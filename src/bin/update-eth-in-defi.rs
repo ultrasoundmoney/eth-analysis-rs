@@ -1,4 +1,4 @@
-use eth_analysis::update_eth_in_defi;
+use eth_analysis::eth_in_defi;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 #[tokio::main]
@@ -15,7 +15,7 @@ pub async fn main() {
 
     sqlx::migrate!().run(&pool).await.unwrap();
 
-    update_eth_in_defi(&pool).await;
+    eth_in_defi::update(&pool).await;
 
     log::info!("done analyzing eth in defi");
 }
