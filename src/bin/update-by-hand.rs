@@ -1,6 +1,5 @@
 use console::Term;
 use dialoguer::{Input, MultiSelect, Select};
-use futures::future::join_all;
 use serde::Serialize;
 use sqlx::{types::Json, PgConnection};
 use std::{env, error::Error};
