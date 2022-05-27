@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct ProtocolSummary {
@@ -34,18 +33,16 @@ pub struct Protocol {
 }
 
 pub fn get_protocols() -> Vec<ProtocolSummary> {
-    ureq::get("https://api.llama.fi/protocols")
-        .call()
+    reqwest::blocking::get("https://api.llama.fi/protocols")
         .unwrap()
-        .into_json::<Vec<ProtocolSummary>>()
+        .json::<Vec<ProtocolSummary>>()
         .unwrap()
 }
 
 pub fn get_protocol(id: &str) -> Protocol {
-    ureq::get(&format!("https://api.llama.fi/protocol/{}", id))
-        .call()
+    reqwest::blocking::get(&format!("https://api.llama.fi/protocol/{}", id))
         .unwrap()
-        .into_json::<Protocol>()
+        .json::<Protocol>()
         .unwrap()
 }
 
