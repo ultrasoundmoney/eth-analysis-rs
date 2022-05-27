@@ -1,0 +1,109 @@
+{
+  "db": "PostgreSQL",
+  "13feb7fe0a4a8d7236f9762de89a2e94fcf0349de8c567996512f99c6a2300da": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Float8"
+        ]
+      }
+    },
+    "query": "INSERT INTO eth_in_defi (timestamp, eth) VALUES ($1, $2)"
+  },
+  "599dc56e83c008c39c90aaf090a679811a07d26f76b0876dba42630bd1415f31": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO beacon_states (state_root, slot) VALUES ($1, $2)\n        "
+  },
+  "bbd198031055f25c66b00a3870944b27497c2c1ebdc2075051640162599df7b2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "deposit_sum_aggregated",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT deposit_sum_aggregated FROM beacon_blocks\n            WHERE block_root = $1\n        "
+  },
+  "c49edba8e1bcb02e70d7d19ded33b9c77e5ceb140c06e04108dcf3a1c4893c6f": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Text",
+          "Int8"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
+  },
+  "d7a27696366610541322e5d50e77b716d68a472fb6372e36858582779e8df748": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Text",
+          "Int8",
+          "Int8"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO beacon_blocks (\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated\n            ) VALUES ($1, $2, $3, $4, $5)\n        "
+  },
+  "f51ac89ed5030a134d406f4f1595abd2af118630ae4e44dbe58c9f3e5acbc148": {
+    "describe": {
+      "columns": [
+        {
+          "name": "state_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "slot",
+          "ordinal": 1,
+          "type_info": "Int4"
+        },
+        {
+          "name": "block_root?",
+          "ordinal": 2,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot,\n                beacon_blocks.block_root AS \"block_root?\"\n            FROM beacon_states\n            LEFT JOIN beacon_blocks ON beacon_blocks.state_root = beacon_states.state_root\n            ORDER BY slot DESC\n            LIMIT 1\n        "
+  }
+}
