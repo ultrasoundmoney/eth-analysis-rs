@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Duration, DurationRound, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, TimeZone, Utc};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -41,31 +41,39 @@ mod tests {
 
     #[test]
     fn test_first_of_day() {
-        assert!(get_is_first_of_day(&3599))
+        assert!(get_is_first_of_day(&0));
+        assert!(get_is_first_of_day(&3599));
     }
 
     #[test]
     fn test_not_first_of_day() {
+        assert!(!get_is_first_of_day(&1));
         assert!(!get_is_first_of_day(&3598));
         assert!(!get_is_first_of_day(&3600));
     }
 
     #[test]
     fn test_get_timestamp() {
-        let timestamp = get_timestamp(&0);
         assert_eq!(
-            timestamp,
+            get_timestamp(&0),
             "2020-12-01T12:00:23Z".parse::<DateTime<Utc>>().unwrap()
-        )
+        );
+        assert_eq!(
+            get_timestamp(&3599),
+            "2020-12-02T00:00:11Z".parse::<DateTime<Utc>>().unwrap()
+        );
     }
 
     #[test]
     fn test_start_of_day() {
-        assert!(FirstOfDaySlot::new(&0).is_some())
+        assert!(FirstOfDaySlot::new(&0).is_some());
+        assert!(FirstOfDaySlot::new(&3599).is_some());
     }
 
     #[test]
     fn test_not_start_of_day() {
-        assert!(FirstOfDaySlot::new(&1).is_none())
+        assert!(FirstOfDaySlot::new(&1).is_none());
+        assert!(FirstOfDaySlot::new(&3598).is_none());
+        assert!(FirstOfDaySlot::new(&3600).is_none());
     }
 }
