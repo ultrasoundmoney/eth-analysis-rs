@@ -52,7 +52,7 @@ pub async fn update(pool: &PgPool) {
     log::info!("{} protocols to crawl", protocols.len());
 
     let mut progress =
-        progress::Progress::new(protocols.len().try_into().unwrap(), "crawl protocols", 10);
+        progress::Progress::new("crawl protocols", protocols.len().try_into().unwrap());
 
     let eth_in_protocols = protocols
         .iter()
@@ -67,7 +67,10 @@ pub async fn update(pool: &PgPool) {
                 Some(weth) => log::debug!("{} wETH in {} - {}", weth, protocol.name, protocol.id),
             };
 
-            progress.step();
+            progress.add_work_done(1);
+            if progress.work_done != 0 && progress.work_done % 10 == 0 {
+                log::debug!("{}", progress.get_progress_string());
+            }
 
             sum + eth_in_protocol.unwrap_or(&0f64)
         });
