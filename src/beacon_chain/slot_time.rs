@@ -22,12 +22,6 @@ pub fn get_is_first_of_day(slot: &u32) -> bool {
     }
 }
 
-pub fn get_start_of_day_from_slot(slot: &u32) -> DateTime<Utc> {
-    get_timestamp(slot)
-        .duration_trunc(Duration::days(1))
-        .unwrap()
-}
-
 #[derive(Debug)]
 pub struct FirstOfDaySlot(pub u32);
 
@@ -62,14 +56,6 @@ mod tests {
         assert_eq!(
             timestamp,
             "2020-12-01T12:00:23Z".parse::<DateTime<Utc>>().unwrap()
-        )
-    }
-
-    #[test]
-    fn test_get_start_of_day() {
-        assert_eq!(
-            get_start_of_day_from_slot(&0),
-            "2020-12-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap()
         )
     }
 
