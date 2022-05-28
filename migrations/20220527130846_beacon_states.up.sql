@@ -18,7 +18,7 @@ CREATE TABLE beacon_blocks (
 	CONSTRAINT beacon_blocks_state_root_fk FOREIGN KEY (state_root) REFERENCES public.beacon_states(state_root)
 );
 
-CREATE TABLE public.beacon_validators_balance (
+CREATE TABLE beacon_validators_balance (
 	"timestamp" timestamptz NOT NULL,
 	state_root text NOT NULL,
 	gwei int8 NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE public.beacon_validators_balance (
 	CONSTRAINT beacon_validators_balance_state_root_fk FOREIGN KEY (state_root) REFERENCES public.beacon_states(state_root)
 );
 
-CREATE TABLE public.beacon_issuance (
+CREATE TABLE beacon_issuance (
 	"timestamp" timestamptz NOT NULL,
 	state_root text NOT NULL,
 	gwei int8 NOT NULL,

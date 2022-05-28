@@ -1,4 +1,7 @@
-use std::{fmt, ops::Add};
+use std::{
+    fmt,
+    ops::{Add, Sub},
+};
 
 use serde::{
     de::{self, Visitor},
@@ -43,6 +46,15 @@ impl Add<GweiAmount> for GweiAmount {
     fn add(self, GweiAmount(rhs): Self) -> Self::Output {
         let GweiAmount(lhs) = self;
         GweiAmount(lhs + rhs)
+    }
+}
+
+impl Sub<GweiAmount> for GweiAmount {
+    type Output = Self;
+
+    fn sub(self, GweiAmount(rhs): GweiAmount) -> Self::Output {
+        let GweiAmount(lhs) = self;
+        GweiAmount(lhs - rhs)
     }
 }
 

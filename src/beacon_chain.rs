@@ -3,6 +3,7 @@ mod blocks;
 mod data_samples;
 mod deposits;
 mod gwei_amounts;
+mod issuance;
 pub mod node;
 mod slot_time;
 mod states;
@@ -12,7 +13,7 @@ use sqlx::PgPool;
 use thiserror::Error;
 use tokio::join;
 
-use self::{gwei_amounts::GweiAmount, node::BeaconHeaderSignedEnvelope, states::GetLastStateError};
+use self::{gwei_amounts::GweiAmount, node::BeaconHeaderSignedEnvelope, slot_time::FirstOfDaySlot};
 
 pub struct SlotRange {
     pub from: u32,
@@ -95,11 +96,27 @@ async fn sync_slot(
         }
     };
 
-    if slot_time::get_is_first_of_day(slot) {
+    if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
         let validator_balances = node::get_validator_balances(node_client, &state_root).await?;
-        let gwei = balances::sum_validator_balances(validator_balances);
-        balances::store_validator_sum_for_day(pool, &state_root, slot, &gwei).await;
-    };
+        let validator_balances_sum_gwei = balances::sum_validator_balances(validator_balances);
+        balances::store_validator_sum_for_day(
+            pool,
+            &state_root,
+            &start_of_day_date_time,
+            &validator_balances_sum_gwei,
+        )
+        .await;
+
+        if let Some(deposit_sum_aggregated) = deposit_sum_aggregated {
+            issuance::store_issuance_for_day(
+                pool,
+                &state_root,
+                start_of_day_date_time,
+                validator_balances_sum_gwei - (deposit_sum_aggregated - deposits::INITIAL_DEPOSITS),
+            )
+            .await;
+        }
+    }
 
     Ok(())
 }
@@ -107,11 +124,11 @@ async fn sync_slot(
 async fn sync_slots(
     pool: &PgPool,
     node_client: &Client,
-    range: SlotRange,
+    SlotRange { from, to }: SlotRange,
 ) -> Result<(), SyncError> {
-    log::debug!("syncing slots from {:?}, to {:?}", range.from, range.to);
+    log::info!("syncing slots from {:?}, to {:?}", from, to);
 
-    for slot in range.from..range.to {
+    for slot in from..=to {
         sync_slot(pool, node_client, &slot).await?;
     }
 
@@ -129,8 +146,8 @@ pub async fn sync(pool: &PgPool) -> Result<(), SyncError> {
     let last_finalized_block =
         last_finalized_block.expect("a last finalized block to always be available");
 
-    match last_state {
-        Ok(last_state) => {
+    match last_state? {
+        Some(last_state) => {
             sync_slots(
                 pool,
                 &node_client,
@@ -141,7 +158,7 @@ pub async fn sync(pool: &PgPool) -> Result<(), SyncError> {
             )
             .await
         }
-        Err(GetLastStateError::EmptyTable) => {
+        None => {
             sync_slots(
                 pool,
                 &node_client,
@@ -152,6 +169,5 @@ pub async fn sync(pool: &PgPool) -> Result<(), SyncError> {
             )
             .await
         }
-        Err(GetLastStateError::SlqxError(error)) => Err(SyncError::SqlxError(error)),
     }
 }

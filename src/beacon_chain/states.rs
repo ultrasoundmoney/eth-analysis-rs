@@ -1,5 +1,4 @@
 use sqlx::{PgExecutor, PgPool};
-use thiserror::Error;
 
 pub struct BeaconState {
     pub state_root: String,
@@ -7,16 +6,8 @@ pub struct BeaconState {
     pub block_root: Option<String>,
 }
 
-#[derive(Error, Debug)]
-pub enum GetLastStateError {
-    #[error("failed to get last state from empty table")]
-    EmptyTable,
-    #[error(transparent)]
-    SlqxError(#[from] sqlx::Error),
-}
-
-pub async fn get_last_state(pool: &PgPool) -> Result<BeaconState, GetLastStateError> {
-    let row = sqlx::query_as!(
+pub async fn get_last_state(pool: &PgPool) -> Result<Option<BeaconState>, sqlx::Error> {
+    sqlx::query_as!(
         BeaconState,
         r#"
             SELECT
@@ -30,12 +21,7 @@ pub async fn get_last_state(pool: &PgPool) -> Result<BeaconState, GetLastStateEr
         "#,
     )
     .fetch_optional(pool)
-    .await?;
-
-    match row {
-        None => Err(GetLastStateError::EmptyTable),
-        Some(row) => Ok(row),
-    }
+    .await
 }
 
 pub async fn store_state<'a, A>(executor: A, state_root: &str, slot: &u32) -> sqlx::Result<()>
