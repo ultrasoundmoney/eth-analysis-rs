@@ -1,7 +1,5 @@
-use crate::{
-    defi_llama::{self, Protocol},
-    progress,
-};
+use crate::defi_llama::{self, Protocol};
+use pit_wall::Progress;
 use sqlx::PgPool;
 
 #[allow(dead_code)]
@@ -51,8 +49,7 @@ pub async fn update(pool: &PgPool) {
 
     log::info!("{} protocols to crawl", protocols.len());
 
-    let mut progress =
-        progress::Progress::new("crawl protocols", protocols.len().try_into().unwrap());
+    let mut progress = Progress::new("crawl protocols", protocols.len().try_into().unwrap());
 
     let eth_in_protocols = protocols
         .iter()
@@ -67,7 +64,7 @@ pub async fn update(pool: &PgPool) {
                 Some(weth) => log::debug!("{} wETH in {} - {}", weth, protocol.name, protocol.id),
             };
 
-            progress.add_work_done(1);
+            progress.inc_work_done();
             if progress.work_done != 0 && progress.work_done % 10 == 0 {
                 log::debug!("{}", progress.get_progress_string());
             }

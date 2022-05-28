@@ -128,8 +128,14 @@ async fn sync_slots(
 ) -> Result<(), SyncError> {
     log::info!("syncing slots from {:?}, to {:?}", from, to);
 
+    let mut progress = pit_wall::Progress::new("sync slots", (to - from).into());
+
     for slot in from..=to {
         sync_slot(pool, node_client, &slot).await?;
+        progress.inc_work_done();
+        if progress.work_done != 0 && progress.work_done % 1000 == 0 {
+            log::info!("{}", progress.get_progress_string());
+        }
     }
 
     Ok(())
