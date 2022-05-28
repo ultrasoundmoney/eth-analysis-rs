@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 
-use super::slot_time;
+use super::{deposits, slot_time};
 use super::{gwei_amounts::GweiAmount, slot_time::FirstOfDaySlot};
 
 pub async fn store_issuance_for_day(
@@ -22,4 +22,27 @@ pub async fn store_issuance_for_day(
     .execute(pool)
     .await
     .unwrap();
+}
+
+pub fn calc_issuance(
+    validator_balances_sum_gwei: &GweiAmount,
+    deposit_sum_aggregated: &GweiAmount,
+) -> GweiAmount {
+    (*validator_balances_sum_gwei - *deposit_sum_aggregated) - deposits::INITIAL_DEPOSITS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calc_issuance() {
+        let validator_balances_sum_gwei = deposits::INITIAL_DEPOSITS + GweiAmount(100);
+        let deposit_sum_aggregated = GweiAmount(50);
+
+        assert_eq!(
+            calc_issuance(&validator_balances_sum_gwei, &deposit_sum_aggregated),
+            GweiAmount(50)
+        )
+    }
 }

@@ -10,7 +10,7 @@ use serde::{
 
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
 // ~9_000_000_000 ETH, which is more than the entire supply.
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct GweiAmount(pub u64);
 

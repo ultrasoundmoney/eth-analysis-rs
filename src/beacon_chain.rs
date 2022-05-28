@@ -112,7 +112,7 @@ async fn sync_slot(
                 pool,
                 &state_root,
                 start_of_day_date_time,
-                validator_balances_sum_gwei - (deposit_sum_aggregated - deposits::INITIAL_DEPOSITS),
+                issuance::calc_issuance(&validator_balances_sum_gwei, &deposit_sum_aggregated),
             )
             .await;
         }
