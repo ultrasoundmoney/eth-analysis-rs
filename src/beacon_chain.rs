@@ -132,6 +132,7 @@ async fn sync_slots(
 
     for slot in from..=to {
         sync_slot(pool, node_client, &slot).await?;
+
         progress.inc_work_done();
         if progress.work_done != 0 && progress.work_done % 1000 == 0 {
             log::info!("{}", progress.get_progress_string());
