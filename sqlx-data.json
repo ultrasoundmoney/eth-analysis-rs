@@ -26,6 +26,20 @@
     },
     "query": "\n            INSERT INTO beacon_states (state_root, slot) VALUES ($1, $2)\n        "
   },
+  "b7bb6881fa2d0a591071a9f538fddfb4d2ee6bb4ffee3154bf6cd9fd0c8ebbe9": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Text",
+          "Int8"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
+  },
   "bbd198031055f25c66b00a3870944b27497c2c1ebdc2075051640162599df7b2": {
     "describe": {
       "columns": [
