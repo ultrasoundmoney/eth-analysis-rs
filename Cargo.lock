@@ -950,9 +950,9 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pit-wall"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ba137f4af82b2eef3e3729718b72c4e0cf74c6a2a5c8c2a60f965a9a5f33227"
+checksum = "755875d78ff1459ccf5823dadf8ca1cb918b516295970127d4bb8bfc53255acb"
 
 [[package]]
 name = "pkg-config"
