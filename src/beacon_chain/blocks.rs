@@ -1,6 +1,8 @@
 use sqlx::{PgExecutor, PgPool};
 
-use super::{node::BeaconHeaderSignedEnvelope, GweiAmount};
+use crate::eth_units::GweiAmount;
+
+use super::node::BeaconHeaderSignedEnvelope;
 
 const GENESIS_PARENT_ROOT: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";

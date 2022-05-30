@@ -1,5 +1,4 @@
-use super::GweiAmount;
-use crate::config;
+use crate::{config, eth_units::GweiAmount};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Deserializer};
 
@@ -31,7 +30,7 @@ fn from_slot<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let s: &str = Deserialize::deserialize(deserializer)?;
+    let s: String = Deserialize::deserialize(deserializer)?;
     Ok(s.parse::<u32>().unwrap())
 }
 
@@ -130,18 +129,6 @@ pub struct ValidatorBalance {
     pub balance: GweiAmount,
 }
 
-impl From<NodeValidatorBalance> for ValidatorBalance {
-    fn from(node_validator_balance: NodeValidatorBalance) -> Self {
-        ValidatorBalance {
-            balance: GweiAmount(node_validator_balance.balance.parse::<u64>().unwrap()),
-        }
-    }
-}
-
-struct NodeValidatorBalance {
-    balance: String,
-}
-
 #[derive(Debug, Deserialize)]
 struct ValidatorBalancesEnvelope {
     data: Vec<ValidatorBalance>,
@@ -233,28 +220,132 @@ pub async fn get_header_by_slot(
     }
 }
 
+fn make_validators_by_state_url(state_root: &str) -> String {
+    format!(
+        "{}/eth/v1/beacon/states/{}/validators",
+        config::get_beacon_url(),
+        state_root
+    )
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Validator {
+    pub effective_balance: GweiAmount,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ValidatorEnvelope {
+    pub validator: Validator,
+}
+
+#[derive(Debug, Deserialize)]
+struct ValidatorsEnvelope {
+    data: Vec<ValidatorEnvelope>,
+}
+
+pub async fn get_validators_by_state(
+    client: &Client,
+    state_root: &str,
+) -> reqwest::Result<Vec<Validator>> {
+    client
+        .get(make_validators_by_state_url(state_root))
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<ValidatorsEnvelope>()
+        .await
+        .map(|validators_envelope| {
+            validators_envelope
+                .data
+                .into_iter()
+                .map(|validator_envelope| validator_envelope.validator)
+                .collect()
+        })
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::beacon_chain::data_samples;
+    use std::{fs::File, io::BufReader};
 
     use super::*;
 
     #[test]
     fn decode_beacon_block_versioned_envelope() {
-        serde_json::from_str::<BeaconBlockVersionedEnvelope>(
-            data_samples::BEACON_BLOCK_VERSIONED_ENVELOPE_1229,
-        )
-        .unwrap();
+        let file =
+            File::open("src/beacon_chain/data_samples/beacon_block_versioned_envelope_1229.json")
+                .unwrap();
+        let reader = BufReader::new(file);
+
+        let b: BeaconBlockVersionedEnvelope = serde_json::from_reader(reader).unwrap();
     }
 
     #[test]
     fn decode_validator_balances() {
-        serde_json::from_str::<ValidatorBalancesEnvelope>(data_samples::VALIDATOR_BALANCES_1229)
-            .unwrap();
+        let file = File::open("src/beacon_chain/data_samples/validator_balaces_1229.json").unwrap();
+        let reader = BufReader::new(file);
+
+        serde_json::from_reader::<BufReader<File>, ValidatorBalancesEnvelope>(reader).unwrap();
     }
 
     #[test]
     fn decode_header_envelope() {
-        serde_json::from_str::<HeaderEnvelope>(data_samples::HEADER_1229).unwrap();
+        let file = File::open("src/beacon_chain/data_samples/header_1229.json").unwrap();
+        let reader = BufReader::new(file);
+
+        serde_json::from_reader::<BufReader<File>, HeaderEnvelope>(reader).unwrap();
+    }
+
+    #[test]
+    fn decode_validators() {
+        let file = File::open("src/beacon_chain/data_samples/validators_1229.json").unwrap();
+        let reader = BufReader::new(file);
+
+        serde_json::from_reader::<BufReader<File>, ValidatorsEnvelope>(reader).unwrap();
+    }
+
+    const SLOT_1229: u32 = 1229;
+    const BLOCK_ROOT_1229: &str =
+        "0x35376f52006e12b7e9247b457277fb34f6bd32d83a651e24c2669467607e0778";
+    const STATE_ROOT_1229: &str =
+        "0x36cb7e3d4585fb90a4ed17a0139de34a08b8354d1a7a054dbe3e4d8a0b93e625";
+
+    #[tokio::test]
+    async fn test_last_finalized_block() {
+        let client = reqwest::Client::new();
+        get_last_finalized_block(&client).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_block_by_root() {
+        let client = reqwest::Client::new();
+        get_block_by_root(&client, BLOCK_ROOT_1229).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_header_by_slot() {
+        let client = reqwest::Client::new();
+        get_header_by_slot(&client, &SLOT_1229).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_state_root_by_slot() {
+        let client = reqwest::Client::new();
+        get_state_root_by_slot(&client, &SLOT_1229).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_validator_balances() {
+        let client = reqwest::Client::new();
+        get_validator_balances(&client, STATE_ROOT_1229)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_validators() {
+        let client = reqwest::Client::new();
+        get_validators_by_state(&client, STATE_ROOT_1229)
+            .await
+            .unwrap();
     }
 }

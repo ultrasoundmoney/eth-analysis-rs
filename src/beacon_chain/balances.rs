@@ -1,7 +1,11 @@
+use reqwest::Client;
 use sqlx::PgPool;
 
-use super::slot_time;
-use super::{gwei_amounts::GweiAmount, node::ValidatorBalance, slot_time::FirstOfDaySlot};
+use crate::eth_units::GweiAmount;
+
+use super::beacon_time::FirstOfDaySlot;
+use super::node::ValidatorBalance;
+use super::{beacon_time, node, states};
 
 pub fn sum_validator_balances(validator_balances: Vec<ValidatorBalance>) -> GweiAmount {
     validator_balances
@@ -23,11 +27,30 @@ pub async fn store_validator_sum_for_day(
         "
             INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
         ",
-        slot_time::get_timestamp(slot),
+        beacon_time::get_timestamp(slot),
         state_root,
         gwei,
     )
     .execute(pool)
     .await
     .unwrap();
+}
+
+pub async fn get_last_effective_balance_sum(
+    pool: &PgPool,
+    client: &Client,
+) -> anyhow::Result<GweiAmount> {
+    let last_state_root = states::get_last_state(pool)
+        .await?
+        .expect("can't calculate a last effective balance with an empty beacon_states table")
+        .state_root;
+
+    node::get_validators_by_state(client, &last_state_root)
+        .await
+        .map(|validators| {
+            validators.iter().fold(GweiAmount(0), |sum, validator| {
+                sum + validator.effective_balance
+            })
+        })
+        .map_err(anyhow::Error::msg)
 }

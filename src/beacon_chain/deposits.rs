@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 
-use super::{blocks, node::BeaconBlock, GweiAmount};
+use crate::eth_units::GweiAmount;
+
+use super::{blocks, node::BeaconBlock};
 
 // Obtained by getting validator balances for slot 0, which had zero deposits.
 pub const INITIAL_DEPOSITS: GweiAmount = GweiAmount(674144000000000);
