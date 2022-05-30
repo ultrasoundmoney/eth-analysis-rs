@@ -1,7 +1,11 @@
 use sqlx::PgPool;
 
-use super::{deposits, slot_time};
-use super::{gwei_amounts::GweiAmount, slot_time::FirstOfDaySlot};
+use crate::eth_units::GweiAmount;
+
+use super::{
+    beacon_time::{self, FirstOfDaySlot},
+    deposits,
+};
 
 pub async fn store_issuance_for_day(
     pool: &PgPool,
@@ -15,7 +19,7 @@ pub async fn store_issuance_for_day(
         "
             INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
         ",
-        slot_time::get_timestamp(&slot),
+        beacon_time::get_timestamp(&slot),
         state_root,
         gwei,
     )
