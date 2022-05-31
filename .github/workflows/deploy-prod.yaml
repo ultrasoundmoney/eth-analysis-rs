@@ -10,13 +10,13 @@ jobs:
     name: wait on build
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for test-build-push to succeed
-        uses: lewagon/wait-on-check-action@v0.2
+      - name: Wait for deploy-staging to succeed
+        uses: lewagon/wait-on-check-action@v1.1.1
         with:
           ref: ${{ github.ref }}
-          check-name: "Docker build and push"
+          check-name: build
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 60
+          wait-interval: 10
   deploy-k8s-resources:
     name: deploy k8s resources
     runs-on: ubuntu-latest
