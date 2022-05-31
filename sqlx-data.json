@@ -1,17 +1,24 @@
 {
   "db": "PostgreSQL",
-  "13feb7fe0a4a8d7236f9762de89a2e94fcf0349de8c567996512f99c6a2300da": {
+  "100d831ec3a9d8ea9545ca0bcaae004558fc96771fe31a755ae04625d38b0000": {
     "describe": {
-      "columns": [],
-      "nullable": [],
+      "columns": [
+        {
+          "name": "pg_notify",
+          "ordinal": 0,
+          "type_info": "Void"
+        }
+      ],
+      "nullable": [
+        null
+      ],
       "parameters": {
         "Left": [
-          "Timestamptz",
-          "Float8"
+          "Text"
         ]
       }
     },
-    "query": "INSERT INTO eth_in_defi (timestamp, eth) VALUES ($1, $2)"
+    "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
   "599dc56e83c008c39c90aaf090a679811a07d26f76b0876dba42630bd1415f31": {
     "describe": {
