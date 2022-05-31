@@ -16,7 +16,7 @@ jobs:
           ref: ${{ github.ref }}
           check-name: "Docker build and push"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
+          wait-interval: 60
   deploy-k8s-resources:
     name: deploy k8s resources
     runs-on: ubuntu-latest
