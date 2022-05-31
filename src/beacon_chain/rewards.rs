@@ -126,8 +126,7 @@ pub async fn update_validator_rewards(pool: &PgPool, node_client: &Client) -> an
     let validator_rewards = get_validator_rewards(&pool, &node_client).await?;
     log::debug!("validator rewards: {:?}", validator_rewards);
 
-    key_value_store::store_value(&pool, VALIDATOR_REWARDS_CACHE_KEY, Json(validator_rewards))
-        .await?;
+    key_value_store::store_value(&pool, VALIDATOR_REWARDS_CACHE_KEY, Json(validator_rewards)).await;
 
     caching::publish_cache_update(&pool, VALIDATOR_REWARDS_CACHE_KEY).await;
 
