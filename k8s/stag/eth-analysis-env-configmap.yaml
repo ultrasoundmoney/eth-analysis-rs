@@ -3,5 +3,4 @@ kind: ConfigMap
 metadata:
   name: eth-analysis-env
 data:
-  ENV: "stag"
   RUST_LOG: "eth_analysis=debug"
