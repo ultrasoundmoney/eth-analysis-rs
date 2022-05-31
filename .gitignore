@@ -1,2 +1,3 @@
 /target
 .env
+k8s-secrets
