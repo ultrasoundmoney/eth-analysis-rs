@@ -17,7 +17,7 @@ spec:
                 - configMapRef:
                     name: eth-analysis-env
                 - secretRef:
-                    name: pg-password-anton
+                    name: lilly-db-url
                 - secretRef:
                     name: node-urls
               env:

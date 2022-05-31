@@ -17,7 +17,7 @@ spec:
                 - configMapRef:
                     name: eth-analysis-env
                 - secretRef:
-                    name: pg-password-anton
+                    name: anton-db-url
                 - secretRef:
                     name: node-urls
               env:
