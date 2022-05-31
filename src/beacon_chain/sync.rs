@@ -69,7 +69,7 @@ async fn sync_slot(
 
     match (header, block, deposit_sum_aggregated) {
         (Some(header), Some(block), Some(deposit_sum_aggregated)) => {
-            log::debug!(
+            tracing::debug!(
                 "storing slot with block, slot: {:?}, state_root: {}",
                 slot,
                 state_root
@@ -85,7 +85,7 @@ async fn sync_slot(
             .await?;
         }
         _ => {
-            log::debug!(
+            tracing::debug!(
                 "storing slot without header, slot: {:?}, state_root: {}",
                 slot,
                 state_root
@@ -124,7 +124,7 @@ async fn sync_slots(
     node_client: &Client,
     SlotRange { from, to }: SlotRange,
 ) -> Result<(), SyncError> {
-    log::info!("syncing slots from {:?}, to {:?}", from, to);
+    tracing::info!("syncing slots from {:?}, to {:?}", from, to);
 
     let mut progress = pit_wall::Progress::new("sync slots", (to - from).into());
 
@@ -133,7 +133,7 @@ async fn sync_slots(
 
         progress.inc_work_done();
         if progress.work_done != 0 && progress.work_done % 1000 == 0 {
-            log::info!("{}", progress.get_progress_string());
+            tracing::info!("{}", progress.get_progress_string());
         }
     }
 
