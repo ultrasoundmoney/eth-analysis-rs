@@ -4,6 +4,7 @@ metadata:
   name: sync-beacon-states
 spec:
   schedule: "0 */4 * * *"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
       template:
