@@ -8,6 +8,8 @@ where
     sqlx::query(
         "
             INSERT INTO key_value_store (key, value) VALUES ($1, $2)
+            ON CONFLICT (key) DO UPDATE SET
+                value = excluded.value
         ",
     )
     .bind(key)
