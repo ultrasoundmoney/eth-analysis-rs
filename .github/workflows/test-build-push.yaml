@@ -1,4 +1,4 @@
-name: test-build-push
+name: test-build-deploy
 
 on:
   push:
@@ -15,7 +15,6 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
       - name: Build
