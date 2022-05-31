@@ -49,7 +49,7 @@ jobs:
           cache-from: type=registry,ref=registry.digitalocean.com/ultrasoundmoney/eth-analysis:latest
           cache-to: type=inline
   deploy-k8s-resources-dev:
-    name: deploy k8s resources
+    name: deploy k8s resources dev
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -60,7 +60,7 @@ jobs:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
           command: apply -f k8s/dev
   deploy-k8s-resources-stag:
-    name: deploy k8s resources
+    name: deploy k8s resources staging
     runs-on: ubuntu-latest
     needs: build
     steps:
