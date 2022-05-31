@@ -16,7 +16,7 @@ spec:
                 - configMapRef:
                     name: eth-analysis-env
                 - secretRef:
-                    name: db-lilly-url
+                    name: lilly-db-url
                 - secretRef:
                     name: node-urls
               env:
