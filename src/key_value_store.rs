@@ -1,20 +1,84 @@
-use serde::Serialize;
-use sqlx::{types::Json, Encode, PgPool, Postgres, Type};
+use std::fmt::Debug;
 
-pub async fn store_value<'a, A>(pool: &PgPool, key: &'a str, value: A)
-where
-    A: 'a + Send + Encode<'a, Postgres> + Type<Postgres> + Serialize,
-{
-    sqlx::query(
+use serde::Serialize;
+use serde_json::Value;
+use sqlx::PgPool;
+
+struct KeyValueFromDb {
+    value: Value,
+}
+
+pub async fn get_value(pool: &PgPool, key: &str) -> Option<serde_json::Value> {
+    sqlx::query_as!(
+        KeyValueFromDb,
+        r#"
+            SELECT value FROM key_value_store
+            WHERE key = $1
+        "#,
+        key
+    )
+    .fetch_optional(pool)
+    .await
+    .unwrap()
+    .map(|row| row.value)
+}
+
+#[derive(Debug, Serialize)]
+pub struct KeyValue<'a> {
+    pub key: &'a str,
+    pub value: Value,
+}
+
+pub async fn set_value(pool: &PgPool, key_value: KeyValue<'_>) {
+    sqlx::query!(
         "
             INSERT INTO key_value_store (key, value) VALUES ($1, $2)
             ON CONFLICT (key) DO UPDATE SET
                 value = excluded.value
         ",
+        key_value.key,
+        key_value.value
     )
-    .bind(key)
-    .bind(Json(value))
     .execute(pool)
     .await
     .unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::Deserialize;
+
+    use crate::config;
+
+    use super::*;
+
+    #[derive(Debug, Deserialize, PartialEq, Serialize)]
+    struct TestJson {
+        name: String,
+        age: i32,
+    }
+
+    #[tokio::test]
+    async fn test_get_set_value() {
+        let pool = sqlx::PgPool::connect(&config::get_db_url()).await.unwrap();
+        let test_json = TestJson {
+            name: "alex".to_string(),
+            age: 29,
+        };
+
+        set_value(
+            &pool,
+            KeyValue {
+                key: "test-key",
+                value: serde_json::to_value(&test_json).unwrap(),
+            },
+        )
+        .await;
+
+        let test_json_from_db =
+            serde_json::from_value::<TestJson>(get_value(&pool, "test-key").await.unwrap())
+                .unwrap();
+
+        assert_eq!(test_json_from_db, test_json)
+    }
 }

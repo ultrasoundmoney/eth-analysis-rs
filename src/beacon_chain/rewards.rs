@@ -6,7 +6,7 @@ use sqlx::{types::Json, PgPool, Row};
 use crate::{
     caching, eth_time,
     eth_units::{self, GweiAmount, GWEI_PER_ETH_F64},
-    key_value_store,
+    key_value_store::{self, KeyValue},
 };
 
 use super::balances;
@@ -126,7 +126,14 @@ pub async fn update_validator_rewards(pool: &PgPool, node_client: &Client) -> an
     let validator_rewards = get_validator_rewards(&pool, &node_client).await?;
     tracing::debug!("validator rewards: {:?}", validator_rewards);
 
-    key_value_store::store_value(&pool, VALIDATOR_REWARDS_CACHE_KEY, Json(validator_rewards)).await;
+    key_value_store::set_value(
+        &pool,
+        KeyValue {
+            key: VALIDATOR_REWARDS_CACHE_KEY,
+            value: serde_json::to_value(validator_rewards).unwrap(),
+        },
+    )
+    .await;
 
     caching::publish_cache_update(&pool, VALIDATOR_REWARDS_CACHE_KEY).await;
 
