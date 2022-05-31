@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sync-beacon-states
+  namespace: dev
+spec:
+  schedule: "0 */4 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: sync-beacon-states
+              image: registry.digitalocean.com/ultrasoundmoney/eth-analysis
+              command: ["sync-beacon-states"]
+              envFrom:
+                - configMapRef:
+                    name: eth-analysis-env
+                - secretRef:
+                    name: pg-password-anton
+                - secretRef:
+                    name: node-urls
+              env:
+                - name: NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: PGDATABASE
+                  value: devdb
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 128Mi
+          restartPolicy: OnFailure

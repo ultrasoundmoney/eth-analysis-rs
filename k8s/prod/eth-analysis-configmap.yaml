@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eth-analysis-env
+data:
+  ENV: "prod"
+  RUST_LOG: "eth_analysis=info"
+  DATABASE_URL: postgresql://doadmin:qbswc73i0oqi4y8w@anton-do-user-9707990-0.b.db.ondigitalocean.com:25060/defaultdb
