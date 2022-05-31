@@ -2,6 +2,7 @@ name: test-build-deploy
 
 on:
   push:
+    branches: [main]
     tags:
       - "stag-*"
   pull_request:
