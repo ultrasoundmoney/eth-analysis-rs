@@ -276,7 +276,7 @@ mod tests {
                 .unwrap();
         let reader = BufReader::new(file);
 
-        let b: BeaconBlockVersionedEnvelope = serde_json::from_reader(reader).unwrap();
+        serde_json::from_reader::<BufReader<File>, BeaconBlockVersionedEnvelope>(reader).unwrap();
     }
 
     #[test]
