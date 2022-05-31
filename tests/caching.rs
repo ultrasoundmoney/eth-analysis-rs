@@ -3,7 +3,6 @@ use sqlx::postgres::PgListener;
 
 // This test fails sometimes because when run against the actual dev DB many
 // notifications fire on the "cache-update" channel. Needs a test DB to work reliably.
-#[ignore]
 #[tokio::test]
 async fn test_publish_cache_update() {
     let mut listener = PgListener::connect(&config::get_db_url()).await.unwrap();
