@@ -92,7 +92,7 @@ pub fn get_issuance_reward(GweiAmount(effective_balance_sum): GweiAmount) -> Val
         "max issuance per year: {} ETH",
         max_issuance_per_year / GWEI_PER_ETH_F64
     );
-    log::debug!("APR: {}%", apr);
+    log::debug!("APR: {:.4}%", apr);
 
     ValidatorReward {
         annual_reward: GweiAmount(annual_reward as u64),
@@ -124,8 +124,12 @@ async fn get_validator_rewards(pool: &PgPool, client: &Client) -> anyhow::Result
 
 pub async fn update_validator_rewards(pool: &PgPool, node_client: &Client) -> anyhow::Result<()> {
     let validator_rewards = get_validator_rewards(&pool, &node_client).await?;
+    log::debug!("validator rewards: {:?}", validator_rewards);
+
     key_value_store::store_value(&pool, VALIDATOR_REWARDS_CACHE_KEY, Json(validator_rewards))
         .await?;
+
     caching::publish_cache_update(&pool, VALIDATOR_REWARDS_CACHE_KEY).await;
+
     Ok(())
 }
