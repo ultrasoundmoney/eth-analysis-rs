@@ -22,6 +22,7 @@ RUN apt update && apt install -y libssl1.1
 
 COPY --from=builder /app/target/release/eth-analysis /usr/local/bin
 COPY --from=builder /app/target/release/update-validator-rewards /usr/local/bin
+COPY --from=builder /app/target/release/update-supply-projection-inputs /usr/local/bin
 COPY --from=builder /app/target/release/sync-beacon-states /usr/local/bin
 
 ENTRYPOINT ["/usr/local/bin/eth-analysis"]
