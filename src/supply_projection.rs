@@ -83,7 +83,14 @@ pub async fn update_supply_projection_inputs() {
 
     let in_contracts_by_day = glassnode::get_locked_eth_data().await.unwrap();
 
+    tracing::debug!(
+        "got gwei in contracts by day, {} data points",
+        in_contracts_by_day.len()
+    );
+
     let staked_data = glassnode::get_staked_data().await.unwrap();
+
+    tracing::debug!("got staked data by day, {} data points", staked_data.len());
 
     let in_beacon_validators_by_day = beacon_chain::get_validator_balances_by_day(&pool)
         .await
@@ -93,7 +100,12 @@ pub async fn update_supply_projection_inputs() {
             t: point.t,
             v: point.v as f64 / GWEI_PER_ETH_F64,
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    tracing::debug!(
+        "got balances in beacon validators by day, {} data points",
+        in_beacon_validators_by_day.len()
+    );
 
     let beacon_issuance_by_day = beacon_chain::get_issuance_by_day(&pool)
         .await
@@ -105,9 +117,18 @@ pub async fn update_supply_projection_inputs() {
         })
         .collect::<Vec<GlassnodeDataPoint>>();
 
+    tracing::debug!(
+        "got beacon issuance by day, {} data points",
+        beacon_issuance_by_day.len()
+    );
+
     let supply_data = glassnode::get_circulating_supply_data().await.unwrap();
 
+    tracing::debug!("got supply data by day, {} data points", supply_data.len());
+
     let supply_by_day = add_beacon_issuance_to_supply(&beacon_issuance_by_day, &supply_data);
+
+    tracing::debug!("got supply by day, {} data points", supply_by_day.len());
 
     // Deprecate supplyData, lockedData, stakedData after prod frontend has switched to new supply projection inputs.
     let supply_projetion_inputs = SupplyProjectionInputs {
@@ -128,5 +149,14 @@ pub async fn update_supply_projection_inputs() {
     )
     .await;
 
+    tracing::debug!("stored fresh projection inputs");
+
     caching::publish_cache_update(&pool, SUPPLY_PROJECTION_INPUTS_CACHE_KEY).await;
+
+    tracing::debug!(
+        "published {} cache update",
+        SUPPLY_PROJECTION_INPUTS_CACHE_KEY
+    );
+
+    tracing::info!("done updating supply projection inputs")
 }
