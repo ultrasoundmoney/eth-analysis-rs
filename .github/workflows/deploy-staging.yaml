@@ -88,6 +88,11 @@ jobs:
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
           command: -n dev set image cronjob/sync-beacon-states sync-beacon-states=registry.digitalocean.com/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
+      - name: run job
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
+          command: -n dev create job --from=cronjob/sync-beacon-states sync-beacon-states-${{ steps.vars.outputs.sha_short }}
   deploy-sync-beacon-states:
     name: deploy sync-beacon-states
     runs-on: ubuntu-latest
@@ -102,6 +107,11 @@ jobs:
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
           command: set image cronjob/sync-beacon-states sync-beacon-states=registry.digitalocean.com/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
+      - name: run job
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
+          command: create job --from=cronjob/sync-beacon-states sync-beacon-states-${{ steps.vars.outputs.sha_short }}
   deploy-update-validator-rewards:
     name: deploy update-validator-rewards
     runs-on: ubuntu-latest
@@ -116,6 +126,11 @@ jobs:
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
           command: set image cronjob/update-validator-rewards update-validator-rewards=registry.digitalocean.com/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
+      - name: run job
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
+          command: create job --from=cronjob/update-validator-rewards update-validator-rewards-${{ steps.vars.outputs.sha_short }}
   deploy-update-supply-projection-inputs:
     name: deploy update-supply-projection-inputs
     runs-on: ubuntu-latest
@@ -130,3 +145,8 @@ jobs:
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
           command: set image cronjob/update-supply-projection-inputs update-supply-projection-inputs=registry.digitalocean.com/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
+      - name: run job
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
+          command: create job --from=cronjob/update-supply-projection-inputs update-supply-projection-inputs-${{ steps.vars.outputs.sha_short }}
