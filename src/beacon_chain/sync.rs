@@ -109,8 +109,8 @@ async fn sync_slot(
             issuance::store_issuance_for_day(
                 pool,
                 &state_root,
-                start_of_day_date_time,
-                issuance::calc_issuance(&validator_balances_sum_gwei, &deposit_sum_aggregated),
+                &start_of_day_date_time,
+                &issuance::calc_issuance(&validator_balances_sum_gwei, &deposit_sum_aggregated),
             )
             .await;
         }

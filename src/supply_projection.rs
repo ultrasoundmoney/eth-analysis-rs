@@ -116,7 +116,7 @@ pub async fn update_supply_projection_inputs() {
         in_beacon_validators_by_day.len()
     );
 
-    let beacon_issuance_by_day = beacon_chain::get_issuance_by_day(&pool)
+    let beacon_issuance_by_day = beacon_chain::get_issuance_by_start_of_day(&pool)
         .await
         .unwrap()
         .iter()

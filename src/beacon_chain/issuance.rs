@@ -1,4 +1,5 @@
-use sqlx::PgPool;
+use chrono::{Duration, DurationRound};
+use sqlx::PgExecutor;
 
 use crate::{
     eth_units::GweiAmount,
@@ -10,11 +11,11 @@ use super::{
     deposits,
 };
 
-pub async fn store_issuance_for_day(
-    pool: &PgPool,
+pub async fn store_issuance_for_day<'a>(
+    pool: impl PgExecutor<'a>,
     state_root: &str,
-    FirstOfDaySlot(slot): FirstOfDaySlot,
-    gwei: GweiAmount,
+    FirstOfDaySlot(slot): &FirstOfDaySlot,
+    gwei: &GweiAmount,
 ) {
     let gwei: i64 = gwei.to_owned().into();
 
@@ -38,7 +39,9 @@ pub fn calc_issuance(
     (*validator_balances_sum_gwei - *deposit_sum_aggregated) - deposits::INITIAL_DEPOSITS
 }
 
-pub async fn get_issuance_by_day(pool: &PgPool) -> sqlx::Result<Vec<GweiInTime>> {
+pub async fn get_issuance_by_start_of_day<'a>(
+    pool: impl PgExecutor<'a>,
+) -> sqlx::Result<Vec<GweiInTime>> {
     sqlx::query_as!(
         GweiInTimeRow,
         "
@@ -47,12 +50,26 @@ pub async fn get_issuance_by_day(pool: &PgPool) -> sqlx::Result<Vec<GweiInTime>>
     )
     .fetch_all(pool)
     .await
-    .map(|rows| rows.iter().map(|row| row.into()).collect())
+    .map(|rows| {
+        rows.iter()
+            .map(|row| {
+                (
+                    row.timestamp.duration_trunc(Duration::days(1)).unwrap(),
+                    row.gwei,
+                )
+            })
+            .map(|row| row.into())
+            .collect()
+    })
 }
 
 #[cfg(test)]
 mod tests {
+    use chrono::{TimeZone, Utc};
+    use sqlx::{PgConnection, PgExecutor};
+
     use super::*;
+    use crate::{beacon_chain::states::store_state, config};
 
     #[test]
     fn test_calc_issuance() {
@@ -63,5 +80,41 @@ mod tests {
             calc_issuance(&validator_balances_sum_gwei, &deposit_sum_aggregated),
             GweiAmount(50)
         )
+    }
+
+    async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
+        sqlx::query!("TRUNCATE beacon_states CASCADE")
+            .execute(pg_exec)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_timestamp_is_start_of_day() {
+        let mut conn: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        store_state(&mut conn, "0xtest", &0).await.unwrap();
+
+        store_issuance_for_day(
+            &mut conn,
+            "0xtest",
+            &FirstOfDaySlot::new(&0).unwrap(),
+            &GweiAmount(100),
+        )
+        .await;
+
+        let validator_balances_by_day = get_issuance_by_start_of_day(&mut conn).await.unwrap();
+
+        let unix_timestamp = validator_balances_by_day.first().unwrap().t;
+
+        let datetime = Utc.timestamp(unix_timestamp.try_into().unwrap(), 0);
+
+        let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
+
+        clean_tables(&mut conn).await;
+
+        assert_eq!(datetime, start_of_day_datetime);
     }
 }
