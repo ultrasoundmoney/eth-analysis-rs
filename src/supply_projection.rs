@@ -25,6 +25,15 @@ pub struct GweiInTime {
     pub v: i64,
 }
 
+impl From<(DateTime<Utc>, i64)> for GweiInTime {
+    fn from((dt, gwei): (DateTime<Utc>, i64)) -> Self {
+        GweiInTime {
+            t: dt.timestamp().try_into().unwrap(),
+            v: gwei,
+        }
+    }
+}
+
 impl From<&GweiInTimeRow> for GweiInTime {
     fn from(row: &GweiInTimeRow) -> Self {
         Self {
@@ -92,7 +101,7 @@ pub async fn update_supply_projection_inputs() {
 
     tracing::debug!("got staked data by day, {} data points", staked_data.len());
 
-    let in_beacon_validators_by_day = beacon_chain::get_validator_balances_by_day(&pool)
+    let in_beacon_validators_by_day = beacon_chain::get_validator_balances_by_start_of_day(&pool)
         .await
         .unwrap()
         .iter()
