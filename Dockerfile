@@ -18,7 +18,7 @@ FROM debian:buster-slim AS runtime
 WORKDIR /app
 
 # sqlx depends on native TLS, which is missing in buster-slim.
-RUN apt update && apt install -y libssl1.1
+RUN apt update && apt install -y libssl1.1 ca-certificates
 
 COPY --from=builder /app/target/release/eth-analysis /usr/local/bin
 COPY --from=builder /app/target/release/update-validator-rewards /usr/local/bin
