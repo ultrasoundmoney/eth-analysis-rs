@@ -91,7 +91,7 @@ mod tests {
     use super::*;
 
     async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
-        sqlx::query!("TRUNCATE beacon_states CASCADE")
+        sqlx::query!("TRUNCATE TABLE beacon_states CASCADE")
             .execute(pg_exec)
             .await
             .unwrap();
@@ -103,12 +103,14 @@ mod tests {
             .await
             .unwrap();
 
-        store_state(&mut conn, "0xtest", &0).await.unwrap();
+        store_state(&mut conn, "0xtest_balances", &10799)
+            .await
+            .unwrap();
 
         store_validator_sum_for_day(
             &mut conn,
-            "0xtest",
-            &FirstOfDaySlot::new(&0).unwrap(),
+            "0xtest_balances",
+            &FirstOfDaySlot::new(&10799).unwrap(),
             &GweiAmount(100),
         )
         .await;

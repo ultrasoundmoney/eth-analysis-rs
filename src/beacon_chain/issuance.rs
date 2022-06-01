@@ -95,12 +95,14 @@ mod tests {
             .await
             .unwrap();
 
-        store_state(&mut conn, "0xtest", &0).await.unwrap();
+        store_state(&mut conn, "0xtest_issuance", &3599)
+            .await
+            .unwrap();
 
         store_issuance_for_day(
             &mut conn,
-            "0xtest",
-            &FirstOfDaySlot::new(&0).unwrap(),
+            "0xtest_issuance",
+            &FirstOfDaySlot::new(&3599).unwrap(),
             &GweiAmount(100),
         )
         .await;
