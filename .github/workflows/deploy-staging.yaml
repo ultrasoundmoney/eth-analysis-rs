@@ -9,6 +9,7 @@ env:
   CARGO_TERM_COLOR: always
   BEACON_URL: http://***REMOVED***
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  GLASSNODE_API_KEY: ${{ secrets.GLASSNODE_API_KEY }}
 
 jobs:
   test:
