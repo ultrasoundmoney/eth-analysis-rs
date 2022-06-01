@@ -63,7 +63,7 @@
         {
           "name": "value",
           "ordinal": 0,
-          "type_info": "Json"
+          "type_info": "Jsonb"
         }
       ],
       "nullable": [
@@ -84,11 +84,29 @@
       "parameters": {
         "Left": [
           "Text",
-          "Json"
+          "Jsonb"
         ]
       }
     },
     "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
+  },
+  "99161f8c9a73c0713c2fefb04cbc70c933371910f7956d459404391a11cb0eb6": {
+    "describe": {
+      "columns": [
+        {
+          "name": "tips_since_london!",
+          "ordinal": 0,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT SUM(tips) / 1e9 AS \"tips_since_london!\" FROM blocks\n        "
   },
   "b7bb6881fa2d0a591071a9f538fddfb4d2ee6bb4ffee3154bf6cd9fd0c8ebbe9": {
     "describe": {

@@ -1,4 +1,4 @@
-use chrono::{Duration, DurationRound, TimeZone};
+use chrono::{Duration, DurationRound};
 use reqwest::Client;
 use sqlx::{PgExecutor, PgPool};
 
@@ -83,7 +83,7 @@ pub async fn get_validator_balances_by_start_of_day<'a>(
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, Utc};
+    use chrono::{Duration, TimeZone, Utc};
     use sqlx::PgConnection;
 
     use crate::{beacon_chain::states::store_state, config};

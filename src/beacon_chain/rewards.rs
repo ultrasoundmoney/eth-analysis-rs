@@ -1,7 +1,7 @@
 use chrono::Utc;
 use reqwest::Client;
 use serde::Serialize;
-use sqlx::{PgPool, Row};
+use sqlx::{Decode, PgPool};
 
 use crate::{
     caching, eth_time,
@@ -24,17 +24,21 @@ fn get_days_since_london() -> i64 {
     (Utc::now() - *eth_time::LONDON_HARDFORK_TIMESTAMP).num_days()
 }
 
+#[derive(Decode)]
+struct TipsSinceLondonRow {
+    tips_since_london: f64,
+}
+
 async fn get_tips_since_london(pool: &PgPool) -> sqlx::Result<GweiAmount> {
-    let tips_since_genesis: f64 = sqlx::query(
-        "
-            SELECT SUM(tips) / 1e9 AS tips_since_genesis FROM blocks
-        ",
+    sqlx::query_as!(
+        TipsSinceLondonRow,
+        r#"
+            SELECT SUM(tips) / 1e9 AS "tips_since_london!" FROM blocks
+        "#,
     )
     .fetch_one(pool)
-    .await?
-    .get("tips_since_genesis");
-
-    Ok(GweiAmount(tips_since_genesis as u64))
+    .await
+    .map(|row| GweiAmount(row.tips_since_london.round() as u64))
 }
 
 async fn get_tips_reward(
