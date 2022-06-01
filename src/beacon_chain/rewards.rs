@@ -14,6 +14,7 @@ use super::balances;
 pub const VALIDATOR_REWARDS_CACHE_KEY: &str = "validator-rewards";
 
 #[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ValidatorReward {
     annual_reward: GweiAmount,
     apr: f64,
