@@ -23,7 +23,7 @@ pub async fn sync_beacon_states() {
     tracing::info!("syncing beacon states");
 
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(3)
         .connect(&config::get_db_url())
         .await
         .unwrap();
@@ -51,7 +51,7 @@ pub async fn update_validator_rewards() {
     tracing::info!("updating validator rewards");
 
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(1)
         .connect(&config::get_db_url())
         .await
         .unwrap();

@@ -74,7 +74,7 @@ pub async fn update_supply_projection_inputs() {
     tracing::info!("updating supply projection inputs");
 
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(1)
         .connect(&config::get_db_url())
         .await
         .unwrap();
