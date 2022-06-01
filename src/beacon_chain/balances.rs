@@ -2,6 +2,7 @@ use reqwest::Client;
 use sqlx::PgPool;
 
 use crate::eth_units::GweiAmount;
+use crate::supply_projection::{GweiInTime, GweiInTimeRow};
 
 use super::beacon_time::FirstOfDaySlot;
 use super::node::ValidatorBalance;
@@ -53,4 +54,16 @@ pub async fn get_last_effective_balance_sum(
             })
         })
         .map_err(anyhow::Error::msg)
+}
+
+pub async fn get_validator_balances_by_day(pool: &PgPool) -> sqlx::Result<Vec<GweiInTime>> {
+    sqlx::query_as!(
+        GweiInTimeRow,
+        "
+            SELECT timestamp, gwei FROM beacon_validators_balance
+        "
+    )
+    .fetch_all(pool)
+    .await
+    .map(|rows| rows.iter().map(|row| row.into()).collect())
 }

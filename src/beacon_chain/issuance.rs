@@ -1,6 +1,9 @@
 use sqlx::PgPool;
 
-use crate::eth_units::GweiAmount;
+use crate::{
+    eth_units::GweiAmount,
+    supply_projection::{GweiInTime, GweiInTimeRow},
+};
 
 use super::{
     beacon_time::{self, FirstOfDaySlot},
@@ -33,6 +36,18 @@ pub fn calc_issuance(
     deposit_sum_aggregated: &GweiAmount,
 ) -> GweiAmount {
     (*validator_balances_sum_gwei - *deposit_sum_aggregated) - deposits::INITIAL_DEPOSITS
+}
+
+pub async fn get_issuance_by_day(pool: &PgPool) -> sqlx::Result<Vec<GweiInTime>> {
+    sqlx::query_as!(
+        GweiInTimeRow,
+        "
+            SELECT timestamp, gwei FROM beacon_issuance
+        "
+    )
+    .fetch_all(pool)
+    .await
+    .map(|rows| rows.iter().map(|row| row.into()).collect())
 }
 
 #[cfg(test)]

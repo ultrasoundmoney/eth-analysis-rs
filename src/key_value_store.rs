@@ -5,10 +5,11 @@ use serde_json::Value;
 use sqlx::PgPool;
 
 struct KeyValueFromDb {
-    value: Value,
+    value: Option<Value>,
 }
 
-pub async fn get_value(pool: &PgPool, key: &str) -> Option<serde_json::Value> {
+// Do we need a distinction between key/value pair isn't there and value is null?
+pub async fn get_value(pool: &PgPool, key: &str) -> Option<Value> {
     sqlx::query_as!(
         KeyValueFromDb,
         r#"
@@ -17,10 +18,10 @@ pub async fn get_value(pool: &PgPool, key: &str) -> Option<serde_json::Value> {
         "#,
         key
     )
-    .fetch_optional(pool)
+    .fetch_one(pool)
     .await
     .unwrap()
-    .map(|row| row.value)
+    .value
 }
 
 #[derive(Debug, Serialize)]

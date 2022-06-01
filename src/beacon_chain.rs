@@ -3,8 +3,8 @@ mod beacon_time;
 mod blocks;
 mod deposits;
 mod issuance;
-pub mod node;
-pub mod rewards;
+mod node;
+mod rewards;
 mod states;
 mod sync;
 
@@ -12,7 +12,10 @@ use sqlx::postgres::PgPoolOptions;
 
 use crate::config;
 
+pub use self::balances::get_validator_balances_by_day;
+pub use self::issuance::get_issuance_by_day;
 pub use self::sync::SyncError;
+pub use rewards::get_issuance_reward;
 
 pub async fn sync_beacon_states() {
     tracing_subscriber::fmt::init();

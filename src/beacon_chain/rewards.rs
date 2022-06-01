@@ -1,7 +1,7 @@
 use chrono::Utc;
 use reqwest::Client;
 use serde::Serialize;
-use sqlx::{types::Json, PgPool, Row};
+use sqlx::{PgPool, Row};
 
 use crate::{
     caching, eth_time,
