@@ -46,14 +46,24 @@ async fn get_tips_reward(
     effective_balance_sum: GweiAmount,
 ) -> sqlx::Result<ValidatorReward> {
     let GweiAmount(tips_since_london) = get_tips_since_london(pool).await?;
+    tracing::debug!("tips since london {}", tips_since_london);
+
     let tips_per_year = tips_since_london as f64 / get_days_since_london() as f64 * 365.25;
     let single_validator_share =
         (32_f64 * eth_units::GWEI_PER_ETH as f64) / effective_balance_sum.0 as f64;
-    let tips_earned_per_year = tips_per_year * single_validator_share;
-    let apr = tips_earned_per_year / (32 * eth_units::GWEI_PER_ETH) as f64;
+    tracing::debug!("single validator share {}", tips_since_london);
+
+    let tips_earned_per_year_per_validator = tips_per_year * single_validator_share;
+    tracing::debug!(
+        "tips earned per year per validator {}",
+        tips_earned_per_year_per_validator
+    );
+
+    let apr = tips_earned_per_year_per_validator / (32 * eth_units::GWEI_PER_ETH) as f64;
+    tracing::debug!("tips APR {}", apr);
 
     Ok(ValidatorReward {
-        annual_reward: GweiAmount(tips_earned_per_year as u64),
+        annual_reward: GweiAmount(tips_earned_per_year_per_validator.round() as u64),
         apr,
     })
 }
