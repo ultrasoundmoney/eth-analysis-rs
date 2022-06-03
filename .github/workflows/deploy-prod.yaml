@@ -27,7 +27,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
-          command: apply -f k8s/prod
+          command: apply -f k8s/overlays/prod
   deploy-sync-beacon-states:
     name: deploy sync-beacon-states
     runs-on: ubuntu-latest
@@ -41,7 +41,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
-          command: set image cronjob/sync-beacon-states sync-beacon-states=registry.digitalocean.com/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
+          command: set image cronjob/sync-beacon-states sync-beacon-states=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
       - name: run job
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -60,7 +60,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
-          command: set image cronjob/update-validator-rewards update-validator-rewards=registry.digitalocean.com/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
+          command: set image cronjob/update-validator-rewards update-validator-rewards=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
       - name: run job
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -79,7 +79,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
-          command: set image cronjob/update-supply-projection-inputs update-supply-projection-inputs=registry.digitalocean.com/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
+          command: set image cronjob/update-supply-projection-inputs update-supply-projection-inputs=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis:${{ steps.vars.outputs.sha_short }}
       - name: run job
         uses: steebchen/kubectl@v2.0.0
         with:
