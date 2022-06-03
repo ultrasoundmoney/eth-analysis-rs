@@ -1,27 +1,25 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: update-supply-projection-inputs
-  namespace: dev
+  name: sync-beacon-states
 spec:
   schedule: "0 */4 * * *"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
       template:
         spec:
           containers:
-            - name: update-supply-projection-inputs
-              image: registry.digitalocean.com/ultrasoundmoney/eth-analysis
-              command: ["update-supply-projection-inputs"]
+            - name: sync-beacon-states
+              image: rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis
+              command: ["sync-beacon-states"]
               envFrom:
                 - configMapRef:
                     name: eth-analysis-env
                 - secretRef:
-                    name: anton-db-url
+                    name: db-url
                 - secretRef:
-                    name: node-urls
-                - secretRef:
-                    name: glassnode-api-key
+                    name: beacon-node-url
               env:
                 - name: NAME
                   valueFrom:
@@ -31,4 +29,6 @@ spec:
                 requests:
                   cpu: 25m
                   memory: 128Mi
+          imagePullSecrets:
+            - name: registry-secret
           restartPolicy: OnFailure

@@ -11,7 +11,7 @@ spec:
         spec:
           containers:
             - name: sync-beacon-states
-              image: registry.digitalocean.com/ultrasoundmoney/eth-analysis
+              image: reg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis
               command: ["sync-beacon-states"]
               envFrom:
                 - configMapRef:
@@ -32,3 +32,5 @@ spec:
                   cpu: 25m
                   memory: 128Mi
           restartPolicy: OnFailure
+          imagePullSecrets:
+            - name: registry-secret

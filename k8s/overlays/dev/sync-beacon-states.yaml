@@ -1,23 +1,24 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: update-validator-rewards
+  name: sync-beacon-states
   namespace: dev
 spec:
   schedule: "0 */4 * * *"
+  concurrencyPolicy: Forbid
   jobTemplate:
     spec:
       template:
         spec:
           containers:
-            - name: update-validator-rewards
-              image: registry.digitalocean.com/ultrasoundmoney/eth-analysis
-              command: ["update-validator-rewards"]
+            - name: sync-beacon-states
+              image: rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis
+              command: ["sync-beacon-states"]
               envFrom:
                 - configMapRef:
                     name: eth-analysis-env
                 - secretRef:
-                    name: anton-db-url
+                    name: db-url
                 - secretRef:
                     name: node-urls
               env:
@@ -25,6 +26,8 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.name
+                - name: PGDATABASE
+                  value: devdb
               resources:
                 requests:
                   cpu: 25m

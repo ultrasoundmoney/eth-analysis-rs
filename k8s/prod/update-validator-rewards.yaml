@@ -10,7 +10,7 @@ spec:
         spec:
           containers:
             - name: update-validator-rewards
-              image: registry.digitalocean.com/ultrasoundmoney/eth-analysis
+              image: reg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis
               command: ["update-validator-rewards"]
               envFrom:
                 - configMapRef:
@@ -32,3 +32,5 @@ spec:
                   cpu: 1000m
                   memory: 1Gi
           restartPolicy: OnFailure
+          imagePullSecrets:
+            - name: registry-secret
