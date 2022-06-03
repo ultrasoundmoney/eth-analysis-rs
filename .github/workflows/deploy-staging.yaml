@@ -75,7 +75,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: apply -f k8s/overlays/dev
+          command: apply -k k8s/overlays/dev
   deploy-k8s-resources-stag:
     name: deploy k8s resources staging
     runs-on: ubuntu-latest
@@ -86,7 +86,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: apply -f k8s/overlays/stag
+          command: apply -k k8s/overlays/stag
   deploy-sync-beacon-states-dev:
     name: deploy dev sync-beacon-states
     runs-on: ubuntu-latest

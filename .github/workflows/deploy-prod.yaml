@@ -27,7 +27,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
-          command: apply -f k8s/overlays/prod
+          command: apply -k k8s/overlays/prod
   deploy-sync-beacon-states:
     name: deploy sync-beacon-states
     runs-on: ubuntu-latest
