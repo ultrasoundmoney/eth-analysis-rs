@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: eth-analysis-env
-data:
-  RUST_LOG: "eth_analysis=info"
