@@ -1,2 +1,3 @@
 # ETH Analysis Services Ξ🔍
-API services backing [ultrasound.money](https://ultrasound.money/).
+
+Services backing [ultrasound.money](https://ultrasound.money/). Written in Rust.
