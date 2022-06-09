@@ -63,9 +63,23 @@ pub async fn get_issuance_by_start_of_day<'a>(
     })
 }
 
+pub async fn get_current_issuance<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result<GweiAmount> {
+    sqlx::query!(
+        "
+            SELECT gwei FROM beacon_issuance
+            ORDER BY timestamp DESC
+            LIMIT 1
+        "
+    )
+    .fetch_one(pool)
+    .await
+    .map(|row| GweiAmount(row.gwei as u64))
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
+    use serial_test::serial;
     use sqlx::{PgConnection, PgExecutor};
 
     use super::*;
@@ -90,6 +104,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_timestamp_is_start_of_day() {
         let mut conn: PgConnection = sqlx::Connection::connect(&config::get_db_url())
             .await
@@ -118,5 +133,43 @@ mod tests {
         clean_tables(&mut conn).await;
 
         assert_eq!(datetime, start_of_day_datetime);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_get_current_issuance() {
+        let mut conn: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        store_state(&mut conn, "0xtest_issuance_1", &3599)
+            .await
+            .unwrap();
+
+        store_state(&mut conn, "0xtest_issuance_2", &10799)
+            .await
+            .unwrap();
+
+        store_issuance_for_day(
+            &mut conn,
+            "0xtest_issuance_1",
+            &FirstOfDaySlot::new(&3599).unwrap(),
+            &GweiAmount(100),
+        )
+        .await;
+
+        store_issuance_for_day(
+            &mut conn,
+            "0xtest_issuance_2",
+            &FirstOfDaySlot::new(&10799).unwrap(),
+            &GweiAmount(110),
+        )
+        .await;
+
+        let current_issuance = get_current_issuance(&mut conn).await.unwrap();
+
+        clean_tables(&mut conn).await;
+
+        assert_eq!(current_issuance, GweiAmount(110));
     }
 }

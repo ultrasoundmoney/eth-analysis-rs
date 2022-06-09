@@ -1,12 +1,16 @@
+use num_bigint::BigUint;
 use std::{
     fmt,
     ops::{Add, Div, Sub},
+    str::FromStr,
 };
 
 use serde::{
     de::{self, Visitor},
     Deserialize, Serialize,
 };
+
+use crate::etherscan::WeiAmount;
 
 pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
@@ -18,6 +22,12 @@ pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct GweiAmount(pub u64);
+
+impl fmt::Display for GweiAmount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} gwei", self.0)
+    }
+}
 
 impl GweiAmount {
     pub fn new(gwei: u64) -> Self {
@@ -31,16 +41,18 @@ impl GweiAmount {
 
 impl From<GweiAmount> for i64 {
     fn from(GweiAmount(amount): GweiAmount) -> Self {
-        amount as i64
+        match i64::try_from(amount) {
+            Err(err) => panic!("failed to convert GweiAmount into i64 {}", err),
+            Ok(amount_i64) => amount_i64,
+        }
     }
 }
 
 impl From<i64> for GweiAmount {
     fn from(num: i64) -> Self {
-        if num < 0 {
-            panic!("tried to convert negative i64 into GweiAmount")
-        } else {
-            GweiAmount(num as u64)
+        match u64::try_from(num) {
+            Err(err) => panic!("failed to convert i64 into GweiAmount {}", err),
+            Ok(num_u64) => GweiAmount(num_u64),
         }
     }
 }
@@ -80,6 +92,14 @@ impl Div<GweiAmount> for GweiAmount {
     fn div(self, GweiAmount(rhs): GweiAmount) -> Self::Output {
         let GweiAmount(lhs) = self;
         GweiAmount(lhs / rhs)
+    }
+}
+
+impl From<WeiAmount> for GweiAmount {
+    fn from(WeiAmount(amount_str): WeiAmount) -> Self {
+        let gwei_biguint = BigUint::from_str(&amount_str).unwrap() / BigUint::from(GWEI_PER_ETH);
+        let gwei_u64 = u64::try_from(gwei_biguint).unwrap();
+        Self(gwei_u64)
     }
 }
 

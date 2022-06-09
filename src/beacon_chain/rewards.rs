@@ -142,7 +142,7 @@ pub async fn update_validator_rewards(pool: &PgPool, node_client: &Client) -> an
     tracing::debug!("validator rewards: {:?}", validator_rewards);
 
     key_value_store::set_value(
-        &pool,
+        pool,
         KeyValue {
             key: VALIDATOR_REWARDS_CACHE_KEY,
             value: serde_json::to_value(validator_rewards).unwrap(),

@@ -11,3 +11,7 @@ pub fn get_db_url() -> String {
 pub fn get_glassnode_api_key() -> String {
     env::var("GLASSNODE_API_KEY").expect("GLASSNODE_API_KEY in env")
 }
+
+pub fn get_etherscan_api_key() -> String {
+    env::var("ETHERSCAN_API_KEY").expect("ETHERSCAN_API_KEY in env")
+}

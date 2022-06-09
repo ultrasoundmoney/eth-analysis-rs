@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::Serialize;
 use serde_json::Value;
-use sqlx::PgPool;
+use sqlx::{PgExecutor, PgPool};
 
 struct KeyValueFromDb {
     value: Option<Value>,
@@ -30,7 +30,7 @@ pub struct KeyValue<'a> {
     pub value: Value,
 }
 
-pub async fn set_value(pool: &PgPool, key_value: KeyValue<'_>) {
+pub async fn set_value<'a>(pg_executor: impl PgExecutor<'a>, key_value: KeyValue<'_>) {
     sqlx::query!(
         "
             INSERT INTO key_value_store (key, value) VALUES ($1, $2)
@@ -40,7 +40,7 @@ pub async fn set_value(pool: &PgPool, key_value: KeyValue<'_>) {
         key_value.key,
         key_value.value
     )
-    .execute(pool)
+    .execute(pg_executor)
     .await
     .unwrap();
 }
