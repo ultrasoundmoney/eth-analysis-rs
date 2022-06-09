@@ -7,10 +7,10 @@ use sqlx::{PgConnection, PgExecutor};
 #[derive(Debug, Serialize)]
 struct IssuanceBreakdown {
     crowd_sale: GweiAmount,
-    ethereum_foundation: GweiAmount,
     early_contributors: GweiAmount,
-    proof_of_stake_issuance: GweiAmount,
-    proof_of_work_issuance: GweiAmount,
+    ethereum_foundation: GweiAmount,
+    proof_of_stake: GweiAmount,
+    proof_of_work: GweiAmount,
 }
 
 const ISSUANCE_BREAKDOWN_CACHE_KEY: &str = "issuance-breakdown";
@@ -43,24 +43,24 @@ pub async fn update_issuance_breakdown() {
     let crowd_sale = GweiAmount::from_eth(60_000_000);
     tracing::debug!("crowd sale: {} ETH", crowd_sale.0 / GWEI_PER_ETH);
 
-    let ethereum_foundation = GweiAmount::from_eth(6_000_000);
-    tracing::debug!(
-        "ethereum foundation: {} ETH",
-        ethereum_foundation.0 / GWEI_PER_ETH
-    );
-
     let early_contributors = GweiAmount::from_eth(6_000_000);
     tracing::debug!(
         "early contributors: {} ETH",
         early_contributors.0 / GWEI_PER_ETH
     );
 
-    let proof_of_stake_issuance = beacon_chain::get_current_issuance(&mut connection)
+    let ethereum_foundation = GweiAmount::from_eth(6_000_000);
+    tracing::debug!(
+        "ethereum foundation: {} ETH",
+        ethereum_foundation.0 / GWEI_PER_ETH
+    );
+
+    let proof_of_stake = beacon_chain::get_current_issuance(&mut connection)
         .await
         .unwrap();
     tracing::debug!(
         "proof of stake issuance: {} ETH",
-        proof_of_stake_issuance.0 / GWEI_PER_ETH
+        proof_of_stake.0 / GWEI_PER_ETH
     );
 
     let eth_supply_2 = etherscan::get_eth_supply_2().await.unwrap();
@@ -70,7 +70,7 @@ pub async fn update_issuance_breakdown() {
         GweiAmount::from(eth_supply_2.eth_supply.clone()).0 / GWEI_PER_ETH
     );
 
-    let proof_of_work_issuance = GweiAmount::from(eth_supply_2.eth_supply)
+    let proof_of_work = GweiAmount::from(eth_supply_2.eth_supply)
         - GweiAmount::from(eth_supply_2.burnt_fees)
         - GweiAmount::from(eth_supply_2.eth2_staking)
         - crowd_sale
@@ -78,15 +78,15 @@ pub async fn update_issuance_breakdown() {
         - early_contributors;
     tracing::debug!(
         "proof of work issuance: {} ETH",
-        proof_of_work_issuance.0 / GWEI_PER_ETH
+        proof_of_work.0 / GWEI_PER_ETH
     );
 
     let issuance_breakdown = IssuanceBreakdown {
         crowd_sale,
-        ethereum_foundation,
         early_contributors,
-        proof_of_work_issuance,
-        proof_of_stake_issuance,
+        ethereum_foundation,
+        proof_of_stake,
+        proof_of_work,
     };
 
     store_issuance_breakdown(&mut connection, &issuance_breakdown).await;
