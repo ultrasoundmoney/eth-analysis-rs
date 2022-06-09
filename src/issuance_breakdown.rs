@@ -13,7 +13,7 @@ struct IssuanceBreakdown {
     proof_of_work_issuance: GweiAmount,
 }
 
-const ISSUANCE_BREAKDOWN_CACHE_KEY: &str = "issuance-breakdown-cache-key";
+const ISSUANCE_BREAKDOWN_CACHE_KEY: &str = "issuance-breakdown";
 
 async fn store_issuance_breakdown<'a>(
     pg_executor: impl PgExecutor<'a>,
