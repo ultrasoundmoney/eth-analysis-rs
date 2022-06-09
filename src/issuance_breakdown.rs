@@ -5,7 +5,6 @@ use serde::Serialize;
 use sqlx::{PgConnection, PgExecutor};
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct IssuanceBreakdown {
     crowd_sale: GweiAmount,
     ethereum_foundation: GweiAmount,
