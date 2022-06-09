@@ -84,6 +84,7 @@ pub async fn get_validator_balances_by_start_of_day<'a>(
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, TimeZone, Utc};
+    use serial_test::serial;
     use sqlx::PgConnection;
 
     use crate::{beacon_chain::states::store_state, config};
@@ -98,19 +99,20 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_timestamp_is_start_of_day() {
         let mut conn: PgConnection = sqlx::Connection::connect(&config::get_db_url())
             .await
             .unwrap();
 
-        store_state(&mut conn, "0xtest_balances", &10799)
+        store_state(&mut conn, "0xtest_balances", &17999)
             .await
             .unwrap();
 
         store_validator_sum_for_day(
             &mut conn,
             "0xtest_balances",
-            &FirstOfDaySlot::new(&10799).unwrap(),
+            &FirstOfDaySlot::new(&17999).unwrap(),
             &GweiAmount(100),
         )
         .await;
