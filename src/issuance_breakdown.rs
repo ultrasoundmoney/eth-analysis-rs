@@ -71,7 +71,7 @@ pub async fn update_issuance_breakdown() {
     );
 
     let proof_of_work = GweiAmount::from(eth_supply_2.eth_supply)
-        - GweiAmount::from(eth_supply_2.burnt_fees)
+        + GweiAmount::from(eth_supply_2.burnt_fees)
         - GweiAmount::from(eth_supply_2.eth2_staking)
         - crowd_sale
         - ethereum_foundation
