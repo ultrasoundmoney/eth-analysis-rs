@@ -7,7 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  BEACON_URL: http://***REMOVED***
+  BEACON_URL: ${{ secrets.BEACON_URL }}
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   GLASSNODE_API_KEY: ${{ secrets.GLASSNODE_API_KEY }}
 
