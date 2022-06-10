@@ -1,6 +1,6 @@
 use crate::eth_units::{GweiAmount, GWEI_PER_ETH};
 use crate::key_value_store::KeyValue;
-use crate::{beacon_chain, config, etherscan, key_value_store};
+use crate::{beacon_chain, caching, config, etherscan, key_value_store};
 use serde::Serialize;
 use sqlx::{PgConnection, PgExecutor};
 
@@ -90,6 +90,8 @@ pub async fn update_issuance_breakdown() {
     };
 
     store_issuance_breakdown(&mut connection, &issuance_breakdown).await;
+
+    caching::publish_cache_update(&mut connection, ISSUANCE_BREAKDOWN_CACHE_KEY).await;
 
     tracing::info!("done updating issuance breakdown")
 }

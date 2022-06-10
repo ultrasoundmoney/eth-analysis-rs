@@ -150,7 +150,7 @@ pub async fn update_validator_rewards(pool: &PgPool, node_client: &Client) -> an
     )
     .await;
 
-    caching::publish_cache_update(&pool, VALIDATOR_REWARDS_CACHE_KEY).await;
+    caching::publish_cache_update(pool, VALIDATOR_REWARDS_CACHE_KEY).await;
 
     Ok(())
 }
