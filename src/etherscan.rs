@@ -29,6 +29,7 @@ pub struct WeiAmount(pub String);
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct EthSupply2 {
+    /// eth_supply is calculated before adding ETH minted as Eth2Staking rewards and subtracting BurntFees from EIP-1559.
     pub eth_supply: WeiAmount,
     pub eth2_staking: WeiAmount,
     pub burnt_fees: WeiAmount,
