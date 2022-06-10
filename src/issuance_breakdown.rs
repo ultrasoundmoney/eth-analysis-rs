@@ -66,7 +66,7 @@ pub async fn update_issuance_breakdown() {
     let eth_supply_2 = etherscan::get_eth_supply_2().await.unwrap();
 
     tracing::debug!(
-        "circulating supply: {} ETH",
+        "eth supply without beacon issuance, with burnt fees: {} ETH",
         GweiAmount::from(eth_supply_2.eth_supply.clone()).0 / GWEI_PER_ETH
     );
 
