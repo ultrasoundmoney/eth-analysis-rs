@@ -24,6 +24,10 @@ pub fn get_etherscan_api_key() -> String {
     get_env_key_unsafe("ETHERSCAN_API_KEY")
 }
 
+pub fn get_execution_url() -> String {
+    get_env_key_unsafe("GETH_URL")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
