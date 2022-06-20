@@ -1,4 +1,3 @@
--- Add up migration script here
 CREATE TABLE IF NOT EXISTS public.blocks (
 	hash text NOT NULL,
 	"number" int4 NOT NULL,
