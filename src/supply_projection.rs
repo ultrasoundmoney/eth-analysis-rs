@@ -59,7 +59,7 @@ fn add_beacon_issuance_to_supply(
                 None => supply_on_day.clone(),
                 Some(issuance_on_day) => GlassnodeDataPoint {
                     t: supply_on_day.t,
-                    v: supply_on_day.v + (issuance_on_day),
+                    v: supply_on_day.v + issuance_on_day,
                 },
             },
         )
