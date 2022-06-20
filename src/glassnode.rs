@@ -5,6 +5,12 @@ use crate::config;
 
 const GLASSNODE_API: &str = "https://api.glassnode.com";
 
+#[derive(Debug, Deserialize)]
+struct GlassnodeDataPointF {
+    t: u64,
+    v: Option<f64>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GlassnodeDataPoint {
     pub t: u64,
@@ -122,8 +128,17 @@ pub async fn get_locked_eth_data() -> reqwest::Result<Vec<GlassnodeDataPoint>> {
     reqwest::get(make_eth_in_smart_contracts_data_url())
         .await?
         .error_for_status()?
-        .json::<Vec<GlassnodeDataPoint>>()
+        .json::<Vec<GlassnodeDataPointF>>()
         .await
+        .map(|data_points| {
+            data_points
+                .iter()
+                .filter_map(|data_point| match data_point.v {
+                    None => None,
+                    Some(v) => Some(GlassnodeDataPoint { t: data_point.t, v }),
+                })
+                .collect()
+        })
 }
 
 #[cfg(test)]
