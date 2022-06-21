@@ -31,7 +31,6 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-web3 = "*"
 
 [dev-dependencies]
 serial_test = "*"
