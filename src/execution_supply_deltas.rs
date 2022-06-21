@@ -1,22 +1,24 @@
 use futures::channel;
 use futures::prelude::*;
-use std::error::Error;
 
-use crate::execution_node;
+use crate::execution_node::ExecutionNode;
 
-pub async fn write_supply_deltas_csv() -> Result<(), Box<dyn Error>> {
+const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
+
+pub async fn write_deltas() {
     tracing_subscriber::fmt::init();
 
     tracing::info!("writing supply deltas CSV");
 
     let (supply_deltas_tx, mut supply_deltas_rx) = channel::mpsc::unbounded();
 
-    let execution_node = execution_node::ExecutionNode::connect().await;
-
     tokio::spawn(async move {
-        execution_node
-            .stream_supply_deltas_from(supply_deltas_tx, &0)
-            .await;
+        crate::execution_node::stream_supply_deltas_from(
+            supply_deltas_tx,
+            &0,
+            SUPPLY_DELTA_BUFFER_SIZE,
+        )
+        .await;
     });
 
     let mut progress = pit_wall::Progress::new("write supply deltas", 15_000_000);
@@ -32,13 +34,20 @@ pub async fn write_supply_deltas_csv() -> Result<(), Box<dyn Error>> {
             csv_writer.serialize(supply_delta).unwrap();
         }
 
-        progress.inc_work_done_by(execution_node::SUPPLY_DELTA_BUFFER_SIZE.try_into().unwrap());
+        progress.inc_work_done_by(SUPPLY_DELTA_BUFFER_SIZE.try_into().unwrap());
         tracing::debug!("{}", progress.get_progress_string());
     }
 
     // A CSV writer maintains an internal buffer, so it's important
     // to flush the buffer when you're done.
     csv_writer.flush().unwrap();
+}
 
-    Ok(())
+pub async fn sync_deltas() {
+    tracing_subscriber::fmt::init();
+
+    tracing::info!("syncing supply deltas");
+
+    let execution_node = ExecutionNode::connect().await;
+    execution_node.get_latest_block().await;
 }

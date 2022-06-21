@@ -25,6 +25,6 @@ COPY --from=builder /app/target/release/update-issuance-breakdown /usr/local/bin
 COPY --from=builder /app/target/release/update-supply-projection-inputs /usr/local/bin
 COPY --from=builder /app/target/release/update-validator-rewards /usr/local/bin
 COPY --from=builder /app/target/release/sync-beacon-states /usr/local/bin
-COPY --from=builder /app/target/release/write-supply-deltas-csv /usr/local/bin
+COPY --from=builder /app/target/release/write-execution-supply-deltas /usr/local/bin
 
 ENTRYPOINT ["/usr/local/bin/eth-analysis"]
