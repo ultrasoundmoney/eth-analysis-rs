@@ -92,7 +92,7 @@ mod tests {
     use super::*;
 
     async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
-        sqlx::query!("TRUNCATE TABLE beacon_states CASCADE")
+        sqlx::query("TRUNCATE TABLE beacon_states CASCADE")
             .execute(pg_exec)
             .await
             .unwrap();
