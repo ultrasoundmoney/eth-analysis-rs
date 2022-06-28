@@ -1,4 +1,3 @@
-use futures::channel;
 use futures::prelude::*;
 
 use crate::execution_node::ExecutionNode;
@@ -10,16 +9,8 @@ pub async fn write_deltas() {
 
     tracing::info!("writing supply deltas CSV");
 
-    let (supply_deltas_tx, mut supply_deltas_rx) = channel::mpsc::unbounded();
-
-    tokio::spawn(async move {
-        crate::execution_node::stream_supply_deltas_from(
-            supply_deltas_tx,
-            &0,
-            SUPPLY_DELTA_BUFFER_SIZE,
-        )
-        .await;
-    });
+    let mut supply_deltas_rx =
+        crate::execution_node::stream_supply_deltas_from(0, SUPPLY_DELTA_BUFFER_SIZE);
 
     let mut progress = pit_wall::Progress::new("write supply deltas", 15_000_000);
 

@@ -86,44 +86,49 @@ impl IdPool {
     }
 }
 
-pub async fn stream_supply_deltas_from(
-    mut supply_deltas_tx: mpsc::UnboundedSender<Vec<SupplyDelta>>,
-    from: &u32,
+pub fn stream_supply_deltas_from(
+    from: u32,
     chunk_size: usize,
-) {
-    let mut ws = connect_async(format!("{}", &config::get_execution_url()))
-        .await
-        .unwrap()
-        .0;
+) -> mpsc::UnboundedReceiver<Vec<SupplyDelta>> {
+    let (mut supply_deltas_tx, supply_deltas_rx) = mpsc::unbounded();
 
-    let deltas_subscribe_message = make_supply_delta_subscribe_message(from);
+    tokio::spawn(async move {
+        let mut ws = connect_async(format!("{}", &config::get_execution_url()))
+            .await
+            .unwrap()
+            .0;
 
-    ws.send(Message::text(deltas_subscribe_message))
-        .await
-        .unwrap();
+        let deltas_subscribe_message = make_supply_delta_subscribe_message(&from);
 
-    loop {
-        if let Some(_) = ws.next().await {
-            tracing::debug!("got subscription confirmation message");
-            break;
+        ws.send(Message::text(deltas_subscribe_message))
+            .await
+            .unwrap();
+
+        loop {
+            if let Some(_) = ws.next().await {
+                tracing::debug!("got subscription confirmation message");
+                break;
+            }
         }
-    }
 
-    let mut supply_delta_buffer = Vec::with_capacity(chunk_size);
+        let mut supply_delta_buffer = Vec::with_capacity(chunk_size);
 
-    while let Some(message) = ws.next().await {
-        let message_text = message.unwrap().into_text().unwrap();
-        let supply_delta_message =
-            serde_json::from_str::<SupplyDeltaMessage>(&message_text).unwrap();
-        let supply_delta = SupplyDelta::from(supply_delta_message);
+        while let Some(message) = ws.next().await {
+            let message_text = message.unwrap().into_text().unwrap();
+            let supply_delta_message =
+                serde_json::from_str::<SupplyDeltaMessage>(&message_text).unwrap();
+            let supply_delta = SupplyDelta::from(supply_delta_message);
 
-        supply_delta_buffer.push(supply_delta);
+            supply_delta_buffer.push(supply_delta);
 
-        if supply_delta_buffer.len() >= chunk_size {
-            supply_deltas_tx.send(supply_delta_buffer).await.unwrap();
-            supply_delta_buffer = vec![];
+            if supply_delta_buffer.len() >= chunk_size {
+                supply_deltas_tx.send(supply_delta_buffer).await.unwrap();
+                supply_delta_buffer = vec![];
+            }
         }
-    }
+    });
+
+    supply_deltas_rx
 }
 
 type NodeMessageRx = SplitStream<WebSocketStream<TokioAdapter<TcpStream>>>;
