@@ -47,7 +47,4 @@ pub async fn sync_deltas() {
     tracing_subscriber::fmt::init();
 
     tracing::info!("syncing supply deltas");
-
-    let execution_node = ExecutionNode::connect().await;
-    execution_node.get_latest_block().await;
 }

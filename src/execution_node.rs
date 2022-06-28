@@ -1,13 +1,15 @@
 mod blocks;
 mod stream_supply_deltas;
 
+use core::panic;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::error::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::config;
-// use crate::execution_node::blocks::*;
+use crate::execution_node::blocks::*;
 use crate::execution_node::stream_supply_deltas::*;
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
@@ -18,37 +20,19 @@ use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::prelude::*;
 use futures::stream::SplitSink;
+use futures::stream::SplitStream;
 use serde::Deserialize;
 use serde_json::json;
 use serde_json::Value;
 use tokio::net::TcpStream;
 
-// #[derive(Deserialize)]
-// #[serde(untagged)]
-// enum RpcMessageIssuance {
-//     SupplyDeltaMessage {
-//         params: SupplyDeltaParams,
-//     },
-//     SubscriptionConfirmationMessage {
-//         id: u32,
-//         jsonrpc: String,
-//         result: String,
-//     },
-//     UnsubscriptionConfirmationMessage {
-//         id: u32,
-//         jsonrpc: String,
-//         result: bool,
-//     },
-// }
-
 #[derive(Debug, Deserialize)]
-struct RpcMessage {
-    jsonrpc: String,
+struct RpcMessage<A> {
     id: u16,
-    result: Value,
+    result: A,
 }
 
-fn make_issuance_subscribe_message(number: &u32) -> String {
+fn make_supply_delta_subscribe_message(number: &u32) -> String {
     let msg = json!({
         "id": 0,
         "method": "eth_subscribe",
@@ -58,16 +42,17 @@ fn make_issuance_subscribe_message(number: &u32) -> String {
     serde_json::to_string(&msg).unwrap()
 }
 
-// fn make_issuance_unsubscribe_message(id: &str) -> String {
-//     let msg = json!({
-//         "id": 0,
-//         "method": "eth_unsubscribe",
-//         "params": [id]
+#[allow(dead_code)]
+fn make_supply_delta_unsubscribe_message(id: &str) -> String {
+    let msg = json!({
+        "id": 0,
+        "method": "eth_unsubscribe",
+        "params": [id]
 
-//     });
+    });
 
-//     serde_json::to_string(&msg).unwrap()
-// }
+    serde_json::to_string(&msg).unwrap()
+}
 
 struct IdPool {
     next_id: u16,
@@ -111,7 +96,7 @@ pub async fn stream_supply_deltas_from(
         .unwrap()
         .0;
 
-    let deltas_subscribe_message = make_issuance_subscribe_message(from);
+    let deltas_subscribe_message = make_supply_delta_subscribe_message(from);
 
     ws.send(Message::text(deltas_subscribe_message))
         .await
@@ -141,7 +126,32 @@ pub async fn stream_supply_deltas_from(
     }
 }
 
-// type NodeStream = WebSocketStream<TokioAdapter<TcpStream>>;
+type NodeMessageRx = SplitStream<WebSocketStream<TokioAdapter<TcpStream>>>;
+type MessageHandlersShared = Arc<Mutex<HashMap<u16, oneshot::Sender<String>>>>;
+type IdPoolShared = Arc<Mutex<IdPool>>;
+
+async fn handle_messages(
+    mut ws_rx: NodeMessageRx,
+    message_handlers: MessageHandlersShared,
+    id_pool: IdPoolShared,
+) -> Result<(), Box<dyn Error>> {
+    while let Some(message) = ws_rx.next().await {
+        let message_text = message?.into_text()?;
+        let rpc_message =
+            serde_json::from_str::<RpcMessage<serde_json::Value>>(&message_text).unwrap();
+        match message_handlers.lock().unwrap().remove(&rpc_message.id) {
+            None => {
+                tracing::error!("got a message without a handler: {:?}", rpc_message);
+            }
+            Some(tx) => {
+                id_pool.lock().unwrap().free_id(&rpc_message.id);
+                tx.send(message_text)?;
+            }
+        };
+    }
+
+    Ok(())
+}
 
 pub struct ExecutionNode {
     id_pool: Arc<Mutex<IdPool>>,
@@ -152,34 +162,33 @@ pub struct ExecutionNode {
 impl ExecutionNode {
     pub async fn connect() -> Self {
         let id_pool_am = Arc::new(Mutex::new(IdPool::new(u16::MAX.into())));
-        let id_pool_ref = id_pool_am.clone();
 
         let message_handlers_am = Arc::new(Mutex::new(
             HashMap::<u16, oneshot::Sender<String>>::with_capacity(u16::MAX.into()),
         ));
 
-        let message_handlers_ref = message_handlers_am.clone();
-
-        let (ws_tx, mut ws_rx) = connect_async(format!("{}", &config::get_execution_url()))
+        let (ws_tx, ws_rx) = connect_async(format!("{}", &config::get_execution_url()))
             .await
             .unwrap()
             .0
             .split();
 
+        // Our execution node websocket uses pipelining, this means we'd like to read messages
+        // concurrently while the main program executes. However, if message reading fails, our
+        // thread may panic, causing main thread channels to hang. To avoid this main should panic
+        // when this thread panics.
+        let default_panic = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            default_panic(info);
+            std::process::exit(1);
+        }));
+
+        let id_pool_ref = id_pool_am.clone();
+        let message_handlers_ref = message_handlers_am.clone();
         tokio::spawn(async move {
-            while let Some(message) = ws_rx.next().await {
-                let message_text = message.unwrap().into_text().unwrap();
-                let rpc_message = serde_json::from_str::<RpcMessage>(&message_text).unwrap();
-                match message_handlers_ref.lock().unwrap().remove(&rpc_message.id) {
-                    None => {
-                        tracing::warn!("got a message without a handler: {:?}", rpc_message);
-                    }
-                    Some(tx) => {
-                        id_pool_ref.lock().unwrap().free_id(&rpc_message.id);
-                        tx.send(message_text).unwrap();
-                    }
-                }
-            }
+            handle_messages(ws_rx, message_handlers_ref, id_pool_ref)
+                .await
+                .unwrap()
         });
 
         ExecutionNode {
@@ -189,17 +198,20 @@ impl ExecutionNode {
         }
     }
 
-    pub async fn get_latest_block(mut self) {
+    pub async fn get_latest_block(&mut self) -> Block {
         let message = self
-            .call("eth_getBlockByNumber", &vec![String::from("latest")])
+            .call(
+                "eth_getBlockByNumber",
+                &json!((String::from("latest"), false)),
+            )
             .await;
 
-        dbg!(message);
+        let rpc_message = serde_json::from_str::<RpcMessage<BlockF>>(&message).unwrap();
 
-        ()
+        Block::from(rpc_message)
     }
 
-    async fn call(&mut self, method: &str, params: &Vec<String>) -> String {
+    async fn call(&mut self, method: &str, params: &Value) -> String {
         let id = self.id_pool.lock().unwrap().get_next_id();
 
         let json = json!({
@@ -220,5 +232,9 @@ impl ExecutionNode {
             .unwrap();
 
         rx.await.unwrap()
+    }
+
+    pub async fn close(&mut self) {
+        self.message_sink.close().await.unwrap();
     }
 }
