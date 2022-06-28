@@ -32,17 +32,7 @@ pub async fn sync_beacon_states() {
 
     let node_client = reqwest::Client::new();
 
-    sync::sync_beacon_states(&pool, &node_client)
-        .await
-        .map_or_else(
-            |error| {
-                tracing::error!("{}", error);
-                tracing::error!("failed to sync beacon states");
-            },
-            |_| {
-                tracing::info!("done syncing beacon states");
-            },
-        );
+    sync::sync_beacon_states(&pool, &node_client).await.unwrap();
 }
 
 pub async fn update_validator_rewards() {
