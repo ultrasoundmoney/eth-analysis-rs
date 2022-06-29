@@ -40,16 +40,18 @@ pub async fn update_issuance_breakdown() {
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
-    let crowd_sale = GweiAmount::from_eth(60_000_000);
+    let crowd_sale = GweiAmount::from_eth_f64(60_108_506.26);
     tracing::debug!("crowd sale: {} ETH", crowd_sale.0 / GWEI_PER_ETH);
 
-    let early_contributors = GweiAmount::from_eth(6_000_000);
+    let early_contributors_without_vitalik = GweiAmount::from_eth_f64(8_418_324.49);
+    let vitalik = GweiAmount::from_eth_f64(696_940.59);
+    let early_contributors = early_contributors_without_vitalik + vitalik;
     tracing::debug!(
         "early contributors: {} ETH",
         early_contributors.0 / GWEI_PER_ETH
     );
 
-    let ethereum_foundation = GweiAmount::from_eth(6_000_000);
+    let ethereum_foundation = GweiAmount::from_eth_f64(3_483_159.75);
     tracing::debug!(
         "ethereum foundation: {} ETH",
         ethereum_foundation.0 / GWEI_PER_ETH
