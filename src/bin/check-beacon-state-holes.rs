@@ -1,0 +1,38 @@
+use std::error::Error;
+
+use eth_analysis::config;
+use futures::TryStreamExt;
+use sqlx::PgConnection;
+
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn Error>> {
+    tracing_subscriber::fmt::init();
+
+    tracing::info!("checking for holes in beacon states");
+
+    let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+        .await
+        .unwrap();
+
+    let mut rows = sqlx::query!(
+        "
+            SELECT slot FROM beacon_states
+            ORDER BY slot ASC
+        ",
+    )
+    .map(|row| row.slot)
+    .fetch(&mut connection);
+
+    let mut last_slot = None;
+    while let Some(slot) = rows.try_next().await? {
+        if let Some(last_slot) = last_slot {
+            if last_slot != slot - 1 {
+                panic!("last slot: {last_slot}, current slot: {slot}")
+            }
+        }
+
+        last_slot = Some(slot);
+    }
+
+    Ok(())
+}
