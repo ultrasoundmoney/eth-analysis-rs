@@ -37,6 +37,10 @@ impl GweiAmount {
     pub fn from_eth(eth: u64) -> Self {
         Self(eth * GWEI_PER_ETH)
     }
+
+    pub fn from_eth_f64(eth: f64) -> Self {
+        Self((eth * GWEI_PER_ETH_F64) as u64)
+    }
 }
 
 impl From<GweiAmount> for i64 {
