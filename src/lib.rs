@@ -4,7 +4,7 @@ pub mod config;
 mod eth_time;
 mod eth_units;
 mod etherscan;
-mod execution_node;
+pub mod execution_node;
 mod execution_supply_deltas;
 mod glassnode;
 mod issuance_breakdown;

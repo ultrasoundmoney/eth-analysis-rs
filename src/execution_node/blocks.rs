@@ -1,21 +1,11 @@
+use super::decoders::from_u32_hex_str;
 use serde::Deserialize;
 
-use super::RpcMessage;
-
-#[derive(Deserialize)]
-pub struct BlockF {
-    number: String,
-}
-
-#[derive(Debug)]
-pub struct Block {
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionNodeBlock {
+    pub hash: String,
+    #[serde(deserialize_with = "from_u32_hex_str")]
     pub number: u32,
-}
-
-impl From<RpcMessage<BlockF>> for Block {
-    fn from(message: RpcMessage<BlockF>) -> Self {
-        Self {
-            number: u32::from_str_radix(&message.result.number[2..], 16).unwrap(),
-        }
-    }
+    pub parent_hash: String,
 }
