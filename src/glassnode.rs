@@ -28,34 +28,6 @@ struct StakedDataParams<'a> {
     u: i64,
 }
 
-fn make_staked_data_url() -> String {
-    let params = StakedDataParams {
-        a: "ETH",
-        api_key: &config::get_glassnode_api_key(),
-        c: "NATIVE",
-        f: "JSON",
-        i: "24h",
-        s: ("2020-11-03T00:00:00Z")
-            .parse::<DateTime<Utc>>()
-            .unwrap()
-            .timestamp(),
-        u: chrono::Utc::now().timestamp(),
-    };
-
-    format!(
-        "{GLASSNODE_API}/v1/metrics/eth2/staking_total_volume_sum?{}",
-        serde_qs::to_string(&params).unwrap()
-    )
-}
-
-pub async fn get_staked_data() -> reqwest::Result<Vec<GlassnodeDataPoint>> {
-    reqwest::get(make_staked_data_url())
-        .await?
-        .error_for_status()?
-        .json::<Vec<GlassnodeDataPoint>>()
-        .await
-}
-
 #[derive(Serialize)]
 struct CirculatingSupplyDataParams<'a> {
     a: &'static str,
