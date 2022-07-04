@@ -4,19 +4,22 @@ use crate::eth_units::GWEI_PER_ETH_F64;
 
 #[derive(Debug, Serialize)]
 pub struct SupplyDelta {
-    block_number: u32,
+    pub block_number: u32,
     fee_burn: f64,
     fixed_reward: f64,
     hash: String,
+    parent_hash: String,
     self_destruct: f64,
     supply_delta: f64,
     uncles_reward: f64,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SupplyDeltaF {
     block: u32,
     hash: String,
+    parent_hash: String,
     issuance: Option<f64>,
     subsidy: f64,
     uncles: f64,
