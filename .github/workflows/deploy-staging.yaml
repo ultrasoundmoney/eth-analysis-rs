@@ -11,6 +11,7 @@ env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
   GLASSNODE_API_KEY: ${{ secrets.GLASSNODE_API_KEY }}
+  GETH_URL: ${{ secrets.GETH_URL }}
 
 jobs:
   test:
