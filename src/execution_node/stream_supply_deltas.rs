@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::eth_units::GWEI_PER_ETH_F64;
+use crate::eth_units::WEI_PER_GWEI_F64;
 
 #[derive(Debug, Serialize)]
 pub struct SupplyDelta {
@@ -33,12 +33,13 @@ impl From<SupplyDeltaMessage> for SupplyDelta {
 
         Self {
             block_number: f.block,
-            fee_burn: f.burn / GWEI_PER_ETH_F64,
-            fixed_reward: f.subsidy / GWEI_PER_ETH_F64,
+            fee_burn: f.burn / WEI_PER_GWEI_F64,
+            fixed_reward: f.subsidy / WEI_PER_GWEI_F64,
             hash: f.hash,
-            self_destruct: f.destruct.unwrap_or(0.0) / GWEI_PER_ETH_F64,
-            supply_delta: f.issuance.unwrap_or(0.0) / GWEI_PER_ETH_F64,
-            uncles_reward: f.uncles / GWEI_PER_ETH_F64,
+            parent_hash: f.parent_hash,
+            self_destruct: f.destruct.unwrap_or(0.0) / WEI_PER_GWEI_F64,
+            supply_delta: f.issuance.unwrap_or(0.0) / WEI_PER_GWEI_F64,
+            uncles_reward: f.uncles / WEI_PER_GWEI_F64,
         }
     }
 }

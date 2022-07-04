@@ -16,6 +16,8 @@ pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
 pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
 
+pub const WEI_PER_GWEI_F64: f64 = 1_000_000_000_f64;
+
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
 // ~9_000_000_000 ETH, which is more than the entire supply.
 // TODO: Guard against overflow.
