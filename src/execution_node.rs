@@ -1,6 +1,5 @@
 mod blocks;
 mod decoders;
-mod stream_new_heads;
 mod stream_supply_deltas;
 
 use core::panic;
