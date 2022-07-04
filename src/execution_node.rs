@@ -37,8 +37,8 @@ struct RpcError {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum RpcMessage {
-    RpcMessageResult { id: u16, result: serde_json::Value },
     RpcMessageError { id: u16, error: RpcError },
+    RpcMessageResult { id: u16, result: serde_json::Value },
 }
 
 fn make_supply_delta_subscribe_message(number: &u32) -> String {
