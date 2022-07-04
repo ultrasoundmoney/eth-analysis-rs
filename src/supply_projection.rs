@@ -69,11 +69,8 @@ fn add_beacon_issuance_to_supply(
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SupplyProjectionInputs {
-    supply_data: Vec<GlassnodeDataPoint>,
     supply_by_day: Vec<GlassnodeDataPoint>,
-    locked_data: Vec<GlassnodeDataPoint>,
     in_contracts_by_day: Vec<GlassnodeDataPoint>,
-    staked_data: Vec<GlassnodeDataPoint>,
     in_beacon_validators_by_day: Vec<GlassnodeDataPoint>,
 }
 
@@ -96,10 +93,6 @@ pub async fn update_supply_projection_inputs() {
         "got gwei in contracts by day, {} data points",
         in_contracts_by_day.len()
     );
-
-    let staked_data = glassnode::get_staked_data().await.unwrap();
-
-    tracing::debug!("got staked data by day, {} data points", staked_data.len());
 
     let in_beacon_validators_by_day = beacon_chain::get_validator_balances_by_start_of_day(&pool)
         .await
@@ -141,11 +134,8 @@ pub async fn update_supply_projection_inputs() {
 
     // Deprecate supplyData, lockedData, stakedData after prod frontend has switched to new supply projection inputs.
     let supply_projetion_inputs = SupplyProjectionInputs {
-        supply_data: supply_by_day.clone(),
         supply_by_day,
-        locked_data: in_contracts_by_day.clone(),
         in_contracts_by_day,
-        staked_data,
         in_beacon_validators_by_day,
     };
 
