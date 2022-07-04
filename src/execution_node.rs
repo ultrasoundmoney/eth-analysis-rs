@@ -11,7 +11,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use self::blocks::*;
-use self::stream_new_heads::*;
 use self::stream_supply_deltas::*;
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
