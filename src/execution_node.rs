@@ -147,7 +147,7 @@ pub fn stream_supply_delta_chunks(
 
     let mut supply_delta_buffer = Vec::with_capacity(chunk_size);
 
-    tokio::spawn(async {
+    tokio::spawn(async move {
         while let Some(supply_delta) = supply_deltas_rx.next().await {
             supply_delta_buffer.push(supply_delta);
 
