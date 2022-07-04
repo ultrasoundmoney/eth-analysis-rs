@@ -1,6 +1,7 @@
 use futures::prelude::*;
+use sqlx::postgres::PgPoolOptions;
 
-use crate::execution_node::ExecutionNode;
+use crate::{config, execution_node::ExecutionNode};
 
 const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
 
@@ -10,7 +11,7 @@ pub async fn write_deltas() {
     tracing::info!("writing supply deltas CSV");
 
     let mut supply_deltas_rx =
-        crate::execution_node::stream_supply_deltas_from(0, SUPPLY_DELTA_BUFFER_SIZE);
+        crate::execution_node::stream_supply_delta_chunks(0, SUPPLY_DELTA_BUFFER_SIZE);
 
     let mut progress = pit_wall::Progress::new("write supply deltas", 15_000_000);
 
@@ -34,8 +35,30 @@ pub async fn write_deltas() {
     csv_writer.flush().unwrap();
 }
 
+const BLOCK_SYNC_QUEUE: Vec<u32> = vec![];
+
 pub async fn sync_deltas() {
     tracing_subscriber::fmt::init();
 
     tracing::info!("syncing supply deltas");
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&config::get_db_url())
+        .await
+        .unwrap();
+
+    sqlx::migrate!().run(&pool).await.unwrap();
+
+    let mut execution_node = ExecutionNode::connect().await;
+    let latest_block = execution_node.get_latest_block().await;
+
+    dbg!(latest_block);
+
+    let mut new_heads_rx = crate::execution_node::stream_new_heads();
+
+    while let Some(new_head) = new_heads_rx.next().await {
+        // let _latest_stored_block = crate::execution_chain::get_latest_block(&pool).await;
+        dbg!(new_head);
+    }
 }

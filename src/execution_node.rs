@@ -1,5 +1,6 @@
 mod blocks;
 mod decoders;
+mod stream_new_heads;
 mod stream_supply_deltas;
 
 use core::panic;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use self::blocks::*;
+use self::stream_new_heads::*;
 use self::stream_supply_deltas::*;
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
@@ -103,10 +105,7 @@ impl IdPool {
     }
 }
 
-pub fn stream_supply_deltas_from(
-    from: u32,
-    chunk_size: usize,
-) -> mpsc::UnboundedReceiver<Vec<SupplyDelta>> {
+pub fn stream_supply_deltas(from: u32) -> mpsc::UnboundedReceiver<SupplyDelta> {
     let (mut supply_deltas_tx, supply_deltas_rx) = mpsc::unbounded();
 
     tokio::spawn(async move {
@@ -126,24 +125,74 @@ pub fn stream_supply_deltas_from(
             }
         }
 
-        let mut supply_delta_buffer = Vec::with_capacity(chunk_size);
-
         while let Some(message) = ws.next().await {
             let message_text = message.unwrap().into_text().unwrap();
             let supply_delta_message =
                 serde_json::from_str::<SupplyDeltaMessage>(&message_text).unwrap();
             let supply_delta = SupplyDelta::from(supply_delta_message);
+            supply_deltas_tx.send(supply_delta).await.unwrap();
+        }
+    });
 
+    supply_deltas_rx
+}
+
+pub fn stream_supply_delta_chunks(
+    from: u32,
+    chunk_size: usize,
+) -> mpsc::UnboundedReceiver<Vec<SupplyDelta>> {
+    let (mut supply_delta_chunks_tx, supply_delta_chunks_rx) = mpsc::unbounded();
+
+    let mut supply_deltas_rx = stream_supply_deltas(from);
+
+    let mut supply_delta_buffer = Vec::with_capacity(chunk_size);
+
+    tokio::spawn(async {
+        while let Some(supply_delta) = supply_deltas_rx.next().await {
             supply_delta_buffer.push(supply_delta);
 
             if supply_delta_buffer.len() >= chunk_size {
-                supply_deltas_tx.send(supply_delta_buffer).await.unwrap();
+                supply_delta_chunks_tx
+                    .send(supply_delta_buffer)
+                    .await
+                    .unwrap();
                 supply_delta_buffer = vec![];
             }
         }
     });
 
-    supply_deltas_rx
+    supply_delta_chunks_rx
+}
+
+pub fn stream_new_heads() -> mpsc::UnboundedReceiver<Head> {
+    let (mut new_heads_tx, new_heads_rx) = mpsc::unbounded();
+
+    tokio::spawn(async move {
+        let url = format!("{}", &crate::config::get_execution_url());
+        let mut ws = connect_async(&url).await.unwrap().0;
+
+        let new_heads_subscribe_message = make_new_heads_subscribe_message();
+
+        ws.send(Message::text(new_heads_subscribe_message))
+            .await
+            .unwrap();
+
+        loop {
+            if let Some(_) = ws.next().await {
+                tracing::debug!("got subscription confirmation message");
+                break;
+            }
+        }
+
+        while let Some(message) = ws.next().await {
+            let message_text = message.unwrap().into_text().unwrap();
+            let new_head_message = serde_json::from_str::<NewHeadMessage>(&message_text).unwrap();
+            let new_head = Head::from(new_head_message);
+            new_heads_tx.send(new_head).await.unwrap();
+        }
+    });
+
+    new_heads_rx
 }
 
 type NodeMessageRx = SplitStream<WebSocketStream<TokioAdapter<TcpStream>>>;
