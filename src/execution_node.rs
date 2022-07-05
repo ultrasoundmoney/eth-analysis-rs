@@ -125,8 +125,15 @@ pub fn stream_supply_deltas(from: u32) -> mpsc::UnboundedReceiver<SupplyDelta> {
             }
         }
 
-        while let Some(message) = ws.next().await {
-            let message_text = message.unwrap().into_text().unwrap();
+        while let Some(message_result) = ws.next().await {
+            let message = message_result.unwrap();
+
+            // We get ping messages too. Do nothing with those.
+            if message.is_ping() {
+                continue;
+            }
+
+            let message_text = message.into_text().unwrap();
             let supply_delta_message =
                 serde_json::from_str::<SupplyDeltaMessage>(&message_text).unwrap();
             let supply_delta = SupplyDelta::from(supply_delta_message);
@@ -205,9 +212,15 @@ async fn handle_messages(
     message_handlers: MessageHandlersShared,
     id_pool: IdPoolShared,
 ) -> Result<(), Box<dyn Error>> {
-    while let Some(message) = ws_rx.next().await {
-        let message_text = message?.into_text()?;
+    while let Some(message_result) = ws_rx.next().await {
+        let message = message_result?;
 
+        // We get ping messages too. Do nothing with those.
+        if message.is_ping() {
+            continue;
+        }
+
+        let message_text = message.into_text()?;
         let rpc_message = serde_json::from_str::<RpcMessage>(&message_text).unwrap();
 
         let id = match rpc_message {
