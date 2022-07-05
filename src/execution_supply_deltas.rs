@@ -11,14 +11,14 @@ const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
 pub async fn write_deltas() {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("writing supply deltas CSV");
+    let timestamp = crate::time::get_timestamp();
+
+    tracing::info!("writing supply deltas {timestamp}");
 
     let mut supply_deltas_rx =
         crate::execution_node::stream_supply_delta_chunks(0, SUPPLY_DELTA_BUFFER_SIZE);
 
     let mut progress = pit_wall::Progress::new("write supply deltas", 15_000_000);
-
-    let timestamp = crate::time::get_timestamp();
 
     let file_path = format!("supply_deltas_{}.csv", timestamp);
 
@@ -79,14 +79,14 @@ struct SupplyDeltaLog {
 pub async fn write_delta_log() {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("writing supply delta log");
+    let timestamp = crate::time::get_timestamp();
+
+    tracing::info!("writing supply delta log {timestamp}");
 
     let mut execution_node = ExecutionNode::connect().await;
     let latest_block = execution_node.get_latest_block().await;
 
     let mut supply_deltas_rx = crate::execution_node::stream_supply_deltas(latest_block.number);
-
-    let timestamp = crate::time::get_timestamp();
 
     let file_path = format!("supply_delta_log_{}.csv", timestamp);
 
