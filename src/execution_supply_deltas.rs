@@ -113,6 +113,8 @@ pub async fn write_delta_log() {
         };
 
         csv_writer.serialize(supply_delta_log).unwrap();
+
+        tracing::debug!("writing supply delta log {}", supply_delta.block_number);
     }
 
     // A CSV writer maintains an internal buffer, so it's important
