@@ -73,13 +73,13 @@ struct SupplyDeltaLog {
     is_duplicate_number: bool,
     is_jumping_ahead: bool,
     parent_hash: String,
-    received_at: u64,
+    received_at: String,
 }
 
 pub async fn write_delta_log() {
     tracing_subscriber::fmt::init();
 
-    let timestamp = crate::time::get_timestamp();
+    let timestamp = chrono::offset::Utc::now().timestamp();
 
     tracing::info!("writing supply delta log {timestamp}");
 
@@ -109,7 +109,7 @@ pub async fn write_delta_log() {
             parent_hash: supply_delta.parent_hash,
             is_jumping_ahead,
             is_duplicate_number,
-            received_at: crate::time::get_timestamp(),
+            received_at: chrono::offset::Utc::now().to_rfc3339(),
         };
 
         csv_writer.serialize(supply_delta_log).unwrap();
