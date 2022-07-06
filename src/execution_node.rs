@@ -191,9 +191,16 @@ pub fn stream_new_heads() -> mpsc::UnboundedReceiver<Head> {
             }
         }
 
-        while let Some(message) = ws.next().await {
-            let message_text = message.unwrap().into_text().unwrap();
-            let new_head_message = serde_json::from_str::<NewHeadMessage>(&message_text).unwrap();
+        while let Some(message_result) = ws.next().await {
+            let message = message_result.unwrap();
+
+            // We get ping messages too. Do nothing with those.
+            if message.is_ping() {
+                continue;
+            }
+
+            let new_head_message =
+                serde_json::from_str::<NewHeadMessage>(&message.into_text().unwrap()).unwrap();
             let new_head = Head::from(new_head_message);
             new_heads_tx.send(new_head).await.unwrap();
         }
