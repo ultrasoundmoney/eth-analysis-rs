@@ -38,8 +38,6 @@ pub async fn write_deltas() {
     csv_writer.flush().unwrap();
 }
 
-const BLOCK_SYNC_QUEUE: Vec<u32> = vec![];
-
 pub async fn sync_deltas() {
     tracing_subscriber::fmt::init();
 
