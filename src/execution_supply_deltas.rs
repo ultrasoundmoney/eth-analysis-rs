@@ -76,7 +76,7 @@ struct SupplyDeltaLog {
     received_at: String,
 }
 
-pub async fn write_delta_log() {
+pub async fn write_deltas_log() {
     tracing_subscriber::fmt::init();
 
     let timestamp = chrono::offset::Utc::now().timestamp();
@@ -88,7 +88,7 @@ pub async fn write_delta_log() {
 
     let mut supply_deltas_rx = crate::execution_node::stream_supply_deltas(latest_block.number);
 
-    let file_path = format!("supply_delta_log_{}.csv", timestamp);
+    let file_path = format!("supply_deltas_log_{}.csv", timestamp);
 
     let mut csv_writer = csv::Writer::from_path(&file_path).unwrap();
 
