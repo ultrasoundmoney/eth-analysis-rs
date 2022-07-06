@@ -4,6 +4,7 @@ pub mod config;
 mod eth_time;
 mod eth_units;
 mod etherscan;
+mod execution_chain;
 pub mod execution_node;
 mod execution_supply_deltas;
 mod glassnode;
@@ -13,8 +14,9 @@ mod supply_projection;
 mod time;
 
 pub use beacon_chain::{sync_beacon_states, update_validator_rewards};
+pub use execution_chain::write_heads_log as write_execution_heads_log;
 pub use execution_supply_deltas::sync_deltas as sync_execution_supply_deltas;
-pub use execution_supply_deltas::write_delta_log as write_execution_supply_delta_log;
 pub use execution_supply_deltas::write_deltas as write_execution_supply_deltas;
+pub use execution_supply_deltas::write_deltas_log as write_execution_supply_deltas_log;
 pub use issuance_breakdown::update_issuance_breakdown;
 pub use supply_projection::update_supply_projection_inputs;

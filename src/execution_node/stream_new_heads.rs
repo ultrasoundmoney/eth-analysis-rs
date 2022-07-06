@@ -1,13 +1,16 @@
-use super::decoders::from_u32_hex_str;
+use super::decoders::*;
+use chrono::Utc;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Head {
-    hash: String,
+    pub hash: String,
     #[serde(deserialize_with = "from_u32_hex_str")]
-    number: u32,
-    parent_hash: String,
+    pub number: u32,
+    pub parent_hash: String,
+    #[serde(deserialize_with = "from_unix_timestamp_hex_str")]
+    pub timestamp: chrono::DateTime<Utc>,
 }
 
 impl From<NewHeadMessage> for Head {
