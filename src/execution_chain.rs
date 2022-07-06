@@ -1,6 +1,7 @@
 mod blocks;
 
 pub use blocks::get_latest_block;
+use chrono::SubsecRound;
 use futures::StreamExt;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -47,7 +48,7 @@ pub async fn write_heads_log() {
             is_duplicate_number,
             is_jumping_ahead,
             parent_hash: head.parent_hash,
-            received_at: chrono::offset::Utc::now().to_rfc3339(),
+            received_at: chrono::offset::Utc::now().trunc_subsecs(0).to_rfc3339(),
             timestamp: head.timestamp.to_rfc3339(),
         };
 
