@@ -123,11 +123,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_staked_data() {
-        get_staked_data().await.unwrap();
-    }
-
-    #[tokio::test]
     async fn test_get_circulating_supply_data() {
         get_circulating_supply_data().await.unwrap();
     }
