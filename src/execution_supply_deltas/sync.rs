@@ -1,6 +1,6 @@
 use futures::StreamExt;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{PgExecutor, PgPool, Row};
+use sqlx::postgres::PgConnection;
+use sqlx::{Connection, PgExecutor, Row};
 
 use crate::config;
 use crate::execution_node::SupplyDelta;

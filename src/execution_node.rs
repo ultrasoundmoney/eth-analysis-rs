@@ -1,7 +1,7 @@
 mod blocks;
 mod decoders;
-mod stream_new_heads;
-mod stream_supply_deltas;
+mod heads;
+mod supply_deltas;
 
 use core::panic;
 use std::collections::HashMap;
@@ -11,9 +11,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use self::blocks::*;
-use self::stream_new_heads::*;
-pub use self::stream_supply_deltas::SupplyDelta;
-use self::stream_supply_deltas::*;
+use self::heads::*;
+pub use self::supply_deltas::SupplyDelta;
+use self::supply_deltas::*;
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
     tungstenite::Message,

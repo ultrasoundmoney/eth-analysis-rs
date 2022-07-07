@@ -12,7 +12,7 @@ use super::{
 };
 
 pub async fn store_issuance_for_day<'a>(
-    pool: impl PgExecutor<'a>,
+    executor: impl PgExecutor<'a>,
     state_root: &str,
     FirstOfDaySlot(slot): &FirstOfDaySlot,
     gwei: &GweiAmount,
@@ -27,7 +27,7 @@ pub async fn store_issuance_for_day<'a>(
         state_root,
         gwei,
     )
-    .execute(pool)
+    .execute(executor)
     .await
     .unwrap();
 }
