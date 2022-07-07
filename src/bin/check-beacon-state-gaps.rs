@@ -8,7 +8,7 @@ use sqlx::{PgConnection, Row};
 pub async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("checking for holes in beacon states");
+    tracing::info!("checking for gaps in beacon states");
 
     let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
         .await
@@ -39,7 +39,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         last_slot = Some(slot);
     }
 
-    tracing::info!("done checking beacon states for holes");
+    tracing::info!("done checking beacon states for gaps");
 
     Ok(())
 }
