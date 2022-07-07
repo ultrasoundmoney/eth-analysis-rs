@@ -14,14 +14,14 @@ env:
   GETH_URL: ${{ secrets.GETH_URL }}
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Build
-        run: cargo build
-      - name: Run tests
-        run: cargo test
+  # test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Build
+  #       run: cargo build
+  #     - name: Run tests
+  #       run: cargo test
   build:
     runs-on: ubuntu-latest
     needs: test
