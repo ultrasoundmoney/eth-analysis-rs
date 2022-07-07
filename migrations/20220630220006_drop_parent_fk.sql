@@ -1,1 +1,1 @@
-ALTER TABLE public.beacon_blocks DROP CONSTRAINT beacon_blocks_parent_root_fk;
+ALTER TABLE public.beacon_blocks DROP CONSTRAINT IF EXISTS beacon_blocks_parent_root_fk;

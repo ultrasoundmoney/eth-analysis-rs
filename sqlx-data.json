@@ -38,6 +38,25 @@
     },
     "query": "\n            SELECT gwei FROM beacon_issuance\n            ORDER BY timestamp DESC\n            LIMIT 1\n        "
   },
+  "2e8eb41aa25d60119f6ca07c27196bfbc8e30df6aa4b3bd9d90829f7f3ee8dbf": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Int4",
+          "Int8",
+          "Int8",
+          "Text",
+          "Int8",
+          "Int8",
+          "Int8"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO execution_supply_deltas (\n                block_hash,\n                block_number,\n                fee_burn,\n                fixed_reward,\n                parent_hash,\n                self_destruct,\n                supply_delta,\n                uncles_reward\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n        "
+  },
   "599dc56e83c008c39c90aaf090a679811a07d26f76b0876dba42630bd1415f31": {
     "describe": {
       "columns": [],
@@ -125,24 +144,6 @@
       }
     },
     "query": "\n            SELECT SUM(tips) / 1e9 AS \"tips_since_london!\" FROM blocks\n        "
-  },
-  "ae6b8008f61ce857b69a9bbea14a50781c42f0eae5fc668655b4f883ea5cd093": {
-    "describe": {
-      "columns": [
-        {
-          "name": "slot",
-          "ordinal": 0,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT slot FROM beacon_states\n            ORDER BY slot ASC\n        "
   },
   "b7bb6881fa2d0a591071a9f538fddfb4d2ee6bb4ffee3154bf6cd9fd0c8ebbe9": {
     "describe": {

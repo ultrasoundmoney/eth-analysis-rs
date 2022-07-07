@@ -12,6 +12,7 @@ use std::sync::Mutex;
 
 use self::blocks::*;
 use self::stream_new_heads::*;
+pub use self::stream_supply_deltas::SupplyDelta;
 use self::stream_supply_deltas::*;
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
@@ -41,11 +42,11 @@ enum RpcMessage {
     RpcMessageResult { id: u16, result: serde_json::Value },
 }
 
-fn make_supply_delta_subscribe_message(number: &u32) -> String {
+fn make_supply_delta_subscribe_message(greater_than: &u32) -> String {
     let msg = json!({
         "id": 0,
         "method": "eth_subscribe",
-        "params": ["issuance", number]
+        "params": ["issuance", greater_than]
     });
 
     serde_json::to_string(&msg).unwrap()
@@ -105,14 +106,14 @@ impl IdPool {
     }
 }
 
-pub fn stream_supply_deltas(from: u32) -> mpsc::UnboundedReceiver<SupplyDelta> {
+pub fn stream_supply_deltas(greater_than: u32) -> mpsc::UnboundedReceiver<SupplyDelta> {
     let (mut supply_deltas_tx, supply_deltas_rx) = mpsc::unbounded();
 
     tokio::spawn(async move {
         let url = format!("{}", &crate::config::get_execution_url());
         let mut ws = connect_async(&url).await.unwrap().0;
 
-        let deltas_subscribe_message = make_supply_delta_subscribe_message(&from);
+        let deltas_subscribe_message = make_supply_delta_subscribe_message(&greater_than);
 
         ws.send(Message::text(deltas_subscribe_message))
             .await

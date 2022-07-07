@@ -1,6 +1,6 @@
 use super::decoders::*;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

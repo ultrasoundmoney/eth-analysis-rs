@@ -1,10 +1,13 @@
+mod sync;
+
 use std::collections::HashSet;
 
 use futures::prelude::*;
 use serde::Serialize;
-use sqlx::postgres::PgPoolOptions;
 
-use crate::{config, execution_node::ExecutionNode};
+use crate::execution_node::ExecutionNode;
+
+pub use self::sync::sync_deltas as sync_execution_supply_deltas;
 
 const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
 
@@ -38,36 +41,10 @@ pub async fn write_deltas() {
     csv_writer.flush().unwrap();
 }
 
-pub async fn sync_deltas() {
-    tracing_subscriber::fmt::init();
-
-    tracing::info!("syncing supply deltas");
-
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&config::get_db_url())
-        .await
-        .unwrap();
-
-    sqlx::migrate!().run(&pool).await.unwrap();
-
-    let mut execution_node = ExecutionNode::connect().await;
-    let latest_block = execution_node.get_latest_block().await;
-
-    dbg!(latest_block);
-
-    let mut new_heads_rx = crate::execution_node::stream_new_heads();
-
-    while let Some(new_head) = new_heads_rx.next().await {
-        // let _latest_stored_block = crate::execution_chain::get_latest_block(&pool).await;
-        dbg!(new_head);
-    }
-}
-
 #[derive(Serialize)]
 struct SupplyDeltaLog {
     block_number: u32,
-    hash: String,
+    block_hash: String,
     is_duplicate_number: bool,
     is_jumping_ahead: bool,
     parent_hash: String,
@@ -99,11 +76,11 @@ pub async fn write_deltas_log() {
             !seen_block_hashes.is_empty() && !seen_block_hashes.contains(&supply_delta.parent_hash);
 
         seen_block_heights.insert(supply_delta.block_number.clone());
-        seen_block_hashes.insert(supply_delta.hash.clone());
+        seen_block_hashes.insert(supply_delta.block_hash.clone());
 
         let supply_delta_log = SupplyDeltaLog {
             block_number: supply_delta.block_number,
-            hash: supply_delta.hash,
+            block_hash: supply_delta.block_hash,
             parent_hash: supply_delta.parent_hash,
             is_jumping_ahead,
             is_duplicate_number,

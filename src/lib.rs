@@ -15,7 +15,7 @@ mod time;
 
 pub use beacon_chain::{sync_beacon_states, update_validator_rewards};
 pub use execution_chain::write_heads_log as write_execution_heads_log;
-pub use execution_supply_deltas::sync_deltas as sync_execution_supply_deltas;
+pub use execution_supply_deltas::sync_execution_supply_deltas;
 pub use execution_supply_deltas::write_deltas as write_execution_supply_deltas;
 pub use execution_supply_deltas::write_deltas_log as write_execution_supply_deltas_log;
 pub use issuance_breakdown::update_issuance_breakdown;
