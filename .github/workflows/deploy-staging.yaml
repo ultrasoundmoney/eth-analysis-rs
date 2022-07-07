@@ -14,49 +14,60 @@ env:
   GETH_URL: ${{ secrets.GETH_URL }}
 
 jobs:
-  # test:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Build
-  #       run: cargo build
-  #     - name: Run tests
-  #       run: cargo test
-  build:
+  wait-on-build:
+    name: wait on build
     runs-on: ubuntu-latest
-    # needs: test
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Login to Scaleway Registry
-        uses: docker/login-action@v2
+      - name: Wait for deploy-staging to succeed
+        uses: lewagon/wait-on-check-action@v1.1.2
         with:
-          registry: rg.nl-ams.scw.cloud/ultrasoundmoney
-          username: ${{ secrets.SCALEWAY_API_KEY }}
-          password: ${{ secrets.SCALEWAY_API_KEY }}
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          images: rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
-      - name: Docker build and push
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          ref: ${{ github.ref }}
+          check-name: build
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+  # # test:
+  # #   runs-on: ubuntu-latest
+  # #   steps:
+  # #     - uses: actions/checkout@v3
+  # #     - name: Build
+  # #       run: cargo build
+  # #     - name: Run tests
+  # #       run: cargo test
+  # build:
+  #   runs-on: ubuntu-latest
+  #   # needs: wait-on-build
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v2
+  #     - name: Login to Scaleway Registry
+  #       uses: docker/login-action@v2
+  #       with:
+  #         registry: rg.nl-ams.scw.cloud/ultrasoundmoney
+  #         username: ${{ secrets.SCALEWAY_API_KEY }}
+  #         password: ${{ secrets.SCALEWAY_API_KEY }}
+  #     - name: Docker meta
+  #       id: meta
+  #       uses: docker/metadata-action@v3
+  #       with:
+  #         images: rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs
+  #         tags: |
+  #           type=sha,prefix=
+  #           type=raw,value=latest
+  #     - name: Docker build and push
+  #       uses: docker/build-push-action@v3
+  #       with:
+  #         context: .
+  #         push: true
+  #         tags: ${{ steps.meta.outputs.tags }}
+  #         labels: ${{ steps.meta.outputs.labels }}
+  #         cache-from: type=gha
+  #         cache-to: type=gha,mode=max
   deploy-sync-beacon-states-dev:
     name: deploy dev sync-beacon-states
     runs-on: ubuntu-latest
-    needs: build
+    needs: wait-on-build
     steps:
       - uses: actions/checkout@master
       - name: Make short SHA available
@@ -75,7 +86,7 @@ jobs:
   deploy-sync-beacon-states:
     name: deploy sync-beacon-states
     runs-on: ubuntu-latest
-    needs: build
+    needs: wait-on-build
     steps:
       - uses: actions/checkout@master
       - name: Make short SHA available
@@ -94,7 +105,7 @@ jobs:
   deploy-update-validator-rewards:
     name: deploy update-validator-rewards
     runs-on: ubuntu-latest
-    needs: build
+    needs: wait-on-build
     steps:
       - uses: actions/checkout@master
       - name: Make short SHA available
@@ -113,7 +124,7 @@ jobs:
   deploy-update-supply-projection-inputs:
     name: deploy update-supply-projection-inputs
     runs-on: ubuntu-latest
-    needs: build
+    needs: wait-on-build
     steps:
       - uses: actions/checkout@master
       - name: Make short SHA available
@@ -132,7 +143,7 @@ jobs:
   deploy-update-issuance-breakdown:
     name: deploy update-issuance-breakdown
     runs-on: ubuntu-latest
-    needs: build
+    needs: wait-on-build
     steps:
       - uses: actions/checkout@master
       - name: Make short SHA available
@@ -151,7 +162,7 @@ jobs:
   deploy-sync-execution-supply-deltas:
     name: deploy sync-execution-supply-deltas
     runs-on: ubuntu-latest
-    needs: build
+    needs: wait-on-build
     steps:
       - uses: actions/checkout@master
       - name: Make short SHA available
@@ -170,7 +181,7 @@ jobs:
   deploy-update-total-supply:
     name: deploy update-total-supply
     runs-on: ubuntu-latest
-    needs: build
+    needs: wait-on-build
     steps:
       - uses: actions/checkout@master
       - name: Make short SHA available
