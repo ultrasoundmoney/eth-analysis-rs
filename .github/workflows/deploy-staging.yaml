@@ -49,7 +49,7 @@ jobs:
         with:
           images: rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs
           tags: |
-            type=sha
+            type=sha,prefix=
             type=raw,value=latest
       - name: Docker build and push
         uses: docker/build-push-action@v3
