@@ -83,10 +83,10 @@ async fn get_supply_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &str)
     .get("total_supply")
 }
 
-async fn store_delta(executor: &PgPool, supply_delta: &SupplyDelta) {
+pub async fn store_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyDelta) {
     let mut transaction = executor.begin().await.unwrap();
 
-    let is_parent_known = get_is_hash_known(&mut *transaction, &supply_delta.parent_hash).await;
+    let is_parent_known = get_is_hash_known(&mut transaction, &supply_delta.parent_hash).await;
 
     dbg!(&supply_delta);
 
@@ -177,7 +177,7 @@ async fn get_is_block_number_known<'a>(executor: impl PgExecutor<'a>, block_numb
     .get("exists")
 }
 
-async fn drop_supply_deltas_from<'a>(executor: &PgPool, block_number: &u32) {
+async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: &u32) {
     let mut transaction = executor.begin().await.unwrap();
 
     sqlx::query(
@@ -210,15 +210,13 @@ pub async fn sync_deltas() {
 
     tracing::info!("syncing supply deltas");
 
-    let pool = PgPoolOptions::new()
-        .max_connections(3)
-        .connect(&config::get_db_url())
+    let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
         .await
         .unwrap();
 
-    sqlx::migrate!().run(&pool).await.unwrap();
+    sqlx::migrate!().run(&mut connection).await.unwrap();
 
-    let latest_synced_supply_delta_number = get_latest_synced_supply_delta_number(&pool)
+    let latest_synced_supply_delta_number = get_latest_synced_supply_delta_number(&mut connection)
         .await
         .unwrap_or(SUPPLY_SNAPSHOT_15082718.block_number + 1);
     tracing::debug!("requesting supply deltas gte {latest_synced_supply_delta_number}");
@@ -226,7 +224,8 @@ pub async fn sync_deltas() {
         crate::execution_node::stream_supply_deltas(latest_synced_supply_delta_number);
 
     while let Some(supply_delta) = supply_delta_stream.next().await {
-        let is_fork_block = get_is_block_number_known(&pool, &supply_delta.block_number).await;
+        let is_fork_block =
+            get_is_block_number_known(&mut connection, &supply_delta.block_number).await;
 
         if is_fork_block {
             tracing::debug!(
@@ -236,11 +235,11 @@ pub async fn sync_deltas() {
             );
 
             tracing::debug!("dropping execution_supply and execution_supply_deltas rows with block_number greater than or equal to {}", &supply_delta.block_number);
-            drop_supply_deltas_from(&pool, &supply_delta.block_number).await;
+            drop_supply_deltas_from(&mut connection, &supply_delta.block_number).await;
         }
 
         tracing::debug!("storing supply delta {}", supply_delta.block_number);
-        store_delta(&pool, &supply_delta).await;
+        store_delta(&mut connection, &supply_delta).await;
     }
 }
 
@@ -248,6 +247,7 @@ pub async fn sync_deltas() {
 mod tests {
     use super::*;
     use serial_test::serial;
+    use sqlx::PgConnection;
 
     async fn clean_tables<'a>(executor: impl PgExecutor<'a>) {
         sqlx::query("TRUNCATE execution_supply_deltas CASCADE")
@@ -256,20 +256,14 @@ mod tests {
             .unwrap();
     }
 
-    async fn get_test_pool() -> PgPool {
-        PgPoolOptions::new()
-            .max_connections(3)
-            .connect(&config::get_db_url())
-            .await
-            .unwrap()
-    }
-
     #[tokio::test]
     #[serial]
     async fn test_get_is_hash_not_known() {
-        let pool = get_test_pool().await;
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
 
-        let is_hash_known = get_is_hash_known(&pool, "0xnot_there").await;
+        let is_hash_known = get_is_hash_known(&mut connection, "0xnot_there").await;
 
         assert_eq!(is_hash_known, false);
     }
@@ -277,7 +271,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_get_is_hash_known() {
-        let pool = get_test_pool().await;
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 0,
@@ -290,10 +286,10 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&pool, &supply_delta_test).await;
-        let is_hash_known = get_is_hash_known(&pool, &supply_delta_test.block_hash).await;
+        store_delta(&mut connection, &supply_delta_test).await;
+        let is_hash_known = get_is_hash_known(&mut connection, &supply_delta_test.block_hash).await;
 
-        clean_tables(&pool).await;
+        clean_tables(&mut connection).await;
 
         assert_eq!(is_hash_known, true);
     }
@@ -301,9 +297,11 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_get_is_block_number_not_known() {
-        let pool = get_test_pool().await;
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
 
-        let is_block_number_known = get_is_block_number_known(&pool, &0).await;
+        let is_block_number_known = get_is_block_number_known(&mut connection, &0).await;
 
         assert_eq!(is_block_number_known, false);
     }
@@ -311,7 +309,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_get_is_block_number_known() {
-        let pool = get_test_pool().await;
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
 
         let supply_delta = SupplyDelta {
             supply_delta: 0,
@@ -324,11 +324,11 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&pool, &supply_delta).await;
+        store_delta(&mut connection, &supply_delta).await;
         let is_block_number_known =
-            get_is_block_number_known(&pool, &supply_delta.block_number).await;
+            get_is_block_number_known(&mut connection, &supply_delta.block_number).await;
 
-        clean_tables(&pool).await;
+        clean_tables(&mut connection).await;
 
         assert_eq!(is_block_number_known, true);
     }
@@ -336,7 +336,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_get_supply_at_hash() {
-        let pool = get_test_pool().await;
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -349,10 +351,10 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&pool, &supply_delta_test).await;
-        let total_supply = get_supply_at_hash(&pool, &supply_delta_test.block_hash).await;
+        store_delta(&mut connection, &supply_delta_test).await;
+        let total_supply = get_supply_at_hash(&mut connection, &supply_delta_test.block_hash).await;
 
-        clean_tables(&pool).await;
+        clean_tables(&mut connection).await;
 
         assert_eq!(total_supply, 1);
     }
@@ -360,7 +362,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_drop_supply_deltas() {
-        let pool = get_test_pool().await;
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -373,20 +377,23 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&pool, &supply_delta_test).await;
-        let total_supply = get_supply_at_hash(&pool, &supply_delta_test.block_hash).await;
+        store_delta(&mut connection, &supply_delta_test).await;
+        let total_supply = get_supply_at_hash(&mut connection, &supply_delta_test.block_hash).await;
 
         assert_eq!(total_supply, 1);
 
-        drop_supply_deltas_from(&pool, &0).await;
+        drop_supply_deltas_from(&mut connection, &0).await;
     }
 
     #[tokio::test]
     #[serial]
     async fn test_get_latest_synced_supply_delta_number_empty() {
-        let pool = get_test_pool().await;
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
 
-        let latest_synced_supply_delta_number = get_latest_synced_supply_delta_number(&pool).await;
+        let latest_synced_supply_delta_number =
+            get_latest_synced_supply_delta_number(&mut connection).await;
 
         assert_eq!(latest_synced_supply_delta_number, None);
     }
@@ -394,7 +401,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_get_latest_synced_supply_delta_number() {
-        let pool = get_test_pool().await;
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -407,11 +416,12 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&pool, &supply_delta_test).await;
+        store_delta(&mut connection, &supply_delta_test).await;
 
-        let latest_synced_supply_delta_number = get_latest_synced_supply_delta_number(&pool).await;
+        let latest_synced_supply_delta_number =
+            get_latest_synced_supply_delta_number(&mut connection).await;
 
-        clean_tables(&pool).await;
+        clean_tables(&mut connection).await;
 
         assert_eq!(latest_synced_supply_delta_number, Some(0));
     }
