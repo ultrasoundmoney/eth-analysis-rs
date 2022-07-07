@@ -7,6 +7,7 @@ mod node;
 mod rewards;
 mod states;
 mod sync;
+mod total_supply;
 
 use sqlx::postgres::PgPoolOptions;
 
@@ -16,6 +17,7 @@ pub use self::balances::get_validator_balances_by_start_of_day;
 pub use self::issuance::get_current_issuance;
 pub use self::issuance::get_issuance_by_start_of_day;
 pub use self::sync::SyncError;
+pub use self::total_supply::get_latest_total_supply;
 
 pub async fn sync_beacon_states() {
     tracing_subscriber::fmt::init();

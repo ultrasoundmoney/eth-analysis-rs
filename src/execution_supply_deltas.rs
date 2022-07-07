@@ -1,4 +1,5 @@
 mod sync;
+mod total_supply;
 
 use std::collections::HashSet;
 
@@ -8,6 +9,7 @@ use serde::Serialize;
 use crate::execution_node::ExecutionNode;
 
 pub use self::sync::sync_deltas as sync_execution_supply_deltas;
+pub use self::total_supply::get_latest_total_supply;
 
 const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
 
