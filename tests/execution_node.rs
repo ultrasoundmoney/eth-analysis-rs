@@ -3,7 +3,7 @@ use eth_analysis::execution_node::*;
 #[tokio::test]
 async fn test_get_latest_block() {
     let mut node = ExecutionNode::connect().await;
-    let block = node.get_latest_block().await;
+    let _block = node.get_latest_block().await;
     node.close().await;
 }
 

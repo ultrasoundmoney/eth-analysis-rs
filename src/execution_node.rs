@@ -29,6 +29,7 @@ use serde_json::json;
 use serde_json::Value;
 use tokio::net::TcpStream;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct RpcError {
     code: i32,
