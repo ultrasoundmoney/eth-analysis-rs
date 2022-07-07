@@ -39,5 +39,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         last_slot = Some(slot);
     }
 
+    tracing::info!("done checking beacon states for holes");
+
     Ok(())
 }
