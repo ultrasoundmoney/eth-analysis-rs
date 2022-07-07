@@ -34,9 +34,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: buildcache-eth-analysis-rs-${{ github.sha }}
+          key: buildcache-eth-analysis-rs
           restore-keys: |
-            buildcache-eth-analysis-rs
+            buildcache-
       - name: Login to Scaleway Registry
         uses: docker/login-action@v2
         with:
