@@ -1,8 +1,8 @@
 use std::error::Error;
 
 use eth_analysis::config;
-use futures::TryStreamExt;
-use sqlx::PgConnection;
+use futures::{StreamExt, TryStreamExt};
+use sqlx::{PgConnection, Row};
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn Error>> {
@@ -14,14 +14,19 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         .await
         .unwrap();
 
-    let mut rows = sqlx::query!(
+    let mut rows = sqlx::query(
         "
             SELECT slot FROM beacon_states
             ORDER BY slot ASC
         ",
     )
-    .map(|row| row.slot)
-    .fetch(&mut connection);
+    .fetch(&mut connection)
+    .map(|row| {
+        row.map(|row| {
+            let slot: u32 = row.get("slot");
+            slot
+        })
+    });
 
     let mut last_slot = None;
     while let Some(slot) = rows.try_next().await? {
