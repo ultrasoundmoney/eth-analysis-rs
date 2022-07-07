@@ -147,7 +147,7 @@ async fn store_delta(executor: &PgPool, supply_delta: &SupplyDelta) {
 }
 
 async fn get_latest_synced_supply_delta_number<'a>(executor: impl PgExecutor<'a>) -> Option<u32> {
-    sqlx::query(
+    let max_opt: Option<i32> = sqlx::query(
         "
             SELECT MAX(block_number) FROM execution_supply_deltas
         ",
@@ -155,7 +155,9 @@ async fn get_latest_synced_supply_delta_number<'a>(executor: impl PgExecutor<'a>
     .fetch_one(executor)
     .await
     .unwrap()
-    .get("max")
+    .get("max");
+
+    max_opt.map(|max| max as u32)
 }
 
 async fn get_is_block_number_known<'a>(executor: impl PgExecutor<'a>, block_number: &u32) -> bool {
@@ -377,5 +379,40 @@ mod tests {
         assert_eq!(total_supply, 1);
 
         drop_supply_deltas_from(&pool, &0).await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_get_latest_synced_supply_delta_number_empty() {
+        let pool = get_test_pool().await;
+
+        let latest_synced_supply_delta_number = get_latest_synced_supply_delta_number(&pool).await;
+
+        assert_eq!(latest_synced_supply_delta_number, None);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_get_latest_synced_supply_delta_number() {
+        let pool = get_test_pool().await;
+
+        let supply_delta_test = SupplyDelta {
+            supply_delta: 1,
+            block_number: 0,
+            block_hash: "0xtest".to_string(),
+            fee_burn: 0,
+            fixed_reward: 0,
+            parent_hash: "0xtestparent".to_string(),
+            self_destruct: 0,
+            uncles_reward: 0,
+        };
+
+        store_delta(&pool, &supply_delta_test).await;
+
+        let latest_synced_supply_delta_number = get_latest_synced_supply_delta_number(&pool).await;
+
+        clean_tables(&pool).await;
+
+        assert_eq!(latest_synced_supply_delta_number, Some(0));
     }
 }
