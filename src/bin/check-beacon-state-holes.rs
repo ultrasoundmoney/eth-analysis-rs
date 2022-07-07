@@ -23,8 +23,8 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     .fetch(&mut connection)
     .map(|row| {
         row.map(|row| {
-            let slot: u32 = row.get("slot");
-            slot
+            let slot: i32 = row.get("slot");
+            slot as u32
         })
     });
 
