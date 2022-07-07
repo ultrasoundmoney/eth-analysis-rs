@@ -37,6 +37,7 @@ jobs:
           key: ${{ runner.os }}-buildx-eth-analysis-rs-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-eth-analysis-rs
+            ${{ runner.os }}-
       - name: Login to Scaleway Registry
         uses: docker/login-action@v2
         with:
