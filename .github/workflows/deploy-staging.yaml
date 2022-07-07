@@ -25,45 +25,6 @@ jobs:
           check-name: build
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
-  # # test:
-  # #   runs-on: ubuntu-latest
-  # #   steps:
-  # #     - uses: actions/checkout@v3
-  # #     - name: Build
-  # #       run: cargo build
-  # #     - name: Run tests
-  # #       run: cargo test
-  # build:
-  #   runs-on: ubuntu-latest
-  #   # needs: wait-on-build
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v2
-  #     - name: Login to Scaleway Registry
-  #       uses: docker/login-action@v2
-  #       with:
-  #         registry: rg.nl-ams.scw.cloud/ultrasoundmoney
-  #         username: ${{ secrets.SCALEWAY_API_KEY }}
-  #         password: ${{ secrets.SCALEWAY_API_KEY }}
-  #     - name: Docker meta
-  #       id: meta
-  #       uses: docker/metadata-action@v3
-  #       with:
-  #         images: rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs
-  #         tags: |
-  #           type=sha,prefix=
-  #           type=raw,value=latest
-  #     - name: Docker build and push
-  #       uses: docker/build-push-action@v3
-  #       with:
-  #         context: .
-  #         push: true
-  #         tags: ${{ steps.meta.outputs.tags }}
-  #         labels: ${{ steps.meta.outputs.labels }}
-  #         cache-from: type=gha
-  #         cache-to: type=gha,mode=max
   deploy-sync-beacon-states-dev:
     name: deploy dev sync-beacon-states
     runs-on: ubuntu-latest
