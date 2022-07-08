@@ -14,8 +14,8 @@ use super::{
 };
 
 pub struct SlotRange {
-    pub from: u32,
-    pub to: u32,
+    pub greater_than_or_equal_to: u32,
+    pub less_than: u32,
 }
 
 async fn store_state_with_block(
@@ -122,9 +122,12 @@ async fn sync_slot(
 async fn sync_slots(
     pool: &PgPool,
     node_client: &Client,
-    SlotRange { from, to }: SlotRange,
+    SlotRange {
+        greater_than_or_equal_to: from,
+        less_than: to,
+    }: SlotRange,
 ) -> Result<(), SyncError> {
-    tracing::info!("syncing slots from {:?}, to {:?}", from, to);
+    tracing::info!("syncing slots from {}, to {}", from, to);
 
     let mut progress = pit_wall::Progress::new("sync slots", (to - from).into());
 
@@ -155,8 +158,8 @@ pub async fn sync_beacon_states(pool: &PgPool, node_client: &Client) -> Result<(
                 &pool,
                 &node_client,
                 SlotRange {
-                    from: last_state.slot as u32 + 1,
-                    to: last_finalized_block.slot,
+                    greater_than_or_equal_to: last_state.slot as u32 + 1,
+                    less_than: last_finalized_block.slot,
                 },
             )
             .await
@@ -166,8 +169,8 @@ pub async fn sync_beacon_states(pool: &PgPool, node_client: &Client) -> Result<(
                 &pool,
                 &node_client,
                 SlotRange {
-                    from: 0,
-                    to: last_finalized_block.slot,
+                    greater_than_or_equal_to: 0,
+                    less_than: last_finalized_block.slot,
                 },
             )
             .await
