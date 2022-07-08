@@ -10,7 +10,7 @@ jobs:
     name: wait on build
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for deploy-staging to succeed
+      - name: Wait for build to succeed
         uses: lewagon/wait-on-check-action@v1.1.2
         with:
           ref: ${{ github.ref }}
