@@ -6,6 +6,17 @@ on:
       - "stag-*"
 
 jobs:
+  wait-on-test:
+    name: wait on test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for test to succeed
+        uses: lewagon/wait-on-check-action@master
+        with:
+          ref: ${{ github.ref }}
+          check-name: test
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
   wait-on-build:
     name: wait on build
     runs-on: ubuntu-latest
