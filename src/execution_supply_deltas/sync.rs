@@ -137,7 +137,7 @@ pub async fn store_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyD
        ",
     )
     .bind(supply_delta.block_hash.clone())
-    .bind(supply_delta.block_number)
+    .bind(supply_delta.block_number as i32)
     .bind(total_supply as i64)
     .execute(&mut *transaction)
     .await
@@ -170,7 +170,7 @@ async fn get_is_block_number_known<'a>(executor: impl PgExecutor<'a>, block_numb
             )
         "#,
     )
-    .bind(block_number)
+    .bind(*block_number as i32)
     .fetch_one(executor)
     .await
     .unwrap()
@@ -186,7 +186,7 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: 
             WHERE block_number >= $1
         "#,
     )
-    .bind(block_number)
+    .bind(*block_number as i32)
     .execute(&mut *transaction)
     .await
     .unwrap();
@@ -197,7 +197,7 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: 
             WHERE block_number >= $1
         "#,
     )
-    .bind(block_number)
+    .bind(*block_number as i32)
     .execute(&mut *transaction)
     .await
     .unwrap();
