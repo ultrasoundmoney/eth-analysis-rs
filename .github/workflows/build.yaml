@@ -6,7 +6,12 @@ on:
       - main
 
 env:
+  BEACON_URL: ${{ secrets.BEACON_URL }}
   CARGO_TERM_COLOR: always
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+  GLASSNODE_API_KEY: ${{ secrets.GLASSNODE_API_KEY }}
+  GETH_URL: ${{ secrets.GETH_URL }}
 
 jobs:
   test:
@@ -19,7 +24,7 @@ jobs:
         run: cargo test
   build:
     runs-on: ubuntu-latest
-    # needs: test
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v3
