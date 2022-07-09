@@ -1,4 +1,4 @@
-use sqlx::{PgExecutor, PgPool};
+use sqlx::PgExecutor;
 
 pub struct BeaconState {
     pub state_root: String,
@@ -6,7 +6,9 @@ pub struct BeaconState {
     pub block_root: Option<String>,
 }
 
-pub async fn get_last_state(pool: &PgPool) -> Result<Option<BeaconState>, sqlx::Error> {
+pub async fn get_last_state<'a>(
+    executor: impl PgExecutor<'a>,
+) -> Result<Option<BeaconState>, sqlx::Error> {
     sqlx::query_as!(
         BeaconState,
         r#"
@@ -20,7 +22,7 @@ pub async fn get_last_state(pool: &PgPool) -> Result<Option<BeaconState>, sqlx::
             LIMIT 1
         "#,
     )
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await
 }
 

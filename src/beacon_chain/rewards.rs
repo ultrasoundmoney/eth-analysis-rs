@@ -1,10 +1,12 @@
 use chrono::Utc;
+
 use reqwest::Client;
 use serde::Serialize;
-use sqlx::{Decode, PgPool};
+use sqlx::postgres::PgPoolOptions;
+use sqlx::{Decode, PgExecutor, PgPool};
 
 use crate::{
-    caching, eth_time,
+    caching, config, eth_time,
     eth_units::{self, GweiAmount, GWEI_PER_ETH_F64},
     key_value_store::{self, KeyValue},
 };
@@ -29,7 +31,7 @@ struct TipsSinceLondonRow {
     tips_since_london: f64,
 }
 
-async fn get_tips_since_london(pool: &PgPool) -> sqlx::Result<GweiAmount> {
+async fn get_tips_since_london<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result<GweiAmount> {
     sqlx::query_as!(
         TipsSinceLondonRow,
         r#"
@@ -41,11 +43,11 @@ async fn get_tips_since_london(pool: &PgPool) -> sqlx::Result<GweiAmount> {
     .map(|row| GweiAmount(row.tips_since_london.round() as u64))
 }
 
-async fn get_tips_reward(
-    pool: &PgPool,
+async fn get_tips_reward<'a>(
+    executor: impl PgExecutor<'a>,
     effective_balance_sum: GweiAmount,
 ) -> sqlx::Result<ValidatorReward> {
-    let GweiAmount(tips_since_london) = get_tips_since_london(pool).await?;
+    let GweiAmount(tips_since_london) = get_tips_since_london(executor).await?;
     tracing::debug!("tips since london {}", tips_since_london);
 
     let tips_per_year = tips_since_london as f64 / get_days_since_london() as f64 * 365.25;
@@ -122,27 +124,45 @@ struct ValidatorRewards {
     mev: ValidatorReward,
 }
 
-async fn get_validator_rewards(pool: &PgPool, client: &Client) -> anyhow::Result<ValidatorRewards> {
-    let last_effective_balance_sum = balances::get_last_effective_balance_sum(pool, client).await?;
+async fn get_validator_rewards<'a>(executor: &PgPool, client: &Client) -> ValidatorRewards {
+    let last_effective_balance_sum = balances::get_last_effective_balance_sum(executor, client)
+        .await
+        .unwrap();
     let issuance_reward = get_issuance_reward(last_effective_balance_sum);
-    let tips_reward = get_tips_reward(pool, last_effective_balance_sum).await?;
+    let tips_reward = get_tips_reward(executor, last_effective_balance_sum)
+        .await
+        .unwrap();
 
-    Ok(ValidatorRewards {
+    ValidatorRewards {
         issuance: issuance_reward,
         tips: tips_reward,
         mev: ValidatorReward {
             annual_reward: GweiAmount((0.3 * GWEI_PER_ETH_F64) as u64),
             apr: 0.01,
         },
-    })
+    }
 }
 
-pub async fn update_validator_rewards(pool: &PgPool, node_client: &Client) -> anyhow::Result<()> {
-    let validator_rewards = get_validator_rewards(&pool, &node_client).await?;
+pub async fn update_validator_rewards() {
+    tracing_subscriber::fmt::init();
+
+    tracing::info!("updating validator rewards");
+
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&config::get_db_url())
+        .await
+        .unwrap();
+
+    sqlx::migrate!().run(&pool).await.unwrap();
+
+    let node_client = reqwest::Client::new();
+
+    let validator_rewards = get_validator_rewards(&pool, &node_client).await;
     tracing::debug!("validator rewards: {:?}", validator_rewards);
 
     key_value_store::set_value(
-        pool,
+        &pool,
         KeyValue {
             key: VALIDATOR_REWARDS_CACHE_KEY,
             value: serde_json::to_value(validator_rewards).unwrap(),
@@ -150,7 +170,7 @@ pub async fn update_validator_rewards(pool: &PgPool, node_client: &Client) -> an
     )
     .await;
 
-    caching::publish_cache_update(pool, VALIDATOR_REWARDS_CACHE_KEY).await;
+    caching::publish_cache_update(&pool, VALIDATOR_REWARDS_CACHE_KEY).await;
 
-    Ok(())
+    tracing::info!("done updating validator rewards");
 }
