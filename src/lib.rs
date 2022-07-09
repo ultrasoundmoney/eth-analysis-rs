@@ -1,6 +1,7 @@
 mod beacon_chain;
 pub mod caching;
 pub mod config;
+mod decoders;
 mod eth_time;
 mod eth_units;
 mod etherscan;

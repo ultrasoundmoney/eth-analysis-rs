@@ -1,4 +1,4 @@
-use crate::{config, eth_units::GweiAmount};
+use crate::{config, decoders::from_u32_string, eth_units::GweiAmount};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Deserializer};
 
@@ -158,7 +158,8 @@ pub async fn get_validator_balances(
 
 #[derive(Debug, Deserialize)]
 pub struct BeaconHeader {
-    pub slot: String,
+    #[serde(deserialize_with = "from_u32_string")]
+    pub slot: u32,
     pub parent_root: String,
     pub state_root: String,
 }
