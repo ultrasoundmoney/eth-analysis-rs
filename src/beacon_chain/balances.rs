@@ -101,23 +101,23 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_timestamp_is_start_of_day() {
-        let mut conn: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
             .await
             .unwrap();
 
-        store_state(&mut conn, "0xtest_balances", &17999)
+        store_state(&mut connection, "0xtest_balances", &17999)
             .await
             .unwrap();
 
         store_validator_sum_for_day(
-            &mut conn,
+            &mut connection,
             "0xtest_balances",
             &FirstOfDaySlot::new(&17999).unwrap(),
             &GweiAmount(100),
         )
         .await;
 
-        let validator_balances_by_day = get_validator_balances_by_start_of_day(&mut conn)
+        let validator_balances_by_day = get_validator_balances_by_start_of_day(&mut connection)
             .await
             .unwrap();
 
@@ -127,7 +127,7 @@ mod tests {
 
         let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
 
-        clean_tables(&mut conn).await;
+        clean_tables(&mut connection).await;
 
         assert_eq!(datetime, start_of_day_datetime);
     }
