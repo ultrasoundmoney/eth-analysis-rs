@@ -33,6 +33,12 @@ pub struct KeyValue<'a> {
 }
 
 pub async fn set_value<'a>(pg_executor: impl PgExecutor<'a>, key_value: KeyValue<'_>) {
+    tracing::debug!(
+        "storing key: {}, value: {:?}",
+        &key_value.key,
+        &key_value.value
+    );
+
     sqlx::query!(
         "
             INSERT INTO key_value_store (key, value) VALUES ($1, $2)
