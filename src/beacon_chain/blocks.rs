@@ -1,4 +1,4 @@
-use sqlx::{PgExecutor, PgPool};
+use sqlx::{PgConnection, PgExecutor, PgPool, Row};
 
 use crate::eth_units::GweiAmount;
 
@@ -26,16 +26,33 @@ pub async fn get_deposit_sum_from_block_root(
     Ok(deposit_sum_aggregated)
 }
 
-pub async fn store_block<'a, A>(
-    executor: A,
+pub async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, hash: &str) -> bool {
+    if hash == GENESIS_PARENT_ROOT {
+        return true;
+    }
+
+    sqlx::query(
+        "
+            SELECT EXISTS (
+                SELECT 1 FROM beacon_blocks
+                WHERE block_root = $1
+            )
+        ",
+    )
+    .bind(hash)
+    .fetch_one(executor)
+    .await
+    .unwrap()
+    .get("exists")
+}
+
+pub async fn store_block<'a>(
+    executor: &mut PgConnection,
     state_root: &str,
     header: &BeaconHeaderSignedEnvelope,
     deposit_sum: &GweiAmount,
     deposit_sum_aggregated: &GweiAmount,
-) -> sqlx::Result<()>
-where
-    A: PgExecutor<'a>,
-{
+) {
     let parent_root = if header.header.message.parent_root == GENESIS_PARENT_ROOT {
         None
     } else {
@@ -59,7 +76,7 @@ where
         i64::from(deposit_sum_aggregated.to_owned()),
     )
     .execute(executor)
-    .await?;
-
-    Ok(())
+    .await
+    .unwrap();
+}
 }

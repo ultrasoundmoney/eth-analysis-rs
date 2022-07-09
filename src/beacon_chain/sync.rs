@@ -25,21 +25,32 @@ async fn store_state_with_block(
     header: &BeaconHeaderSignedEnvelope,
     deposit_sum: &GweiAmount,
     deposit_sum_aggregated: &GweiAmount,
-) -> Result<(), sqlx::Error> {
-    let mut tx = pool.begin().await?;
+) {
+    let mut transaction = pool.begin().await.unwrap();
 
-    states::store_state(&mut tx, state_root, slot).await?;
+    states::store_state(&mut *transaction, state_root, slot)
+        .await
+        .unwrap();
+
+    let is_parent_known =
+        blocks::get_is_hash_known(&mut *transaction, &header.header.message.parent_root).await;
+    if !is_parent_known {
+        panic!(
+            "trying to insert beacon block with missing parent, block_root: {}, parent_root: {:?}",
+            header.root, header.header.message.parent_root
+        )
+    }
 
     blocks::store_block(
-        &mut tx,
+        &mut *transaction,
         state_root,
         header,
         deposit_sum,
         deposit_sum_aggregated,
     )
-    .await?;
+    .await;
 
-    tx.commit().await
+    transaction.commit().await.unwrap();
 }
 
 #[derive(Error, Debug)]
@@ -82,7 +93,7 @@ async fn sync_slot(
                 &deposits::get_deposit_sum_from_block(&block),
                 &deposit_sum_aggregated,
             )
-            .await?;
+            .await;
         }
         _ => {
             tracing::debug!(
