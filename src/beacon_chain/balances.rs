@@ -43,7 +43,7 @@ pub async fn get_last_effective_balance_sum<'a>(
     client: &Client,
 ) -> anyhow::Result<GweiAmount> {
     let last_state_root = states::get_last_state(executor)
-        .await?
+        .await
         .expect("can't calculate a last effective balance with an empty beacon_states table")
         .state_root;
 

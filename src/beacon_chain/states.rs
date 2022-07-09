@@ -6,9 +6,7 @@ pub struct BeaconState {
     pub block_root: Option<String>,
 }
 
-pub async fn get_last_state<'a>(
-    executor: impl PgExecutor<'a>,
-) -> Result<Option<BeaconState>, sqlx::Error> {
+pub async fn get_last_state<'a>(executor: impl PgExecutor<'a>) -> Option<BeaconState> {
     sqlx::query_as!(
         BeaconState,
         r#"
@@ -24,12 +22,14 @@ pub async fn get_last_state<'a>(
     )
     .fetch_optional(executor)
     .await
+    .unwrap()
 }
 
-pub async fn store_state<'a, A>(executor: A, state_root: &str, slot: &u32) -> sqlx::Result<()>
-where
-    A: PgExecutor<'a>,
-{
+pub async fn store_state<'a>(
+    executor: impl PgExecutor<'a>,
+    state_root: &str,
+    slot: &u32,
+) -> sqlx::Result<()> {
     sqlx::query!(
         "
             INSERT INTO beacon_states (state_root, slot) VALUES ($1, $2)
