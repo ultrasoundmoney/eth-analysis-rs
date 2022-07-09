@@ -1,9 +1,11 @@
-use reqwest::Client;
+use futures::SinkExt;
+use futures::{channel::mpsc, StreamExt};
+use serde::Deserialize;
+use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use thiserror::Error;
-use tokio::join;
 
-use crate::eth_units::GweiAmount;
+use crate::{config, decoders::from_u32_string, eth_units::GweiAmount};
 
 use super::{
     balances,
@@ -132,48 +134,130 @@ async fn sync_slot(
 
 async fn sync_slots(
     pool: &PgPool,
-    node_client: &Client,
+    node_client: &reqwest::Client,
     SlotRange {
         greater_than_or_equal_to: from,
         less_than: to,
     }: SlotRange,
-) -> Result<(), SyncError> {
-    tracing::info!("syncing slots from {}, to {}", from, to);
+) {
+    tracing::info!(
+        "syncing slots from {}, to {}, {} slots total",
+        from,
+        to,
+        to - from
+    );
 
     let mut progress = pit_wall::Progress::new("sync slots", (to - from).into());
 
     for slot in from..=to {
-        sync_slot(pool, node_client, &slot).await?;
+        sync_slot(pool, node_client, &slot).await.unwrap();
 
         progress.inc_work_done();
         if progress.work_done != 0 && progress.work_done % 1000 == 0 {
             tracing::info!("{}", progress.get_progress_string());
         }
     }
-
-    Ok(())
 }
 
-pub async fn sync_beacon_states(pool: &PgPool, node_client: &Client) -> Result<(), SyncError> {
-    let (last_finalized_block, last_state) = join!(
-        node::get_last_finalized_block(&node_client),
-        states::get_last_state(&pool)
+#[derive(Debug, Deserialize)]
+struct FinalizedCheckpoint {
+    block: String,
+    state: String,
+    #[serde(deserialize_with = "from_u32_string")]
+    epoch: u32,
+}
+
+fn stream_finalized_checkpoints() -> mpsc::UnboundedReceiver<FinalizedCheckpoint> {
+    let (mut finalized_checkpoint_tx, finalized_checkpoint_rx) = mpsc::unbounded();
+
+    let url_string = format!(
+        "{}/eth/v1/events/?topics=finalized_checkpoint",
+        config::get_beacon_url()
+    );
+    let url = reqwest::Url::parse(&url_string).unwrap();
+
+    let client = eventsource::reqwest::Client::new(url);
+
+    tokio::spawn(async move {
+        for event in client {
+            let event = event.unwrap();
+            match event.event_type {
+                Some(ref event_type) if event_type == "finalized_checkpoint" => {
+                    let finalized_checkpoint =
+                        serde_json::from_str::<FinalizedCheckpoint>(&event.data).unwrap();
+
+                    tracing::debug!(
+                        "received new finalized checkpoint {:#?}",
+                        finalized_checkpoint
+                    );
+
+                    finalized_checkpoint_tx
+                        .send(finalized_checkpoint)
+                        .await
+                        .unwrap();
+                }
+                Some(event) => {
+                    tracing::warn!(
+                        "received a server event that was not a finalized_checkpoint: {}",
+                        event
+                    );
+                }
+                None => {
+                    tracing::debug!("received an empty server event");
+                }
+            }
+        }
+    });
+
+    finalized_checkpoint_rx
+}
+
+pub async fn sync_beacon_states() {
+    tracing_subscriber::fmt::init();
+
+    tracing::info!("syncing beacon states");
+
+    let pool = PgPoolOptions::new()
+        .max_connections(3)
+        .connect(&config::get_db_url())
+        .await
+        .unwrap();
+
+    sqlx::migrate!().run(&pool).await.unwrap();
+
+    let node_client = reqwest::Client::new();
+
+    let latest_finalized_block_on_start = super::get_last_finalized_block(&node_client)
+        .await
+        .expect("last finalized block to be available");
+
+    tracing::debug!(
+        "last finalized block on start: {}",
+        latest_finalized_block_on_start.slot
     );
 
-    let last_finalized_block =
-        last_finalized_block.expect("a last finalized block to always be available");
+    let last_synced_state = states::get_last_state(&pool).await;
 
-    match last_state? {
-        Some(last_state) => {
+    tracing::debug!(
+        "last synced state: {}",
+        last_synced_state
+            .as_ref()
+            .map_or("?".to_string(), |state| state.slot.to_string())
+    );
+
+    let mut finalized_checkpoint_stream = stream_finalized_checkpoints();
+
+    match last_synced_state {
+        Some(last_synced_state) => {
             sync_slots(
                 &pool,
                 &node_client,
                 SlotRange {
-                    greater_than_or_equal_to: last_state.slot as u32 + 1,
-                    less_than: last_finalized_block.slot,
+                    greater_than_or_equal_to: last_synced_state.slot as u32 + 1,
+                    less_than: latest_finalized_block_on_start.slot,
                 },
             )
-            .await
+            .await;
         }
         None => {
             sync_slots(
@@ -181,10 +265,14 @@ pub async fn sync_beacon_states(pool: &PgPool, node_client: &Client) -> Result<(
                 &node_client,
                 SlotRange {
                     greater_than_or_equal_to: 0,
-                    less_than: last_finalized_block.slot,
+                    less_than: latest_finalized_block_on_start.slot,
                 },
             )
-            .await
+            .await;
         }
+    }
+
+    while let Some(checkpoint) = finalized_checkpoint_stream.next().await {
+        dbg!(checkpoint);
     }
 }
