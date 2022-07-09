@@ -99,7 +99,7 @@ async fn sync_slot(
         }
         _ => {
             tracing::debug!(
-                "storing slot without header, slot: {:?}, state_root: {}",
+                "storing slot without block, slot: {:?}, state_root: {}",
                 slot,
                 state_root
             );
