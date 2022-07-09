@@ -79,4 +79,117 @@ pub async fn store_block<'a>(
     .await
     .unwrap();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        beacon_chain::{
+            node::{BeaconHeader, BeaconHeaderEnvelope},
+            states::store_state,
+        },
+        config,
+    };
+    use serial_test::serial;
+
+    async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
+        sqlx::query("TRUNCATE beacon_states CASCADE")
+            .execute(pg_exec)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_is_genesis_known_test() {
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        let is_hash_known = get_is_hash_known(&mut connection, GENESIS_PARENT_ROOT).await;
+
+        assert_eq!(is_hash_known, true);
+    }
+
+    #[tokio::test]
+    async fn get_is_hash_not_known_test() {
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        let is_hash_known = get_is_hash_known(&mut connection, "0xnot_there").await;
+
+        assert_eq!(is_hash_known, false);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn get_is_hash_known_test() {
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        store_state(&mut connection, "0xstate_root", &0)
+            .await
+            .unwrap();
+
+        store_block(
+            &mut connection,
+            "0xstate_root",
+            &BeaconHeaderSignedEnvelope {
+                root: "0xblock_root".to_string(),
+                header: BeaconHeaderEnvelope {
+                    message: BeaconHeader {
+                        slot: 0,
+                        parent_root: GENESIS_PARENT_ROOT.to_string(),
+                        state_root: "0xstate_root".to_string(),
+                    },
+                },
+            },
+            &GweiAmount(0),
+            &GweiAmount(0),
+        )
+        .await;
+
+        let is_hash_known = get_is_hash_known(&mut connection, "0xblock_root").await;
+
+        clean_tables(&mut connection).await;
+
+        assert_eq!(is_hash_known, true);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn store_block_test() {
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        store_state(&mut connection, "0xstate_root", &0)
+            .await
+            .unwrap();
+
+        store_block(
+            &mut connection,
+            "0xstate_root",
+            &BeaconHeaderSignedEnvelope {
+                root: "0xblock_root".to_string(),
+                header: BeaconHeaderEnvelope {
+                    message: BeaconHeader {
+                        slot: 0,
+                        parent_root: GENESIS_PARENT_ROOT.to_string(),
+                        state_root: "0xstate_root".to_string(),
+                    },
+                },
+            },
+            &GweiAmount(0),
+            &GweiAmount(0),
+        )
+        .await;
+
+        let is_hash_known = get_is_hash_known(&mut connection, "0xblock_root").await;
+
+        clean_tables(&mut connection).await;
+
+        assert_eq!(is_hash_known, true);
+    }
 }
