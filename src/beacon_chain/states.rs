@@ -1,14 +1,30 @@
 use sqlx::PgExecutor;
 
+struct BeaconStateRow {
+    block_root: Option<String>,
+    slot: i32,
+    state_root: String,
+}
+
 pub struct BeaconState {
-    pub state_root: String,
-    pub slot: i32,
     pub block_root: Option<String>,
+    pub slot: u32,
+    pub state_root: String,
+}
+
+impl From<BeaconStateRow> for BeaconState {
+    fn from(row: BeaconStateRow) -> Self {
+        Self {
+            block_root: row.block_root,
+            slot: row.slot as u32,
+            state_root: row.state_root,
+        }
+    }
 }
 
 pub async fn get_last_state<'a>(executor: impl PgExecutor<'a>) -> Option<BeaconState> {
     sqlx::query_as!(
-        BeaconState,
+        BeaconStateRow,
         r#"
             SELECT
                 beacon_states.state_root,
@@ -23,6 +39,7 @@ pub async fn get_last_state<'a>(executor: impl PgExecutor<'a>) -> Option<BeaconS
     .fetch_optional(executor)
     .await
     .unwrap()
+    .map(|row| row.into())
 }
 
 pub async fn store_state<'a>(
