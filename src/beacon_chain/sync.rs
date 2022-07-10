@@ -6,17 +6,11 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgExecutor, PgPool};
 use thiserror::Error;
 
-use crate::beacon_chain::{self, beacon_time};
 use crate::{config, decoders::from_u32_string, eth_units::GweiAmount};
 
-use super::node::BeaconBlock;
-use super::BeaconNode;
 use super::{
-    balances,
-    beacon_time::FirstOfDaySlot,
-    blocks, deposits, issuance,
-    node::{self, BeaconHeaderSignedEnvelope},
-    states,
+    balances, beacon_time::FirstOfDaySlot, blocks, deposits, issuance, node::BeaconBlock,
+    node::BeaconHeaderSignedEnvelope, states, BeaconNode,
 };
 
 pub struct SlotRange {
@@ -67,17 +61,21 @@ pub enum SyncError {
     SqlxError(#[from] sqlx::Error),
 }
 
-async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) -> Result<(), SyncError> {
-    let state_root = beacon_node.get_state_root_by_slot(slot).await?;
+async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) {
+    let state_root = beacon_node.get_state_root_by_slot(slot).await.unwrap();
 
-    let header = beacon_node.get_header_by_slot(slot).await?;
+    let header = beacon_node.get_header_by_slot(slot).await.unwrap();
     let block = match header {
         None => None,
-        Some(ref header) => Some(beacon_node.get_block_by_root(&header.root).await?),
+        Some(ref header) => Some(beacon_node.get_block_by_root(&header.root).await.unwrap()),
     };
     let deposit_sum_aggregated = match block {
         None => None,
-        Some(ref block) => Some(deposits::get_deposit_sum_aggregated(pool, block).await?),
+        Some(ref block) => Some(
+            deposits::get_deposit_sum_aggregated(pool, block)
+                .await
+                .unwrap(),
+        ),
     };
 
     match (header, block, deposit_sum_aggregated) {
@@ -103,12 +101,15 @@ async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) -> Resul
                 slot,
                 state_root
             );
-            states::store_state(pool, &state_root, slot).await?;
+            states::store_state(pool, &state_root, slot).await.unwrap();
         }
     };
 
     if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
-        let validator_balances = beacon_node.get_validator_balances(&state_root).await?;
+        let validator_balances = beacon_node
+            .get_validator_balances(&state_root)
+            .await
+            .unwrap();
         let validator_balances_sum_gwei = balances::sum_validator_balances(validator_balances);
         balances::store_validator_sum_for_day(
             pool,
@@ -128,8 +129,6 @@ async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) -> Resul
             .await;
         }
     }
-
-    Ok(())
 }
 
 async fn sync_slots(pool: &PgPool, beacon_node: &BeaconNode, slot_range: &SlotRange) {
@@ -146,7 +145,7 @@ async fn sync_slots(pool: &PgPool, beacon_node: &BeaconNode, slot_range: &SlotRa
     );
 
     for slot in slot_range.greater_than_or_equal..=slot_range.less_than_or_equal {
-        sync_slot(pool, beacon_node, &slot).await.unwrap();
+        sync_slot(pool, beacon_node, &slot).await;
 
         progress.inc_work_done();
         if progress.work_done != 0 && progress.work_done % 1000 == 0 {
@@ -155,6 +154,7 @@ async fn sync_slots(pool: &PgPool, beacon_node: &BeaconNode, slot_range: &SlotRa
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct FinalizedCheckpointEvent {
     block: String,
