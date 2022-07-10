@@ -264,6 +264,42 @@ pub async fn get_validators_by_state(
         })
 }
 
+fn make_finality_checkpoint_url() -> String {
+    format!(
+        "{}/eth/v1/beacon/states/head/finality_checkpoints",
+        config::get_beacon_url(),
+    )
+}
+
+#[derive(Deserialize)]
+pub struct FinalityCheckpoint {
+    #[serde(deserialize_with = "from_u32_string")]
+    epoch: u32,
+    #[allow(dead_code)]
+    root: String,
+}
+
+#[derive(Deserialize)]
+struct FinalityCheckpoints {
+    finalized: FinalityCheckpoint,
+}
+
+#[derive(Deserialize)]
+struct CheckpointEnvelope {
+    data: FinalityCheckpoints,
+}
+
+pub async fn get_last_finality_checkpoint(client: &Client) -> reqwest::Result<FinalityCheckpoint> {
+    client
+        .get(make_finality_checkpoint_url())
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<CheckpointEnvelope>()
+        .await
+        .map(|envelope| envelope.data.finalized)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fs::File, io::BufReader};
@@ -348,5 +384,11 @@ mod tests {
         get_validators_by_state(&client, STATE_ROOT_1229)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_last_finality_checkpoint_test() {
+        let client = reqwest::Client::new();
+        get_last_finality_checkpoint(&client).await.unwrap();
     }
 }
