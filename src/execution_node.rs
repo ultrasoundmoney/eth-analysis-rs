@@ -275,10 +275,13 @@ impl ExecutionNode {
         let url = format!("{}", &crate::config::get_execution_url());
         let (ws_tx, ws_rx) = connect_async(&url).await.unwrap().0.split();
 
-        // Our execution node websocket uses pipelining, this means we'd like to read messages
-        // concurrently while the main program executes. However, if message reading fails, our
-        // thread may panic, causing main thread channels to hang. To avoid this main should panic
-        // when this thread panics.
+        // We'd like to read websocket messages concurrently so we read in a thread.
+        // The websocket uses pipelining, so IDs are used to match request and response.
+        // We'd like the request to wait for a response (from the thread).
+        // Currently we use a HashMap + callback channel system, this means requests hang
+        // when the websocket thread panics. Try rewriting to an implementation where the
+        // sending end gets moved to the thread so that it may be dropped when the thread panics.
+        // As a workaround we panic main when this thread panics.
         let default_panic = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             default_panic(info);
