@@ -1,5 +1,4 @@
 use chrono::{Duration, DurationRound};
-use reqwest::Client;
 use sqlx::PgExecutor;
 
 use crate::eth_units::GweiAmount;
@@ -7,7 +6,7 @@ use crate::supply_projection::{GweiInTime, GweiInTimeRow};
 
 use super::beacon_time::FirstOfDaySlot;
 use super::node::ValidatorBalance;
-use super::{beacon_time, node, states};
+use super::{beacon_time, node, states, BeaconNode};
 
 pub fn sum_validator_balances(validator_balances: Vec<ValidatorBalance>) -> GweiAmount {
     validator_balances
@@ -40,14 +39,15 @@ pub async fn store_validator_sum_for_day<'a>(
 
 pub async fn get_last_effective_balance_sum<'a>(
     executor: impl PgExecutor<'a>,
-    client: &Client,
+    beacon_node: &BeaconNode,
 ) -> anyhow::Result<GweiAmount> {
     let last_state_root = states::get_last_state(executor)
         .await
         .expect("can't calculate a last effective balance with an empty beacon_states table")
         .state_root;
 
-    node::get_validators_by_state(client, &last_state_root)
+    beacon_node
+        .get_validators_by_state(&last_state_root)
         .await
         .map(|validators| {
             validators.iter().fold(GweiAmount(0), |sum, validator| {

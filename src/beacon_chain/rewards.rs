@@ -1,6 +1,5 @@
 use chrono::Utc;
 
-use reqwest::Client;
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Decode, PgExecutor, PgPool};
@@ -11,7 +10,7 @@ use crate::{
     key_value_store::{self, KeyValue},
 };
 
-use super::balances;
+use super::{balances, BeaconNode};
 
 pub const VALIDATOR_REWARDS_CACHE_KEY: &str = "validator-rewards";
 
@@ -124,10 +123,14 @@ struct ValidatorRewards {
     mev: ValidatorReward,
 }
 
-async fn get_validator_rewards<'a>(executor: &PgPool, client: &Client) -> ValidatorRewards {
-    let last_effective_balance_sum = balances::get_last_effective_balance_sum(executor, client)
-        .await
-        .unwrap();
+async fn get_validator_rewards<'a>(
+    executor: &PgPool,
+    beacon_node: &BeaconNode,
+) -> ValidatorRewards {
+    let last_effective_balance_sum =
+        balances::get_last_effective_balance_sum(executor, beacon_node)
+            .await
+            .unwrap();
     let issuance_reward = get_issuance_reward(last_effective_balance_sum);
     let tips_reward = get_tips_reward(executor, last_effective_balance_sum)
         .await
@@ -156,9 +159,9 @@ pub async fn update_validator_rewards() {
 
     sqlx::migrate!().run(&pool).await.unwrap();
 
-    let node_client = reqwest::Client::new();
+    let beacon_node = BeaconNode::new();
 
-    let validator_rewards = get_validator_rewards(&pool, &node_client).await;
+    let validator_rewards = get_validator_rewards(&pool, &beacon_node).await;
     tracing::debug!("validator rewards: {:?}", validator_rewards);
 
     key_value_store::set_value(

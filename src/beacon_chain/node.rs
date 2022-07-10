@@ -1,6 +1,6 @@
 use crate::{config, decoders::from_u32_string, eth_units::GweiAmount};
 use reqwest::{Client, StatusCode};
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 
 enum BlockId {
     #[allow(dead_code)]
@@ -26,19 +26,11 @@ pub struct Body {
     pub deposits: Vec<DepositEnvelope>,
 }
 
-fn from_slot<'de, D>(deserializer: D) -> Result<u32, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    Ok(s.parse::<u32>().unwrap())
-}
-
 #[derive(Debug, Deserialize)]
 pub struct BeaconBlock {
     pub body: Body,
     pub parent_root: String,
-    #[serde(deserialize_with = "from_slot")]
+    #[serde(deserialize_with = "from_u32_string")]
     pub slot: u32,
     pub state_root: String,
 }
@@ -70,28 +62,6 @@ fn make_blocks_url(block_id: &BlockId) -> String {
     )
 }
 
-pub async fn get_block_by_root(client: &Client, block_root: &str) -> reqwest::Result<BeaconBlock> {
-    client
-        .get(make_blocks_url(&BlockId::BlockRoot(block_root.to_string())))
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<BeaconBlockVersionedEnvelope>()
-        .await
-        .map(|envelope| envelope.data.message.into())
-}
-
-pub async fn get_last_finalized_block(client: &Client) -> reqwest::Result<BeaconBlock> {
-    client
-        .get(make_blocks_url(&BlockId::Finalized))
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<BeaconBlockVersionedEnvelope>()
-        .await
-        .map(|envelope| envelope.data.message.into())
-}
-
 #[derive(Debug, Deserialize)]
 struct StateRoot {
     root: String,
@@ -110,20 +80,6 @@ fn make_state_root_url(slot: &u32) -> String {
     )
 }
 
-pub async fn get_state_root_by_slot(
-    client: &reqwest::Client,
-    slot: &u32,
-) -> reqwest::Result<String> {
-    client
-        .get(make_state_root_url(slot))
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<StateRootEnvelope>()
-        .await
-        .map(|envelope| envelope.data.root)
-}
-
 #[derive(Debug, Deserialize)]
 pub struct ValidatorBalance {
     pub balance: GweiAmount,
@@ -140,20 +96,6 @@ fn make_validator_balances_by_state_url(state_root: &str) -> String {
         config::get_beacon_url(),
         state_root
     )
-}
-
-pub async fn get_validator_balances(
-    client: &Client,
-    state_root: &str,
-) -> reqwest::Result<Vec<ValidatorBalance>> {
-    client
-        .get(make_validator_balances_by_state_url(state_root))
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<ValidatorBalancesEnvelope>()
-        .await
-        .map(|envelope| envelope.data)
 }
 
 #[derive(Debug, Deserialize)]
@@ -189,38 +131,6 @@ fn make_header_by_slot_url(slot: &u32) -> String {
     )
 }
 
-/// This function returns nothing both when a slot does not exist at all, and a slot does exist but
-/// is blockless. In other words, don't use this function alone to tell if a given slot has a
-/// block, check the slot exists first.
-pub async fn get_header_by_slot(
-    client: &Client,
-    slot: &u32,
-) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
-    // No header at this slot, either this slot doesn't exist or there is no header at this slot. We assume the slot exists but is headerless.
-    let res = client
-        .get(make_header_by_slot_url(slot))
-        .send()
-        .await?
-        .error_for_status();
-
-    match res {
-        Ok(res) => res
-            .json::<HeaderEnvelope>()
-            .await
-            .map(|envelope| Some(envelope.data)),
-        Err(res) => match res.status() {
-            None => Err(res),
-            Some(status) => {
-                if status == StatusCode::NOT_FOUND {
-                    Ok(None)
-                } else {
-                    Err(res)
-                }
-            }
-        },
-    }
-}
-
 fn make_validators_by_state_url(state_root: &str) -> String {
     format!(
         "{}/eth/v1/beacon/states/{}/validators",
@@ -242,26 +152,6 @@ pub struct ValidatorEnvelope {
 #[derive(Debug, Deserialize)]
 struct ValidatorsEnvelope {
     data: Vec<ValidatorEnvelope>,
-}
-
-pub async fn get_validators_by_state(
-    client: &Client,
-    state_root: &str,
-) -> reqwest::Result<Vec<Validator>> {
-    client
-        .get(make_validators_by_state_url(state_root))
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<ValidatorsEnvelope>()
-        .await
-        .map(|validators_envelope| {
-            validators_envelope
-                .data
-                .into_iter()
-                .map(|validator_envelope| validator_envelope.validator)
-                .collect()
-        })
 }
 
 fn make_finality_checkpoint_url() -> String {
@@ -289,15 +179,134 @@ struct CheckpointEnvelope {
     data: FinalityCheckpoints,
 }
 
-pub async fn get_last_finality_checkpoint(client: &Client) -> reqwest::Result<FinalityCheckpoint> {
-    client
-        .get(make_finality_checkpoint_url())
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<CheckpointEnvelope>()
-        .await
-        .map(|envelope| envelope.data.finalized)
+pub struct BeaconNode {
+    client: reqwest::Client,
+}
+
+impl BeaconNode {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+        }
+    }
+
+    pub async fn get_block_by_root(&self, block_root: &str) -> reqwest::Result<BeaconBlock> {
+        let url = make_blocks_url(&BlockId::BlockRoot(block_root.to_string()));
+
+        self.client
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<BeaconBlockVersionedEnvelope>()
+            .await
+            .map(|envelope| envelope.data.message.into())
+    }
+
+    pub async fn get_last_finalized_block(&self) -> reqwest::Result<BeaconBlock> {
+        let url = make_blocks_url(&BlockId::Finalized);
+
+        self.client
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<BeaconBlockVersionedEnvelope>()
+            .await
+            .map(|envelope| envelope.data.message.into())
+    }
+
+    pub async fn get_state_root_by_slot(&self, slot: &u32) -> reqwest::Result<String> {
+        let url = make_state_root_url(slot);
+
+        self.client
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<StateRootEnvelope>()
+            .await
+            .map(|envelope| envelope.data.root)
+    }
+
+    pub async fn get_validator_balances(
+        &self,
+        state_root: &str,
+    ) -> reqwest::Result<Vec<ValidatorBalance>> {
+        let url = make_validator_balances_by_state_url(state_root);
+
+        self.client
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<ValidatorBalancesEnvelope>()
+            .await
+            .map(|envelope| envelope.data)
+    }
+
+    /// This function returns nothing both when a slot does not exist at all, and a slot does exist but
+    /// is blockless. In other words, don't use this function alone to tell if a given slot has a
+    /// block, check the slot exists first.
+    pub async fn get_header_by_slot(
+        &self,
+        slot: &u32,
+    ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
+        let url = make_header_by_slot_url(slot);
+
+        // No header at this slot, either this slot doesn't exist or there is no header at this slot. We assume the slot exists but is headerless.
+        let res = self.client.get(&url).send().await?.error_for_status();
+
+        match res {
+            Ok(res) => res
+                .json::<HeaderEnvelope>()
+                .await
+                .map(|envelope| Some(envelope.data)),
+            Err(res) => match res.status() {
+                None => Err(res),
+                Some(status) => {
+                    if status == StatusCode::NOT_FOUND {
+                        Ok(None)
+                    } else {
+                        Err(res)
+                    }
+                }
+            },
+        }
+    }
+
+    pub async fn get_last_finality_checkpoint(&self) -> reqwest::Result<FinalityCheckpoint> {
+        let url = make_finality_checkpoint_url();
+        self.client
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<CheckpointEnvelope>()
+            .await
+            .map(|envelope| envelope.data.finalized)
+    }
+
+    pub async fn get_validators_by_state(
+        &self,
+        state_root: &str,
+    ) -> reqwest::Result<Vec<Validator>> {
+        let url = make_validators_by_state_url(state_root);
+        self.client
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<ValidatorsEnvelope>()
+            .await
+            .map(|validators_envelope| {
+                validators_envelope
+                    .data
+                    .into_iter()
+                    .map(|validator_envelope| validator_envelope.validator)
+                    .collect()
+            })
+    }
 }
 
 #[cfg(test)]
@@ -348,47 +357,55 @@ mod tests {
 
     #[tokio::test]
     async fn test_last_finalized_block() {
-        let client = reqwest::Client::new();
-        get_last_finalized_block(&client).await.unwrap();
+        let beacon_node = BeaconNode::new();
+        beacon_node.get_last_finalized_block().await.unwrap();
     }
 
     #[tokio::test]
     async fn test_block_by_root() {
-        let client = reqwest::Client::new();
-        get_block_by_root(&client, BLOCK_ROOT_1229).await.unwrap();
+        let beacon_node = BeaconNode::new();
+        beacon_node
+            .get_block_by_root(BLOCK_ROOT_1229)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn test_header_by_slot() {
-        let client = reqwest::Client::new();
-        get_header_by_slot(&client, &SLOT_1229).await.unwrap();
+        let beacon_node = BeaconNode::new();
+        beacon_node.get_header_by_slot(&SLOT_1229).await.unwrap();
     }
 
     #[tokio::test]
     async fn test_state_root_by_slot() {
-        let client = reqwest::Client::new();
-        get_state_root_by_slot(&client, &SLOT_1229).await.unwrap();
+        let beacon_node = BeaconNode::new();
+        beacon_node
+            .get_state_root_by_slot(&SLOT_1229)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn test_validator_balances() {
-        let client = reqwest::Client::new();
-        get_validator_balances(&client, STATE_ROOT_1229)
+        let beacon_node = BeaconNode::new();
+        beacon_node
+            .get_validator_balances(STATE_ROOT_1229)
             .await
             .unwrap();
     }
 
     #[tokio::test]
     async fn test_validators() {
-        let client = reqwest::Client::new();
-        get_validators_by_state(&client, STATE_ROOT_1229)
+        let beacon_node = BeaconNode::new();
+        beacon_node
+            .get_validators_by_state(STATE_ROOT_1229)
             .await
             .unwrap();
     }
 
     #[tokio::test]
     async fn get_last_finality_checkpoint_test() {
-        let client = reqwest::Client::new();
-        get_last_finality_checkpoint(&client).await.unwrap();
+        let beacon_node = BeaconNode::new();
+        beacon_node.get_last_finality_checkpoint().await.unwrap();
     }
 }
