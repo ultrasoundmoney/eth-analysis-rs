@@ -354,13 +354,13 @@ mod tests {
         "0x36cb7e3d4585fb90a4ed17a0139de34a08b8354d1a7a054dbe3e4d8a0b93e625";
 
     #[tokio::test]
-    async fn test_last_finalized_block() {
+    async fn last_finalized_block_test() {
         let beacon_node = BeaconNode::new();
         beacon_node.get_last_finalized_block().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_block_by_root() {
+    async fn block_by_root_test() {
         let beacon_node = BeaconNode::new();
         beacon_node
             .get_block_by_root(BLOCK_ROOT_1229)
@@ -369,13 +369,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_header_by_slot() {
+    async fn header_by_slot_test() {
         let beacon_node = BeaconNode::new();
         beacon_node.get_header_by_slot(&SLOT_1229).await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_state_root_by_slot() {
+    async fn state_root_by_slot_test() {
         let beacon_node = BeaconNode::new();
         beacon_node
             .get_state_root_by_slot(&SLOT_1229)
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_validator_balances() {
+    async fn validator_balances_test() {
         let beacon_node = BeaconNode::new();
         beacon_node
             .get_validator_balances(STATE_ROOT_1229)
@@ -393,7 +393,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_validators() {
+    async fn validators_test() {
         let beacon_node = BeaconNode::new();
         beacon_node
             .get_validators_by_state(STATE_ROOT_1229)
