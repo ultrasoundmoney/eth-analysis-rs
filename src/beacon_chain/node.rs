@@ -1,5 +1,5 @@
 use crate::{config, decoders::from_u32_string, eth_units::GweiAmount};
-use reqwest::{Client, StatusCode};
+use reqwest::StatusCode;
 use serde::Deserialize;
 
 enum BlockId {
@@ -254,9 +254,9 @@ impl BeaconNode {
     ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
         let url = make_header_by_slot_url(slot);
 
-        // No header at this slot, either this slot doesn't exist or there is no header at this slot. We assume the slot exists but is headerless.
         let res = self.client.get(&url).send().await?.error_for_status();
 
+        // No header at this slot, either this slot doesn't exist or there is no header at this slot. We assume the slot exists but is headerless.
         match res {
             Ok(res) => res
                 .json::<HeaderEnvelope>()
@@ -264,17 +264,15 @@ impl BeaconNode {
                 .map(|envelope| Some(envelope.data)),
             Err(res) => match res.status() {
                 None => Err(res),
-                Some(status) => {
-                    if status == StatusCode::NOT_FOUND {
-                        Ok(None)
-                    } else {
-                        Err(res)
-                    }
-                }
+                Some(status) => match status {
+                    StatusCode::NOT_FOUND => Ok(None),
+                    _ => Err(res),
+                },
             },
         }
     }
 
+    #[allow(dead_code)]
     pub async fn get_last_finality_checkpoint(&self) -> reqwest::Result<FinalityCheckpoint> {
         let url = make_finality_checkpoint_url();
         self.client
