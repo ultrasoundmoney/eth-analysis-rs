@@ -6,7 +6,7 @@ use crate::supply_projection::{GweiInTime, GweiInTimeRow};
 
 use super::beacon_time::FirstOfDaySlot;
 use super::node::ValidatorBalance;
-use super::{beacon_time, node, states, BeaconNode};
+use super::{beacon_time, states, BeaconNode};
 
 pub fn sum_validator_balances(validator_balances: Vec<ValidatorBalance>) -> GweiAmount {
     validator_balances
