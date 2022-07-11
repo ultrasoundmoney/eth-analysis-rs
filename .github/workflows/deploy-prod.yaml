@@ -10,11 +10,11 @@ jobs:
     name: wait on test
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for test to succeed
+      - name: Wait for build to succeed
         uses: lewagon/wait-on-check-action@master
         with:
           ref: ${{ github.ref }}
-          check-name: test
+          check-name: build
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
   wait-on-build:
