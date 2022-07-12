@@ -3,6 +3,7 @@ mod decoders;
 mod heads;
 mod supply_deltas;
 
+use super::SupplyDelta;
 use core::panic;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -12,8 +13,7 @@ use std::sync::Mutex;
 
 use self::blocks::*;
 use self::heads::*;
-pub use self::supply_deltas::SupplyDelta;
-use self::supply_deltas::*;
+use self::supply_deltas::SupplyDeltaMessage;
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
     tungstenite::Message,
