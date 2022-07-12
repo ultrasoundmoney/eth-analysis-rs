@@ -76,13 +76,13 @@ async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &st
 
     sqlx::query(
         "
-            SELECT balances FROM execution_supply
+            SELECT balances_sum::TEXT FROM execution_supply
             WHERE block_hash = $1
         ",
     )
     .bind(block_hash)
     .map(|row: PgRow| {
-        let balances_str = row.get::<String, _>("balances");
+        let balances_str = row.get::<String, _>("balances_sum");
         u128::from_str(&balances_str).unwrap()
     })
     .fetch_one(executor)
@@ -117,12 +117,12 @@ pub async fn store_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyD
             VALUES (
                 $1,
                 $2,
-                $3,
-                $4,
+                $3::NUMERIC,
+                $4::NUMERIC,
                 $5,
-                $6,
-                $7,
-                $8
+                $6::NUMERIC,
+                $7::NUMERIC,
+                $8::NUMERIC
             )
         ",
     )
@@ -146,7 +146,7 @@ pub async fn store_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyD
             INSERT INTO execution_supply (
                 block_hash,
                 block_number,
-                balances
+                balances_sum
             ) VALUES ($1, $2, $3::NUMERIC)
        ",
     )
