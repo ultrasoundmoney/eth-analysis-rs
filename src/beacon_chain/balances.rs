@@ -118,8 +118,6 @@ pub async fn get_balances_sum<'a>(executor: impl PgExecutor<'a>) -> BeaconBalanc
         .await
         .unwrap();
 
-    dbg!(&value);
-
     serde_json::from_value(value).unwrap()
 }
 
