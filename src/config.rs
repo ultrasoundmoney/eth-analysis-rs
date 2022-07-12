@@ -4,6 +4,7 @@ pub fn get_env_key_unsafe(key: &str) -> String {
     env::var(key).expect(&format!("{key} in env"))
 }
 
+#[allow(dead_code)]
 pub fn get_env_key(key: &str) -> Result<String, env::VarError> {
     env::var(key)
 }
