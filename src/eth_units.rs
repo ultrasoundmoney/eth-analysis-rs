@@ -4,7 +4,9 @@ use std::{
     str::FromStr,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize};
+
+use crate::decoders::from_u64_string;
 
 pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
@@ -14,7 +16,7 @@ pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
 // ~9_000_000_000 ETH, which is more than the entire supply.
 // TODO: Guard against overflow.
 // Consider replacing with simple type alias.
-#[derive(Clone, Copy, Deserialize, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct GweiAmount(pub u64);
 
@@ -83,6 +85,54 @@ impl From<WeiString> for GweiAmount {
         let gwei_u128 = u128::from_str(&amount_str).unwrap() / u128::from(GWEI_PER_ETH);
         let gwei_u64 = u64::try_from(gwei_u128).unwrap();
         Self(gwei_u64)
+    }
+}
+
+pub fn gwei_from_u64_string<'de, D>(deserializer: D) -> Result<GweiAmount, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let gwei_u64 = from_u64_string(deserializer)?;
+    Ok(GweiAmount(gwei_u64))
+}
+
+struct GweiAmountVisitor;
+
+impl<'de> Visitor<'de> for GweiAmountVisitor {
+    type Value = GweiAmount;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter
+            .write_str("an number encoded as a string smaller than the total supply of ETH in Gwei")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        match v.parse::<u64>() {
+            Err(error) => Err(E::custom(format!(
+                "failed to parse amount as u64: {}",
+                error
+            ))),
+            Ok(amount) => Ok(GweiAmount(amount)),
+        }
+    }
+
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(GweiAmount(u64::try_from(v).unwrap()))
+    }
+}
+
+impl<'de> Deserialize<'de> for GweiAmount {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(GweiAmountVisitor)
     }
 }
 
