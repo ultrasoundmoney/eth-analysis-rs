@@ -1,27 +1,22 @@
-use num_bigint::BigUint;
 use std::{
     fmt,
-    ops::{Add, Div, Sub},
+    ops::{Add, Sub},
     str::FromStr,
 };
 
-use serde::{
-    de::{self, Visitor},
-    Deserialize, Serialize,
-};
+use serde::{Deserialize, Serialize};
 
-use crate::etherscan::WeiAmount;
+use crate::etherscan::WeiString;
 
 pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
 pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
 
-pub const WEI_PER_GWEI_F64: f64 = 1_000_000_000_f64;
-
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
 // ~9_000_000_000 ETH, which is more than the entire supply.
 // TODO: Guard against overflow.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+// Consider replacing with simple type alias.
+#[derive(Clone, Copy, Deserialize, Debug, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct GweiAmount(pub u64);
 
@@ -47,26 +42,20 @@ impl GweiAmount {
 
 impl From<GweiAmount> for i64 {
     fn from(GweiAmount(amount): GweiAmount) -> Self {
-        match i64::try_from(amount) {
-            Err(err) => panic!("failed to convert GweiAmount into i64 {}", err),
-            Ok(amount_i64) => amount_i64,
-        }
+        i64::try_from(amount).unwrap()
     }
 }
 
 impl From<i64> for GweiAmount {
-    fn from(num: i64) -> Self {
-        match u64::try_from(num) {
-            Err(err) => panic!("failed to convert i64 into GweiAmount {}", err),
-            Ok(num_u64) => GweiAmount(num_u64),
-        }
+    fn from(gwei_i64: i64) -> Self {
+        GweiAmount(u64::try_from(gwei_i64).expect("failed to convert i64 into GweiAmount {}"))
     }
 }
 
 impl From<String> for GweiAmount {
-    fn from(amount: String) -> Self {
+    fn from(gwei_str: String) -> Self {
         GweiAmount(
-            amount
+            gwei_str
                 .parse::<u64>()
                 .expect("amount to be a string of a gwei amount that fits into u64"),
         )
@@ -91,53 +80,45 @@ impl Sub<GweiAmount> for GweiAmount {
     }
 }
 
-impl Div<GweiAmount> for GweiAmount {
-    type Output = Self;
-
-    // Consider forbidding integer division and forcing use of float variants.
-    fn div(self, GweiAmount(rhs): GweiAmount) -> Self::Output {
-        let GweiAmount(lhs) = self;
-        GweiAmount(lhs / rhs)
-    }
-}
-
-impl From<WeiAmount> for GweiAmount {
-    fn from(WeiAmount(amount_str): WeiAmount) -> Self {
-        let gwei_biguint = BigUint::from_str(&amount_str).unwrap() / BigUint::from(GWEI_PER_ETH);
-        let gwei_u64 = u64::try_from(gwei_biguint).unwrap();
+impl From<WeiString> for GweiAmount {
+    fn from(WeiString(amount_str): WeiString) -> Self {
+        let gwei_u128 = u128::from_str(&amount_str).unwrap() / u128::from(GWEI_PER_ETH);
+        let gwei_u64 = u64::try_from(gwei_u128).unwrap();
         Self(gwei_u64)
     }
 }
 
-struct GweiAmountVisitor;
+pub type Wei = u128;
 
-impl<'de> Visitor<'de> for GweiAmountVisitor {
-    type Value = GweiAmount;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter
-            .write_str("an number encoded as a string smaller than the total supply of ETH in Gwei")
+    #[test]
+    fn gwei_from_wei_string_test() {
+        let wei_string = WeiString("118068179561500000000000000".to_string());
+        let gwei = GweiAmount::from(wei_string);
+        assert_eq!(gwei, GweiAmount(118068179561500000));
     }
 
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        match v.parse::<u64>() {
-            Err(error) => Err(E::custom(format!(
-                "failed to parse amount as u64: {}",
-                error
-            ))),
-            Ok(amount) => Ok(GweiAmount(amount)),
-        }
+    #[test]
+    fn gwei_from_string_test() {
+        let gwei = GweiAmount::from("1234567890".to_string());
+        assert_eq!(gwei, GweiAmount(1234567890));
     }
-}
 
-impl<'de> Deserialize<'de> for GweiAmount {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_str(GweiAmountVisitor)
+    #[test]
+    fn gwei_add_test() {
+        assert_eq!(GweiAmount(1) + GweiAmount(1), GweiAmount(2));
+    }
+
+    #[test]
+    fn gwei_sub_test() {
+        assert_eq!(GweiAmount(1) - GweiAmount(1), GweiAmount(0));
+    }
+
+    #[test]
+    fn gwei_from_eth() {
+        assert_eq!(GweiAmount::from_eth(1), GweiAmount(GWEI_PER_ETH))
     }
 }
