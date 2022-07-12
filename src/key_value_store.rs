@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::Serialize;
 use serde_json::Value;
-use sqlx::{PgExecutor, PgPool};
+use sqlx::PgExecutor;
 
 #[allow(dead_code)]
 struct KeyValueFromDb {
@@ -11,7 +11,7 @@ struct KeyValueFromDb {
 
 // Do we need a distinction between key/value pair isn't there and value is null?
 #[allow(dead_code)]
-pub async fn get_value(pool: &PgPool, key: &str) -> Option<Value> {
+pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<Value> {
     sqlx::query_as!(
         KeyValueFromDb,
         r#"
@@ -20,7 +20,7 @@ pub async fn get_value(pool: &PgPool, key: &str) -> Option<Value> {
         "#,
         key
     )
-    .fetch_one(pool)
+    .fetch_one(executor)
     .await
     .unwrap()
     .value
