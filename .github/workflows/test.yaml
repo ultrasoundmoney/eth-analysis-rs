@@ -1,0 +1,29 @@
+name: test
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  BEACON_URL: ${{ secrets.BEACON_URL }}
+  CARGO_TERM_COLOR: always
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+  GLASSNODE_API_KEY: ${{ secrets.GLASSNODE_API_KEY }}
+  GETH_URL: ${{ secrets.GETH_URL }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v1
+      - name: Build
+        run: cargo build
+      - name: Run tests
+        run: cargo test
