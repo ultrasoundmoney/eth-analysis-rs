@@ -163,6 +163,7 @@ fn make_finality_checkpoint_url() -> String {
 
 #[derive(Deserialize)]
 pub struct FinalityCheckpoint {
+    #[allow(dead_code)]
     #[serde(deserialize_with = "from_u32_string")]
     epoch: u32,
     #[allow(dead_code)]
