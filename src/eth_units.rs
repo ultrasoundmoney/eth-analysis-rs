@@ -4,9 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize};
-
-use crate::decoders::from_u64_string;
+use serde::{de, de::Visitor, Deserialize, Serialize};
 
 pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
@@ -86,14 +84,6 @@ impl From<WeiString> for GweiAmount {
         let gwei_u64 = u64::try_from(gwei_u128).unwrap();
         Self(gwei_u64)
     }
-}
-
-pub fn gwei_from_u64_string<'de, D>(deserializer: D) -> Result<GweiAmount, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let gwei_u64 = from_u64_string(deserializer)?;
-    Ok(GweiAmount(gwei_u64))
 }
 
 struct GweiAmountVisitor;

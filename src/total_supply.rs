@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
-use sqlx::PgConnection;
+use sqlx::{Connection, PgConnection};
 
+use crate::beacon_chain::{BeaconBalancesSum, BeaconDepositsSum};
 use crate::config;
+use crate::execution_chain::ExecutionBalancesSum;
 use crate::key_value_store::{self, KeyValue};
 
 const TOTAL_SUPPLY_CACHE_KEY: &str = "total-supply";
@@ -12,10 +14,27 @@ pub struct SupplyAtBlock {
     pub total_supply: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 struct TotalSupply {
-    execution_chain: SupplyAtBlock,
-    beacon_chain: SupplyAtBlock,
+    execution_balances: ExecutionBalancesSum,
+    beacon_balances: BeaconBalancesSum,
+    beacon_deposits: BeaconDepositsSum,
+}
+
+async fn get_total_supply(executor: &mut PgConnection) -> TotalSupply {
+    let mut tx = executor.begin().await.unwrap();
+
+    let execution_balances = crate::execution_chain::get_balances_sum(&mut *tx).await;
+    let beacon_balances = crate::beacon_chain::get_balances_sum(&mut *tx).await;
+    let beacon_deposits = crate::beacon_chain::get_deposits_sum(&mut *tx).await;
+
+    tx.commit().await.unwrap();
+
+    TotalSupply {
+        execution_balances,
+        beacon_balances,
+        beacon_deposits,
+    }
 }
 
 pub async fn update() {
@@ -29,14 +48,7 @@ pub async fn update() {
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
-    let execution_total_supply =
-        crate::execution_supply_deltas::get_latest_total_supply(&mut connection).await;
-    let beacon_total_supply = crate::beacon_chain::get_latest_total_supply(&mut connection).await;
-
-    let total_supply = TotalSupply {
-        execution_chain: execution_total_supply,
-        beacon_chain: beacon_total_supply,
-    };
+    let total_supply = get_total_supply(&mut connection).await;
 
     key_value_store::set_value(
         &mut connection,
