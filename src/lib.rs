@@ -1,6 +1,7 @@
 mod beacon_chain;
 pub mod caching;
 pub mod config;
+mod check_beacon_state_gaps;
 mod decoders;
 mod eth_time;
 mod eth_units;
@@ -20,6 +21,7 @@ pub use execution_chain::write_heads_log as write_execution_heads_log;
 pub use execution_supply_deltas::sync_execution_supply_deltas;
 pub use execution_supply_deltas::write_deltas as write_execution_supply_deltas;
 pub use execution_supply_deltas::write_deltas_log as write_execution_supply_deltas_log;
+pub use check_beacon_state_gaps::check_beacon_state_gaps;
 pub use issuance_breakdown::update_issuance_breakdown;
 pub use supply_projection::update_supply_projection_inputs;
 pub use total_supply::update as update_total_supply;
