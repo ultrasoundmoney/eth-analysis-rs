@@ -1,14 +1,14 @@
-use sqlx::{PgConnection, PgExecutor, PgPool, Row};
+use sqlx::{PgConnection, PgExecutor, Row};
 
 use crate::eth_units::GweiAmount;
 
 use super::node::BeaconHeaderSignedEnvelope;
 
-const GENESIS_PARENT_ROOT: &str =
+pub const GENESIS_PARENT_ROOT: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-pub async fn get_deposit_sum_from_block_root(
-    pool: &PgPool,
+pub async fn get_deposit_sum_from_block_root<'a>(
+    executor: impl PgExecutor<'a>,
     block_root: &str,
 ) -> sqlx::Result<GweiAmount> {
     let deposit_sum_aggregated = sqlx::query!(
@@ -18,7 +18,7 @@ pub async fn get_deposit_sum_from_block_root(
         ",
         block_root
     )
-    .fetch_one(pool)
+    .fetch_one(executor)
     .await?
     .deposit_sum_aggregated
     .into();
