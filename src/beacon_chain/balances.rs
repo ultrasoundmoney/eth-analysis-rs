@@ -125,39 +125,31 @@ pub async fn get_balances_sum<'a>(executor: impl PgExecutor<'a>) -> BeaconBalanc
 mod tests {
     use chrono::{Duration, TimeZone, Utc};
     use serial_test::serial;
-    use sqlx::PgConnection;
+    use sqlx::{Connection, PgConnection};
 
     use crate::{beacon_chain::states::store_state, config};
 
     use super::*;
 
-    async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
-        sqlx::query("TRUNCATE beacon_states CASCADE")
-            .execute(pg_exec)
-            .await
-            .unwrap();
-    }
-
     #[tokio::test]
     #[serial]
-    async fn test_timestamp_is_start_of_day() {
-        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-            .await
-            .unwrap();
+    async fn timestamp_is_start_of_day_test() {
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut connection, "0xtest_balances", &17999)
+        store_state(&mut transaction, "0xtest_balances", &17999)
             .await
             .unwrap();
 
         store_validator_sum_for_day(
-            &mut connection,
+            &mut transaction,
             "0xtest_balances",
             &FirstOfDaySlot::new(&17999).unwrap(),
             &GweiAmount(100),
         )
         .await;
 
-        let validator_balances_by_day = get_validator_balances_by_start_of_day(&mut connection)
+        let validator_balances_by_day = get_validator_balances_by_start_of_day(&mut transaction)
             .await
             .unwrap();
 
@@ -167,21 +159,18 @@ mod tests {
 
         let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
 
-        clean_tables(&mut connection).await;
-
         assert_eq!(datetime, start_of_day_datetime);
     }
 
     #[tokio::test]
     #[serial]
     async fn get_balances_sum_test() {
-        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-            .await
-            .unwrap();
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
 
-        set_balances_sum(&mut connection, &0, GweiAmount(1)).await;
+        set_balances_sum(&mut transaction, &0, GweiAmount(1)).await;
 
-        let beacon_chain_balances = get_balances_sum(&mut connection).await;
+        let beacon_chain_balances = get_balances_sum(&mut transaction).await;
 
         assert_eq!(
             beacon_chain_balances,
@@ -195,15 +184,14 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn set_balances_sum_test() {
-        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-            .await
-            .unwrap();
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
 
-        set_balances_sum(&mut connection, &0, GweiAmount(1)).await;
+        set_balances_sum(&mut transaction, &0, GweiAmount(1)).await;
 
-        set_balances_sum(&mut connection, &1, GweiAmount(2)).await;
+        set_balances_sum(&mut transaction, &1, GweiAmount(2)).await;
 
-        let beacon_chain_balances = get_balances_sum(&mut connection).await;
+        let beacon_chain_balances = get_balances_sum(&mut transaction).await;
 
         assert_eq!(
             beacon_chain_balances,
