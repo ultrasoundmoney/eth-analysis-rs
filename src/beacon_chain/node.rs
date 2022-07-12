@@ -1,6 +1,9 @@
-use crate::{config, decoders::from_u32_string, eth_units::GweiAmount};
 use reqwest::StatusCode;
 use serde::Deserialize;
+
+use crate::config;
+use crate::decoders::from_u32_string;
+use crate::eth_units::GweiAmount;
 
 enum BlockId {
     #[allow(dead_code)]

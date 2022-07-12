@@ -103,7 +103,7 @@ impl<'de> Visitor<'de> for GweiAmountVisitor {
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter
-            .write_str("an number encoded as a string smaller than the total supply of ETH in Gwei")
+            .write_str("a number, or string of number, smaller u64::MAX representing some amount of ETH in Gwei")
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
@@ -125,6 +125,13 @@ impl<'de> Visitor<'de> for GweiAmountVisitor {
     {
         Ok(GweiAmount(u64::try_from(v).unwrap()))
     }
+
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(GweiAmount(v))
+    }
 }
 
 impl<'de> Deserialize<'de> for GweiAmount {
@@ -132,7 +139,7 @@ impl<'de> Deserialize<'de> for GweiAmount {
     where
         D: serde::Deserializer<'de>,
     {
-        deserializer.deserialize_str(GweiAmountVisitor)
+        deserializer.deserialize_any(GweiAmountVisitor)
     }
 }
 
