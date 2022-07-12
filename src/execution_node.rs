@@ -315,6 +315,7 @@ impl ExecutionNode {
         serde_json::from_value::<ExecutionNodeBlock>(value).unwrap()
     }
 
+    #[allow(dead_code)]
     pub async fn get_block_by_number(&mut self, number: &u32) -> ExecutionNodeBlock {
         let hex_number = format!("0x{:x}", number);
         let value = self
@@ -348,6 +349,7 @@ impl ExecutionNode {
         rx.await.unwrap()
     }
 
+    #[allow(dead_code)]
     pub async fn close(mut self) {
         self.message_sink.close().await.unwrap();
     }
