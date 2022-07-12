@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::config;
+use crate::{config, eth_units::WeiString};
 
 const ETHERSCAN_API: &str = "https://api.etherscan.io/api";
 
@@ -22,17 +22,13 @@ fn make_eth_supply_2_url() -> String {
     format!("{ETHERSCAN_API}?{}", serde_qs::to_string(&params).unwrap())
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct WeiAmount(pub String);
-
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct EthSupply2 {
     /// eth_supply is calculated before adding ETH minted as Eth2Staking rewards and subtracting BurntFees from EIP-1559.
-    pub eth_supply: WeiAmount,
-    pub eth2_staking: WeiAmount,
-    pub burnt_fees: WeiAmount,
+    pub eth_supply: WeiString,
+    pub eth2_staking: WeiString,
+    pub burnt_fees: WeiString,
 }
 
 #[derive(Deserialize)]

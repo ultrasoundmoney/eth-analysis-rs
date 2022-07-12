@@ -6,8 +6,6 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::etherscan::WeiString;
-
 pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
 pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
@@ -89,6 +87,10 @@ impl From<WeiString> for GweiAmount {
 }
 
 pub type Wei = u128;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct WeiString(pub String);
 
 #[cfg(test)]
 mod tests {
