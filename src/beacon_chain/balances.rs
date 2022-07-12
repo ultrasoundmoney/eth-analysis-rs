@@ -1,12 +1,15 @@
 use chrono::{Duration, DurationRound};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::PgExecutor;
 
 use crate::eth_units::GweiAmount;
+use crate::key_value_store;
 use crate::supply_projection::{GweiInTime, GweiInTimeRow};
 
 use super::beacon_time::FirstOfDaySlot;
 use super::node::ValidatorBalance;
-use super::{beacon_time, states, BeaconNode};
+use super::{beacon_time, states, BeaconNode, Slot};
 
 pub fn sum_validator_balances(validator_balances: Vec<ValidatorBalance>) -> GweiAmount {
     validator_balances
@@ -81,6 +84,45 @@ pub async fn get_validator_balances_by_start_of_day<'a>(
     })
 }
 
+pub const BEACON_BALANCES_CACHE_KEY: &str = "beacon-chain-balances";
+
+pub async fn set_balances_sum<'a>(
+    executor: impl PgExecutor<'a>,
+    slot: &u32,
+    balances_sum: GweiAmount,
+) {
+    let value = serde_json::to_value(json!({
+        "slot": slot,
+        "balances_sum": balances_sum
+    }))
+    .unwrap();
+
+    key_value_store::set_value(
+        executor,
+        key_value_store::KeyValue {
+            key: BEACON_BALANCES_CACHE_KEY,
+            value,
+        },
+    )
+    .await;
+}
+
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
+pub struct BeaconBalancesSum {
+    slot: Slot,
+    balances_sum: GweiAmount,
+}
+
+pub async fn get_balances_sum<'a>(executor: impl PgExecutor<'a>) -> BeaconBalancesSum {
+    let value = key_value_store::get_value(executor, BEACON_BALANCES_CACHE_KEY)
+        .await
+        .unwrap();
+
+    dbg!(&value);
+
+    serde_json::from_value(value).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, TimeZone, Utc};
@@ -92,7 +134,7 @@ mod tests {
     use super::*;
 
     async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
-        sqlx::query("TRUNCATE TABLE beacon_states CASCADE")
+        sqlx::query("TRUNCATE beacon_states CASCADE")
             .execute(pg_exec)
             .await
             .unwrap();
@@ -130,5 +172,47 @@ mod tests {
         clean_tables(&mut connection).await;
 
         assert_eq!(datetime, start_of_day_datetime);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn get_balances_sum_test() {
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        set_balances_sum(&mut connection, &0, GweiAmount(1)).await;
+
+        let beacon_chain_balances = get_balances_sum(&mut connection).await;
+
+        assert_eq!(
+            beacon_chain_balances,
+            BeaconBalancesSum {
+                slot: 0,
+                balances_sum: GweiAmount(1)
+            }
+        )
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn set_balances_sum_test() {
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        set_balances_sum(&mut connection, &0, GweiAmount(1)).await;
+
+        set_balances_sum(&mut connection, &1, GweiAmount(2)).await;
+
+        let beacon_chain_balances = get_balances_sum(&mut connection).await;
+
+        assert_eq!(
+            beacon_chain_balances,
+            BeaconBalancesSum {
+                slot: 1,
+                balances_sum: GweiAmount(2)
+            }
+        )
     }
 }

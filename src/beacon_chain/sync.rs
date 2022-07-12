@@ -105,17 +105,19 @@ async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) {
         }
     };
 
+    let validator_balances = beacon_node
+        .get_validator_balances(&state_root)
+        .await
+        .unwrap();
+    let validator_balances_sum = balances::sum_validator_balances(validator_balances);
+    super::set_balances_sum(pool, slot, validator_balances_sum).await;
+
     if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
-        let validator_balances = beacon_node
-            .get_validator_balances(&state_root)
-            .await
-            .unwrap();
-        let validator_balances_sum_gwei = balances::sum_validator_balances(validator_balances);
         balances::store_validator_sum_for_day(
             pool,
             &state_root,
             &start_of_day_date_time,
-            &validator_balances_sum_gwei,
+            &validator_balances_sum,
         )
         .await;
 
@@ -124,7 +126,7 @@ async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) {
                 pool,
                 &state_root,
                 &start_of_day_date_time,
-                &issuance::calc_issuance(&validator_balances_sum_gwei, &deposit_sum_aggregated),
+                &issuance::calc_issuance(&validator_balances_sum, &deposit_sum_aggregated),
             )
             .await;
         }
