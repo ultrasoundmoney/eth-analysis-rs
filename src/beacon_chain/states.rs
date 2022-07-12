@@ -1,14 +1,19 @@
 use sqlx::PgExecutor;
 
+// Beacon chain slots are defined as 12 second periods starting from genesis. With u32 our program
+// would overflow when the slot number passes 4_294_967_295. u32::MAX * 12 seconds = ~1633 years.
+pub type Slot = u32;
+
 struct BeaconStateRow {
     block_root: Option<String>,
     slot: i32,
     state_root: String,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct BeaconState {
     pub block_root: Option<String>,
-    pub slot: u32,
+    pub slot: Slot,
     pub state_root: String,
 }
 
@@ -58,4 +63,73 @@ pub async fn store_state<'a>(
     .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config;
+    use serial_test::serial;
+    use sqlx::PgConnection;
+
+    async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
+        sqlx::query("TRUNCATE beacon_states CASCADE")
+            .execute(pg_exec)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn store_state_test() {
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        store_state(&mut connection, "0xstate_root", &0)
+            .await
+            .unwrap();
+
+        let state = get_last_state(&mut connection).await.unwrap();
+
+        clean_tables(&mut connection).await;
+
+        assert_eq!(
+            state,
+            BeaconState {
+                slot: 0,
+                state_root: "0xstate_root".to_string(),
+                block_root: None
+            }
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn get_last_state_test() {
+        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+            .await
+            .unwrap();
+
+        store_state(&mut connection, "0xstate_root_1", &0)
+            .await
+            .unwrap();
+
+        store_state(&mut connection, "0xstate_root_2", &1)
+            .await
+            .unwrap();
+
+        let state = get_last_state(&mut connection).await.unwrap();
+
+        clean_tables(&mut connection).await;
+
+        assert_eq!(
+            state,
+            BeaconState {
+                slot: 1,
+                state_root: "0xstate_root_2".to_string(),
+                block_root: None
+            }
+        );
+    }
 }
