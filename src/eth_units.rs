@@ -133,7 +133,7 @@ impl<'de> Deserialize<'de> for GweiAmount {
     }
 }
 
-pub type Wei = u128;
+pub type Wei = i128;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(transparent)]

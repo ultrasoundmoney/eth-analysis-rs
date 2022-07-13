@@ -18,7 +18,7 @@ struct SupplySnapshot {
     block_hash: &'static str,
     block_number: u32,
     root: &'static str,
-    balances: Wei,
+    balances_sum: Wei,
 }
 
 const SUPPLY_SNAPSHOT_15082718: SupplySnapshot = SupplySnapshot {
@@ -26,7 +26,7 @@ const SUPPLY_SNAPSHOT_15082718: SupplySnapshot = SupplySnapshot {
     block_hash: "0xba7baa960085d0997884135a9c0f04f6b6de53164604084be701f98a31c4124d",
     block_number: 15082718,
     root: "655618..cfe0e6",
-    balances: 118908973575220940,
+    balances_sum: 118908973575220940,
 };
 
 async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> bool {
@@ -57,7 +57,7 @@ async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) 
     .get("exists")
 }
 
-async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> u128 {
+async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> i128 {
     // Instead of the genesis parent_hash being absent, it is set to GENESIS_PARENT_HASH.
     // We'd like to have all supply deltas making only an exception for the genesis hash, but we
     // don't have all supply deltas and so have to contend with a snapshot total supply as a
@@ -67,7 +67,7 @@ async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &st
     }
 
     if block_hash == SUPPLY_SNAPSHOT_15082718.block_hash {
-        return SUPPLY_SNAPSHOT_15082718.balances;
+        return SUPPLY_SNAPSHOT_15082718.balances_sum;
     }
 
     if block_hash == "0xtestparent" {
@@ -83,7 +83,7 @@ async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &st
     .bind(block_hash)
     .map(|row: PgRow| {
         let balances_str = row.get::<String, _>("balances_sum");
-        u128::from_str(&balances_str).unwrap()
+        i128::from_str(&balances_str).unwrap()
     })
     .fetch_one(executor)
     .await
