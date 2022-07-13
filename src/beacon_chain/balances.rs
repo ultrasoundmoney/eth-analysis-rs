@@ -84,7 +84,7 @@ pub async fn get_validator_balances_by_start_of_day<'a>(
     })
 }
 
-pub const BEACON_BALANCES_CACHE_KEY: &str = "beacon-chain-balances";
+pub const BEACON_BALANCES_SUM_CACHE_KEY: &str = "beacon-balances-sum";
 
 pub async fn set_balances_sum<'a>(
     executor: impl PgExecutor<'a>,
@@ -100,7 +100,7 @@ pub async fn set_balances_sum<'a>(
     key_value_store::set_value(
         executor,
         key_value_store::KeyValue {
-            key: BEACON_BALANCES_CACHE_KEY,
+            key: BEACON_BALANCES_SUM_CACHE_KEY,
             value,
         },
     )
@@ -114,7 +114,7 @@ pub struct BeaconBalancesSum {
 }
 
 pub async fn get_balances_sum<'a>(executor: impl PgExecutor<'a>) -> BeaconBalancesSum {
-    let value = key_value_store::get_value(executor, BEACON_BALANCES_CACHE_KEY)
+    let value = key_value_store::get_value(executor, BEACON_BALANCES_SUM_CACHE_KEY)
         .await
         .unwrap();
 
