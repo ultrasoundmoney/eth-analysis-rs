@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-use crate::beacon_chain::{BeaconBalancesSum, BeaconDepositsSum};
+use crate::beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum};
+use crate::caching;
+use crate::execution_chain;
 use crate::execution_chain::ExecutionBalancesSum;
 use crate::key_value_store::{self, KeyValueStr};
 use crate::performance::LifetimeMeasure;
@@ -17,9 +19,9 @@ struct TotalSupply {
 
 async fn get_total_supply<'a>(executor: &PgPool) -> TotalSupply {
     let _ = LifetimeMeasure::log_lifetime("get total supply");
-    let execution_balances = crate::execution_chain::get_balances_sum(executor).await;
-    let beacon_balances = crate::beacon_chain::get_balances_sum(executor).await;
-    let beacon_deposits = crate::beacon_chain::get_deposits_sum(executor).await;
+    let execution_balances = execution_chain::get_balances_sum(executor).await;
+    let beacon_balances = beacon_chain::get_balances_sum(executor).await;
+    let beacon_deposits = beacon_chain::get_deposits_sum(executor).await;
 
     TotalSupply {
         execution_balances_sum: execution_balances,
@@ -41,4 +43,6 @@ pub async fn update(executor: &PgPool) {
         },
     )
     .await;
+
+    caching::publish_cache_update(executor, TOTAL_SUPPLY_CACHE_KEY).await;
 }
