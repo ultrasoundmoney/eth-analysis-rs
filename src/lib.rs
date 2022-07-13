@@ -10,6 +10,7 @@ mod execution_chain;
 mod glassnode;
 mod issuance_breakdown;
 mod key_value_store;
+mod performance;
 mod supply_projection;
 mod time;
 mod total_supply;

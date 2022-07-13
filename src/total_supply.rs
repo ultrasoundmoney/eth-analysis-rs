@@ -4,6 +4,7 @@ use sqlx::PgPool;
 use crate::beacon_chain::{BeaconBalancesSum, BeaconDepositsSum};
 use crate::execution_chain::ExecutionBalancesSum;
 use crate::key_value_store::{self, KeyValueStr};
+use crate::performance::LifetimeMeasure;
 
 const TOTAL_SUPPLY_CACHE_KEY: &str = "total-supply";
 
@@ -27,6 +28,8 @@ async fn get_total_supply<'a>(executor: &PgPool) -> TotalSupply {
 }
 
 pub async fn update(executor: &PgPool) {
+    let _m1 = LifetimeMeasure::log_lifetime("store total supply");
+
     let total_supply = get_total_supply(executor).await;
 
     // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize

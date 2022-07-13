@@ -26,6 +26,7 @@ async fn store_state_with_block(
     deposit_sum: &GweiAmount,
     deposit_sum_aggregated: &GweiAmount,
 ) {
+    let _m1 = LifetimeMeasure::log_lifetime("store state with block");
     let mut transaction = pool.begin().await.unwrap();
 
     states::store_state(&mut *transaction, state_root, slot)
@@ -62,6 +63,7 @@ pub enum SyncError {
 }
 
 async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) {
+    let _m1 = LifetimeMeasure::log_lifetime(&format!("sync slot {}", slot));
     let state_root = beacon_node.get_state_root_by_slot(slot).await.unwrap();
 
     let header = beacon_node.get_header_by_slot(slot).await.unwrap();
@@ -105,12 +107,14 @@ async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) {
         }
     };
 
+    let _m2 = LifetimeMeasure::log_lifetime("store validator balances");
     let validator_balances = beacon_node
         .get_validator_balances(&state_root)
         .await
         .unwrap();
     let validator_balances_sum = balances::sum_validator_balances(validator_balances);
     super::set_balances_sum(pool, slot, validator_balances_sum).await;
+    drop(_m2);
 
     if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
         balances::store_validator_sum_for_day(

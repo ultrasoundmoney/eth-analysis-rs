@@ -4,6 +4,7 @@ use serde::Deserialize;
 use crate::config;
 use crate::decoders::from_u32_string;
 use crate::eth_units::GweiAmount;
+use crate::performance::LifetimeMeasure;
 
 enum BlockId {
     #[allow(dead_code)]
@@ -256,6 +257,7 @@ impl BeaconNode {
         &self,
         slot: &u32,
     ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
+        let _m1 = LifetimeMeasure::log_lifetime("get header by slot");
         let url = make_header_by_slot_url(slot);
 
         let res = self.client.get(&url).send().await?.error_for_status();
