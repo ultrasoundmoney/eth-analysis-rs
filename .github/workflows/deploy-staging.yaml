@@ -143,3 +143,22 @@ jobs:
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
           command: rollout status deployment/sync-beacon-states
+  deploy-sync-beacon-states-dev:
+    name: deploy sync-beacon-states-dev
+    runs-on: ubuntu-latest
+    needs: wait-on-build
+    steps:
+      - uses: actions/checkout@master
+      - name: Make short SHA available
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: deploy
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
+          command: -n dev set image deployment/sync-beacon-states sync-beacon-states=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+      - name: Verify deployment
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
+          command: -n dev rollout status deployment/sync-beacon-states
