@@ -6,7 +6,11 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgExecutor, PgPool};
 use thiserror::Error;
 
-use crate::{config, decoders::from_u32_string, eth_units::GweiAmount};
+use crate::config;
+use crate::decoders::from_u32_string;
+use crate::eth_units::GweiAmount;
+use crate::performance::LifetimeMeasure;
+use crate::total_supply;
 
 use super::{
     balances, beacon_time::FirstOfDaySlot, blocks, deposits, issuance, node::BeaconBlock,
@@ -156,7 +160,7 @@ async fn sync_slots(pool: &PgPool, beacon_node: &BeaconNode, slot_range: &SlotRa
         sync_slot(pool, beacon_node, &slot).await;
 
         progress.inc_work_done();
-        if progress.work_done != 0 && progress.work_done % 1000 == 0 {
+        if progress.work_done != 0 && progress.work_done % 30 == 0 {
             tracing::info!("{}", progress.get_progress_string());
         }
     }
