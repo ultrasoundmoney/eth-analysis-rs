@@ -6,6 +6,7 @@ use std::str::FromStr;
 use crate::config;
 use crate::eth_units::Wei;
 use crate::execution_chain::node;
+use crate::performance::LifetimeMeasure;
 
 use super::SupplyDelta;
 
@@ -91,6 +92,7 @@ async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &st
 }
 
 pub async fn store_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyDelta) {
+    let _ = LifetimeMeasure::log_lifetime("store delta");
     let mut transaction = executor.begin().await.unwrap();
 
     let is_parent_known = get_is_hash_known(&mut *transaction, &supply_delta.parent_hash).await;
