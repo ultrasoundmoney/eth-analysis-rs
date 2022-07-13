@@ -1,60 +1,41 @@
 use serde::{Deserialize, Serialize};
-use sqlx::{Connection, PgConnection};
+use sqlx::PgPool;
 
 use crate::beacon_chain::{BeaconBalancesSum, BeaconDepositsSum};
-use crate::config;
 use crate::execution_chain::ExecutionBalancesSum;
-use crate::key_value_store::{self, KeyValue};
+use crate::key_value_store::{self, KeyValueStr};
 
 const TOTAL_SUPPLY_CACHE_KEY: &str = "total-supply";
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct SupplyAtBlock {
-    pub block_number: u32,
-    pub total_supply: u64,
-}
-
 #[derive(Deserialize, Serialize)]
 struct TotalSupply {
-    execution_balances: ExecutionBalancesSum,
-    beacon_balances: BeaconBalancesSum,
-    beacon_deposits: BeaconDepositsSum,
+    execution_balances_sum: ExecutionBalancesSum,
+    beacon_balances_sum: BeaconBalancesSum,
+    beacon_deposits_sum: BeaconDepositsSum,
 }
 
-async fn get_total_supply(executor: &mut PgConnection) -> TotalSupply {
-    let mut tx = executor.begin().await.unwrap();
-
-    let execution_balances = crate::execution_chain::get_balances_sum(&mut *tx).await;
-    let beacon_balances = crate::beacon_chain::get_balances_sum(&mut *tx).await;
-    let beacon_deposits = crate::beacon_chain::get_deposits_sum(&mut *tx).await;
-
-    tx.commit().await.unwrap();
+async fn get_total_supply<'a>(executor: &PgPool) -> TotalSupply {
+    let execution_balances = crate::execution_chain::get_balances_sum(executor).await;
+    let beacon_balances = crate::beacon_chain::get_balances_sum(executor).await;
+    let beacon_deposits = crate::beacon_chain::get_deposits_sum(executor).await;
 
     TotalSupply {
-        execution_balances,
-        beacon_balances,
-        beacon_deposits,
+        execution_balances_sum: execution_balances,
+        beacon_balances_sum: beacon_balances,
+        beacon_deposits_sum: beacon_deposits,
     }
 }
 
-pub async fn update() {
-    tracing_subscriber::fmt::init();
+pub async fn update(executor: &PgPool) {
+    let total_supply = get_total_supply(executor).await;
 
-    tracing::info!("updating total supply");
-
-    let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-        .await
-        .unwrap();
-
-    sqlx::migrate!().run(&mut connection).await.unwrap();
-
-    let total_supply = get_total_supply(&mut connection).await;
-
-    key_value_store::set_value(
-        &mut connection,
-        KeyValue {
+    // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
+    // as string however.
+    key_value_store::set_value_str(
+        executor,
+        KeyValueStr {
             key: TOTAL_SUPPLY_CACHE_KEY,
-            value: serde_json::to_value(&total_supply).unwrap(),
+            value_str: &serde_json::to_string(&total_supply).unwrap(),
         },
     )
     .await;

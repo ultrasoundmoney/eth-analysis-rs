@@ -131,6 +131,8 @@ async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) {
             .await;
         }
     }
+
+    total_supply::update(pool).await;
 }
 
 async fn sync_slots(pool: &PgPool, beacon_node: &BeaconNode, slot_range: &SlotRange) {
