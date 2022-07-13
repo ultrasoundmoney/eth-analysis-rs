@@ -16,6 +16,10 @@ impl LifetimeMeasure {
 
 impl Drop for LifetimeMeasure {
     fn drop(&mut self) {
-        tracing::debug!("{} took {:.2?}", self.name, self.t0.elapsed());
+        if std::env::var("LOG_PERF")
+            .map_or(false, |log_perf_str| log_perf_str.to_lowercase() == "true")
+        {
+            tracing::debug!("{} took {:.2?}", self.name, self.t0.elapsed());
+        }
     }
 }
