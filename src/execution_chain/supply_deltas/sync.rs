@@ -26,7 +26,7 @@ const SUPPLY_SNAPSHOT_15082718: SupplySnapshot = SupplySnapshot {
     block_hash: "0xba7baa960085d0997884135a9c0f04f6b6de53164604084be701f98a31c4124d",
     block_number: 15082718,
     root: "655618..cfe0e6",
-    balances_sum: 118908973575220940,
+    balances_sum: 118908973575220938641041929,
 };
 
 async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> bool {
