@@ -33,10 +33,6 @@ async fn store_state_with_block(
     let _m1 = LifetimeMeasure::log_lifetime("store state with block");
     let mut transaction = pool.begin().await.unwrap();
 
-    states::store_state(&mut *transaction, state_root, slot)
-        .await
-        .unwrap();
-
     let is_parent_known =
         blocks::get_is_hash_known(&mut *transaction, &header.header.message.parent_root).await;
     if !is_parent_known {
@@ -45,6 +41,10 @@ async fn store_state_with_block(
             header.root, header.header.message.parent_root
         )
     }
+
+    states::store_state(&mut *transaction, state_root, slot)
+        .await
+        .unwrap();
 
     blocks::store_block(
         &mut *transaction,
