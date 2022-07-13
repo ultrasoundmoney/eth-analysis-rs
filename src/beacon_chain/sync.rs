@@ -118,6 +118,7 @@ async fn sync_slot(
 
     // Keep track of the last validator balances.
     if *is_last_slot_to_sync {
+        tracing::debug!("syncing last slot in range, updating validator balances");
         let validator_balances = beacon_node
             .get_validator_balances(&state_root)
             .await
