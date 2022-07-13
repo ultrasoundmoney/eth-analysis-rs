@@ -16,6 +16,7 @@ struct TotalSupply {
 }
 
 async fn get_total_supply<'a>(executor: &PgPool) -> TotalSupply {
+    let _ = LifetimeMeasure::log_lifetime("get total supply");
     let execution_balances = crate::execution_chain::get_balances_sum(executor).await;
     let beacon_balances = crate::beacon_chain::get_balances_sum(executor).await;
     let beacon_deposits = crate::beacon_chain::get_deposits_sum(executor).await;
@@ -28,8 +29,6 @@ async fn get_total_supply<'a>(executor: &PgPool) -> TotalSupply {
 }
 
 pub async fn update(executor: &PgPool) {
-    let _m1 = LifetimeMeasure::log_lifetime("store total supply");
-
     let total_supply = get_total_supply(executor).await;
 
     // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize

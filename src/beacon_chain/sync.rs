@@ -30,7 +30,7 @@ async fn store_state_with_block(
     deposit_sum: &GweiAmount,
     deposit_sum_aggregated: &GweiAmount,
 ) {
-    let _m1 = LifetimeMeasure::log_lifetime("store state with block");
+    let _ = LifetimeMeasure::log_lifetime("store state with block");
     let mut transaction = pool.begin().await.unwrap();
 
     let is_parent_known =
@@ -66,8 +66,13 @@ pub enum SyncError {
     SqlxError(#[from] sqlx::Error),
 }
 
-async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) {
-    let _m1 = LifetimeMeasure::log_lifetime(&format!("sync slot {}", slot));
+async fn sync_slot(
+    pool: &PgPool,
+    beacon_node: &BeaconNode,
+    slot: &u32,
+    is_last_slot_to_sync: &bool,
+) {
+    let _ = LifetimeMeasure::log_lifetime("sync slot");
     let state_root = beacon_node.get_state_root_by_slot(slot).await.unwrap();
 
     let header = beacon_node.get_header_by_slot(slot).await.unwrap();
@@ -111,16 +116,23 @@ async fn sync_slot(pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) {
         }
     };
 
-    let _m2 = LifetimeMeasure::log_lifetime("store validator balances");
-    let validator_balances = beacon_node
-        .get_validator_balances(&state_root)
-        .await
-        .unwrap();
-    let validator_balances_sum = balances::sum_validator_balances(validator_balances);
-    super::set_balances_sum(pool, slot, validator_balances_sum).await;
-    drop(_m2);
+    // Keep track of the last validator balances.
+    if *is_last_slot_to_sync {
+        let validator_balances = beacon_node
+            .get_validator_balances(&state_root)
+            .await
+            .unwrap();
+        let validator_balances_sum = balances::sum_validator_balances(validator_balances);
+        super::set_balances_sum(pool, slot, validator_balances_sum).await;
+    }
 
     if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
+        // Always calculate the validator balances for the first of day slot.
+        let validator_balances = beacon_node
+            .get_validator_balances(&state_root)
+            .await
+            .unwrap();
+        let validator_balances_sum = balances::sum_validator_balances(validator_balances);
         balances::store_validator_sum_for_day(
             pool,
             &state_root,
@@ -157,7 +169,13 @@ async fn sync_slots(pool: &PgPool, beacon_node: &BeaconNode, slot_range: &SlotRa
     );
 
     for slot in slot_range.greater_than_or_equal..=slot_range.less_than_or_equal {
-        sync_slot(pool, beacon_node, &slot).await;
+        sync_slot(
+            pool,
+            beacon_node,
+            &slot,
+            &(slot == slot_range.less_than_or_equal),
+        )
+        .await;
 
         progress.inc_work_done();
         if progress.work_done != 0 && progress.work_done % 30 == 0 {

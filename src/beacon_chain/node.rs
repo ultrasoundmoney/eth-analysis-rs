@@ -238,6 +238,7 @@ impl BeaconNode {
         &self,
         state_root: &str,
     ) -> reqwest::Result<Vec<ValidatorBalance>> {
+        let _ = LifetimeMeasure::log_lifetime("get validator balances");
         let url = make_validator_balances_by_state_url(state_root);
 
         self.client
