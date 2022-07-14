@@ -12,9 +12,9 @@ const TOTAL_SUPPLY_CACHE_KEY: &str = "total-supply";
 
 #[derive(Deserialize, Serialize)]
 struct TotalSupply {
-    execution_balances_sum: ExecutionBalancesSum,
     beacon_balances_sum: BeaconBalancesSum,
     beacon_deposits_sum: BeaconDepositsSum,
+    execution_balances_sum: ExecutionBalancesSum,
 }
 
 async fn get_total_supply<'a>(executor: &PgPool) -> TotalSupply {
