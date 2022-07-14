@@ -12,6 +12,8 @@ struct KeyValueFromDb {
 // Do we need a distinction between key/value pair isn't there and value is null?
 #[allow(dead_code)]
 pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<Value> {
+    tracing::debug!("getting key: {}", key);
+
     sqlx::query_as!(
         KeyValueFromDb,
         r#"
