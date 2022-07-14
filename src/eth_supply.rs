@@ -11,6 +11,7 @@ use crate::performance::LifetimeMeasure;
 const ETH_SUPPLY_CACHE_KEY: &str = "eth-supply";
 
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct EthSupply {
     beacon_balances_sum: BeaconBalancesSum,
     beacon_deposits_sum: BeaconDepositsSum,
