@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, Row};
 
-use crate::eth_units::GweiAmount;
+use crate::eth_units::{to_gwei_string, GweiAmount};
 
 use super::blocks::get_deposit_sum_from_block_root;
 use super::node::BeaconBlock;
@@ -36,6 +36,7 @@ pub async fn get_deposit_sum_aggregated<'a>(
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct BeaconDepositsSum {
+    #[serde(serialize_with = "to_gwei_string")]
     deposits_sum: GweiAmount,
     slot: Slot,
 }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgExecutor;
 
-use crate::eth_units::GweiAmount;
+use crate::eth_units::{to_gwei_string, GweiAmount};
 use crate::key_value_store;
 use crate::supply_projection::{GweiInTime, GweiInTimeRow};
 
@@ -110,6 +110,7 @@ pub async fn set_balances_sum<'a>(
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct BeaconBalancesSum {
     slot: Slot,
+    #[serde(serialize_with = "to_gwei_string")]
     balances_sum: GweiAmount,
 }
 

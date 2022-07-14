@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use serde::{de, de::Visitor, Deserialize, Serialize};
+use serde::{de, de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
 pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
@@ -100,13 +100,14 @@ impl<'de> Visitor<'de> for GweiAmountVisitor {
     where
         E: de::Error,
     {
-        match v.parse::<u64>() {
-            Err(error) => Err(E::custom(format!(
-                "failed to parse amount as u64: {}",
-                error
-            ))),
-            Ok(amount) => Ok(GweiAmount(amount)),
-        }
+        v.parse::<u64>()
+            .map(|gwei_u64| GweiAmount(gwei_u64))
+            .map_err(|error| {
+                de::Error::invalid_value(
+                    de::Unexpected::Str(&format!("unexpected value: {}, error: {}", v, error)),
+                    &"a number as string: \"118908973575220938\", which fits within u64",
+                )
+            })
     }
 
     fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
@@ -133,11 +134,48 @@ impl<'de> Deserialize<'de> for GweiAmount {
     }
 }
 
+pub fn to_gwei_string<S>(gwei: &GweiAmount, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let gwei_str = gwei.0.to_string();
+    serializer.serialize_str(&gwei_str)
+}
+
 pub type Wei = i128;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct WeiString(pub String);
+
+pub fn from_u32_string<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    Ok(s.parse::<u32>().unwrap())
+}
+
+#[allow(dead_code)]
+pub fn from_i128_string<'de, D>(deserializer: D) -> Result<i128, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: &str = Deserialize::deserialize(deserializer)?;
+    s.parse::<i128>().map_err(|error| {
+        de::Error::invalid_value(
+            de::Unexpected::Str(&format!("unexpected value: {}, error: {}", s, error)),
+            &"a number as string: \"118908973575220938641041929\", which fits within i128",
+        )
+    })
+}
+
+pub fn to_i128_string<S>(num_i128: &i128, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&num_i128.to_string())
+}
 
 #[cfg(test)]
 mod tests {
@@ -169,5 +207,37 @@ mod tests {
     #[test]
     fn gwei_from_eth() {
         assert_eq!(GweiAmount::from_eth(1), GweiAmount(GWEI_PER_ETH))
+    }
+
+    #[derive(Debug, Deserialize, PartialEq, Serialize)]
+    struct Person {
+        name: String,
+        #[serde(
+            deserialize_with = "from_i128_string",
+            serialize_with = "to_i128_string"
+        )]
+        big_num: i128,
+    }
+
+    #[test]
+    fn deserialize_i128_str_test() {
+        let src = r#"{ "name": "alex", "big_num": "118908973575220938641041929" }"#;
+        let actual = serde_json::from_str::<Person>(src).unwrap();
+        let expected = Person {
+            name: "alex".to_string(),
+            big_num: 118908973575220938641041929,
+        };
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn serialize_i128_str_test() {
+        let expected = r#"{"name":"alex","big_num":"118908973575220938641041929"}"#;
+        let actual = serde_json::to_string(&Person {
+            name: "alex".to_string(),
+            big_num: 118908973575220938641041929,
+        })
+        .unwrap();
+        assert_eq!(actual, expected);
     }
 }

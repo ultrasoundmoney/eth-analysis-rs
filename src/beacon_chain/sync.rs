@@ -7,9 +7,8 @@ use sqlx::{PgExecutor, PgPool};
 use thiserror::Error;
 
 use crate::config;
-use crate::decoders::from_u32_string;
 use crate::eth_supply;
-use crate::eth_units::GweiAmount;
+use crate::eth_units::{from_u32_string, GweiAmount};
 use crate::performance::LifetimeMeasure;
 
 use super::{

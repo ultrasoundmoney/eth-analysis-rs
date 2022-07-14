@@ -2,7 +2,6 @@ mod beacon_chain;
 mod caching;
 mod check_beacon_state_gaps;
 mod config;
-mod decoders;
 mod eth_supply;
 mod eth_time;
 mod eth_units;

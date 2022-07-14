@@ -1,12 +1,13 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 use std::str::FromStr;
 
-use crate::eth_units::Wei;
+use crate::eth_units::{to_i128_string, Wei};
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct ExecutionBalancesSum {
     pub block_number: u32,
+    #[serde(serialize_with = "to_i128_string")]
     pub balances_sum: Wei,
 }
 

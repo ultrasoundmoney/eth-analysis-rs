@@ -2,8 +2,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::config;
-use crate::decoders::from_u32_string;
-use crate::eth_units::GweiAmount;
+use crate::eth_units::{from_u32_string, GweiAmount};
 use crate::performance::LifetimeMeasure;
 
 enum BlockId {
