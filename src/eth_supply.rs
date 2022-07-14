@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::PgPool;
 
 use crate::beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum};
@@ -10,7 +10,7 @@ use crate::performance::LifetimeMeasure;
 
 const ETH_SUPPLY_CACHE_KEY: &str = "eth-supply";
 
-#[derive(Deserialize, Serialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EthSupply {
     beacon_balances_sum: BeaconBalancesSum,

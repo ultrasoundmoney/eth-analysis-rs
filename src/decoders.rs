@@ -8,6 +8,7 @@ where
     Ok(s.parse::<u32>().unwrap())
 }
 
+#[allow(dead_code)]
 pub fn from_i128_string<'de, D>(deserializer: D) -> Result<i128, D::Error>
 where
     D: Deserializer<'de>,
@@ -21,6 +22,7 @@ where
     })
 }
 
+#[allow(dead_code)]
 pub fn to_i128_string<S>(num_i128: &i128, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,

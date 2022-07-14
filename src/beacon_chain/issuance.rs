@@ -80,7 +80,7 @@ pub async fn get_current_issuance<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result
 mod tests {
     use chrono::{TimeZone, Utc};
     use serial_test::serial;
-    use sqlx::{Connection, PgConnection, PgExecutor};
+    use sqlx::{Connection, PgConnection};
 
     use super::*;
     use crate::{beacon_chain::states::store_state, config};
