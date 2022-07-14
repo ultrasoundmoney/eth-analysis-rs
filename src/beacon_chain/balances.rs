@@ -31,7 +31,7 @@ pub async fn store_validator_sum_for_day<'a>(
         "
             INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
         ",
-        beacon_time::get_timestamp(slot),
+        beacon_time::date_time_from_slot(slot),
         state_root,
         gwei,
     )
