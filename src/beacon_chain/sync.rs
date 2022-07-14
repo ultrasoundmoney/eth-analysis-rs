@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use balances::BeaconBalancesSum;
 use futures::{channel::mpsc, SinkExt, Stream, StreamExt};
 use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
@@ -123,7 +124,14 @@ async fn sync_slot(
             .await
             .unwrap();
         let validator_balances_sum = balances::sum_validator_balances(validator_balances);
-        super::set_balances_sum(pool, slot, validator_balances_sum).await;
+        eth_supply::update(
+            pool,
+            BeaconBalancesSum {
+                balances_sum: validator_balances_sum,
+                slot: slot.clone(),
+            },
+        )
+        .await;
     }
 
     if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
@@ -151,8 +159,6 @@ async fn sync_slot(
             .await;
         }
     }
-
-    eth_supply::update(pool).await;
 }
 
 async fn sync_slots(pool: &PgPool, beacon_node: &BeaconNode, slot_range: &SlotRange) {

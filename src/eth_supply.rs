@@ -18,21 +18,23 @@ struct EthSupply {
     execution_balances_sum: ExecutionBalancesSum,
 }
 
-async fn get_eth_supply<'a>(executor: &PgPool) -> EthSupply {
+async fn get_eth_supply<'a>(
+    executor: &PgPool,
+    beacon_balances_sum: BeaconBalancesSum,
+) -> EthSupply {
     let _ = LifetimeMeasure::log_lifetime("get eth supply");
-    let execution_balances = execution_chain::get_balances_sum(executor).await;
-    let beacon_balances = beacon_chain::get_balances_sum(executor).await;
-    let beacon_deposits = beacon_chain::get_deposits_sum(executor).await;
+    let execution_balances_sum = execution_chain::get_balances_sum(executor).await;
+    let beacon_deposits_sum = beacon_chain::get_deposits_sum(executor).await;
 
     EthSupply {
-        execution_balances_sum: execution_balances,
-        beacon_balances_sum: beacon_balances,
-        beacon_deposits_sum: beacon_deposits,
+        execution_balances_sum,
+        beacon_balances_sum,
+        beacon_deposits_sum,
     }
 }
 
-pub async fn update(executor: &PgPool) {
-    let eth_supply = get_eth_supply(executor).await;
+pub async fn update(executor: &PgPool, beacon_balances_sum: BeaconBalancesSum) {
+    let eth_supply = get_eth_supply(executor, beacon_balances_sum).await;
 
     key_value_store::set_value_str(
         executor,
