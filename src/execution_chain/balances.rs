@@ -59,10 +59,10 @@ mod tests {
         };
 
         store_delta(&mut transaction, &supply_delta_test).await;
-        let total_supply = get_balances_sum(&mut transaction).await;
+        let execution_balances_sum = get_balances_sum(&mut transaction).await;
 
         assert_eq!(
-            total_supply,
+            execution_balances_sum,
             ExecutionBalancesSum {
                 block_number: 0,
                 balances_sum: 1,

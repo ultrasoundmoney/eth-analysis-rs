@@ -8,9 +8,9 @@ use thiserror::Error;
 
 use crate::config;
 use crate::decoders::from_u32_string;
+use crate::eth_supply;
 use crate::eth_units::GweiAmount;
 use crate::performance::LifetimeMeasure;
-use crate::total_supply;
 
 use super::{
     balances, beacon_time::FirstOfDaySlot, blocks, deposits, issuance, node::BeaconBlock,
@@ -153,7 +153,7 @@ async fn sync_slot(
         }
     }
 
-    total_supply::update(pool).await;
+    eth_supply::update(pool).await;
 }
 
 async fn sync_slots(pool: &PgPool, beacon_node: &BeaconNode, slot_range: &SlotRange) {

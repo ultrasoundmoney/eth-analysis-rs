@@ -33,8 +33,8 @@ const SUPPLY_SNAPSHOT_15082718: SupplySnapshot = SupplySnapshot {
 async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> bool {
     // Instead of the genesis parent_hash being absent, it is set to GENESIS_PARENT_HASH.
     // We'd like to have all supply deltas making only an exception for the genesis hash, but we
-    // don't have all supply deltas and so have to contend with a snapshot total supply as a
-    // "jumping off point" for which we're also missing the hash.
+    // don't have all supply deltas and so have to contend with a snapshot eth supply as a
+    // "jumping off point".
     if block_hash == GENESIS_PARENT_HASH
         || block_hash == SUPPLY_SNAPSHOT_15082718.block_hash
         || block_hash == "0xtestparent"
@@ -61,10 +61,10 @@ async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) 
 async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> i128 {
     // Instead of the genesis parent_hash being absent, it is set to GENESIS_PARENT_HASH.
     // We'd like to have all supply deltas making only an exception for the genesis hash, but we
-    // don't have all supply deltas and so have to contend with a snapshot total supply as a
-    // "jumping off point" for which we're also missing the hash.
+    // don't have all supply deltas and so have to contend with a snapshot eth supply as a
+    // "jumping off point".
     if block_hash == GENESIS_PARENT_HASH {
-        panic!("missing hardcoded genesis parent total supply")
+        panic!("missing hardcoded genesis parent balances sum")
     }
 
     if block_hash == SUPPLY_SNAPSHOT_15082718.block_hash {
@@ -336,7 +336,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_get_supply_at_hash() {
+    async fn test_get_balances_at_hash() {
         let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
         let mut transaction = connection.begin().await.unwrap();
 
@@ -352,10 +352,10 @@ mod tests {
         };
 
         store_delta(&mut transaction, &supply_delta_test).await;
-        let total_supply =
+        let balances_sum =
             get_balances_at_hash(&mut transaction, &supply_delta_test.block_hash).await;
 
-        assert_eq!(total_supply, 1);
+        assert_eq!(balances_sum, 1);
     }
 
     #[tokio::test]
@@ -376,10 +376,10 @@ mod tests {
         };
 
         store_delta(&mut transaction, &supply_delta_test).await;
-        let total_supply =
+        let balances_sum =
             get_balances_at_hash(&mut transaction, &supply_delta_test.block_hash).await;
 
-        assert_eq!(total_supply, 1);
+        assert_eq!(balances_sum, 1);
 
         drop_supply_deltas_from(&mut transaction, &0).await;
     }
