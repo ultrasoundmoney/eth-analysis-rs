@@ -105,25 +105,6 @@ jobs:
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: rollout status deployment/sync-execution-supply-deltas
-  deploy-update-total-supply:
-    name: deploy update-total-supply
-    runs-on: ubuntu-latest
-    needs: wait-on-build
-    steps:
-      - uses: actions/checkout@master
-      - name: Make short SHA available
-        id: vars
-        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
-      - name: deploy
-        uses: steebchen/kubectl@v2.0.0
-        with:
-          config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
-          command: set image cronjob/update-total-supply update-total-supply=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
-      - name: run job
-        uses: steebchen/kubectl@v2.0.0
-        with:
-          config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
-          command: create job --from=cronjob/update-total-supply update-total-supply-${{ steps.vars.outputs.sha_short }}
   deploy-sync-beacon-states:
     name: Deploy sync-beacon-states
     runs-on: ubuntu-latest
