@@ -5,6 +5,7 @@ use std::str::FromStr;
 use crate::eth_units::{to_i128_string, Wei};
 
 #[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExecutionBalancesSum {
     pub block_number: u32,
     #[serde(serialize_with = "to_i128_string")]

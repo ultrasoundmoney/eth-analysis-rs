@@ -108,6 +108,7 @@ pub async fn set_balances_sum<'a>(
 }
 
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BeaconBalancesSum {
     slot: Slot,
     #[serde(serialize_with = "to_gwei_string")]
