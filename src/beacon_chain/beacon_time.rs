@@ -5,7 +5,7 @@ lazy_static! {
     pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp(1606824023, 0);
 }
 
-pub fn date_time_from_slot(slot: &u32) -> DateTime<Utc> {
+pub fn get_date_time_from_slot(slot: &u32) -> DateTime<Utc> {
     *GENESIS_TIMESTAMP + Duration::seconds((slot * 12).into())
 }
 
@@ -13,8 +13,8 @@ pub fn get_is_first_of_day(slot: &u32) -> bool {
     match slot {
         slot if *slot == 0 => true,
         slot if *slot > 0 => {
-            let day_of_month_previous_slot = date_time_from_slot(&(slot - 1)).day();
-            let day_of_month = date_time_from_slot(&slot).day();
+            let day_of_month_previous_slot = get_date_time_from_slot(&(slot - 1)).day();
+            let day_of_month = get_date_time_from_slot(&slot).day();
 
             return day_of_month_previous_slot != day_of_month;
         }
@@ -55,11 +55,11 @@ mod tests {
     #[test]
     fn test_get_timestamp() {
         assert_eq!(
-            date_time_from_slot(&0),
+            get_date_time_from_slot(&0),
             "2020-12-01T12:00:23Z".parse::<DateTime<Utc>>().unwrap()
         );
         assert_eq!(
-            date_time_from_slot(&3599),
+            get_date_time_from_slot(&3599),
             "2020-12-02T00:00:11Z".parse::<DateTime<Utc>>().unwrap()
         );
     }
