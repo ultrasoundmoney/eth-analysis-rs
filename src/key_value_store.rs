@@ -22,10 +22,10 @@ pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<V
         "#,
         key
     )
-    .fetch_one(executor)
+    .fetch_optional(executor)
     .await
     .unwrap()
-    .value
+    .and_then(|kv| kv.value)
 }
 
 #[derive(Debug, Serialize)]
