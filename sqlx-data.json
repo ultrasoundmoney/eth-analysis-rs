@@ -38,25 +38,6 @@
     },
     "query": "\n            SELECT gwei FROM beacon_issuance\n            ORDER BY timestamp DESC\n            LIMIT 1\n        "
   },
-  "2e8eb41aa25d60119f6ca07c27196bfbc8e30df6aa4b3bd9d90829f7f3ee8dbf": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Int4",
-          "Int8",
-          "Int8",
-          "Text",
-          "Int8",
-          "Int8",
-          "Int8"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO execution_supply_deltas (\n                block_hash,\n                block_number,\n                fee_burn,\n                fixed_reward,\n                parent_hash,\n                self_destruct,\n                supply_delta,\n                uncles_reward\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n        "
-  },
   "599dc56e83c008c39c90aaf090a679811a07d26f76b0876dba42630bd1415f31": {
     "describe": {
       "columns": [],
