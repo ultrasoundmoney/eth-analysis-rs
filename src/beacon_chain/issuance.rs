@@ -80,7 +80,7 @@ pub async fn get_current_issuance<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result
 mod tests {
     use chrono::{TimeZone, Utc};
     use serial_test::serial;
-    use sqlx::{PgConnection, PgExecutor};
+    use sqlx::{Connection, PgConnection, PgExecutor};
 
     use super::*;
     use crate::{beacon_chain::states::store_state, config};
@@ -96,33 +96,27 @@ mod tests {
         )
     }
 
-    async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
-        sqlx::query("TRUNCATE beacon_states CASCADE")
-            .execute(pg_exec)
-            .await
-            .unwrap();
-    }
-
     #[tokio::test]
     #[serial]
     async fn test_timestamp_is_start_of_day() {
-        let mut conn: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-            .await
-            .unwrap();
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut conn, "0xtest_issuance", &3599)
+        store_state(&mut transaction, "0xtest_issuance", &3599)
             .await
             .unwrap();
 
         store_issuance_for_day(
-            &mut conn,
+            &mut transaction,
             "0xtest_issuance",
             &FirstOfDaySlot::new(&3599).unwrap(),
             &GweiAmount(100),
         )
         .await;
 
-        let validator_balances_by_day = get_issuance_by_start_of_day(&mut conn).await.unwrap();
+        let validator_balances_by_day = get_issuance_by_start_of_day(&mut transaction)
+            .await
+            .unwrap();
 
         let unix_timestamp = validator_balances_by_day.first().unwrap().t;
 
@@ -130,28 +124,25 @@ mod tests {
 
         let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
 
-        clean_tables(&mut conn).await;
-
         assert_eq!(datetime, start_of_day_datetime);
     }
 
     #[tokio::test]
     #[serial]
     async fn test_get_current_issuance() {
-        let mut conn: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xtest_issuance_1", &3599)
             .await
             .unwrap();
 
-        store_state(&mut conn, "0xtest_issuance_1", &3599)
-            .await
-            .unwrap();
-
-        store_state(&mut conn, "0xtest_issuance_2", &10799)
+        store_state(&mut transaction, "0xtest_issuance_2", &10799)
             .await
             .unwrap();
 
         store_issuance_for_day(
-            &mut conn,
+            &mut transaction,
             "0xtest_issuance_1",
             &FirstOfDaySlot::new(&3599).unwrap(),
             &GweiAmount(100),
@@ -159,16 +150,14 @@ mod tests {
         .await;
 
         store_issuance_for_day(
-            &mut conn,
+            &mut transaction,
             "0xtest_issuance_2",
             &FirstOfDaySlot::new(&10799).unwrap(),
             &GweiAmount(110),
         )
         .await;
 
-        let current_issuance = get_current_issuance(&mut conn).await.unwrap();
-
-        clean_tables(&mut conn).await;
+        let current_issuance = get_current_issuance(&mut transaction).await.unwrap();
 
         assert_eq!(current_issuance, GweiAmount(110));
     }

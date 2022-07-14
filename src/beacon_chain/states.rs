@@ -70,29 +70,19 @@ mod tests {
     use super::*;
     use crate::config;
     use serial_test::serial;
-    use sqlx::PgConnection;
-
-    async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
-        sqlx::query("TRUNCATE beacon_states CASCADE")
-            .execute(pg_exec)
-            .await
-            .unwrap();
-    }
+    use sqlx::{Connection, PgConnection};
 
     #[tokio::test]
     #[serial]
     async fn store_state_test() {
-        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xstate_root", &0)
             .await
             .unwrap();
 
-        store_state(&mut connection, "0xstate_root", &0)
-            .await
-            .unwrap();
-
-        let state = get_last_state(&mut connection).await.unwrap();
-
-        clean_tables(&mut connection).await;
+        let state = get_last_state(&mut transaction).await.unwrap();
 
         assert_eq!(
             state,
@@ -107,21 +97,18 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn get_last_state_test() {
-        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xstate_root_1", &0)
             .await
             .unwrap();
 
-        store_state(&mut connection, "0xstate_root_1", &0)
+        store_state(&mut transaction, "0xstate_root_2", &1)
             .await
             .unwrap();
 
-        store_state(&mut connection, "0xstate_root_2", &1)
-            .await
-            .unwrap();
-
-        let state = get_last_state(&mut connection).await.unwrap();
-
-        clean_tables(&mut connection).await;
+        let state = get_last_state(&mut transaction).await.unwrap();
 
         assert_eq!(
             state,

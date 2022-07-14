@@ -70,28 +70,20 @@ mod tests {
     use crate::beacon_chain::node::BeaconHeaderSignedEnvelope;
     use crate::config;
     use serial_test::serial;
-    use sqlx::PgConnection;
-
-    async fn clean_tables<'a>(pg_exec: impl PgExecutor<'a>) {
-        sqlx::query("TRUNCATE beacon_states CASCADE")
-            .execute(pg_exec)
-            .await
-            .unwrap();
-    }
+    use sqlx::{Connection, PgConnection};
 
     #[tokio::test]
     #[serial]
     async fn get_deposits_sum_test() {
-        let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-            .await
-            .unwrap();
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut connection, "0xstate_root", &0)
+        store_state(&mut transaction, "0xstate_root", &0)
             .await
             .unwrap();
 
         store_block(
-            &mut connection,
+            &mut transaction,
             "0xstate_root",
             &BeaconHeaderSignedEnvelope {
                 root: "0xblock_root".to_string(),
@@ -108,9 +100,7 @@ mod tests {
         )
         .await;
 
-        let deposits_sum = get_deposits_sum(&mut connection).await;
-
-        clean_tables(&mut connection).await;
+        let deposits_sum = get_deposits_sum(&mut transaction).await;
 
         assert_eq!(
             deposits_sum,
