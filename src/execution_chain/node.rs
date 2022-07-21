@@ -124,12 +124,8 @@ pub fn stream_supply_deltas(greater_than_or_equal_to: u32) -> mpsc::UnboundedRec
             .await
             .unwrap();
 
-        loop {
-            if let Some(_) = ws.next().await {
-                tracing::debug!("got subscription confirmation message");
-                break;
-            }
-        }
+        ws.next().await;
+        tracing::debug!("got subscription confirmation message");
 
         while let Some(message_result) = ws.next().await {
             let message = message_result.unwrap();
