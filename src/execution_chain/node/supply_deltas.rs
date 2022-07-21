@@ -7,9 +7,9 @@ use crate::{eth_units::Wei, execution_chain::SupplyDelta};
 pub struct SupplyDeltaF {
     block: u32,
     burn: Wei,
-    destruct: Wei,
+    destruct: Option<Wei>,
     hash: String,
-    issuance: Wei,
+    issuance: Option<Wei>,
     parent_hash: String,
     subsidy: Wei,
     uncles: Wei,
@@ -25,8 +25,8 @@ impl From<SupplyDeltaMessage> for SupplyDelta {
             fee_burn: f.burn,
             fixed_reward: f.subsidy,
             parent_hash: f.parent_hash,
-            self_destruct: f.destruct,
-            supply_delta: f.issuance,
+            self_destruct: f.destruct.unwrap_or(0),
+            supply_delta: f.issuance.unwrap_or(0),
             uncles_reward: f.uncles,
         }
     }
