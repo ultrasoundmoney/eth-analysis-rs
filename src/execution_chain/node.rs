@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use self::blocks::*;
 use self::heads::*;
@@ -27,7 +28,9 @@ use futures::stream::SplitStream;
 use serde::Deserialize;
 use serde_json::json;
 use serde_json::Value;
+use thiserror::Error;
 use tokio::net::TcpStream;
+use tokio::time::timeout;
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -211,6 +214,59 @@ pub fn stream_new_heads() -> mpsc::UnboundedReceiver<Head> {
     new_heads_rx
 }
 
+#[derive(Error, Debug)]
+pub enum SupplyDeltaByBlockNumberError {
+    #[error("did not receive a supply delta within the given timeout")]
+    Timeout,
+    #[error("connection closed before receiving a supply delta")]
+    Closed,
+}
+
+pub async fn get_supply_delta_by_block_number(
+    block_number: u32,
+) -> Result<SupplyDelta, SupplyDeltaByBlockNumberError> {
+    crate::performance::LifetimeMeasure::log_lifetime("get_supply_delta_by_block_number");
+
+    let url = format!("{}", &crate::config::get_execution_url());
+    let mut ws = connect_async(&url).await.unwrap().0;
+
+    let deltas_subscribe_message = make_supply_delta_subscribe_message(&(block_number));
+
+    ws.send(Message::text(deltas_subscribe_message))
+        .await
+        .unwrap();
+
+    ws.next().await;
+    tracing::debug!("got subscription confirmation message");
+
+    // We work with a pipeline that also pipes through ping messages. We ignore those but at the
+    // same time expect an answer quickly and don't want to hang waiting, so we use a timeout.
+    let supply_delta_future = tokio::spawn(async move {
+        while let Some(message_result) = ws.next().await {
+            let message = message_result.unwrap();
+
+            // We get ping messages too. Do nothing with those.
+            if message.is_ping() {
+                continue;
+            }
+
+            let message_text = message.into_text().unwrap();
+            let supply_delta_message =
+                serde_json::from_str::<SupplyDeltaMessage>(&message_text).unwrap();
+            let supply_delta = SupplyDelta::from(supply_delta_message);
+            return Ok(supply_delta);
+        }
+
+        Err(SupplyDeltaByBlockNumberError::Closed)
+    });
+
+    match timeout(Duration::from_secs(4), supply_delta_future).await {
+        Err(_) => Err(SupplyDeltaByBlockNumberError::Timeout),
+        // Unwrap the JoinError.
+        Ok(res) => res.unwrap(),
+    }
+}
+
 type NodeMessageRx = SplitStream<WebSocketStream<TokioAdapter<TcpStream>>>;
 type MessageHandlersShared =
     Arc<Mutex<HashMap<u16, oneshot::Sender<Result<serde_json::Value, RpcError>>>>>;
@@ -357,6 +413,11 @@ impl ExecutionNode {
 
 #[cfg(test)]
 mod tests {
+    use core::panic;
+    use std::time::Duration;
+
+    use tokio::time::timeout;
+
     use super::*;
 
     #[tokio::test]
@@ -372,5 +433,27 @@ mod tests {
         let block = node.get_block_by_number(&0).await;
         assert_eq!(0, block.number);
         node.close().await;
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_stream_supply_deltas() {
+        let stream = stream_supply_deltas(15_000_000);
+        let ten_deltas_future = stream.take(10).collect::<Vec<_>>();
+        match timeout(Duration::from_secs(4), ten_deltas_future).await {
+            Err(_) => {
+                panic!("test_stream_supply_deltas failed to receive ten deltas in three seconds")
+            }
+            Ok(deltas) => {
+                assert_eq!(deltas.len(), 10);
+            }
+        }
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_get_supply_delta_by_block_number() {
+        let supply_delta = get_supply_delta_by_block_number(15_000_000).await.unwrap();
+        assert_eq!(supply_delta.block_number, 15_000_000);
     }
 }
