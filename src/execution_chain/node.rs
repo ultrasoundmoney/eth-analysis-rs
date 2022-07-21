@@ -4,7 +4,6 @@ mod heads;
 mod supply_deltas;
 
 use super::SupplyDelta;
-use core::panic;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::Error;
