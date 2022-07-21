@@ -46,11 +46,11 @@ enum RpcMessage {
     RpcMessageResult { id: u16, result: serde_json::Value },
 }
 
-fn make_supply_delta_subscribe_message(greater_than: &u32) -> String {
+fn make_supply_delta_subscribe_message(greater_than_or_equal_to: &u32) -> String {
     let msg = json!({
         "id": 0,
         "method": "eth_subscribe",
-        "params": ["issuance", greater_than]
+        "params": ["issuance", greater_than_or_equal_to]
     });
 
     serde_json::to_string(&msg).unwrap()
@@ -110,14 +110,15 @@ impl IdPool {
     }
 }
 
-pub fn stream_supply_deltas(greater_than: u32) -> mpsc::UnboundedReceiver<SupplyDelta> {
+pub fn stream_supply_deltas(greater_than_or_equal_to: u32) -> mpsc::UnboundedReceiver<SupplyDelta> {
     let (mut supply_deltas_tx, supply_deltas_rx) = mpsc::unbounded();
 
     tokio::spawn(async move {
         let url = format!("{}", &crate::config::get_execution_url());
         let mut ws = connect_async(&url).await.unwrap().0;
 
-        let deltas_subscribe_message = make_supply_delta_subscribe_message(&greater_than);
+        let deltas_subscribe_message =
+            make_supply_delta_subscribe_message(&greater_than_or_equal_to);
 
         ws.send(Message::text(deltas_subscribe_message))
             .await
