@@ -392,7 +392,7 @@ pub async fn sync_deltas() {
             .unwrap_or(SUPPLY_SNAPSHOT_15082718.block_number + 1);
     tracing::debug!("requesting supply deltas gte {last_synced_supply_delta_number_on_start}");
     let mut supply_delta_stream =
-        super::stream_supply_deltas(last_synced_supply_delta_number_on_start);
+        super::stream_supply_deltas(last_synced_supply_delta_number_on_start + 1);
 
     let deltas_queue: DeltasQueue = Arc::new(Mutex::new(VecDeque::new()));
 
