@@ -1,11 +1,13 @@
 mod export;
 mod logs;
+mod node;
 mod sync;
 
-pub use self::export::write_deltas;
-pub use self::logs::write_deltas_log;
-pub use self::sync::store_delta;
-pub use self::sync::sync_deltas;
+pub use export::write_deltas;
+pub use logs::write_deltas_log;
+pub use node::{stream_supply_delta_chunks, stream_supply_deltas};
+pub use sync::store_delta;
+pub use sync::sync_deltas;
 
 use serde::Serialize;
 

@@ -1,4 +1,4 @@
-use crate::execution_chain::{node, ExecutionNode};
+use crate::execution_chain::{supply_deltas, ExecutionNode};
 use futures::StreamExt;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -23,7 +23,7 @@ pub async fn write_deltas_log() {
     let mut execution_node = ExecutionNode::connect().await;
     let latest_block = execution_node.get_latest_block().await;
 
-    let mut supply_deltas_rx = node::stream_supply_deltas(latest_block.number);
+    let mut supply_deltas_rx = supply_deltas::stream_supply_deltas(latest_block.number);
 
     let file_path = format!("supply_deltas_log_{}.csv", timestamp);
 

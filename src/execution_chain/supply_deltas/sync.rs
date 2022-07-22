@@ -5,7 +5,6 @@ use std::str::FromStr;
 
 use crate::config;
 use crate::eth_units::Wei;
-use crate::execution_chain::node;
 use crate::performance::LifetimeMeasure;
 
 use super::SupplyDelta;
@@ -236,7 +235,7 @@ pub async fn sync_deltas() {
         .await
         .unwrap_or(SUPPLY_SNAPSHOT_15082718.block_number + 1);
     tracing::debug!("requesting supply deltas gte {latest_synced_supply_delta_number}");
-    let mut supply_delta_stream = node::stream_supply_deltas(latest_synced_supply_delta_number);
+    let mut supply_delta_stream = super::stream_supply_deltas(latest_synced_supply_delta_number);
 
     while let Some(supply_delta) = supply_delta_stream.next().await {
         let is_fork_block =
