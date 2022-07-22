@@ -497,4 +497,52 @@ mod tests {
         let supply_delta = get_last_synced_supply_delta(&mut transaction).await;
         assert_eq!(supply_delta, supply_delta_test);
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_reverted_fork() {
+        // We test:
+        // A -> B ---> C
+        //   \---> B'
+        // In this scenario we drop B when receiving B', but then get C, which expects parent B.
+        // Because we are now missing B, we crash. We're fine on restart, but constant restarting
+        // is bad. Our cluster scheduler may stop trying to restart our app if this happens a lot.
+        let delta_b = SupplyDelta {
+            supply_delta: 0,
+            block_number: 0,
+            block_hash: "0xB".to_string(),
+            fee_burn: 0,
+            fixed_reward: 0,
+            parent_hash: "0xtestparent".to_string(),
+            self_destruct: 0,
+            uncles_reward: 0,
+        };
+        let delta_b_prime = SupplyDelta {
+            supply_delta: 0,
+            block_number: 0,
+            block_hash: "0xB_PRIME".to_string(),
+            fee_burn: 0,
+            fixed_reward: 0,
+            parent_hash: "0xtestparent".to_string(),
+            self_destruct: 0,
+            uncles_reward: 0,
+        };
+        let delta_c = SupplyDelta {
+            supply_delta: 0,
+            block_number: 0,
+            block_hash: "0xC".to_string(),
+            fee_burn: 0,
+            fixed_reward: 0,
+            parent_hash: "0xB".to_string(),
+            self_destruct: 0,
+            uncles_reward: 0,
+        };
+
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        sync_delta(&mut transaction, &delta_b).await;
+        sync_delta(&mut transaction, &delta_b_prime).await;
+        sync_delta(&mut transaction, &delta_c).await;
+    }
 }
