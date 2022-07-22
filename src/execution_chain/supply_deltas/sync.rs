@@ -1,10 +1,13 @@
 use futures::StreamExt;
 use sqlx::postgres::{PgConnection, PgRow};
 use sqlx::{Connection, PgExecutor, Row};
+use std::collections::VecDeque;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
 use crate::config;
 use crate::eth_units::Wei;
+use crate::execution_chain::supply_deltas::node::get_supply_delta_by_block_number;
 use crate::performance::LifetimeMeasure;
 
 use super::SupplyDelta;
@@ -22,9 +25,9 @@ struct SupplySnapshot {
 }
 
 const SUPPLY_SNAPSHOT_15082718: SupplySnapshot = SupplySnapshot {
-    accounts_count: 176496428,
+    accounts_count: 176_496_428,
     block_hash: "0xba7baa960085d0997884135a9c0f04f6b6de53164604084be701f98a31c4124d",
-    block_number: 15082718,
+    block_number: 15_082_718,
     root: "655618..cfe0e6",
     balances_sum: 118908973575220938641041929,
 };
@@ -238,7 +241,7 @@ pub async fn add_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyDel
     transaction.commit().await.unwrap();
 }
 
-async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: &u32) {
+async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_number: &u32) {
     let mut transaction = executor.begin().await.unwrap();
 
     sqlx::query(
@@ -247,7 +250,7 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: 
             WHERE block_number >= $1
         "#,
     )
-    .bind(*block_number as i32)
+    .bind(*gte_block_number as i32)
     .execute(&mut *transaction)
     .await
     .unwrap();
@@ -258,7 +261,7 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: 
             WHERE block_number >= $1
         "#,
     )
-    .bind(*block_number as i32)
+    .bind(*gte_block_number as i32)
     .execute(&mut *transaction)
     .await
     .unwrap();
@@ -266,27 +269,111 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: 
     transaction.commit().await.unwrap();
 }
 
-pub async fn sync_delta(connection: &mut PgConnection, supply_delta: &SupplyDelta) {
-    // Is there a more efficient way lend out the connection and still re-use it.
-    let mut transaction = connection.begin().await.unwrap();
-    let is_fork_block =
-        get_is_block_number_known(&mut transaction, &supply_delta.block_number).await;
-    transaction.commit().await.unwrap();
+enum NextStep {
+    RollbackLastAndParent,
+    RollbackLast,
+    AddToCurrent,
+}
 
-    if is_fork_block {
-        tracing::debug!(
-            "supply delta {}, with hash {}, is a fork block supply delta",
-            supply_delta.block_number,
-            supply_delta.block_hash
-        );
+async fn get_next_step(connection: &mut PgConnection, supply_delta: &SupplyDelta) -> NextStep {
+    use sqlx::Acquire;
 
-        tracing::debug!("dropping execution_supply and execution_supply_deltas rows with block_number greater than or equal to {}", &supply_delta.block_number);
-        drop_supply_deltas_from(connection, &supply_delta.block_number).await;
+    let is_parent_known = get_is_hash_known(
+        connection.acquire().await.unwrap(),
+        &supply_delta.parent_hash,
+    )
+    .await;
+
+    if !is_parent_known {
+        return NextStep::RollbackLastAndParent;
     }
 
-    tracing::debug!("storing supply delta {}", supply_delta.block_number);
-    add_delta(connection, &supply_delta).await;
+    let is_fork_block = get_is_block_number_known(
+        connection.acquire().await.unwrap(),
+        &supply_delta.block_number,
+    )
+    .await;
+
+    if is_fork_block {
+        return NextStep::RollbackLast;
+    }
+
+    return NextStep::AddToCurrent;
 }
+
+pub async fn sync_delta_next(
+    connection: &mut PgConnection,
+    deltas_queue: DeltasQueue,
+    delta_to_sync: DeltaToSync,
+) {
+    use sqlx::Acquire;
+
+    let supply_delta = match delta_to_sync {
+        DeltaToSync::WithData(supply_delta) => supply_delta,
+        DeltaToSync::WithoutData(supply_delta_number) => {
+            get_supply_delta_by_block_number(supply_delta_number)
+                .await
+                .unwrap()
+        }
+    };
+
+    match get_next_step(connection, &supply_delta).await {
+        NextStep::RollbackLastAndParent => {
+            tracing::info!(
+                "parent of delta {} is missing, rolling back current and parent block",
+                supply_delta.block_number
+            );
+
+            // Roll back current and parent supply delta in search of a common ancestor.
+            drop_supply_deltas_from(connection, &(supply_delta.block_number - 1)).await;
+
+            // Queue dropped deltas for sync. We can't be sure the delta we received will still be the
+            // canonical delta when we sync this delta again, therefore we queue without data.
+            tracing::debug!("queueing current and parent block for sync");
+            deltas_queue
+                .lock()
+                .unwrap()
+                .push_front(DeltaToSync::WithoutData(supply_delta.block_number));
+
+            deltas_queue
+                .lock()
+                .unwrap()
+                .push_front(DeltaToSync::WithoutData(supply_delta.block_number - 1));
+        }
+        NextStep::RollbackLast => {
+            tracing::info!(
+                "delta {} creates a fork, rolling back our last block",
+                &supply_delta.block_number
+            );
+            // Roll back last synced, and queue for sync.
+            drop_supply_deltas_from(
+                connection.acquire().await.unwrap(),
+                &supply_delta.block_number,
+            )
+            .await;
+
+            // Queue dropped deltas for sync. We can't be sure the delta we received will still be the
+            // canonical delta when we sync this delta again, therefore we queue without data.
+            deltas_queue
+                .lock()
+                .unwrap()
+                .push_front(DeltaToSync::WithoutData(supply_delta.block_number));
+        }
+        NextStep::AddToCurrent => {
+            // Progress as usual.
+            tracing::debug!("storing supply delta {}", supply_delta.block_number);
+            add_delta(connection, &supply_delta).await;
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum DeltaToSync {
+    WithData(SupplyDelta),
+    WithoutData(u32),
+}
+
+type DeltasQueue = Arc<Mutex<VecDeque<DeltaToSync>>>;
 
 pub async fn sync_deltas() {
     tracing_subscriber::fmt::init();
@@ -307,16 +394,38 @@ pub async fn sync_deltas() {
     let mut supply_delta_stream =
         super::stream_supply_deltas(last_synced_supply_delta_number_on_start);
 
+    let deltas_queue: DeltasQueue = Arc::new(Mutex::new(VecDeque::new()));
+
     while let Some(supply_delta) = supply_delta_stream.next().await {
-        sync_delta(&mut connection, &supply_delta).await;
+        deltas_queue
+            .lock()
+            .unwrap()
+            .push_back(DeltaToSync::WithData(supply_delta));
+
+        // Work through the queue until it's empty.
+        loop {
+            match deltas_queue.lock().unwrap().pop_front() {
+                None => {
+                    // Continue syncing deltas that we've received from the node.
+                    break;
+                }
+                Some(delta_to_sync) => {
+                    // Because we may encounter rollbacks, this step may add more deltas to sync to
+                    // the front of the queue.
+                    sync_delta_next(&mut connection, deltas_queue.clone(), delta_to_sync).await;
+                }
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     use serial_test::serial;
     use sqlx::PgConnection;
+
+    use super::*;
 
     #[tokio::test]
     #[serial]
@@ -498,6 +607,7 @@ mod tests {
         assert_eq!(supply_delta, supply_delta_test);
     }
 
+    #[ignore]
     #[tokio::test]
     #[serial]
     async fn test_reverted_fork() {
@@ -509,8 +619,9 @@ mod tests {
         // is bad. Our cluster scheduler may stop trying to restart our app if this happens a lot.
         let delta_b = SupplyDelta {
             supply_delta: 0,
-            block_number: 0,
-            block_hash: "0xB".to_string(),
+            block_number: 15_082_719,
+            block_hash: "0x5c47be526e24f7b58a27d5f6ad16e70df4ffc3bc3e3d3558267e92a4c4fff063"
+                .to_string(),
             fee_burn: 0,
             fixed_reward: 0,
             parent_hash: "0xtestparent".to_string(),
@@ -519,7 +630,7 @@ mod tests {
         };
         let delta_b_prime = SupplyDelta {
             supply_delta: 0,
-            block_number: 0,
+            block_number: 15_082_719,
             block_hash: "0xB_PRIME".to_string(),
             fee_burn: 0,
             fixed_reward: 0,
@@ -529,11 +640,13 @@ mod tests {
         };
         let delta_c = SupplyDelta {
             supply_delta: 0,
-            block_number: 0,
-            block_hash: "0xC".to_string(),
+            block_number: 15_082_720,
+            block_hash: "0x422fa5aed7e38dac0246e160472962fd385833c6ef0333d7c767e8729e5442c3"
+                .to_string(),
             fee_burn: 0,
             fixed_reward: 0,
-            parent_hash: "0xB".to_string(),
+            parent_hash: "0x5c47be526e24f7b58a27d5f6ad16e70df4ffc3bc3e3d3558267e92a4c4fff063"
+                .to_string(),
             self_destruct: 0,
             uncles_reward: 0,
         };
@@ -541,8 +654,46 @@ mod tests {
         let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
         let mut transaction = connection.begin().await.unwrap();
 
-        sync_delta(&mut transaction, &delta_b).await;
-        sync_delta(&mut transaction, &delta_b_prime).await;
-        sync_delta(&mut transaction, &delta_c).await;
+        let deltas_queue: DeltasQueue = Arc::new(Mutex::new(VecDeque::new()));
+
+        // Sync a delta.
+        sync_delta_next(
+            &mut transaction,
+            deltas_queue.clone(),
+            DeltaToSync::WithData(delta_b),
+        )
+        .await;
+        // Fork that delta.
+        sync_delta_next(
+            &mut transaction,
+            deltas_queue.clone(),
+            DeltaToSync::WithData(delta_b_prime.clone()),
+        )
+        .await;
+
+        let expected_1 = VecDeque::from(vec![DeltaToSync::WithoutData(15_082_719)]);
+        assert_eq!(deltas_queue.lock().unwrap().clone(), expected_1);
+
+        // B 15_082_719, has been dropped, because syncing B' 15_082_719 talks to a real node, it
+        // would sync the real 15_082_719, but we want C 15_082_720 to be forking B' 15_082_719, only
+        // accepting building on B. We force insert B' as 15_082_719.
+        // real 15_082_719.
+        deltas_queue.lock().unwrap().pop_front();
+        add_delta(&mut transaction, &delta_b_prime).await;
+
+        // Now try to process C which depends on B which we've dropped.
+        sync_delta_next(
+            &mut transaction,
+            deltas_queue.clone(),
+            DeltaToSync::WithData(delta_c),
+        )
+        .await;
+
+        let expected = VecDeque::from(vec![
+            DeltaToSync::WithoutData(15_082_719),
+            DeltaToSync::WithoutData(15_082_720),
+        ]);
+        let actual = deltas_queue.lock().unwrap().clone();
+        assert_eq!(actual, expected);
     }
 }

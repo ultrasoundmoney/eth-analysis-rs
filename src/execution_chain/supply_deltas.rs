@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::eth_units::Wei;
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct SupplyDelta {
     pub block_hash: String,
     pub block_number: u32,
