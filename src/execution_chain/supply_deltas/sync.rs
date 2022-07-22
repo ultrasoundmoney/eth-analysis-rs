@@ -74,6 +74,7 @@ async fn get_last_synced_supply_delta_number<'a>(executor: impl PgExecutor<'a>) 
     max_opt.map(|max| max as u32)
 }
 
+#[allow(dead_code)]
 async fn get_last_synced_supply_delta<'a>(executor: impl PgExecutor<'a>) -> SupplyDelta {
     sqlx::query(
         "
