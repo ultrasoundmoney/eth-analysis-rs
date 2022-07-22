@@ -307,8 +307,6 @@ pub async fn sync_delta_next(
     deltas_queue: DeltasQueue,
     delta_to_sync: DeltaToSync,
 ) {
-    use sqlx::Acquire;
-
     let supply_delta = match delta_to_sync {
         DeltaToSync::WithData(supply_delta) => supply_delta,
         DeltaToSync::WithoutData(supply_delta_number) => {
@@ -347,11 +345,7 @@ pub async fn sync_delta_next(
                 &supply_delta.block_number
             );
             // Roll back last synced, and queue for sync.
-            drop_supply_deltas_from(
-                connection.acquire().await.unwrap(),
-                &supply_delta.block_number,
-            )
-            .await;
+            drop_supply_deltas_from(connection, &supply_delta.block_number).await;
 
             // Queue dropped deltas for sync. We can't be sure the delta we received will still be the
             // canonical delta when we sync this delta again, therefore we queue without data.
@@ -375,6 +369,13 @@ pub enum DeltaToSync {
 }
 
 type DeltasQueue = Arc<Mutex<VecDeque<DeltaToSync>>>;
+
+fn get_delta_block_number(delta_to_sync: &DeltaToSync) -> u32 {
+    match delta_to_sync {
+        DeltaToSync::WithData(supply_delta) => supply_delta.block_number.clone(),
+        DeltaToSync::WithoutData(block_number) => block_number.clone(),
+    }
+}
 
 pub async fn sync_deltas() {
     tracing_subscriber::fmt::init();
@@ -405,7 +406,8 @@ pub async fn sync_deltas() {
 
         // Work through the queue until it's empty.
         loop {
-            match deltas_queue.lock().unwrap().pop_front() {
+            let next_delta = { deltas_queue.lock().unwrap().pop_front() };
+            match next_delta {
                 None => {
                     // Continue syncing deltas that we've received from the node.
                     break;
