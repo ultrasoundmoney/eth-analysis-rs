@@ -266,6 +266,28 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: 
     transaction.commit().await.unwrap();
 }
 
+pub async fn sync_delta(connection: &mut PgConnection, supply_delta: &SupplyDelta) {
+    // Is there a more efficient way lend out the connection and still re-use it.
+    let mut transaction = connection.begin().await.unwrap();
+    let is_fork_block =
+        get_is_block_number_known(&mut transaction, &supply_delta.block_number).await;
+    transaction.commit().await.unwrap();
+
+    if is_fork_block {
+        tracing::debug!(
+            "supply delta {}, with hash {}, is a fork block supply delta",
+            supply_delta.block_number,
+            supply_delta.block_hash
+        );
+
+        tracing::debug!("dropping execution_supply and execution_supply_deltas rows with block_number greater than or equal to {}", &supply_delta.block_number);
+        drop_supply_deltas_from(connection, &supply_delta.block_number).await;
+    }
+
+    tracing::debug!("storing supply delta {}", supply_delta.block_number);
+    add_delta(connection, &supply_delta).await;
+}
+
 pub async fn sync_deltas() {
     tracing_subscriber::fmt::init();
 
@@ -286,22 +308,7 @@ pub async fn sync_deltas() {
         super::stream_supply_deltas(last_synced_supply_delta_number_on_start);
 
     while let Some(supply_delta) = supply_delta_stream.next().await {
-        let is_fork_block =
-            get_is_block_number_known(&mut connection, &supply_delta.block_number).await;
-
-        if is_fork_block {
-            tracing::debug!(
-                "supply delta {}, with hash {}, is a fork block supply delta",
-                supply_delta.block_number,
-                supply_delta.block_hash
-            );
-
-            tracing::debug!("dropping execution_supply and execution_supply_deltas rows with block_number greater than or equal to {}", &supply_delta.block_number);
-            drop_supply_deltas_from(&mut connection, &supply_delta.block_number).await;
-        }
-
-        tracing::debug!("storing supply delta {}", supply_delta.block_number);
-        add_delta(&mut connection, &supply_delta).await;
+        sync_delta(&mut connection, &supply_delta).await;
     }
 }
 
