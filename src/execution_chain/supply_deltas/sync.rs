@@ -370,13 +370,6 @@ pub enum DeltaToSync {
 
 type DeltasQueue = Arc<Mutex<VecDeque<DeltaToSync>>>;
 
-fn get_delta_block_number(delta_to_sync: &DeltaToSync) -> u32 {
-    match delta_to_sync {
-        DeltaToSync::WithData(supply_delta) => supply_delta.block_number.clone(),
-        DeltaToSync::WithoutData(block_number) => block_number.clone(),
-    }
-}
-
 pub async fn sync_deltas() {
     tracing_subscriber::fmt::init();
 
