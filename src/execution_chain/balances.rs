@@ -38,7 +38,7 @@ mod tests {
     use serial_test::serial;
     use sqlx::{Connection, PgConnection};
 
-    use super::super::supply_deltas::store_delta;
+    use super::super::supply_deltas::add_delta;
     use super::*;
     use crate::config;
     use crate::execution_chain::SupplyDelta;
@@ -60,7 +60,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
         let execution_balances_sum = get_balances_sum(&mut transaction).await;
 
         assert_eq!(

@@ -57,6 +57,117 @@ async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) 
     .get("exists")
 }
 
+async fn get_last_synced_supply_delta_number<'a>(executor: impl PgExecutor<'a>) -> Option<u32> {
+    let max_opt: Option<i32> = sqlx::query(
+        "
+            SELECT MAX(block_number) FROM execution_supply_deltas
+        ",
+    )
+    .fetch_one(executor)
+    .await
+    .unwrap()
+    .get("max");
+
+    max_opt.map(|max| max as u32)
+}
+
+async fn get_last_synced_supply_delta<'a>(executor: impl PgExecutor<'a>) -> SupplyDelta {
+    sqlx::query(
+        "
+            SELECT
+                block_hash,
+                block_number,
+                parent_hash,
+                supply_delta::TEXT,
+                fee_burn::TEXT,
+                fixed_reward::TEXT,
+                self_destruct::TEXT,
+                uncles_reward::TEXT
+            FROM execution_supply_deltas
+        ",
+    )
+    .map(|row: PgRow| SupplyDelta {
+        block_number: row.get::<i32, _>("block_number") as u32,
+        parent_hash: row.get("parent_hash"),
+        block_hash: row.get("block_hash"),
+        supply_delta: row
+            .get::<String, _>("supply_delta")
+            .parse::<i128>()
+            .unwrap(),
+        fee_burn: row.get::<String, _>("fee_burn").parse::<i128>().unwrap(),
+        fixed_reward: row
+            .get::<String, _>("fixed_reward")
+            .parse::<i128>()
+            .unwrap(),
+        self_destruct: row
+            .get::<String, _>("self_destruct")
+            .parse::<i128>()
+            .unwrap(),
+        uncles_reward: row
+            .get::<String, _>("uncles_reward")
+            .parse::<i128>()
+            .unwrap(),
+    })
+    .fetch_one(executor)
+    .await
+    .unwrap()
+}
+
+async fn get_is_block_number_known<'a>(executor: impl PgExecutor<'a>, block_number: &u32) -> bool {
+    sqlx::query(
+        r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM execution_supply_deltas
+                WHERE block_number = $1
+            )
+        "#,
+    )
+    .bind(*block_number as i32)
+    .fetch_one(executor)
+    .await
+    .unwrap()
+    .get("exists")
+}
+
+async fn store_delta<'a>(executor: impl PgExecutor<'a>, supply_delta: &SupplyDelta) {
+    sqlx::query(
+        "
+            INSERT INTO execution_supply_deltas (
+                block_hash,
+                block_number,
+                fee_burn,
+                fixed_reward,
+                parent_hash,
+                self_destruct,
+                supply_delta,
+                uncles_reward
+            )
+            VALUES (
+                $1,
+                $2,
+                $3::NUMERIC,
+                $4::NUMERIC,
+                $5,
+                $6::NUMERIC,
+                $7::NUMERIC,
+                $8::NUMERIC
+            )
+        ",
+    )
+    .bind(supply_delta.block_hash.clone())
+    .bind(supply_delta.block_number as i32)
+    .bind(supply_delta.fee_burn.to_string())
+    .bind(supply_delta.fixed_reward.to_string())
+    .bind(supply_delta.parent_hash.to_string())
+    .bind(supply_delta.self_destruct.to_string())
+    .bind(supply_delta.supply_delta.to_string())
+    .bind(supply_delta.uncles_reward.to_string())
+    .execute(executor)
+    .await
+    .unwrap();
+}
+
 async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> i128 {
     // Instead of the genesis parent_hash being absent, it is set to GENESIS_PARENT_HASH.
     // We'd like to have all supply deltas making only an exception for the genesis hash, but we
@@ -90,11 +201,11 @@ async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &st
     .unwrap()
 }
 
-pub async fn store_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyDelta) {
+pub async fn add_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyDelta) {
     let _ = LifetimeMeasure::log_lifetime("store delta");
     let mut transaction = executor.begin().await.unwrap();
 
-    let is_parent_known = get_is_hash_known(&mut *transaction, &supply_delta.parent_hash).await;
+    let is_parent_known = get_is_hash_known(&mut transaction, &supply_delta.parent_hash).await;
 
     if !is_parent_known {
         panic!(
@@ -103,43 +214,9 @@ pub async fn store_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyD
         )
     }
 
-    sqlx::query(
-        "
-            INSERT INTO execution_supply_deltas (
-                block_hash,
-                block_number,
-                fee_burn,
-                fixed_reward,
-                parent_hash,
-                self_destruct,
-                supply_delta,
-                uncles_reward
-            )
-            VALUES (
-                $1,
-                $2,
-                $3::NUMERIC,
-                $4::NUMERIC,
-                $5,
-                $6::NUMERIC,
-                $7::NUMERIC,
-                $8::NUMERIC
-            )
-        ",
-    )
-    .bind(supply_delta.block_hash.clone())
-    .bind(supply_delta.block_number as i32)
-    .bind(supply_delta.fee_burn.to_string())
-    .bind(supply_delta.fixed_reward.to_string())
-    .bind(supply_delta.parent_hash.to_string())
-    .bind(supply_delta.self_destruct.to_string())
-    .bind(supply_delta.supply_delta.to_string())
-    .bind(supply_delta.uncles_reward.to_string())
-    .execute(&mut *transaction)
-    .await
-    .unwrap();
+    store_delta(&mut transaction, supply_delta).await;
 
-    let balances = get_balances_at_hash(&mut *transaction, &supply_delta.parent_hash).await
+    let balances = get_balances_at_hash(&mut transaction, &supply_delta.parent_hash).await
         + supply_delta.supply_delta;
 
     sqlx::query(
@@ -154,42 +231,11 @@ pub async fn store_delta<'a>(executor: &mut PgConnection, supply_delta: &SupplyD
     .bind(supply_delta.block_hash.clone())
     .bind(supply_delta.block_number as i32)
     .bind(balances.to_string())
-    .execute(&mut *transaction)
+    .execute(&mut transaction)
     .await
     .unwrap();
 
     transaction.commit().await.unwrap();
-}
-
-async fn get_latest_synced_supply_delta_number<'a>(executor: impl PgExecutor<'a>) -> Option<u32> {
-    let max_opt: Option<i32> = sqlx::query(
-        "
-            SELECT MAX(block_number) FROM execution_supply_deltas
-        ",
-    )
-    .fetch_one(executor)
-    .await
-    .unwrap()
-    .get("max");
-
-    max_opt.map(|max| max as u32)
-}
-
-async fn get_is_block_number_known<'a>(executor: impl PgExecutor<'a>, block_number: &u32) -> bool {
-    sqlx::query(
-        r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM execution_supply_deltas
-                WHERE block_number = $1
-            )
-        "#,
-    )
-    .bind(*block_number as i32)
-    .fetch_one(executor)
-    .await
-    .unwrap()
-    .get("exists")
 }
 
 async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, block_number: &u32) {
@@ -231,11 +277,13 @@ pub async fn sync_deltas() {
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
-    let latest_synced_supply_delta_number = get_latest_synced_supply_delta_number(&mut connection)
-        .await
-        .unwrap_or(SUPPLY_SNAPSHOT_15082718.block_number + 1);
-    tracing::debug!("requesting supply deltas gte {latest_synced_supply_delta_number}");
-    let mut supply_delta_stream = super::stream_supply_deltas(latest_synced_supply_delta_number);
+    let last_synced_supply_delta_number_on_start =
+        get_last_synced_supply_delta_number(&mut connection)
+            .await
+            .unwrap_or(SUPPLY_SNAPSHOT_15082718.block_number + 1);
+    tracing::debug!("requesting supply deltas gte {last_synced_supply_delta_number_on_start}");
+    let mut supply_delta_stream =
+        super::stream_supply_deltas(last_synced_supply_delta_number_on_start);
 
     while let Some(supply_delta) = supply_delta_stream.next().await {
         let is_fork_block =
@@ -253,7 +301,7 @@ pub async fn sync_deltas() {
         }
 
         tracing::debug!("storing supply delta {}", supply_delta.block_number);
-        store_delta(&mut connection, &supply_delta).await;
+        add_delta(&mut connection, &supply_delta).await;
     }
 }
 
@@ -291,7 +339,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
         let is_hash_known =
             get_is_hash_known(&mut transaction, &supply_delta_test.block_hash).await;
 
@@ -326,7 +374,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&mut transaction, &supply_delta).await;
+        add_delta(&mut transaction, &supply_delta).await;
         let is_block_number_known =
             get_is_block_number_known(&mut transaction, &supply_delta.block_number).await;
 
@@ -350,7 +398,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
         let balances_sum =
             get_balances_at_hash(&mut transaction, &supply_delta_test.block_hash).await;
 
@@ -374,7 +422,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
         let balances_sum =
             get_balances_at_hash(&mut transaction, &supply_delta_test.block_hash).await;
 
@@ -390,7 +438,7 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let latest_synced_supply_delta_number =
-            get_latest_synced_supply_delta_number(&mut transaction).await;
+            get_last_synced_supply_delta_number(&mut transaction).await;
 
         assert_eq!(latest_synced_supply_delta_number, None);
     }
@@ -412,11 +460,34 @@ mod tests {
             uncles_reward: 0,
         };
 
-        store_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
 
         let latest_synced_supply_delta_number =
-            get_latest_synced_supply_delta_number(&mut transaction).await;
+            get_last_synced_supply_delta_number(&mut transaction).await;
 
         assert_eq!(latest_synced_supply_delta_number, Some(0));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_get_last_synced_supply_delta() {
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        let supply_delta_test = SupplyDelta {
+            supply_delta: 1,
+            block_number: 0,
+            block_hash: "0xtest".to_string(),
+            fee_burn: 0,
+            fixed_reward: 0,
+            parent_hash: "0xtestparent".to_string(),
+            self_destruct: 0,
+            uncles_reward: 0,
+        };
+
+        store_delta(&mut transaction, &supply_delta_test).await;
+
+        let supply_delta = get_last_synced_supply_delta(&mut transaction).await;
+        assert_eq!(supply_delta, supply_delta_test);
     }
 }
