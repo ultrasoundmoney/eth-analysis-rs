@@ -41,6 +41,17 @@ pub fn get_execution_url() -> String {
     get_env_var_unsafe("GETH_URL")
 }
 
+fn get_env_bool(key: &str) -> bool {
+    let flag = get_env_var(key).map_or(false, |var| var.to_lowercase() == "true");
+    tracing::debug!("env flag {key}: {flag}");
+    flag
+}
+
+#[cached]
+pub fn get_log_perf() -> bool {
+    get_env_bool("LOG_PERF")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,5 +83,34 @@ mod tests {
         let key = get_env_var("DOESNT_EXIST");
         assert!(key.is_none());
     }
+
+    #[test]
+    fn get_env_bool_not_there_test() {
+        let flag = get_env_bool("DOESNT_EXIST");
+        assert_eq!(flag, false);
+    }
+
+    #[test]
+    fn get_env_bool_true_test() {
+        let test_key = "TEST_KEY_BOOL_TRUE";
+        let test_value = "true";
+        std::env::set_var(test_key, test_value);
+        assert_eq!(get_env_bool(test_key), true);
+    }
+
+    #[test]
+    fn get_env_bool_true_upper_test() {
+        let test_key = "TEST_KEY_BOOL_TRUE2";
+        let test_value = "TRUE";
+        std::env::set_var(test_key, test_value);
+        assert_eq!(get_env_bool(test_key), true);
+    }
+
+    #[test]
+    fn get_env_bool_false_test() {
+        let test_key = "TEST_KEY_BOOL_FALSE";
+        let test_value = "false";
+        std::env::set_var(test_key, test_value);
+        assert_eq!(get_env_bool(test_key), false);
     }
 }

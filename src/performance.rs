@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+use crate::config;
+
 pub struct LifetimeMeasure {
     name: String,
     t0: Instant,
@@ -16,9 +18,7 @@ impl LifetimeMeasure {
 
 impl Drop for LifetimeMeasure {
     fn drop(&mut self) {
-        if std::env::var("LOG_PERF")
-            .map_or(false, |log_perf_str| log_perf_str.to_lowercase() == "true")
-        {
+        if config::get_log_perf() {
             tracing::debug!("{} took {:.2?}", self.name, self.t0.elapsed());
         }
     }
