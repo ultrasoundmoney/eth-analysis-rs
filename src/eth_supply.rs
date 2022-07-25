@@ -1,12 +1,12 @@
 use serde::Serialize;
-use sqlx::PgPool;
+use sqlx::{Acquire, PgConnection};
 
 use crate::beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum};
 use crate::caching;
 use crate::execution_chain;
 use crate::execution_chain::ExecutionBalancesSum;
 use crate::key_value_store::{self, KeyValueStr};
-use crate::performance::LifetimeMeasure;
+use crate::performance::TimedExt;
 
 const ETH_SUPPLY_CACHE_KEY: &str = "eth-supply";
 
@@ -18,12 +18,12 @@ struct EthSupply {
     execution_balances_sum: ExecutionBalancesSum,
 }
 
-async fn get_eth_supply<'a>(
-    executor: &PgPool,
+async fn get_eth_supply(
+    executor: &mut PgConnection,
     beacon_balances_sum: BeaconBalancesSum,
 ) -> EthSupply {
-    let _ = LifetimeMeasure::log_lifetime("get eth supply");
-    let execution_balances_sum = execution_chain::get_balances_sum(executor).await;
+    let execution_balances_sum =
+        execution_chain::get_balances_sum(executor.acquire().await.unwrap()).await;
     let beacon_deposits_sum = beacon_chain::get_deposits_sum(executor).await;
 
     EthSupply {
@@ -33,11 +33,13 @@ async fn get_eth_supply<'a>(
     }
 }
 
-pub async fn update(executor: &PgPool, beacon_balances_sum: BeaconBalancesSum) {
-    let eth_supply = get_eth_supply(executor, beacon_balances_sum).await;
+pub async fn update(executor: &mut PgConnection, beacon_balances_sum: BeaconBalancesSum) {
+    let eth_supply = get_eth_supply(executor, beacon_balances_sum)
+        .timed("get eth supply")
+        .await;
 
     key_value_store::set_value_str(
-        executor,
+        executor.acquire().await.unwrap(),
         KeyValueStr {
             key: ETH_SUPPLY_CACHE_KEY,
             // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize

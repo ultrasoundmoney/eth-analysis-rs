@@ -9,7 +9,7 @@ use super::node::{get_supply_delta_by_block_number, stream_supply_deltas_from_la
 use super::snapshot::SUPPLY_SNAPSHOT_15082718;
 use crate::config;
 use crate::execution_chain::blocks::BlockNumber;
-use crate::performance::LifetimeMeasure;
+use crate::performance::TimedExt;
 
 use super::SupplyDelta;
 
@@ -133,7 +133,6 @@ async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &st
 }
 
 pub async fn add_delta<'a>(connection: &mut PgConnection, supply_delta: &SupplyDelta) {
-    let _ = LifetimeMeasure::log_lifetime("store delta");
     let mut transaction = connection.begin().await.unwrap();
 
     let is_parent_known = get_is_hash_known(&mut transaction, &supply_delta.parent_hash).await;
@@ -257,6 +256,7 @@ async fn sync_delta(
         DeltaToSync::Fetched(supply_delta) => supply_delta,
         DeltaToSync::Refetch(supply_delta_number) => {
             get_supply_delta_by_block_number(supply_delta_number)
+                .timed("get supply delta by block number")
                 .await
                 .unwrap()
         }
@@ -305,7 +305,9 @@ async fn sync_delta(
         NextStep::AddToExisting => {
             // Progress as usual.
             tracing::debug!("storing supply delta {}", supply_delta.block_number);
-            add_delta(connection, &supply_delta).await;
+            add_delta(connection, &supply_delta)
+                .timed("add delta")
+                .await;
         }
     }
 }

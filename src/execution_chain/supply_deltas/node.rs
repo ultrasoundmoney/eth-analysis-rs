@@ -143,8 +143,6 @@ pub enum SupplyDeltaByBlockNumberError {
 pub async fn get_supply_delta_by_block_number(
     block_number: u32,
 ) -> Result<SupplyDelta, SupplyDeltaByBlockNumberError> {
-    crate::performance::LifetimeMeasure::log_lifetime("get_supply_delta_by_block_number");
-
     let url = format!("{}", &crate::config::get_execution_url());
     let mut ws = connect_async(&url).await.unwrap().0;
 
