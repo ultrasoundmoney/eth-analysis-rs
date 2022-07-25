@@ -15,4 +15,4 @@ pub use self::issuance::get_issuance_by_start_of_day;
 pub use self::node::BeaconNode;
 pub use self::rewards::update_validator_rewards;
 pub use self::states::Slot;
-pub use self::sync::{sync_beacon_states, SyncError};
+pub use self::sync::sync_beacon_states;

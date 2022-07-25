@@ -20,6 +20,18 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
+  "1acb9e77328053e58148fb19c131bebeb9ce7fd9dc33f7fb8334ae5a59dc8d03": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM beacon_blocks\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
+  },
   "28cb24726a2123cb298b5480b7376b305d40f262338f44aa24c7a8a3795398a0": {
     "describe": {
       "columns": [
@@ -37,6 +49,30 @@
       }
     },
     "query": "\n            SELECT gwei FROM beacon_issuance\n            ORDER BY timestamp DESC\n            LIMIT 1\n        "
+  },
+  "3d161e6a7b26b1759ada2a5102c9fa5e4fdf75b0fe094850e4502cf6e38c9760": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM beacon_validators_balance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
+  },
+  "44bc5d5d6512783fdf6ec5ba29175d768730e11dafa2b1a6c517c08f33c99d31": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM beacon_issuance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
   "599dc56e83c008c39c90aaf090a679811a07d26f76b0876dba42630bd1415f31": {
     "describe": {
@@ -173,6 +209,18 @@
       }
     },
     "query": "\n            INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
+  },
+  "c4f33536e0cf242082981afb66afbea9ee8c06cd39c61fa2c617d0ed2fb03caf": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
   },
   "d7a27696366610541322e5d50e77b716d68a472fb6372e36858582779e8df748": {
     "describe": {

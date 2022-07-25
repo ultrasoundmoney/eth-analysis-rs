@@ -1,17 +1,23 @@
+use chrono::Utc;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::config;
 use crate::eth_units::{from_u32_string, GweiAmount};
-use crate::performance::LifetimeMeasure;
+use crate::performance::TimedExt;
 
+use super::{beacon_time, Slot};
+
+#[derive(Debug)]
 enum BlockId {
-    #[allow(dead_code)]
-    Head,
+    BlockRoot(String),
     Finalized,
     #[allow(dead_code)]
     Genesis,
-    BlockRoot(String),
+    #[allow(dead_code)]
+    Head,
+    #[allow(dead_code)]
+    Slot(u32),
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,17 +57,18 @@ struct BeaconBlockVersionedEnvelope {
 }
 
 fn make_blocks_url(block_id: &BlockId) -> String {
-    let block_id_str = match block_id {
-        BlockId::Head => String::from("head"),
-        BlockId::Finalized => String::from("finalized"),
-        BlockId::Genesis => String::from("genesis"),
-        BlockId::BlockRoot(str) => str.to_string(),
+    let block_id_text = match block_id {
+        BlockId::BlockRoot(str) => str.to_owned(),
+        BlockId::Finalized => "finalized".to_string(),
+        BlockId::Genesis => "genesis".to_string(),
+        BlockId::Head => "head".to_string(),
+        BlockId::Slot(slot) => slot.to_string(),
     };
 
     format!(
         "{}/eth/v2/beacon/blocks/{}",
         config::get_beacon_url(),
-        block_id_str
+        block_id_text
     )
 }
 
@@ -126,11 +133,19 @@ struct HeaderEnvelope {
     data: BeaconHeaderSignedEnvelope,
 }
 
-fn make_header_by_slot_url(slot: &u32) -> String {
+fn make_header_by_block_id_url(block_id: &BlockId) -> String {
+    let block_id_text = match block_id {
+        BlockId::BlockRoot(str) => str.to_owned(),
+        BlockId::Finalized => "finalized".to_string(),
+        BlockId::Genesis => "genesis".to_string(),
+        BlockId::Head => "head".to_string(),
+        BlockId::Slot(slot) => slot.to_string(),
+    };
+
     format!(
         "{}/eth/v1/beacon/headers/{}",
         config::get_beacon_url(),
-        slot.to_string()
+        block_id_text
     )
 }
 
@@ -194,8 +209,8 @@ impl BeaconNode {
         }
     }
 
-    pub async fn get_block_by_root(&self, block_root: &str) -> reqwest::Result<BeaconBlock> {
-        let url = make_blocks_url(&BlockId::BlockRoot(block_root.to_string()));
+    async fn get_block(&self, block_id: &BlockId) -> reqwest::Result<BeaconBlock> {
+        let url = make_blocks_url(block_id);
 
         self.client
             .get(&url)
@@ -207,17 +222,23 @@ impl BeaconNode {
             .map(|envelope| envelope.data.message.into())
     }
 
-    pub async fn get_last_finalized_block(&self) -> reqwest::Result<BeaconBlock> {
-        let url = make_blocks_url(&BlockId::Finalized);
+    #[allow(dead_code)]
+    pub async fn get_block_by_slot(&self, slot: &Slot) -> reqwest::Result<BeaconBlock> {
+        self.get_block(&BlockId::Slot(*slot)).await
+    }
 
-        self.client
-            .get(&url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<BeaconBlockVersionedEnvelope>()
+    pub async fn get_block_by_block_root(&self, block_root: &str) -> reqwest::Result<BeaconBlock> {
+        self.get_block(&BlockId::BlockRoot(block_root.to_string()))
             .await
-            .map(|envelope| envelope.data.message.into())
+    }
+
+    pub async fn get_last_finalized_block(&self) -> reqwest::Result<BeaconBlock> {
+        self.get_block(&BlockId::Finalized).await
+    }
+
+    #[allow(dead_code)]
+    pub async fn get_last_block(&self) -> reqwest::Result<BeaconBlock> {
+        self.get_block(&BlockId::Head).await
     }
 
     pub async fn get_state_root_by_slot(&self, slot: &u32) -> reqwest::Result<String> {
@@ -237,12 +258,12 @@ impl BeaconNode {
         &self,
         state_root: &str,
     ) -> reqwest::Result<Vec<ValidatorBalance>> {
-        let _ = LifetimeMeasure::log_lifetime("get validator balances");
         let url = make_validator_balances_by_state_url(state_root);
 
         self.client
             .get(&url)
             .send()
+            .timed("get validator balances")
             .await?
             .error_for_status()?
             .json::<ValidatorBalancesEnvelope>()
@@ -250,19 +271,14 @@ impl BeaconNode {
             .map(|envelope| envelope.data)
     }
 
-    /// This function returns nothing both when a slot does not exist at all, and a slot does exist but
-    /// is blockless. In other words, don't use this function alone to tell if a given slot has a
-    /// block, check the slot exists first.
-    pub async fn get_header_by_slot(
+    async fn get_header(
         &self,
-        slot: &u32,
+        block_id: &BlockId,
     ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
-        let _m1 = LifetimeMeasure::log_lifetime("get header by slot");
-        let url = make_header_by_slot_url(slot);
+        let url = make_header_by_block_id_url(block_id);
 
         let res = self.client.get(&url).send().await?.error_for_status();
 
-        // No header at this slot, either this slot doesn't exist or there is no header at this slot. We assume the slot exists but is headerless.
         match res {
             Ok(res) => res
                 .json::<HeaderEnvelope>()
@@ -270,12 +286,41 @@ impl BeaconNode {
                 .map(|envelope| Some(envelope.data)),
             Err(res) => match res.status() {
                 None => Err(res),
-                Some(status) => match status {
-                    StatusCode::NOT_FOUND => Ok(None),
-                    _ => Err(res),
-                },
+                Some(status) if status == StatusCode::NOT_FOUND => Ok(None),
+                Some(_) => Err(res),
             },
         }
+    }
+
+    pub async fn get_header_by_slot(
+        &self,
+        slot: &u32,
+    ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
+        let slot_timestamp = beacon_time::get_date_time_from_slot(slot);
+        if slot_timestamp > Utc::now() {
+            // If we would return this case at None, the caller would be unable to distinguish
+            // between slots without blocks, and slots that are in the future.
+            panic!(
+                "tried to get header by slot for slot: {}, but slot is in the future!",
+                &slot
+            )
+        }
+
+        self.get_header(&BlockId::Slot(*slot)).await
+    }
+
+    pub async fn get_header_by_hash(
+        &self,
+        block_root: &str,
+    ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
+        self.get_header(&BlockId::BlockRoot(block_root.to_string()))
+            .await
+    }
+
+    pub async fn get_last_header(&self) -> reqwest::Result<BeaconHeaderSignedEnvelope> {
+        self.get_header(&BlockId::Head)
+            .await
+            .map(|envelope| envelope.expect("a head to always exist on-chain"))
     }
 
     #[allow(dead_code)]
@@ -369,7 +414,7 @@ mod tests {
     async fn block_by_root_test() {
         let beacon_node = BeaconNode::new();
         beacon_node
-            .get_block_by_root(BLOCK_ROOT_1229)
+            .get_block_by_block_root(BLOCK_ROOT_1229)
             .await
             .unwrap();
     }
@@ -411,5 +456,28 @@ mod tests {
     async fn get_last_finality_checkpoint_test() {
         let beacon_node = BeaconNode::new();
         beacon_node.get_last_finality_checkpoint().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_header_by_slot_test() {
+        let beacon_node = BeaconNode::new();
+        beacon_node.get_header_by_slot(&4_000_000).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_header_by_hash_test() {
+        let beacon_node = BeaconNode::new();
+        beacon_node
+            .get_header_by_hash(
+                "0x09df4a49850ec0c878ba2443f60f5fa6b473abcb14d222915fc44b17885ed8a4",
+            )
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_last_head_test() {
+        let beacon_node = BeaconNode::new();
+        let header = beacon_node.get_last_header().await.unwrap();
     }
 }

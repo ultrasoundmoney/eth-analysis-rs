@@ -50,7 +50,7 @@ pub async fn get_last_state<'a>(executor: impl PgExecutor<'a>) -> Option<BeaconS
 pub async fn store_state<'a>(
     executor: impl PgExecutor<'a>,
     state_root: &str,
-    slot: &u32,
+    slot: &Slot,
 ) -> sqlx::Result<()> {
     sqlx::query!(
         "
@@ -63,6 +63,19 @@ pub async fn store_state<'a>(
     .await?;
 
     Ok(())
+}
+
+pub async fn delete_states<'a>(executor: impl PgExecutor<'a>, greater_than_or_equal: &Slot) {
+    sqlx::query!(
+        "
+            DELETE FROM beacon_states
+            WHERE slot >= $1
+        ",
+        *greater_than_or_equal as i32
+    )
+    .execute(executor)
+    .await
+    .unwrap();
 }
 
 #[cfg(test)]
@@ -118,5 +131,23 @@ mod tests {
                 block_root: None
             }
         );
+    }
+
+    #[tokio::test]
+    async fn delete_state_test() {
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xstate_root", &0)
+            .await
+            .unwrap();
+
+        let state = get_last_state(&mut transaction).await;
+        assert!(state.is_some());
+
+        delete_states(&mut transaction, &0).await;
+
+        let state_after = get_last_state(&mut transaction).await;
+        assert!(state_after.is_none());
     }
 }

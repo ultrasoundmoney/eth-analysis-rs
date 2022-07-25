@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     beacon_time::{self, FirstOfDaySlot},
-    deposits,
+    deposits, Slot,
 };
 
 pub async fn store_issuance_for_day<'a>(
@@ -76,6 +76,22 @@ pub async fn get_current_issuance<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result
     .map(|row| GweiAmount(row.gwei as u64))
 }
 
+pub async fn delete_issuances<'a>(connection: impl PgExecutor<'a>, greater_than_or_equal: &Slot) {
+    sqlx::query!(
+        "
+            DELETE FROM beacon_issuance
+            WHERE state_root IN (
+                SELECT state_root FROM beacon_states
+                WHERE slot >= $1
+            )
+        ",
+        *greater_than_or_equal as i32
+    )
+    .execute(connection)
+    .await
+    .unwrap();
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
@@ -86,7 +102,7 @@ mod tests {
     use crate::{beacon_chain::states::store_state, config};
 
     #[test]
-    fn test_calc_issuance() {
+    fn calc_issuance_test() {
         let validator_balances_sum_gwei = deposits::INITIAL_DEPOSITS + GweiAmount(100);
         let deposit_sum_aggregated = GweiAmount(50);
 
@@ -98,7 +114,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_timestamp_is_start_of_day() {
+    async fn timestamp_is_start_of_day_test() {
         let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
         let mut transaction = connection.begin().await.unwrap();
 
@@ -129,7 +145,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn test_get_current_issuance() {
+    async fn get_current_issuance_test() {
         let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
         let mut transaction = connection.begin().await.unwrap();
 
@@ -160,5 +176,37 @@ mod tests {
         let current_issuance = get_current_issuance(&mut transaction).await.unwrap();
 
         assert_eq!(current_issuance, GweiAmount(110));
+    }
+
+    #[tokio::test]
+    async fn delete_issuance_test() {
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xtest_issuance", &3599)
+            .await
+            .unwrap();
+
+        store_issuance_for_day(
+            &mut transaction,
+            "0xtest_issuance",
+            &FirstOfDaySlot::new(&3599).unwrap(),
+            &GweiAmount(100),
+        )
+        .await;
+
+        let issuance_by_day = get_issuance_by_start_of_day(&mut transaction)
+            .await
+            .unwrap();
+
+        assert_eq!(issuance_by_day.len(), 1);
+
+        delete_issuances(&mut transaction, &3599).await;
+
+        let issuance_by_day_after = get_issuance_by_start_of_day(&mut transaction)
+            .await
+            .unwrap();
+
+        assert_eq!(issuance_by_day_after.len(), 0);
     }
 }

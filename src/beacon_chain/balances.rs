@@ -60,7 +60,7 @@ pub async fn get_last_effective_balance_sum<'a>(
 
 pub async fn get_validator_balances_by_start_of_day<'a>(
     pool: impl PgExecutor<'a>,
-) -> sqlx::Result<Vec<GweiInTime>> {
+) -> Vec<GweiInTime> {
     sqlx::query_as!(
         GweiInTimeRow,
         "
@@ -80,6 +80,26 @@ pub async fn get_validator_balances_by_start_of_day<'a>(
             .map(|row| row.into())
             .collect()
     })
+    .unwrap()
+}
+
+pub async fn delete_validator_sums<'a>(
+    executor: impl PgExecutor<'a>,
+    greater_than_or_equal: &Slot,
+) {
+    sqlx::query!(
+        "
+            DELETE FROM beacon_validators_balance
+            WHERE state_root IN (
+                SELECT state_root FROM beacon_states
+                WHERE slot >= $1
+            )
+        ",
+        *greater_than_or_equal as i32
+    )
+    .execute(executor)
+    .await
+    .unwrap();
 }
 
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
@@ -118,9 +138,8 @@ mod tests {
         )
         .await;
 
-        let validator_balances_by_day = get_validator_balances_by_start_of_day(&mut transaction)
-            .await
-            .unwrap();
+        let validator_balances_by_day =
+            get_validator_balances_by_start_of_day(&mut transaction).await;
 
         let unix_timestamp = validator_balances_by_day.first().unwrap().t;
 
@@ -129,5 +148,31 @@ mod tests {
         let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
 
         assert_eq!(datetime, start_of_day_datetime);
+    }
+
+    #[tokio::test]
+    async fn delete_balance_test() {
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xtest_balances", &17999)
+            .await
+            .unwrap();
+
+        store_validator_sum_for_day(
+            &mut transaction,
+            "0xtest_balances",
+            &FirstOfDaySlot::new(&17999).unwrap(),
+            &GweiAmount(100),
+        )
+        .await;
+
+        let balances = get_validator_balances_by_start_of_day(&mut transaction).await;
+        assert_eq!(balances.len(), 1);
+
+        delete_validator_sums(&mut transaction, &17999).await;
+
+        let balances = get_validator_balances_by_start_of_day(&mut transaction).await;
+        assert_eq!(balances.len(), 0);
     }
 }
