@@ -23,7 +23,7 @@ pub async fn write_deltas_log() {
     let mut execution_node = ExecutionNode::connect().await;
     let latest_block = execution_node.get_latest_block().await;
 
-    let mut supply_deltas_rx = supply_deltas::stream_supply_deltas(latest_block.number);
+    let mut supply_deltas_stream = supply_deltas::stream_supply_deltas_from(latest_block.number);
 
     let file_path = format!("supply_deltas_log_{}.csv", timestamp);
 
@@ -32,7 +32,7 @@ pub async fn write_deltas_log() {
     let mut seen_block_heights = HashSet::<u32>::new();
     let mut seen_block_hashes = HashSet::<String>::new();
 
-    while let Some(supply_delta) = supply_deltas_rx.next().await {
+    while let Some(supply_delta) = supply_deltas_stream.next().await {
         let is_duplicate_number = seen_block_heights.contains(&supply_delta.block_number);
         let is_jumping_ahead =
             !seen_block_hashes.is_empty() && !seen_block_hashes.contains(&supply_delta.parent_hash);

@@ -1,12 +1,14 @@
 use std::time::Duration;
 
 use async_tungstenite::{tokio::connect_async, tungstenite::Message};
-use futures::{channel::mpsc::UnboundedReceiver, SinkExt, StreamExt};
+use futures::{channel::mpsc::UnboundedReceiver, SinkExt, Stream, StreamExt};
 use serde::Deserialize;
 use serde_json::json;
+use sqlx::PgConnection;
 use thiserror::Error;
 use tokio::time::timeout;
 
+use super::sync::get_last_synced_supply_delta_number;
 use crate::{eth_units::Wei, execution_chain::SupplyDelta};
 
 #[derive(Debug, Deserialize)]
@@ -60,8 +62,9 @@ fn make_supply_delta_subscribe_message(greater_than_or_equal_to: &u32) -> String
     serde_json::to_string(&msg).unwrap()
 }
 
-pub fn stream_supply_deltas(greater_than_or_equal_to: u32) -> UnboundedReceiver<SupplyDelta> {
-    let (mut supply_deltas_tx, supply_deltas_rx) = futures::channel::mpsc::unbounded();
+pub fn stream_supply_deltas_from(greater_than_or_equal_to: u32) -> impl Stream<Item = SupplyDelta> {
+    tracing::debug!("streaming supply deltas gte {greater_than_or_equal_to}");
+    let (mut tx, rx) = futures::channel::mpsc::unbounded();
 
     tokio::spawn(async move {
         let url = format!("{}", &crate::config::get_execution_url());
@@ -89,20 +92,29 @@ pub fn stream_supply_deltas(greater_than_or_equal_to: u32) -> UnboundedReceiver<
             let supply_delta_message =
                 serde_json::from_str::<SupplyDeltaMessage>(&message_text).unwrap();
             let supply_delta = SupplyDelta::from(supply_delta_message);
-            supply_deltas_tx.send(supply_delta).await.unwrap();
+            tx.send(supply_delta).await.unwrap();
         }
     });
 
-    supply_deltas_rx
+    rx
+}
+
+pub async fn stream_supply_deltas_from_last<'a>(
+    executor: &mut PgConnection,
+) -> impl Stream<Item = SupplyDelta> {
+    let last_synced_supply_delta_number = get_last_synced_supply_delta_number(executor)
+        .await
+        .unwrap_or(super::snapshot::SUPPLY_SNAPSHOT_15082718.block_number);
+    super::stream_supply_deltas_from(last_synced_supply_delta_number + 1)
 }
 
 pub fn stream_supply_delta_chunks(
     from: u32,
     chunk_size: usize,
 ) -> UnboundedReceiver<Vec<SupplyDelta>> {
-    let (mut supply_delta_chunks_tx, supply_delta_chunks_rx) = futures::channel::mpsc::unbounded();
+    let (mut tx, rx) = futures::channel::mpsc::unbounded();
 
-    let mut supply_deltas_rx = stream_supply_deltas(from);
+    let mut supply_deltas_rx = stream_supply_deltas_from(from);
 
     let mut supply_delta_buffer = Vec::with_capacity(chunk_size);
 
@@ -111,16 +123,13 @@ pub fn stream_supply_delta_chunks(
             supply_delta_buffer.push(supply_delta);
 
             if supply_delta_buffer.len() >= chunk_size {
-                supply_delta_chunks_tx
-                    .send(supply_delta_buffer)
-                    .await
-                    .unwrap();
+                tx.send(supply_delta_buffer).await.unwrap();
                 supply_delta_buffer = vec![];
             }
         }
     });
 
-    supply_delta_chunks_rx
+    rx
 }
 
 #[derive(Error, Debug)]
@@ -181,14 +190,19 @@ mod tests {
     use core::panic;
     use std::time::Duration;
 
+    use serial_test::serial;
+    use sqlx::Connection;
+    use sqlx::PgConnection;
     use tokio::time::timeout;
 
+    use super::super::add_delta;
     use super::*;
+    use crate::config;
 
     #[ignore]
     #[tokio::test]
     async fn test_stream_supply_deltas() {
-        let stream = stream_supply_deltas(15_000_000);
+        let stream = stream_supply_deltas_from(15_000_000);
         let ten_deltas_future = stream.take(10).collect::<Vec<_>>();
         match timeout(Duration::from_secs(4), ten_deltas_future).await {
             Err(_) => {
@@ -205,5 +219,42 @@ mod tests {
     async fn test_get_supply_delta_by_block_number() {
         let supply_delta = get_supply_delta_by_block_number(15_000_000).await.unwrap();
         assert_eq!(supply_delta.block_number, 15_000_000);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_get_latest_synced_supply_delta_number() {
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        let supply_delta_test = SupplyDelta {
+            supply_delta: 1,
+            block_number: 0,
+            block_hash: "0xtest".to_string(),
+            fee_burn: 0,
+            fixed_reward: 0,
+            parent_hash: "0xtestparent".to_string(),
+            self_destruct: 0,
+            uncles_reward: 0,
+        };
+
+        add_delta(&mut transaction, &supply_delta_test).await;
+
+        let latest_synced_supply_delta_number =
+            get_last_synced_supply_delta_number(&mut transaction).await;
+
+        assert_eq!(latest_synced_supply_delta_number, Some(0));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_get_latest_synced_supply_delta_number_empty() {
+        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut transaction = connection.begin().await.unwrap();
+
+        let latest_synced_supply_delta_number =
+            get_last_synced_supply_delta_number(&mut transaction).await;
+
+        assert_eq!(latest_synced_supply_delta_number, None);
     }
 }

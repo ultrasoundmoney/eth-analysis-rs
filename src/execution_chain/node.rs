@@ -8,18 +8,18 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use self::blocks::*;
-use self::heads::*;
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
     tungstenite::Message,
     WebSocketStream,
 };
+use blocks::*;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::prelude::*;
 use futures::stream::SplitSink;
 use futures::stream::SplitStream;
+use heads::*;
 use serde::Deserialize;
 use serde_json::json;
 use serde_json::Value;
