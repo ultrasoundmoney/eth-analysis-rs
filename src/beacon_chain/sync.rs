@@ -375,10 +375,12 @@ async fn get_is_slot_known(connection: &mut PgConnection, slot: &Slot) -> bool {
 
 async fn rollback_slots<'a>(db_pool: &PgPool, greater_than_or_equal: &Slot) {
     tracing::debug!("rolling back data based on slots gte {greater_than_or_equal}");
-    blocks::delete_blocks(db_pool, greater_than_or_equal).await;
-    issuance::delete_issuances(db_pool, greater_than_or_equal).await;
-    balances::delete_validator_sums(db_pool, greater_than_or_equal).await;
-    states::delete_states(db_pool, greater_than_or_equal).await;
+    let mut transaction = db_pool.begin().await.unwrap();
+    blocks::delete_blocks(&mut transaction, greater_than_or_equal).await;
+    issuance::delete_issuances(&mut transaction, greater_than_or_equal).await;
+    balances::delete_validator_sums(&mut transaction, greater_than_or_equal).await;
+    states::delete_states(&mut transaction, greater_than_or_equal).await;
+    transaction.commit().await.unwrap();
 }
 
 enum NextStep {
