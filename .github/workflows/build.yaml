@@ -31,7 +31,7 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest
       - name: Wait for tests to succeed
-        uses: lewagon/wait-on-check-action@v1.1.1
+        uses: lewagon/wait-on-check-action@v1.1.2
         with:
           ref: ${{ github.ref }}
           check-name: test
