@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     beacon_time::{self, FirstOfDaySlot},
-    deposits, Slot,
+    Slot,
 };
 
 pub async fn store_issuance_for_day<'a>(
@@ -36,7 +36,7 @@ pub fn calc_issuance(
     validator_balances_sum_gwei: &GweiAmount,
     deposit_sum_aggregated: &GweiAmount,
 ) -> GweiAmount {
-    (*validator_balances_sum_gwei - *deposit_sum_aggregated)
+    *validator_balances_sum_gwei - *deposit_sum_aggregated
 }
 
 pub async fn get_issuance_by_start_of_day<'a>(
