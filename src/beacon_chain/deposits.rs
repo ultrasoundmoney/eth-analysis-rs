@@ -8,9 +8,6 @@ use super::blocks::get_deposit_sum_from_block_root;
 use super::node::BeaconBlock;
 use super::states::Slot;
 
-// Obtained by getting validator balances for slot 0, which had zero deposits.
-pub const INITIAL_DEPOSITS: GweiAmount = GweiAmount(674144000000000);
-
 pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiAmount {
     block
         .body

@@ -36,7 +36,7 @@ pub fn calc_issuance(
     validator_balances_sum_gwei: &GweiAmount,
     deposit_sum_aggregated: &GweiAmount,
 ) -> GweiAmount {
-    (*validator_balances_sum_gwei - *deposit_sum_aggregated) - deposits::INITIAL_DEPOSITS
+    (*validator_balances_sum_gwei - *deposit_sum_aggregated)
 }
 
 pub async fn get_issuance_by_start_of_day<'a>(
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn calc_issuance_test() {
-        let validator_balances_sum_gwei = deposits::INITIAL_DEPOSITS + GweiAmount(100);
+        let validator_balances_sum_gwei = GweiAmount(100);
         let deposit_sum_aggregated = GweiAmount(50);
 
         assert_eq!(
