@@ -26,4 +26,7 @@ ALTER TABLE beacon_blocks_tmp RENAME TO beacon_blocks;
 ALTER TABLE public.beacon_blocks ADD CONSTRAINT beacon_blocks_pk PRIMARY KEY (block_root);
 ALTER TABLE public.beacon_blocks ADD CONSTRAINT beacon_blocks_state_root_fk FOREIGN KEY (state_root) REFERENCES beacon_states(state_root);
 CREATE UNIQUE INDEX beacon_blocks_state_root_idx ON public.beacon_blocks USING btree (state_root);
-
+ALTER TABLE beacon_blocks ALTER COLUMN state_root SET NOT NULL;
+ALTER TABLE beacon_blocks ALTER COLUMN parent_root SET NOT NULL;
+ALTER TABLE beacon_blocks ALTER COLUMN deposit_sum SET NOT NULL;
+ALTER TABLE beacon_blocks ALTER COLUMN deposit_sum_aggregated SET NOT NULL;
