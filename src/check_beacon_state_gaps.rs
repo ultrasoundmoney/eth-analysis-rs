@@ -51,8 +51,8 @@ pub async fn check_beacon_state_gaps() -> Result<(), Box<dyn Error>> {
         ",
     )
     .map(|row: PgRow| {
-        let block_root: String = row.get("block_root");
-        let parent_root: Option<String> = row.get("parent_root");
+        let block_root = row.get::<String, _>("block_root");
+        let parent_root = row.get::<String, _>("parent_root");
         (block_root, parent_root)
     })
     .fetch(&mut connection);
@@ -62,10 +62,7 @@ pub async fn check_beacon_state_gaps() -> Result<(), Box<dyn Error>> {
     while let Some((block_root, parent_root)) = block_rows.try_next().await? {
         hashes.insert(block_root.clone());
 
-        let is_parent_known = parent_root.as_ref().map_or_else(
-            || &block_root == "0x4d611d5b93fdab69013a7f0a2f961caca0c853f87cfe9595fe50038163079360",
-            |parent_root| hashes.contains(parent_root),
-        );
+        let is_parent_known = hashes.contains(&parent_root);
 
         if !is_parent_known {
             panic!(

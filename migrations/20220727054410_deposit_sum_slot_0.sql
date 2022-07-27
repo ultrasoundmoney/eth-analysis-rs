@@ -7,6 +7,11 @@ UPDATE beacon_blocks
 SET deposit_sum = 674144000000000
 WHERE state_root = '0x7e76880eb67bbdc86250aa578958e9d0675e64e714337855204fb5abaaf82c2b';
 
+-- Set genesis parent root for slot 0.
+UPDATE beacon_blocks
+SET parent_root = '0x0000000000000000000000000000000000000000000000000000000000000000'
+WHERE state_root = '0x7e76880eb67bbdc86250aa578958e9d0675e64e714337855204fb5abaaf82c2b';
+
 CREATE TABLE beacon_blocks_tmp AS (
   SELECT
     block_root,

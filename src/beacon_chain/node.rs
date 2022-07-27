@@ -11,12 +11,11 @@ use super::{beacon_time, Slot};
 #[derive(Debug)]
 enum BlockId {
     BlockRoot(String),
+    #[allow(dead_code)]
     Finalized,
     #[allow(dead_code)]
     Genesis,
-    #[allow(dead_code)]
     Head,
-    #[allow(dead_code)]
     Slot(u32),
 }
 

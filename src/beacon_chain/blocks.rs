@@ -53,12 +53,6 @@ pub async fn store_block<'a>(
     deposit_sum: &GweiAmount,
     deposit_sum_aggregated: &GweiAmount,
 ) {
-    let parent_root = if header.header.message.parent_root == GENESIS_PARENT_ROOT {
-        None
-    } else {
-        Some(header.header.message.parent_root.clone())
-    };
-
     sqlx::query!(
         "
             INSERT INTO beacon_blocks (
@@ -71,7 +65,7 @@ pub async fn store_block<'a>(
         ",
         header.root,
         state_root,
-        parent_root,
+        header.header.message.parent_root,
         i64::from(deposit_sum.to_owned()),
         i64::from(deposit_sum_aggregated.to_owned()),
     )
