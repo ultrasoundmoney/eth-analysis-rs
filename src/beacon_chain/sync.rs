@@ -457,7 +457,7 @@ async fn sync_head(
     .await
     {
         NextStep::HandleGap => {
-            tracing::warn!("parent of block at slot {} is missing, dropping min(our last block.slot, new block.slot) and queueing all blocks gte the received block", head_event.slot);
+            tracing::warn!("parent of block at slot {} is missing, dropping min(our last block.slot, new block.slot) and queueing all blocks gte the received block, block: {}", head_event.slot, head_event.block);
 
             let last_block_slot = get_last_block_slot(&mut db_pool.acquire().await.unwrap())
                 .await
@@ -478,8 +478,9 @@ async fn sync_head(
         }
         NextStep::HandleHeadFork => {
             tracing::info!(
-                "block at slot {} creates a fork, rolling back our last block",
-                head_event.slot
+                "block at slot {} creates a fork, rolling back our last block - {}",
+                head_event.slot,
+                head_event.block
             );
 
             rollback_slots(db_pool, &head_event.slot).await;
