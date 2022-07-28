@@ -231,6 +231,7 @@ impl BeaconNode {
             .await
     }
 
+    #[allow(dead_code)]
     pub async fn get_last_finalized_block(&self) -> reqwest::Result<BeaconBlock> {
         self.get_block(&BlockId::Finalized).await
     }
