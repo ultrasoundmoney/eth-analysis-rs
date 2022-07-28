@@ -477,6 +477,6 @@ mod tests {
     #[tokio::test]
     async fn get_last_head_test() {
         let beacon_node = BeaconNode::new();
-        let header = beacon_node.get_last_header().await.unwrap();
+        beacon_node.get_last_header().await.unwrap();
     }
 }
