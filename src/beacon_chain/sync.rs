@@ -533,7 +533,7 @@ pub async fn sync_beacon_states() {
 
     let db_pool = PgPoolOptions::new()
         .max_connections(3)
-        .connect(&config::get_db_url())
+        .connect(&config::get_db_url_with_name("sync-beacon-states"))
         .await
         .unwrap();
 

@@ -81,7 +81,7 @@ pub async fn update_supply_projection_inputs() {
 
     let pool = PgPoolOptions::new()
         .max_connections(1)
-        .connect(&config::get_db_url())
+        .connect(&config::get_db_url_with_name("supply_projection_inputs"))
         .await
         .unwrap();
 

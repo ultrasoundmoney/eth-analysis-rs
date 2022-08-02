@@ -26,6 +26,10 @@ pub fn get_db_url() -> String {
     get_env_var_unsafe("DATABASE_URL")
 }
 
+pub fn get_db_url_with_name<'a>(name: &str) -> String {
+    format!("{}?application-name={name}", get_db_url())
+}
+
 #[cached]
 pub fn get_glassnode_api_key() -> String {
     get_env_var_unsafe("GLASSNODE_API_KEY")
