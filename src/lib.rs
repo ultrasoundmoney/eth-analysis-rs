@@ -3,7 +3,6 @@ mod caching;
 mod check_beacon_state_gaps;
 mod config;
 mod eth_supply;
-mod eth_time;
 mod eth_units;
 mod etherscan;
 mod execution_chain;
