@@ -32,6 +32,24 @@
     },
     "query": "\n            DELETE FROM beacon_blocks\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
+  "2531d698a8e86404a071079689eb33e585e105e621fd45025e448e54f39e36ad": {
+    "describe": {
+      "columns": [
+        {
+          "name": "wei",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                SUM(gas_used::numeric(78) * base_fee_per_gas::numeric(78))::TEXT AS wei\n            FROM\n                blocks\n        "
+  },
   "28cb24726a2123cb298b5480b7376b305d40f262338f44aa24c7a8a3795398a0": {
     "describe": {
       "columns": [
@@ -111,6 +129,26 @@
     },
     "query": "\n            SELECT timestamp, gwei FROM beacon_issuance\n        "
   },
+  "817fa31bb856c4c9dd34011a8344aedc49f6870b9ed48f2c5240aa0f43376223": {
+    "describe": {
+      "columns": [
+        {
+          "name": "wei",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                SUM(gas_used::numeric(78) * base_fee_per_gas::numeric(78))::TEXT AS wei\n            FROM\n                blocks\n            WHERE\n                mined_at >= NOW() - $1::interval\n        "
+  },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {
       "columns": [
@@ -143,6 +181,22 @@
       }
     },
     "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
+  },
+  "96699a3966db2fe2de98dc9cd0db41276406bafb0af630e43156fcc69ba0cf1c": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Int8",
+          "Text",
+          "Timestamptz",
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO\n                blocks\n            (\n                base_fee_per_gas,\n                gas_used,\n                hash,\n                mined_at,\n                number\n            )\n            VALUES\n            (\n                $1,\n                $2,\n                $3,\n                $4,\n                $5\n            )\n        "
   },
   "99161f8c9a73c0713c2fefb04cbc70c933371910f7956d459404391a11cb0eb6": {
     "describe": {
