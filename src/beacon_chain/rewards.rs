@@ -4,13 +4,11 @@ use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Decode, PgExecutor, PgPool};
 
-use crate::{
-    caching, config, eth_time,
-    eth_units::{self, GweiAmount, GWEI_PER_ETH_F64},
-    key_value_store::{self, KeyValue},
-};
-
 use super::{balances, BeaconNode};
+use crate::eth_units::{GweiAmount, GWEI_PER_ETH, GWEI_PER_ETH_F64};
+use crate::execution_chain::LONDON_HARDFORK_TIMESTAMP;
+use crate::key_value_store::KeyValue;
+use crate::{caching, config, key_value_store};
 
 pub const VALIDATOR_REWARDS_CACHE_KEY: &str = "validator-rewards";
 
@@ -22,7 +20,7 @@ pub struct ValidatorReward {
 }
 
 fn get_days_since_london() -> i64 {
-    (Utc::now() - *eth_time::LONDON_HARDFORK_TIMESTAMP).num_days()
+    (Utc::now() - *LONDON_HARDFORK_TIMESTAMP).num_days()
 }
 
 #[derive(Decode)]
@@ -50,8 +48,7 @@ async fn get_tips_reward<'a>(
     tracing::debug!("tips since london {}", tips_since_london);
 
     let tips_per_year = tips_since_london as f64 / get_days_since_london() as f64 * 365.25;
-    let single_validator_share =
-        (32_f64 * eth_units::GWEI_PER_ETH as f64) / effective_balance_sum.0 as f64;
+    let single_validator_share = (32_f64 * GWEI_PER_ETH as f64) / effective_balance_sum.0 as f64;
     tracing::debug!("single validator share {}", tips_since_london);
 
     let tips_earned_per_year_per_validator = tips_per_year * single_validator_share;
@@ -60,7 +57,7 @@ async fn get_tips_reward<'a>(
         tips_earned_per_year_per_validator
     );
 
-    let apr = tips_earned_per_year_per_validator / (32 * eth_units::GWEI_PER_ETH) as f64;
+    let apr = tips_earned_per_year_per_validator / (32 * GWEI_PER_ETH) as f64;
     tracing::debug!("tips APR {}", apr);
 
     Ok(ValidatorReward {

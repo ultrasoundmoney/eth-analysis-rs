@@ -61,7 +61,10 @@ pub async fn store_block<'a>(
                 parent_root,
                 deposit_sum,
                 deposit_sum_aggregated
-            ) VALUES ($1, $2, $3, $4, $5)
+            )
+            VALUES (
+                $1, $2, $3, $4, $5
+            )
         ",
         header.root,
         state_root,
@@ -77,8 +80,14 @@ pub async fn store_block<'a>(
 pub async fn get_last_block_slot(connection: &mut PgConnection) -> Option<u32> {
     sqlx::query(
         "
-            SELECT slot FROM beacon_blocks JOIN beacon_states
-            ON beacon_states.state_root = beacon_blocks.state_root
+            SELECT
+                slot
+            FROM
+                beacon_blocks
+            JOIN
+                beacon_states
+            ON
+                beacon_states.state_root = beacon_blocks.state_root
             ORDER BY slot DESC
             LIMIT 1
         ",
@@ -94,7 +103,10 @@ pub async fn delete_blocks<'a>(connection: impl PgExecutor<'a>, greater_than_or_
         "
             DELETE FROM beacon_blocks
             WHERE state_root IN (
-                SELECT state_root FROM beacon_states
+                SELECT
+                    state_root
+                FROM
+                    beacon_states
                 WHERE slot >= $1
             )
         ",
