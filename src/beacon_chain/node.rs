@@ -71,14 +71,16 @@ fn make_blocks_url(block_id: &BlockId) -> String {
     )
 }
 
+pub type StateRoot = String;
+
 #[derive(Debug, Deserialize)]
-struct StateRoot {
-    root: String,
+struct StateRootSecondEnvelope {
+    root: StateRoot,
 }
 
 #[derive(Debug, Deserialize)]
-struct StateRootEnvelope {
-    data: StateRoot,
+struct StateRootFirstEnvelope {
+    data: StateRootSecondEnvelope,
 }
 
 fn make_state_root_url(slot: &u32) -> String {
@@ -249,7 +251,7 @@ impl BeaconNode {
             .send()
             .await?
             .error_for_status()?
-            .json::<StateRootEnvelope>()
+            .json::<StateRootFirstEnvelope>()
             .await
             .map(|envelope| envelope.data.root)
     }
