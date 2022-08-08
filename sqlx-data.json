@@ -20,36 +20,6 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
-  "1acb9e77328053e58148fb19c131bebeb9ce7fd9dc33f7fb8334ae5a59dc8d03": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            DELETE FROM beacon_blocks\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
-  },
-  "2531d698a8e86404a071079689eb33e585e105e621fd45025e448e54f39e36ad": {
-    "describe": {
-      "columns": [
-        {
-          "name": "wei",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT\n                SUM(gas_used::numeric(78) * base_fee_per_gas::numeric(78))::TEXT AS wei\n            FROM\n                blocks\n        "
-  },
   "28cb24726a2123cb298b5480b7376b305d40f262338f44aa24c7a8a3795398a0": {
     "describe": {
       "columns": [
@@ -67,6 +37,26 @@
       }
     },
     "query": "\n            SELECT gwei FROM beacon_issuance\n            ORDER BY timestamp DESC\n            LIMIT 1\n        "
+  },
+  "373699992ba24383ca449966a910ff1caae73a250224e03a01bb463cc9ec5966": {
+    "describe": {
+      "columns": [
+        {
+          "name": "effective_balance_sum",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                effective_balance_sum\n            FROM\n                beacon_states\n            WHERE\n                state_root = $1\n        "
   },
   "3d161e6a7b26b1759ada2a5102c9fa5e4fdf75b0fe094850e4502cf6e38c9760": {
     "describe": {
@@ -129,26 +119,6 @@
     },
     "query": "\n            SELECT timestamp, gwei FROM beacon_issuance\n        "
   },
-  "817fa31bb856c4c9dd34011a8344aedc49f6870b9ed48f2c5240aa0f43376223": {
-    "describe": {
-      "columns": [
-        {
-          "name": "wei",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Interval"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                SUM(gas_used::numeric(78) * base_fee_per_gas::numeric(78))::TEXT AS wei\n            FROM\n                blocks\n            WHERE\n                mined_at >= NOW() - $1::interval\n        "
-  },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {
       "columns": [
@@ -182,22 +152,6 @@
     },
     "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
   },
-  "96699a3966db2fe2de98dc9cd0db41276406bafb0af630e43156fcc69ba0cf1c": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int8",
-          "Int8",
-          "Text",
-          "Timestamptz",
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO\n                blocks\n            (\n                base_fee_per_gas,\n                gas_used,\n                hash,\n                mined_at,\n                number\n            )\n            VALUES\n            (\n                $1,\n                $2,\n                $3,\n                $4,\n                $5\n            )\n        "
-  },
   "99161f8c9a73c0713c2fefb04cbc70c933371910f7956d459404391a11cb0eb6": {
     "describe": {
       "columns": [
@@ -215,6 +169,31 @@
       }
     },
     "query": "\n            SELECT SUM(tips) / 1e9 AS \"tips_since_london!\" FROM blocks\n        "
+  },
+  "a5a62478fc58eb6b9271428b2936a35e21d4e080f758baf199906ae79d97af50": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM beacon_blocks\n            WHERE state_root IN (\n                SELECT\n                    state_root\n                FROM\n                    beacon_states\n                WHERE slot >= $1\n            )\n        "
+  },
+  "afcdf2723131331fa33290904bd69c0b3c49033b1cb4756e10b2dddd1f483ee5": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            UPDATE\n                beacon_states\n            SET\n                effective_balance_sum = $1\n            WHERE\n                state_root = $2\n        "
   },
   "b7bb6881fa2d0a591071a9f538fddfb4d2ee6bb4ffee3154bf6cd9fd0c8ebbe9": {
     "describe": {
@@ -276,7 +255,7 @@
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
   },
-  "d7a27696366610541322e5d50e77b716d68a472fb6372e36858582779e8df748": {
+  "e3e2ba8332c056d960683e6f010adaf33805d3687a263fb0e10ec7460bc41ab0": {
     "describe": {
       "columns": [],
       "nullable": [],
@@ -290,7 +269,7 @@
         ]
       }
     },
-    "query": "\n            INSERT INTO beacon_blocks (\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated\n            ) VALUES ($1, $2, $3, $4, $5)\n        "
+    "query": "\n            INSERT INTO beacon_blocks (\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated\n            )\n            VALUES (\n                $1, $2, $3, $4, $5\n            )\n        "
   },
   "f51ac89ed5030a134d406f4f1595abd2af118630ae4e44dbe58c9f3e5acbc148": {
     "describe": {

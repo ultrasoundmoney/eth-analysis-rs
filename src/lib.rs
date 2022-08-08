@@ -13,7 +13,9 @@ mod performance;
 mod supply_projection;
 mod time;
 
-pub use beacon_chain::{sync_beacon_states, update_validator_rewards};
+pub use beacon_chain::{
+    sync_beacon_states, update_effective_balance_sum, update_validator_rewards,
+};
 pub use check_beacon_state_gaps::check_beacon_state_gaps;
 pub use eth_supply::update as update_total_supply;
 pub use execution_chain::sync_execution_supply_deltas;
