@@ -113,7 +113,6 @@ pub struct BeaconBalancesSum {
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, TimeZone, Utc};
-    use serial_test::serial;
     use sqlx::{Connection, PgConnection};
 
     use crate::{beacon_chain::states::store_state, config};
@@ -121,7 +120,6 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[serial]
     async fn timestamp_is_start_of_day_test() {
         let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
         let mut transaction = connection.begin().await.unwrap();
