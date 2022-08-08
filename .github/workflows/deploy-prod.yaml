@@ -124,3 +124,22 @@ jobs:
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: rollout status deployment/sync-beacon-states
+  deploy-update-effective-balance-sum:
+    name: deploy update-effective-balance-sum
+    runs-on: ubuntu-latest
+    needs: wait-on-build
+    steps:
+      - uses: actions/checkout@master
+      - name: Make short SHA available
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: deploy
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
+          command: set image cronjob/update-effective-balance-sum update-effective-balance-sum=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+      - name: run job
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
+          command: create job --from=cronjob/update-effective-balance-sum update-effective-balance-sum-${{ steps.vars.outputs.sha_short }}
