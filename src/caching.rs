@@ -1,6 +1,6 @@
 use sqlx::PgExecutor;
 
-pub async fn publish_cache_update<'a>(pool: impl PgExecutor<'a>, key: &str) {
+pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: &str) {
     tracing::debug!("publishing cache update: {}", key);
 
     sqlx::query!(
@@ -9,7 +9,7 @@ pub async fn publish_cache_update<'a>(pool: impl PgExecutor<'a>, key: &str) {
         ",
         key
     )
-    .execute(pool)
+    .execute(executor)
     .await
     .unwrap();
 }
