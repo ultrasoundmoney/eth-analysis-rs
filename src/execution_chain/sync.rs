@@ -15,13 +15,13 @@ use std::iter::Iterator;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use super::merge_countdown;
 use super::node::BlockNumber;
 use super::node::Head;
 use crate::config;
 use crate::execution_chain;
 use crate::execution_chain::block_store::BlockStore;
 use crate::execution_chain::block_store::MemoryBlockStore;
+use crate::execution_chain::merge_estimate;
 use crate::execution_chain::ExecutionNode;
 use crate::performance::TimedExt;
 
@@ -51,7 +51,7 @@ async fn sync_by_hash<'a>(
     // until we're in-sync with the chain again.
     if is_synced {
         tracing::debug!("we're synced, running on_new_head for skippables");
-        merge_countdown::on_new_head(executor, &block).await;
+        merge_estimate::on_new_head(executor, &block).await;
     }
 }
 
