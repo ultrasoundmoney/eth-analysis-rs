@@ -15,6 +15,7 @@ const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
 const MERGE_ESTIMATE_CACHE_KEY: &str = "merge-estimate";
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct MergeTTDCountdown {
     block_number: BlockNumber,
     blocks_left: u32,
