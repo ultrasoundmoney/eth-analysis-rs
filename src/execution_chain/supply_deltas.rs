@@ -14,7 +14,7 @@ use serde::Serialize;
 
 use crate::eth_units::Wei;
 
-use super::blocks::BlockNumber;
+use super::node::BlockNumber;
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct SupplyDelta {

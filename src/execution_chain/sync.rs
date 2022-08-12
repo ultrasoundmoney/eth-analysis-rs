@@ -13,7 +13,7 @@ use std::iter::Iterator;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use super::blocks::BlockNumber;
+use super::node::BlockNumber;
 use super::node::Head;
 use crate::execution_chain;
 use crate::execution_chain::block_store::BlockStore;

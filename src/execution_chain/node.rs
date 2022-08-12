@@ -13,7 +13,7 @@ use async_tungstenite::{
     tungstenite::Message,
     WebSocketStream,
 };
-pub use blocks::ExecutionNodeBlock;
+pub use blocks::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
 use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::prelude::*;

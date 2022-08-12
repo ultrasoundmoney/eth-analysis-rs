@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use super::blocks::BlockNumber;
-use super::node::ExecutionNodeBlock;
+use super::node::{BlockNumber, ExecutionNodeBlock};
 
 pub trait BlockStore {
     fn delete_block_by_number(&mut self, block_number: &BlockNumber);

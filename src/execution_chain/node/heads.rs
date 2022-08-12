@@ -2,7 +2,7 @@ use super::{blocks::ExecutionNodeBlock, decoders::*};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::execution_chain::blocks::BlockNumber;
+use crate::execution_chain::node::BlockNumber;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
