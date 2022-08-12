@@ -25,21 +25,9 @@ use crate::execution_chain::block_store::MemoryBlockStore;
 use crate::execution_chain::ExecutionNode;
 use crate::performance::TimedExt;
 
-async fn rollback_numbers<'a>(store: &mut impl BlockStore, greater_than_or_equal: &BlockNumber) {
+fn rollback_numbers<'a>(store: &mut impl BlockStore, greater_than_or_equal: &BlockNumber) {
     tracing::debug!("rolling back data based on numbers gte {greater_than_or_equal}");
-    let last_block = store.get_last_block_number();
-    match last_block {
-        None => {
-            tracing::warn!(
-                "asked to rollback numbers gte {greater_than_or_equal} but BlockStore is empty"
-            );
-        }
-        Some(last_block_number) => {
-            for block_number in (*greater_than_or_equal..=last_block_number).rev() {
-                store.delete_blocks(&block_number)
-            }
-        }
-    }
+    store.delete_blocks(&greater_than_or_equal);
 }
 
 async fn sync_by_hash<'a>(
@@ -120,7 +108,7 @@ async fn sync_head(
             // Head number may be lower than our last synced. Roll back gte lowest of the two.
             let lowest_number = last_block_number.min(head_event.number);
 
-            rollback_numbers(store, &lowest_number).await;
+            rollback_numbers(store, &lowest_number);
 
             for number in (lowest_number..=head_event.number).rev() {
                 tracing::debug!("queueing {number} for sync after dropping");
@@ -137,7 +125,7 @@ async fn sync_head(
                 head_event.hash
             );
 
-            rollback_numbers(store, &head_event.number).await;
+            rollback_numbers(store, &head_event.number);
 
             heads_queue
                 .lock()
@@ -240,7 +228,7 @@ mod tests {
             total_difficulty: 0,
         });
 
-        rollback_numbers(&mut block_store, &0).await;
+        rollback_numbers(&mut block_store, &0);
 
         // This should blow up if the order is backwards but its not obvious how. Consider using
         // mockall to create a mock instance of block_store so we can observe whether
