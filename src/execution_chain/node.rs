@@ -247,10 +247,7 @@ impl ExecutionNode {
                     tracing::error!("eth_getBlockByHash bad response {:?}", err);
                     None
                 },
-                |value| {
-                    let block = serde_json::from_value::<ExecutionNodeBlock>(value).unwrap();
-                    Some(block)
-                },
+                |value| serde_json::from_value::<Option<ExecutionNodeBlock>>(value).unwrap(),
             )
     }
 
@@ -263,10 +260,7 @@ impl ExecutionNode {
                     tracing::error!("eth_getBlockByNumber bad response {:?}", err);
                     None
                 },
-                |value| {
-                    let block = serde_json::from_value::<ExecutionNodeBlock>(value).unwrap();
-                    Some(block)
-                },
+                |value| serde_json::from_value::<Option<ExecutionNodeBlock>>(value).unwrap(),
             )
     }
 
@@ -313,8 +307,8 @@ mod tests {
     #[tokio::test]
     async fn get_block_by_number_test() {
         let mut node = ExecutionNode::connect().await;
-        let block = node.get_block_by_number(&0).await;
-        assert_eq!(0, block.unwrap().number);
+        let block = node.get_block_by_number(&12965000).await;
+        assert_eq!(block.unwrap().number, 12965000);
         node.close().await;
     }
 
@@ -322,7 +316,7 @@ mod tests {
     async fn get_unavailable_block_by_number_test() {
         let mut node = ExecutionNode::connect().await;
         let block = node.get_block_by_number(&999_999_999).await;
-        assert_eq!(0, block.unwrap().number);
+        assert_eq!(block, None);
         node.close().await;
     }
 
@@ -332,7 +326,7 @@ mod tests {
         let block = node
             .get_block_by_hash("0x1b9595ee9ccda512b7f60beb1127095854475422ceb754a05fe537ee8163e4e7")
             .await;
-        assert_eq!(0, block.unwrap().number);
+        assert_eq!(block.unwrap().number, 15327142);
         node.close().await;
     }
 
@@ -340,7 +334,7 @@ mod tests {
     async fn get_unavailable_block_by_hash_test() {
         let mut node = ExecutionNode::connect().await;
         let block = node.get_block_by_hash("0xdoesnotexist").await;
-        assert_eq!(0, block.unwrap().number);
+        assert_eq!(block, None);
         node.close().await;
     }
 }
