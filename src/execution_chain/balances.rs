@@ -2,7 +2,8 @@ use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 use std::str::FromStr;
 
-use crate::eth_units::{to_i128_string, Wei};
+use crate::eth_units::Wei;
+use crate::json_codecs::to_i128_string;
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -8,6 +8,7 @@ mod etherscan;
 mod execution_chain;
 mod glassnode;
 mod issuance_breakdown;
+mod json_codecs;
 mod key_value_store;
 mod performance;
 mod supply_projection;

@@ -12,7 +12,8 @@ use sqlx::PgPool;
 use crate::beacon_chain::blocks::get_last_block_slot;
 use crate::config;
 use crate::eth_supply;
-use crate::eth_units::{from_u32_string, GweiAmount};
+use crate::eth_units::GweiAmount;
+use crate::json_codecs::from_u32_string;
 use crate::performance::TimedExt;
 
 use super::beacon_time::FirstOfDaySlot;
