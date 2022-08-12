@@ -229,20 +229,10 @@ async fn sync_slots(
         slot_range.less_than_or_equal - slot_range.greater_than_or_equal + 1
     );
 
-    let mut progress = pit_wall::Progress::new(
-        "sync slots",
-        (slot_range.less_than_or_equal - slot_range.greater_than_or_equal + 1).into(),
-    );
-
     for slot in slot_range.greater_than_or_equal..=slot_range.less_than_or_equal {
         sync_slot(connection, beacon_node, &slot)
             .timed("sync slot")
             .await;
-
-        progress.inc_work_done();
-        if progress.work_done != 0 && progress.work_done % 30 == 0 {
-            tracing::info!("{}", progress.get_progress_string());
-        }
     }
 }
 
