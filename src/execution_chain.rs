@@ -2,6 +2,7 @@ mod balances;
 mod block_store;
 mod blocks;
 mod logs;
+mod merge_countdown;
 mod node;
 mod supply_deltas;
 mod sync;

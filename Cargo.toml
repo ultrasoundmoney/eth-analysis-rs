@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
-async-tungstenite = {version="0.17", features = ["tokio-runtime"]}
+async-tungstenite = { version = "0.17", features = ["tokio-runtime"] }
 cached = "0.37"
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 console = "0.15"
 csv = "1"
 dialoguer = "0.10"

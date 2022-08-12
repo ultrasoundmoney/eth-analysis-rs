@@ -22,7 +22,7 @@ pub struct ExecutionNodeBlock {
     #[serde(deserialize_with = "from_unix_timestamp_hex_str")]
     pub timestamp: DateTime<Utc>,
     #[serde(deserialize_with = "from_u64_hex_str")]
-    pub difficulty: u64,
+    pub difficulty: Difficulty,
     #[serde(deserialize_with = "from_u128_hex_str")]
-    pub total_difficulty: u128,
+    pub total_difficulty: TotalDifficulty,
 }

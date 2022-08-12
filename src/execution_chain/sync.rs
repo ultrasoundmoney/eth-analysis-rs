@@ -8,13 +8,17 @@
 //!
 //! For now, blocks are stored in-memory only.
 use futures::StreamExt;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::PgPool;
 use std::collections::VecDeque;
 use std::iter::Iterator;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use super::merge_countdown;
 use super::node::BlockNumber;
 use super::node::Head;
+use crate::config;
 use crate::execution_chain;
 use crate::execution_chain::block_store::BlockStore;
 use crate::execution_chain::block_store::MemoryBlockStore;
@@ -38,9 +42,10 @@ async fn rollback_numbers<'a>(store: &mut impl BlockStore, greater_than_or_equal
     }
 }
 
-async fn sync_by_hash(
+async fn sync_by_hash<'a>(
     block_store: &mut impl BlockStore,
     execution_node: &mut ExecutionNode,
+    executor: &PgPool,
     hash: &str,
 ) {
     let block = execution_node
@@ -50,7 +55,16 @@ async fn sync_by_hash(
 
     // Between the time we received the head event and requested a header for the given
     // block_root the block may have disappeared. Right now we panic, we could do better.
-    block_store.store_block(block.into())
+    block_store.store_block(block.clone());
+
+    let is_synced = execution_node.get_latest_block().await.hash == hash;
+    // Some computations can be skipped, others should be ran, and rolled back for every change in
+    // the chain of blocks we've assembled. These are the ones that are skippable, and so skipped
+    // until we're in-sync with the chain again.
+    if is_synced {
+        tracing::debug!("we're synced, running on_new_head for skippables");
+        merge_countdown::on_new_head(executor, &block).await;
+    }
 }
 
 enum NextStep {
@@ -80,6 +94,7 @@ fn get_next_step(block_store: &impl BlockStore, head: &Head) -> NextStep {
 async fn sync_head(
     store: &mut impl BlockStore,
     execution_node: &mut ExecutionNode,
+    db_pool: &PgPool,
     heads_queue: HeadsQueue,
     head_to_sync: HeadToSync,
 ) {
@@ -130,7 +145,7 @@ async fn sync_head(
                 .push_front(HeadToSync::Fetched(head_event))
         }
         NextStep::AddToExisting => {
-            sync_by_hash(store, execution_node, &head_event.hash)
+            sync_by_hash(store, execution_node, db_pool, &head_event.hash)
                 .timed("sync numbers")
                 .await;
         }
@@ -148,6 +163,12 @@ pub async fn sync_blocks() {
     tracing_subscriber::fmt::init();
 
     tracing::info!("syncing execution blocks");
+
+    let db_pool = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&config::get_db_url_with_name("sync-execution-blocks"))
+        .await
+        .unwrap();
 
     let mut execution_node = ExecutionNode::connect().await;
 
@@ -178,6 +199,7 @@ pub async fn sync_blocks() {
                     sync_head(
                         &mut block_store,
                         &mut execution_node,
+                        &db_pool,
                         heads_queue.clone(),
                         next_head,
                     )
