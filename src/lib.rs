@@ -18,6 +18,7 @@ pub use beacon_chain::{
 };
 pub use check_beacon_state_gaps::check_beacon_state_gaps;
 pub use eth_supply::update as update_total_supply;
+pub use execution_chain::sync_execution_blocks;
 pub use execution_chain::sync_execution_supply_deltas;
 pub use execution_chain::write_execution_heads_log;
 pub use execution_chain::write_execution_supply_deltas;

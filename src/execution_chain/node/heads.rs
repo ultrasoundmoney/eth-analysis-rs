@@ -1,10 +1,10 @@
-use super::decoders::*;
+use super::{blocks::ExecutionNodeBlock, decoders::*};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::execution_chain::blocks::BlockNumber;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Head {
     pub hash: String,
@@ -18,6 +18,17 @@ pub struct Head {
 impl From<NewHeadMessage> for Head {
     fn from(message: NewHeadMessage) -> Self {
         message.params.result
+    }
+}
+
+impl From<ExecutionNodeBlock> for Head {
+    fn from(block: ExecutionNodeBlock) -> Self {
+        Self {
+            hash: block.hash,
+            number: block.number,
+            parent_hash: block.parent_hash,
+            timestamp: block.timestamp,
+        }
     }
 }
 

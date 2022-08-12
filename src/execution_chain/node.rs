@@ -13,13 +13,14 @@ use async_tungstenite::{
     tungstenite::Message,
     WebSocketStream,
 };
-use blocks::*;
+pub use blocks::ExecutionNodeBlock;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::prelude::*;
 use futures::stream::SplitSink;
 use futures::stream::SplitStream;
-use heads::*;
+pub use heads::Head;
+use heads::NewHeadMessage;
 use serde::Deserialize;
 use serde_json::json;
 use serde_json::Value;
@@ -93,7 +94,7 @@ impl IdPool {
     }
 }
 
-pub fn stream_new_heads() -> mpsc::UnboundedReceiver<Head> {
+pub fn stream_new_heads() -> impl Stream<Item = Head> {
     let (mut new_heads_tx, new_heads_rx) = mpsc::unbounded();
 
     tokio::spawn(async move {
@@ -238,15 +239,35 @@ impl ExecutionNode {
         serde_json::from_value::<ExecutionNodeBlock>(value).unwrap()
     }
 
-    #[allow(dead_code)]
-    pub async fn get_block_by_number(&mut self, number: &u32) -> ExecutionNodeBlock {
-        let hex_number = format!("0x{:x}", number);
-        let value = self
-            .call("eth_getBlockByNumber", &json!((hex_number, false)))
+    pub async fn get_block_by_hash(&mut self, hash: &str) -> Option<ExecutionNodeBlock> {
+        self.call("eth_getBlockByHash", &json!((hash, false)))
             .await
-            .unwrap();
+            .map_or_else(
+                |err| {
+                    tracing::error!("eth_getBlockByHash bad response {:?}", err);
+                    None
+                },
+                |value| {
+                    let block = serde_json::from_value::<ExecutionNodeBlock>(value).unwrap();
+                    Some(block)
+                },
+            )
+    }
 
-        serde_json::from_value::<ExecutionNodeBlock>(value).unwrap()
+    pub async fn get_block_by_number(&mut self, number: &u32) -> Option<ExecutionNodeBlock> {
+        let hex_number = format!("0x{:x}", number);
+        self.call("eth_getBlockByNumber", &json!((hex_number, false)))
+            .await
+            .map_or_else(
+                |err| {
+                    tracing::error!("eth_getBlockByNumber bad response {:?}", err);
+                    None
+                },
+                |value| {
+                    let block = serde_json::from_value::<ExecutionNodeBlock>(value).unwrap();
+                    Some(block)
+                },
+            )
     }
 
     async fn call(&mut self, method: &str, params: &Value) -> Result<serde_json::Value, RpcError> {
@@ -283,17 +304,43 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_get_latest_block() {
+    async fn get_latest_block_test() {
         let mut node = ExecutionNode::connect().await;
         let _block = node.get_latest_block().await;
         node.close().await;
     }
 
     #[tokio::test]
-    async fn test_get_block() {
+    async fn get_block_by_number_test() {
         let mut node = ExecutionNode::connect().await;
         let block = node.get_block_by_number(&0).await;
-        assert_eq!(0, block.number);
+        assert_eq!(0, block.unwrap().number);
+        node.close().await;
+    }
+
+    #[tokio::test]
+    async fn get_unavailable_block_by_number_test() {
+        let mut node = ExecutionNode::connect().await;
+        let block = node.get_block_by_number(&999_999_999).await;
+        assert_eq!(0, block.unwrap().number);
+        node.close().await;
+    }
+
+    #[tokio::test]
+    async fn get_block_by_hash_test() {
+        let mut node = ExecutionNode::connect().await;
+        let block = node
+            .get_block_by_hash("0x1b9595ee9ccda512b7f60beb1127095854475422ceb754a05fe537ee8163e4e7")
+            .await;
+        assert_eq!(0, block.unwrap().number);
+        node.close().await;
+    }
+
+    #[tokio::test]
+    async fn get_unavailable_block_by_hash_test() {
+        let mut node = ExecutionNode::connect().await;
+        let block = node.get_block_by_hash("0xdoesnotexist").await;
+        assert_eq!(0, block.unwrap().number);
         node.close().await;
     }
 }
