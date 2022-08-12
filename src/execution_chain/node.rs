@@ -202,6 +202,9 @@ impl ExecutionNode {
         // when the websocket thread panics. Try rewriting to an implementation where the
         // sending end gets moved to the thread so that it may be dropped when the thread panics.
         // As a workaround we panic main when this thread panics.
+        // Perhaps leave a tx on main, then send txs through that channel that expect a message
+        // with some ID to arrive soon. This would mean the message handlers hashmap no longer has
+        // to be shared and could move into the message thread.
         let default_panic = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             default_panic(info);
