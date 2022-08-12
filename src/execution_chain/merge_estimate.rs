@@ -16,7 +16,7 @@ const MERGE_ESTIMATE_CACHE_KEY: &str = "merge-estimate";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct MergeTTDCountdown {
+struct MergeEstimate {
     block_number: BlockNumber,
     blocks_left: u32,
     #[serde(serialize_with = "to_u64_string")]
@@ -34,7 +34,7 @@ pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
     let time_left = Duration::seconds(13).mul(blocks_left as i32);
     let estimated_date_time = Utc::now() + time_left;
 
-    let merge_ttd_countdown = MergeTTDCountdown {
+    let merge_ttd_countdown = MergeEstimate {
         block_number: block.number,
         blocks_left,
         difficulty: block.difficulty,
