@@ -35,7 +35,7 @@ async fn rollback_numbers<'a>(store: &mut impl BlockStore, greater_than_or_equal
             );
         }
         Some(last_block_number) => {
-            for block_number in *greater_than_or_equal..=last_block_number {
+            for block_number in (*greater_than_or_equal..=last_block_number).rev() {
                 store.delete_blocks(&block_number)
             }
         }
@@ -208,5 +208,42 @@ pub async fn sync_blocks() {
                 }
             }
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+
+    use crate::execution_chain::node::ExecutionNodeBlock;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn rollback_last_first_test() {
+        let mut block_store = MemoryBlockStore::new();
+
+        block_store.store_block(ExecutionNodeBlock {
+            difficulty: 0,
+            hash: "0xhash".to_string(),
+            number: 0,
+            parent_hash: "0xparent".to_string(),
+            timestamp: Utc::now(),
+            total_difficulty: 0,
+        });
+
+        block_store.store_block(ExecutionNodeBlock {
+            difficulty: 0,
+            hash: "0xhash2".to_string(),
+            number: 1,
+            parent_hash: "0xhash".to_string(),
+            timestamp: Utc::now(),
+            total_difficulty: 0,
+        });
+
+        rollback_numbers(&mut block_store, &0).await;
+
+        // This should blow up if the order is backwards but its not obvious how. Consider using
+        // mockall to create a mock instance of block_store so we can observe whether
+        // rollback_numbers is calling it correctly.
     }
 }
