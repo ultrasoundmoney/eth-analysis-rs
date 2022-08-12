@@ -206,8 +206,8 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn rollback_last_first_test() {
+    #[test]
+    fn rollback_last_first_test() {
         let mut block_store = MemoryBlockStore::new();
 
         block_store.store_block(ExecutionNodeBlock {
