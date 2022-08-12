@@ -22,6 +22,7 @@ RUN apt update && apt install -y libssl1.1 ca-certificates
 
 COPY --from=builder /app/target/release/eth-analysis /usr/local/bin
 COPY --from=builder /app/target/release/sync-beacon-states /usr/local/bin
+COPY --from=builder /app/target/release/sync-execution-blocks /usr/local/bin
 COPY --from=builder /app/target/release/sync-execution-supply-deltas /usr/local/bin
 COPY --from=builder /app/target/release/update-effective-balance-sum /usr/local/bin
 COPY --from=builder /app/target/release/update-issuance-breakdown /usr/local/bin
