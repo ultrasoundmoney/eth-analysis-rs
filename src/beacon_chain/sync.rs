@@ -11,7 +11,7 @@ use sqlx::PgPool;
 
 use crate::beacon_chain::blocks::get_last_block_slot;
 use crate::config;
-use crate::eth_supply;
+use crate::eth_supply_parts;
 use crate::eth_units::GweiAmount;
 use crate::json_codecs::from_u32_string;
 use crate::performance::TimedExt;
@@ -181,7 +181,7 @@ async fn sync_slot(connection: &mut PgConnection, beacon_node: &BeaconNode, slot
             .await
             .unwrap();
         let validator_balances_sum = balances::sum_validator_balances(validator_balances);
-        eth_supply::update(
+        eth_supply_parts::update(
             connection,
             BeaconBalancesSum {
                 balances_sum: validator_balances_sum,
