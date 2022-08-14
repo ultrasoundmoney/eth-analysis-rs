@@ -8,7 +8,7 @@ use crate::execution_chain::ExecutionBalancesSum;
 use crate::key_value_store::{self, KeyValueStr};
 use crate::performance::TimedExt;
 
-const ETH_SUPPLY_CACHE_KEY: &str = "eth-supply";
+const ETH_SUPPLY_PARTS_CACHE_KEY: &str = "eth-supply-parts";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,7 +18,7 @@ struct EthSupply {
     execution_balances_sum: ExecutionBalancesSum,
 }
 
-async fn get_eth_supply(
+async fn get_eth_supply_parts(
     executor: &mut PgConnection,
     beacon_balances_sum: BeaconBalancesSum,
 ) -> EthSupply {
@@ -34,20 +34,20 @@ async fn get_eth_supply(
 }
 
 pub async fn update(executor: &mut PgConnection, beacon_balances_sum: BeaconBalancesSum) {
-    let eth_supply = get_eth_supply(executor, beacon_balances_sum)
-        .timed("get eth supply")
+    let eth_supply_parts = get_eth_supply_parts(executor, beacon_balances_sum)
+        .timed("get eth supply parts")
         .await;
 
     key_value_store::set_value_str(
         executor.acquire().await.unwrap(),
         KeyValueStr {
-            key: ETH_SUPPLY_CACHE_KEY,
+            key: ETH_SUPPLY_PARTS_CACHE_KEY,
             // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
             // as string however.
-            value_str: &serde_json::to_string(&eth_supply).unwrap(),
+            value_str: &serde_json::to_string(&eth_supply_parts).unwrap(),
         },
     )
     .await;
 
-    caching::publish_cache_update(executor, ETH_SUPPLY_CACHE_KEY).await;
+    caching::publish_cache_update(executor, ETH_SUPPLY_PARTS_CACHE_KEY).await;
 }
