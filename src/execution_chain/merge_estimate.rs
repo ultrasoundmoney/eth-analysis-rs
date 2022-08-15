@@ -14,6 +14,8 @@ const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
 
 const MERGE_ESTIMATE_CACHE_KEY: &str = "merge-estimate";
 
+const AVERAGE_BLOCK_TIME_ESTIMATE: i64 = 13500;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct MergeEstimate {
@@ -31,7 +33,7 @@ pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
 
     let blocks_left =
         ((TOTAL_TERMINAL_DIFFICULTY - block.total_difficulty) / block.difficulty as u128) as u32;
-    let time_left = Duration::seconds(13).mul(blocks_left as i32);
+    let time_left = Duration::milliseconds(AVERAGE_BLOCK_TIME_ESTIMATE).mul(blocks_left as i32);
     let estimated_date_time = Utc::now() + time_left;
 
     let merge_ttd_countdown = MergeEstimate {
