@@ -27,7 +27,7 @@ pub fn get_db_url() -> String {
 }
 
 pub fn get_db_url_with_name<'a>(name: &str) -> String {
-    format!("{}?application-name={name}", get_db_url())
+    format!("{}?application_name={name}", get_db_url())
 }
 
 #[cached]
