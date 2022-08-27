@@ -2,6 +2,8 @@ mod beacon_chain;
 mod caching;
 mod check_beacon_state_gaps;
 mod config;
+#[cfg(test)]
+mod db_testing;
 mod eth_supply_parts;
 mod eth_units;
 mod etherscan;

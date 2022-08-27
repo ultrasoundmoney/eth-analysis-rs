@@ -25,4 +25,11 @@ pub struct ExecutionNodeBlock {
     pub difficulty: Difficulty,
     #[serde(deserialize_with = "from_u128_hex_str")]
     pub total_difficulty: TotalDifficulty,
+    // Started at 8M, currently at 30M, seems to fit in 2^31 for the foreseeable future.
+    #[serde(deserialize_with = "from_u32_hex_str")]
+    pub gas_used: u32,
+    // Highest gas price seen, ~4000 Gwei, if we want 10x- 100x future proof, we need to handle
+    // 4000 * 100 * 1e9 (Gwei), which wouldn't fit in i32, but is <1% of i64.
+    #[serde(deserialize_with = "from_u64_hex_str")]
+    pub base_fee_per_gas: u64,
 }

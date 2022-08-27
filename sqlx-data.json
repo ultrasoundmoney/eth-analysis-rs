@@ -1,5 +1,43 @@
 {
   "db": "PostgreSQL",
+  "0095a39b2059c44bb70fc7e26c567227deae1dd658b8f5d73217b778627dc6dd": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                  EXISTS(\n                    SELECT\n                      hash\n                    FROM\n                      blocks_next\n                    WHERE\n                      number = $1\n                  ) AS \"exists!\"\n            "
+  },
+  "017c881da2ebcd080ea65a96821f8a4320e7e839b3ff5aab079e16ce3fc2ddd0": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n                SELECT\n                    number\n                FROM\n                    blocks_next\n                ORDER BY number DESC\n                LIMIT 1\n            "
+  },
   "100d831ec3a9d8ea9545ca0bcaae004558fc96771fe31a755ae04625d38b0000": {
     "describe": {
       "columns": [
@@ -37,6 +75,68 @@
       }
     },
     "query": "\n            SELECT gwei FROM beacon_issuance\n            ORDER BY timestamp DESC\n            LIMIT 1\n        "
+  },
+  "36b6169564ef841d5cfe8e64835534b1156ac30c63afa408684aa6af967711ee": {
+    "describe": {
+      "columns": [
+        {
+          "name": "base_fee_per_gas",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "difficulty",
+          "ordinal": 1,
+          "type_info": "Int8"
+        },
+        {
+          "name": "gas_used",
+          "ordinal": 2,
+          "type_info": "Int4"
+        },
+        {
+          "name": "hash",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "number",
+          "ordinal": 4,
+          "type_info": "Int4"
+        },
+        {
+          "name": "parent_hash",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "timestamp",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "total_difficulty!",
+          "ordinal": 7,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM\n                    blocks_next\n                WHERE\n                    number = $1\n            "
   },
   "373699992ba24383ca449966a910ff1caae73a250224e03a01bb463cc9ec5966": {
     "describe": {
@@ -82,6 +182,24 @@
     },
     "query": "\n            DELETE FROM beacon_issuance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
+  "5152e0dba03bc8d7baa8e8b2c2f7f3bca0fcae139dccba9c87e238ce33cb75b4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n                SELECT COUNT(*) AS \"count!\" FROM blocks_next\n            "
+  },
   "599dc56e83c008c39c90aaf090a679811a07d26f76b0876dba42630bd1415f31": {
     "describe": {
       "columns": [],
@@ -119,6 +237,18 @@
     },
     "query": "\n            SELECT timestamp, gwei FROM beacon_issuance\n        "
   },
+  "73a4e423df6615c6fac510739e7cc18a7626439f2ccdf2b7b6193577ab00d4c3": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                DELETE FROM blocks_next\n                WHERE number >= $1\n            "
+  },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {
       "columns": [
@@ -151,6 +281,26 @@
       }
     },
     "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
+  },
+  "95f051861a5ca96b593acc398f7f29d5c8ca859e7a76cc8888b00868a23563be": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n                    SELECT\n                      EXISTS(\n                        SELECT\n                          hash\n                        FROM\n                          blocks_next\n                        WHERE\n                          hash = $1\n                      ) AS \"exists!\"\n                "
   },
   "99161f8c9a73c0713c2fefb04cbc70c933371910f7956d459404391a11cb0eb6": {
     "describe": {
@@ -229,6 +379,24 @@
     },
     "query": "\n            SELECT deposit_sum_aggregated FROM beacon_blocks\n            WHERE block_root = $1\n        "
   },
+  "c3e675178c9b93119e5298a613b1c84cd0847ad39755d3e530cac5a52586a747": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n                SELECT\n                    COUNT(*) AS \"count!\"\n                FROM\n                    blocks_next\n                LIMIT 1\n            "
+  },
   "c49edba8e1bcb02e70d7d19ded33b9c77e5ceb140c06e04108dcf3a1c4893c6f": {
     "describe": {
       "columns": [],
@@ -254,6 +422,68 @@
       }
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
+  },
+  "dee40e6dd15adfc421012d85806bf7e7ce55ac6e8c445b0c070bd9eadcebd253": {
+    "describe": {
+      "columns": [
+        {
+          "name": "base_fee_per_gas",
+          "ordinal": 0,
+          "type_info": "Int8"
+        },
+        {
+          "name": "difficulty",
+          "ordinal": 1,
+          "type_info": "Int8"
+        },
+        {
+          "name": "gas_used",
+          "ordinal": 2,
+          "type_info": "Int4"
+        },
+        {
+          "name": "hash",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "number",
+          "ordinal": 4,
+          "type_info": "Int4"
+        },
+        {
+          "name": "parent_hash",
+          "ordinal": 5,
+          "type_info": "Text"
+        },
+        {
+          "name": "timestamp",
+          "ordinal": 6,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "total_difficulty!",
+          "ordinal": 7,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM\n                    blocks_next\n                WHERE\n                    hash = $1\n            "
   },
   "e3e2ba8332c056d960683e6f010adaf33805d3687a263fb0e10ec7460bc41ab0": {
     "describe": {
