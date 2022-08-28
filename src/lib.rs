@@ -13,6 +13,7 @@ mod issuance_breakdown;
 mod json_codecs;
 mod key_value_store;
 mod performance;
+mod phoenix;
 mod supply_projection;
 mod time;
 
@@ -27,4 +28,5 @@ pub use execution_chain::write_execution_heads_log;
 pub use execution_chain::write_execution_supply_deltas;
 pub use execution_chain::write_execution_supply_deltas_log;
 pub use issuance_breakdown::update_issuance_breakdown;
+pub use phoenix::monitor_critical_services;
 pub use supply_projection::update_supply_projection_inputs;

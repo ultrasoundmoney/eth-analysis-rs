@@ -56,6 +56,11 @@ pub fn get_log_perf() -> bool {
     get_env_bool("LOG_PERF")
 }
 
+#[cached]
+pub fn get_opsgenie_api_key() -> String {
+    get_env_var_unsafe("OPSGENIE_API_KEY")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
