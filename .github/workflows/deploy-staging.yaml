@@ -42,7 +42,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: set image cronjob/update-validator-rewards update-validator-rewards=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: set image cronjob/update-validator-rewards update-validator-rewards=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -61,7 +61,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: set image cronjob/update-supply-projection-inputs update-supply-projection-inputs=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: set image cronjob/update-supply-projection-inputs update-supply-projection-inputs=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -80,7 +80,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: set image cronjob/update-issuance-breakdown update-issuance-breakdown=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: set image cronjob/update-issuance-breakdown update-issuance-breakdown=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -99,7 +99,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: -n dev set image deployment/sync-execution-supply-deltas sync-execution-supply-deltas=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: -n dev set image deployment/sync-execution-supply-deltas sync-execution-supply-deltas=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -118,7 +118,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: set image deployment/sync-execution-supply-deltas sync-execution-supply-deltas=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: set image deployment/sync-execution-supply-deltas sync-execution-supply-deltas=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -137,7 +137,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: set image deployment/sync-beacon-states sync-beacon-states=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: set image deployment/sync-beacon-states sync-beacon-states=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -156,7 +156,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: -n dev set image deployment/sync-beacon-states sync-beacon-states=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: -n dev set image deployment/sync-beacon-states sync-beacon-states=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -175,7 +175,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: set image cronjob/update-effective-balance-sum update-effective-balance-sum=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: set image cronjob/update-effective-balance-sum update-effective-balance-sum=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -194,7 +194,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: -n dev set image deployment/sync-execution-blocks sync-execution-blocks=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: -n dev set image deployment/sync-execution-blocks sync-execution-blocks=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
         uses: steebchen/kubectl@v2.0.0
         with:
@@ -213,7 +213,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: set image deployment/sync-execution-blocks sync-execution-blocks=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: set image deployment/sync-execution-blocks sync-execution-blocks=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
         uses: steebchen/kubectl@v2.0.0
         with:
