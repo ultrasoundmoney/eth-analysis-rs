@@ -10,6 +10,7 @@ use crate::{
 pub const DIFFICULTY_PROGRESS_CACHE_KEY: &str = "difficulty-progress";
 
 #[derive(Debug, FromRow, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ProgressForDay {
     number: i32,
     timestamp: DateTime<Utc>,
