@@ -1,6 +1,7 @@
 mod balances;
 mod block_store;
 mod blocks;
+mod difficulty_progress;
 mod eth_prices;
 mod logs;
 mod merge_estimate;
@@ -13,6 +14,8 @@ pub use blocks::get_latest_block;
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
+pub use difficulty_progress::update_difficulty_progress;
+pub use difficulty_progress::DIFFICULTY_PROGRESS_CACHE_KEY;
 pub use eth_prices::get_eth_price_by_block;
 use lazy_static::lazy_static;
 pub use logs::write_heads_log as write_execution_heads_log;

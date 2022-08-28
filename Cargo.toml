@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+axum = "0.5"
 anyhow = "1"
 async-tungstenite = { version = "0.17", features = ["tokio-runtime"] }
 cached = "0.37"
