@@ -548,10 +548,10 @@ dependencies = [
 name = "eth-analysis"
 version = "0.1.0"
 dependencies = [
- "adler",
  "anyhow",
  "async-tungstenite",
  "axum",
+ "base64",
  "cached",
  "chrono",
  "console",
@@ -569,6 +569,7 @@ dependencies = [
  "serde_json",
  "serde_qs",
  "serial_test",
+ "sha1",
  "sqlx",
  "thiserror",
  "tokio 1.20.1",
@@ -1829,6 +1830,17 @@ name = "sha-1"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "028f48d513f9678cda28f6e4064755b3fbb2af6acd672f2c209b62323f7aea0f"
+dependencies = [
+ "cfg-if 1.0.0",
+ "cpufeatures",
+ "digest",
+]
+
+[[package]]
+name = "sha1"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c77f4e7f65455545c2153c1253d25056825e77ee2533f0e41deb65a93a34852f"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",

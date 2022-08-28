@@ -1,4 +1,3 @@
-use adler::Adler32;
 use axum::http::header;
 use axum::http::HeaderMap;
 use axum::http::HeaderValue;
@@ -9,8 +8,9 @@ use axum::Json;
 use axum::Router;
 use futures::TryStreamExt;
 use reqwest::StatusCode;
-
 use serde_json::Value;
+use sha1::Digest;
+use sha1::Sha1;
 use sqlx::Connection;
 use sqlx::PgConnection;
 use std::sync::Arc;
@@ -24,20 +24,25 @@ type StateExtension = Extension<Arc<State>>;
 
 #[derive(Debug)]
 struct Cache {
-    difficulty_by_day: RwLock<Option<Value>>,
+    difficulty_by_day: RwLock<Option<(Value, String)>>,
 }
 
 pub struct State {
     cache: Arc<Cache>,
 }
 
-async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoResponse {
-    let mut adler = Adler32::new();
+fn hash_from_u8(text: &[u8]) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(text);
+    let hash = hasher.finalize();
+    base64::encode(hash)
+}
 
+async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoResponse {
     let difficulty_by_day = state.cache.difficulty_by_day.read().unwrap();
     match &*difficulty_by_day {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some(difficulty_by_day) => {
+        Some((difficulty_by_day, hash)) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
@@ -45,11 +50,7 @@ async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoRespon
                 HeaderValue::from_static("max-age=60, stale-while-revalidate=43200"),
             );
 
-            let json_str = serde_json::to_vec(difficulty_by_day).unwrap();
-            adler.write_slice(&json_str);
-            let checksum = adler.checksum();
-            tracing::debug!("generated a json hash for etag: {}", checksum);
-            match etag::EntityTag::checked_strong(&checksum.to_string()) {
+            match etag::EntityTag::checked_strong(&hash) {
                 Err(err) => {
                     tracing::error!("failed to generate etag: {}", err);
                 }
@@ -76,9 +77,16 @@ pub async fn start_server() {
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
     tracing::debug!("warming up total difficulty progress cache");
-    let difficulty_by_day = RwLock::new(
-        key_value_store::get_value(&mut connection, DIFFICULTY_PROGRESS_CACHE_KEY).await,
-    );
+    let difficulty_by_day = {
+        let difficulty_by_day =
+            key_value_store::get_value(&mut connection, DIFFICULTY_PROGRESS_CACHE_KEY).await;
+        let pair = difficulty_by_day.map(|difficulty_by_day| {
+            let difficulty_by_day_hash =
+                hash_from_u8(&serde_json::to_vec(&difficulty_by_day).unwrap());
+            (difficulty_by_day, difficulty_by_day_hash)
+        });
+        RwLock::new(pair)
+    };
     let cache = Arc::new(Cache { difficulty_by_day });
 
     tracing::debug!("cache warming done");
@@ -102,12 +110,20 @@ pub async fn start_server() {
                     let next_difficulty_by_day =
                         key_value_store::get_value(&mut connection, DIFFICULTY_PROGRESS_CACHE_KEY)
                             .await;
+
                     let mut cache_wlock = shared_state_cache_update_clone
                         .cache
                         .difficulty_by_day
                         .write()
                         .unwrap();
-                    *cache_wlock = next_difficulty_by_day;
+
+                    let pair = next_difficulty_by_day.map(|next| {
+                        let difficulty_by_day_hash =
+                            hash_from_u8(&serde_json::to_vec(&next).unwrap());
+                        (next, difficulty_by_day_hash)
+                    });
+
+                    *cache_wlock = pair;
                 }
                 _ => (),
             }
