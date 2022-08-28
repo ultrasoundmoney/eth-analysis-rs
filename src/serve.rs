@@ -1,4 +1,7 @@
+use adler::Adler32;
 use axum::http::header;
+use axum::http::HeaderMap;
+use axum::http::HeaderValue;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Extension;
@@ -29,17 +32,37 @@ pub struct State {
 }
 
 async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoResponse {
+    let mut adler = Adler32::new();
+
     let difficulty_by_day = state.cache.difficulty_by_day.read().unwrap();
     match &*difficulty_by_day {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some(difficulty_by_day) => (
-            [(
+        Some(difficulty_by_day) => {
+            let mut headers = HeaderMap::new();
+
+            headers.insert(
                 header::CACHE_CONTROL,
-                "max-age=60, stale-while-revalidate=43200",
-            )],
-            Json(difficulty_by_day).into_response(),
-        )
-            .into_response(),
+                HeaderValue::from_static("max-age=60, stale-while-revalidate=43200"),
+            );
+
+            let json_str = serde_json::to_vec(difficulty_by_day).unwrap();
+            adler.write_slice(&json_str);
+            let checksum = adler.checksum();
+            tracing::debug!("generated a json hash for etag: {}", checksum);
+            match etag::EntityTag::checked_strong(&checksum.to_string()) {
+                Err(err) => {
+                    tracing::error!("failed to generate etag: {}", err);
+                }
+                Ok(entity_tag) => {
+                    headers.insert(
+                        header::ETAG,
+                        HeaderValue::from_str(entity_tag.tag()).unwrap(),
+                    );
+                }
+            }
+
+            (headers, Json(difficulty_by_day).into_response()).into_response()
+        }
     }
 }
 

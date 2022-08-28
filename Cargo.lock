@@ -535,9 +535,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "etag"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aec9f8918ec91bd35f3068e33da01b72a295ac8a7baacb0290b56ffeeec9d88f"
+dependencies = [
+ "str-buf",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "eth-analysis"
 version = "0.1.0"
 dependencies = [
+ "adler",
  "anyhow",
  "async-tungstenite",
  "axum",
@@ -546,6 +557,7 @@ dependencies = [
  "console",
  "csv",
  "dialoguer",
+ "etag",
  "eventsource",
  "futures",
  "lazy_static",
@@ -1995,6 +2007,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "str-buf"
+version = "2.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0873cb29201126440dcc78d0b1f5a13d917e78831778429a7920ca9c7f3dae1e"
+
+[[package]]
 name = "stringprep"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2666,6 +2684,12 @@ dependencies = [
  "winapi 0.2.8",
  "winapi-build",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "074914ea4eec286eb8d1fd745768504f420a1f7b7919185682a4a267bed7d2e7"
 
 [[package]]
 name = "zeroize"

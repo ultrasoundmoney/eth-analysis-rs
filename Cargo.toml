@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+adler = "1"
 axum = "0.5"
 anyhow = "1"
 async-tungstenite = { version = "0.17", features = ["tokio-runtime"] }
@@ -12,6 +13,7 @@ chrono = { version = "0.4", features = ["serde"] }
 console = "0.15"
 csv = "1"
 dialoguer = "0.10"
+etag = "3"
 eventsource = "0.5"
 futures = "0.3"
 lazy_static = "1"
