@@ -194,12 +194,12 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: set image deployment/sync-execution-blocks-dev sync-execution-blocks-dev=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+          command: -n dev set image deployment/sync-execution-blocks sync-execution-blocks=rg.nl-ams.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
-          command: rollout status deployment/sync-execution-blocks-dev
+          command: -n dev rollout status deployment/sync-execution-blocks
   deploy-sync-execution-blocks:
     name: deploy sync-execution-blocks
     runs-on: ubuntu-latest
