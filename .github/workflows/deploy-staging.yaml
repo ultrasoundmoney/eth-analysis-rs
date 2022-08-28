@@ -238,3 +238,22 @@ jobs:
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
           command: rollout status deployment/serve-fees-rs
+  deploy-update-total-difficulty-progress:
+    name: deploy update-total-difficulty-progress
+    runs-on: ubuntu-latest
+    needs: wait-on-build
+    steps:
+      - uses: actions/checkout@master
+      - name: Make short SHA available
+        id: vars
+        run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+      - name: deploy
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
+          command: set image cronjob/update-total-difficulty-progress update-total-difficulty-progress=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
+      - name: run job
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBE_CONFIG_DATA_STAG }}
+          command: create job --from=cronjob/update-total-difficulty-progress update-total-difficulty-progress-${{ steps.vars.outputs.sha_short }}
