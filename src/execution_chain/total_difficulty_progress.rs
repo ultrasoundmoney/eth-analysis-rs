@@ -17,6 +17,7 @@ struct ProgressForDay {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DifficultyProgress {
     block_number: u32,
     total_difficulty_by_day: Vec<ProgressForDay>,
@@ -39,7 +40,7 @@ async fn get_total_difficulty_by_day<'a>(executor: impl PgExecutor<'a>) -> Vec<P
     .unwrap()
 }
 
-pub async fn update_difficulty_progress() {
+pub async fn update_total_difficulty_progress() {
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
 
     let total_difficulty_by_day = get_total_difficulty_by_day(&mut connection).await;
