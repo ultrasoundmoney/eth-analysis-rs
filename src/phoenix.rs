@@ -104,7 +104,7 @@ async fn get_current_execution_delta_block_number() -> u32 {
         .block_number
 }
 
-const PHOENIX_MAX_LIFESPAN: Duration = Duration::from_secs(60 * 1);
+const PHOENIX_MAX_LIFESPAN: Duration = Duration::from_secs(60 * 6);
 const MIN_ALARM_WAIT: Duration = Duration::from_secs(60 * 4);
 
 pub async fn monitor_critical_services() {
