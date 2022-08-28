@@ -1,4 +1,4 @@
-use chrono::{DateTime, DurationRound, SubsecRound, Utc};
+use chrono::{DateTime, SubsecRound, Utc};
 use sqlx::{Acquire, PgConnection};
 
 use super::node::{BlockNumber, ExecutionNodeBlock};

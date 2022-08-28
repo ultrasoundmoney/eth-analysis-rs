@@ -1,6 +1,5 @@
 mod balances;
 mod block_store;
-mod blocks;
 mod eth_prices;
 mod logs;
 mod merge_estimate;
@@ -10,7 +9,6 @@ mod sync;
 mod total_difficulty_progress;
 
 pub use balances::{get_balances_sum, ExecutionBalancesSum};
-pub use blocks::get_latest_block;
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
