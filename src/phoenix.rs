@@ -133,7 +133,6 @@ pub async fn monitor_critical_services() {
         }
 
         let current_execution_delta_block_number = get_current_execution_delta_block_number().await;
-        tracing::debug!("{}", current_execution_delta_block_number);
         if last_seen_execution_delta_block_number != current_execution_delta_block_number {
             tracing::debug!( "last seen execution delta block number: {last_seen_execution_delta_block_number}, current block number: {current_execution_delta_block_number}, rebirth phoenix");
             execution_delta_phoenix_birth = SystemTime::now();
