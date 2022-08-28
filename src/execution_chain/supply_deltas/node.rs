@@ -105,7 +105,7 @@ pub async fn stream_supply_deltas_from_last<'a>(
     let last_synced_supply_delta_number = get_last_synced_supply_delta_number(executor)
         .await
         .unwrap_or(super::snapshot::SUPPLY_SNAPSHOT_15082718.block_number);
-    super::stream_supply_deltas_from(last_synced_supply_delta_number + 1)
+    stream_supply_deltas_from(last_synced_supply_delta_number + 1)
 }
 
 pub fn stream_supply_delta_chunks(
