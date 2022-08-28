@@ -42,6 +42,10 @@ async fn get_total_difficulty_by_day<'a>(executor: impl PgExecutor<'a>) -> Vec<P
 }
 
 pub async fn update_total_difficulty_progress() {
+    tracing_subscriber::fmt::init();
+
+    tracing::info!("updating total difficulty progress");
+
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
 
     let total_difficulty_by_day = get_total_difficulty_by_day(&mut connection).await;
