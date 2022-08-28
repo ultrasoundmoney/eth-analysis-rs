@@ -68,7 +68,8 @@ pub async fn update_difficulty_progress() {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, DurationRound};
+
+    use chrono::SubsecRound;
 
     use crate::{
         db_testing,
@@ -89,12 +90,19 @@ mod tests {
             hash: "0xtest".to_string(),
             number: 0,
             parent_hash: "0xparent".to_string(),
-            timestamp: Utc::now().duration_round(Duration::days(1)).unwrap(),
+            timestamp: Utc::now().trunc_subsecs(0),
             total_difficulty: 10,
         };
 
         block_store.store_block(&test_block, 0.0).await;
         let progress_by_day = get_total_difficulty_by_day(&mut *transaction).await;
-        assert_eq!(progress_by_day, vec![]);
+        assert_eq!(
+            progress_by_day,
+            vec![ProgressForDay {
+                number: 0,
+                timestamp: Utc::now().trunc_subsecs(0),
+                total_difficulty: 10.0
+            }]
+        );
     }
 }

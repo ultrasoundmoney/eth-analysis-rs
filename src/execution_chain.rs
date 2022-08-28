@@ -1,21 +1,19 @@
 mod balances;
 mod block_store;
 mod blocks;
-mod difficulty_progress;
 mod eth_prices;
 mod logs;
 mod merge_estimate;
 mod node;
 mod supply_deltas;
 mod sync;
+mod total_difficulty_progress;
 
 pub use balances::{get_balances_sum, ExecutionBalancesSum};
 pub use blocks::get_latest_block;
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-pub use difficulty_progress::update_difficulty_progress;
-pub use difficulty_progress::DIFFICULTY_PROGRESS_CACHE_KEY;
 pub use eth_prices::get_eth_price_by_block;
 use lazy_static::lazy_static;
 pub use logs::write_heads_log as write_execution_heads_log;
@@ -26,6 +24,8 @@ pub use supply_deltas::write_deltas as write_execution_supply_deltas;
 pub use supply_deltas::write_deltas_log as write_execution_supply_deltas_log;
 pub use supply_deltas::SupplyDelta;
 pub use sync::sync_blocks as sync_execution_blocks;
+pub use total_difficulty_progress::update_difficulty_progress;
+pub use total_difficulty_progress::DIFFICULTY_PROGRESS_CACHE_KEY;
 
 lazy_static! {
     pub static ref LONDON_HARDFORK_TIMESTAMP: DateTime<Utc> = Utc.timestamp(1628166822, 0);
