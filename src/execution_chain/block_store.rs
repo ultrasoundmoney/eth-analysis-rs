@@ -254,7 +254,7 @@ impl BlockStore<'_> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
+    use chrono::{Duration, DurationRound, Utc};
 
     use super::*;
     use crate::db_testing::get_test_db;
@@ -267,7 +267,7 @@ mod tests {
             hash: "0xtest".to_string(),
             number: 0,
             parent_hash: "0xparent".to_string(),
-            timestamp: Utc::now(),
+            timestamp: Utc::now().duration_round(Duration::seconds(1)).unwrap(),
             total_difficulty: 0,
         }
     }
