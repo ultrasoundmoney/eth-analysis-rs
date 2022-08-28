@@ -245,13 +245,15 @@ async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Head> {
     historic_heads_stream.chain(heads_stream)
 }
 
+const EXECUTION_BLOCK_NUMBER_AUG_1ST: u32 = 15253306;
+
 async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = Head> {
     let mut connection = db.acquire().await.unwrap();
     let mut block_store = BlockStore::new(&mut *connection);
     let next_block_to_sync = block_store
         .get_last_block_number()
         .await
-        .map_or(15253306, |number| number + 1);
+        .map_or(EXECUTION_BLOCK_NUMBER_AUG_1ST, |number| number + 1);
     stream_heads_from(next_block_to_sync).await
 }
 
@@ -314,6 +316,7 @@ pub async fn sync_blocks() {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
