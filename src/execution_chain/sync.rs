@@ -271,6 +271,8 @@ pub async fn sync_blocks() {
         .await
         .unwrap();
 
+    sqlx::migrate!().run(&db_pool).await.unwrap();
+
     let mut execution_node = ExecutionNode::connect().await;
 
     let mut connection = db_pool.acquire().await.unwrap();
