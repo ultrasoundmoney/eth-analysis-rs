@@ -102,7 +102,7 @@ mod tests {
             progress_by_day,
             vec![ProgressForDay {
                 number: 0,
-                timestamp: Utc::now().trunc_subsecs(0),
+                timestamp: test_block.timestamp,
                 total_difficulty: 10.0
             }]
         );
