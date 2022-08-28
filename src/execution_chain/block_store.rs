@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, DurationRound, SubsecRound, Utc};
 use sqlx::{Acquire, PgConnection};
 
 use super::node::{BlockNumber, ExecutionNodeBlock};
@@ -244,7 +244,7 @@ impl BlockStore<'_> {
         .bind(block.hash.clone())
         .bind(block.number as i32)
         .bind(block.parent_hash.clone())
-        .bind(block.timestamp)
+        .bind(block.timestamp.trunc_subsecs(0))
         .bind(block.total_difficulty.to_string())
         .execute(self.connection.acquire().await.unwrap())
         .await
