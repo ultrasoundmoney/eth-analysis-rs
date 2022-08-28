@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::config;
-use crate::execution_chain::DIFFICULTY_PROGRESS_CACHE_KEY;
+use crate::execution_chain::TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY;
 use crate::key_value_store;
 
 type StateExtension = Extension<Arc<State>>;
@@ -79,7 +79,7 @@ pub async fn start_server() {
     tracing::debug!("warming up total difficulty progress cache");
     let difficulty_by_day = {
         let difficulty_by_day =
-            key_value_store::get_value(&mut connection, DIFFICULTY_PROGRESS_CACHE_KEY).await;
+            key_value_store::get_value(&mut connection, TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY).await;
         let pair = difficulty_by_day.map(|difficulty_by_day| {
             let difficulty_by_day_hash =
                 hash_from_u8(&serde_json::to_vec(&difficulty_by_day).unwrap());
@@ -105,11 +105,13 @@ pub async fn start_server() {
         while let Some(notification) = notification_stream.try_next().await.unwrap() {
             let payload = notification.payload();
             match payload {
-                DIFFICULTY_PROGRESS_CACHE_KEY => {
+                TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY => {
                     tracing::debug!("total difficulty progress cache update");
-                    let next_difficulty_by_day =
-                        key_value_store::get_value(&mut connection, DIFFICULTY_PROGRESS_CACHE_KEY)
-                            .await;
+                    let next_difficulty_by_day = key_value_store::get_value(
+                        &mut connection,
+                        TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY,
+                    )
+                    .await;
 
                     let mut cache_wlock = shared_state_cache_update_clone
                         .cache

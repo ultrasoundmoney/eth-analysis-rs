@@ -7,7 +7,7 @@ use crate::{
     key_value_store::{self, KeyValue},
 };
 
-pub const DIFFICULTY_PROGRESS_CACHE_KEY: &str = "difficulty-progress";
+pub const TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY: &str = "total-difficulty-progress";
 
 #[derive(Debug, FromRow, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,13 +59,13 @@ pub async fn update_total_difficulty_progress() {
     key_value_store::set_value(
         &mut connection,
         KeyValue {
-            key: DIFFICULTY_PROGRESS_CACHE_KEY,
+            key: TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY,
             value: serde_json::to_value(&total_difficulty_progress).unwrap(),
         },
     )
     .await;
 
-    caching::publish_cache_update(&mut connection, DIFFICULTY_PROGRESS_CACHE_KEY).await;
+    caching::publish_cache_update(&mut connection, TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY).await;
 }
 
 #[cfg(test)]
