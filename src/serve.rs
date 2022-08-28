@@ -1,3 +1,4 @@
+use axum::http::header;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Extension;
@@ -31,7 +32,14 @@ async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoRespon
     let difficulty_by_day = state.cache.difficulty_by_day.read().unwrap();
     match &*difficulty_by_day {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some(difficulty_by_day) => Json(difficulty_by_day).into_response(),
+        Some(difficulty_by_day) => (
+            [(
+                header::CACHE_CONTROL,
+                "max-age=60, stale-while-revalidate=43200",
+            )],
+            Json(difficulty_by_day).into_response(),
+        )
+            .into_response(),
     }
 }
 
