@@ -47,7 +47,7 @@ async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoRespon
 
             headers.insert(
                 header::CACHE_CONTROL,
-                HeaderValue::from_static("max-age=60, stale-while-revalidate=43200"),
+                HeaderValue::from_static("max-age=600, stale-while-revalidate=86400"),
             );
 
             match etag::EntityTag::checked_strong(&hash) {
