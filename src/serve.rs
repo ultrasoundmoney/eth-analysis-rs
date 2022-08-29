@@ -49,10 +49,10 @@ fn hash_from_json(v: &Value) -> String {
 }
 
 async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
-    let eth_supply = state.cache.merge_estimate.read().unwrap();
+    let eth_supply = state.cache.eth_supply.read().unwrap();
     match &*eth_supply {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some(merge_estimate) => {
+        Some(eth_supply) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
@@ -60,11 +60,11 @@ async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
                 HeaderValue::from_static("max-age=4, stale-while-revalidate=60"),
             );
 
-            let hash = hash_from_json(&merge_estimate);
+            let hash = hash_from_json(&eth_supply);
             let etag = EntityTag::strong(&hash);
             headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
 
-            (headers, Json(merge_estimate).into_response()).into_response()
+            (headers, Json(eth_supply).into_response()).into_response()
         }
     }
 }
