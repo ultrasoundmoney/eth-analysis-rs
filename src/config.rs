@@ -8,7 +8,17 @@ pub fn get_env_var(key: &str) -> Option<String> {
         Err(err) => panic!("{}", err),
         Ok(var) => Some(var),
     };
-    tracing::debug!("env var {key}: {var:?}");
+
+    if let Some(ref existing_var) = var {
+        if ["DATABASE_URL"].contains(&key) {
+            tracing::debug!("env var {key}: ****")
+        } else {
+            tracing::debug!("env var {key}: {existing_var}");
+        }
+    } else {
+        tracing::debug!("env var {key} requested but not found")
+    };
+
     var
 }
 
