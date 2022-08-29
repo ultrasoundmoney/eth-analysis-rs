@@ -132,7 +132,6 @@ async fn insert_block<'a>(executor: impl PgExecutor<'a>, gas_used: i64, base_fee
 
 #[cfg(test)]
 mod tests {
-    use crate::config;
     use sqlx::Connection;
     use sqlx::PgConnection;
 
@@ -140,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn burn_total_all_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         insert_block(&mut transaction, 10, 10).await;
@@ -152,7 +151,7 @@ mod tests {
 
     #[tokio::test]
     async fn burn_total_limited_time_frame_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         insert_block(&mut transaction, 10, 10).await;
