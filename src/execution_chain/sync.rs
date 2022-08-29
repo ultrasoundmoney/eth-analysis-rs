@@ -151,8 +151,8 @@ async fn sync_head(
 
 #[derive(Clone)]
 pub struct BlockRange {
-    greater_than_or_equal: BlockNumber,
-    less_than_or_equal: BlockNumber,
+    pub greater_than_or_equal: BlockNumber,
+    pub less_than_or_equal: BlockNumber,
 }
 
 impl BlockRange {
@@ -245,7 +245,7 @@ async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Head> {
     historic_heads_stream.chain(heads_stream)
 }
 
-const EXECUTION_BLOCK_NUMBER_AUG_1ST: u32 = 15253306;
+pub const EXECUTION_BLOCK_NUMBER_AUG_1ST: u32 = 15253306;
 
 async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = Head> {
     let mut connection = db.acquire().await.unwrap();
