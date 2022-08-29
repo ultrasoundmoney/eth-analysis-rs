@@ -17,6 +17,7 @@ pub use eth_prices::get_eth_price_by_block;
 pub use export_blocks::write_blocks_from_august;
 use lazy_static::lazy_static;
 pub use logs::write_heads_log as write_execution_heads_log;
+pub use merge_estimate::MERGE_ESTIMATE_CACHE_KEY;
 pub use node::{stream_new_heads, ExecutionNode};
 pub use supply_deltas::stream_supply_delta_chunks;
 pub use supply_deltas::sync_deltas as sync_execution_supply_deltas;

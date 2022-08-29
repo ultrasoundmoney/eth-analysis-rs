@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::config;
+use crate::execution_chain::MERGE_ESTIMATE_CACHE_KEY;
 use crate::execution_chain::TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY;
 use crate::key_value_store;
 
@@ -25,7 +26,8 @@ type StateExtension = Extension<Arc<State>>;
 
 #[derive(Debug)]
 struct Cache {
-    difficulty_by_day: RwLock<Option<(Value, String)>>,
+    difficulty_by_day: RwLock<Option<Value>>,
+    merge_estimate: RwLock<Option<Value>>,
 }
 
 pub struct State {
@@ -101,7 +103,15 @@ pub async fn start_server() {
             key_value_store::get_value(&mut connection, TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY).await;
         RwLock::new(difficulty_by_day)
     };
-    let cache = Arc::new(Cache { difficulty_by_day });
+    let merge_estimate = {
+        let merge_estimate =
+            key_value_store::get_value(&mut connection, MERGE_ESTIMATE_CACHE_KEY).await;
+        RwLock::new(merge_estimate)
+    };
+    let cache = Arc::new(Cache {
+        difficulty_by_day,
+        merge_estimate,
+    });
 
     tracing::debug!("cache warming done");
 
@@ -134,7 +144,17 @@ pub async fn start_server() {
                         .unwrap();
                     *cache_wlock = difficulty_by_day;
                 }
+                MERGE_ESTIMATE_CACHE_KEY => {
+                    tracing::debug!("merge estimate cache update");
+                    let merge_estimate =
+                        key_value_store::get_value(&mut connection, MERGE_ESTIMATE_CACHE_KEY).await;
 
+                    let mut cache_wlock = shared_state_cache_update_clone
+                        .cache
+                        .merge_estimate
+                        .write()
+                        .unwrap();
+                    *cache_wlock = merge_estimate;
                 }
                 _ => (),
             }
@@ -146,6 +166,7 @@ pub async fn start_server() {
             "/api/v2/fees/total-difficulty-progress",
             get(get_total_difficulty_progress),
         )
+        .route("/api/v2/fees/merge-estimate", get(get_merge_estimate))
         .route("/healthz", get(|| async { StatusCode::OK }))
         .layer(Extension(shared_state));
 

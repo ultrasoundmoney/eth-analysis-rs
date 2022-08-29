@@ -12,7 +12,7 @@ use super::node::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
 
 const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
 
-const MERGE_ESTIMATE_CACHE_KEY: &str = "merge-estimate";
+pub const MERGE_ESTIMATE_CACHE_KEY: &str = "merge-estimate";
 
 const AVERAGE_BLOCK_TIME_ESTIMATE: i64 = 13500;
 
