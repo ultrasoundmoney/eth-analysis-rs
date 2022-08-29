@@ -8,7 +8,7 @@ use crate::execution_chain::ExecutionBalancesSum;
 use crate::key_value_store::{self, KeyValueStr};
 use crate::performance::TimedExt;
 
-const ETH_SUPPLY_PARTS_CACHE_KEY: &str = "eth-supply-parts";
+pub const ETH_SUPPLY_PARTS_CACHE_KEY: &str = "eth-supply-parts";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
