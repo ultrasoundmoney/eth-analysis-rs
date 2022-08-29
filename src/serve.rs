@@ -6,6 +6,7 @@ use axum::routing::get;
 use axum::Extension;
 use axum::Json;
 use axum::Router;
+use etag::EntityTag;
 use futures::TryStreamExt;
 use reqwest::StatusCode;
 use serde_json::Value;
@@ -38,11 +39,16 @@ fn hash_from_u8(text: &[u8]) -> String {
     base64::encode(hash)
 }
 
+fn hash_from_json(v: &Value) -> String {
+    let v_bytes = serde_json::to_vec(v).unwrap();
+    hash_from_u8(&v_bytes)
+}
+
 async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoResponse {
     let difficulty_by_day = state.cache.difficulty_by_day.read().unwrap();
     match &*difficulty_by_day {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some((difficulty_by_day, hash)) => {
+        Some(difficulty_by_day) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
@@ -50,19 +56,32 @@ async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoRespon
                 HeaderValue::from_static("max-age=600, stale-while-revalidate=86400"),
             );
 
-            match etag::EntityTag::checked_strong(&hash) {
-                Err(err) => {
-                    tracing::error!("failed to generate etag: {}", err);
-                }
-                Ok(entity_tag) => {
-                    headers.insert(
-                        header::ETAG,
-                        HeaderValue::from_str(entity_tag.tag()).unwrap(),
-                    );
-                }
-            }
+            let hash = hash_from_json(&difficulty_by_day);
+            let etag = EntityTag::strong(&hash);
+            headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
 
             (headers, Json(difficulty_by_day).into_response()).into_response()
+        }
+    }
+}
+
+async fn get_merge_estimate(state: StateExtension) -> impl IntoResponse {
+    let merge_estimate = state.cache.merge_estimate.read().unwrap();
+    match &*merge_estimate {
+        None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        Some(merge_estimate) => {
+            let mut headers = HeaderMap::new();
+
+            headers.insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("max-age=4, stale-while-revalidate=14400"),
+            );
+
+            let hash = hash_from_json(&merge_estimate);
+            let etag = EntityTag::strong(&hash);
+            headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
+
+            (headers, Json(merge_estimate).into_response()).into_response()
         }
     }
 }
@@ -80,12 +99,7 @@ pub async fn start_server() {
     let difficulty_by_day = {
         let difficulty_by_day =
             key_value_store::get_value(&mut connection, TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY).await;
-        let pair = difficulty_by_day.map(|difficulty_by_day| {
-            let difficulty_by_day_hash =
-                hash_from_u8(&serde_json::to_vec(&difficulty_by_day).unwrap());
-            (difficulty_by_day, difficulty_by_day_hash)
-        });
-        RwLock::new(pair)
+        RwLock::new(difficulty_by_day)
     };
     let cache = Arc::new(Cache { difficulty_by_day });
 
@@ -107,7 +121,7 @@ pub async fn start_server() {
             match payload {
                 TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY => {
                     tracing::debug!("total difficulty progress cache update");
-                    let next_difficulty_by_day = key_value_store::get_value(
+                    let difficulty_by_day = key_value_store::get_value(
                         &mut connection,
                         TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY,
                     )
@@ -118,14 +132,9 @@ pub async fn start_server() {
                         .difficulty_by_day
                         .write()
                         .unwrap();
+                    *cache_wlock = difficulty_by_day;
+                }
 
-                    let pair = next_difficulty_by_day.map(|next| {
-                        let difficulty_by_day_hash =
-                            hash_from_u8(&serde_json::to_vec(&next).unwrap());
-                        (next, difficulty_by_day_hash)
-                    });
-
-                    *cache_wlock = pair;
                 }
                 _ => (),
             }
