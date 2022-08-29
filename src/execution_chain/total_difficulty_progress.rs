@@ -78,7 +78,7 @@ pub async fn update_total_difficulty_progress() {
 
     // Replace today's total difficulty with the most current one, this let's us report that our
     // graph is updated every 10 min.
-    total_difficulty_by_day.remove(total_difficulty_by_day.len());
+    total_difficulty_by_day.pop();
     total_difficulty_by_day.push(current_total_difficulty);
 
     let total_difficulty_progress = DifficultyProgress {
