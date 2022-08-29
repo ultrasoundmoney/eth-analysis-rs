@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, SubsecRound, Utc};
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -35,7 +35,7 @@ pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
     let blocks_left =
         ((TOTAL_TERMINAL_DIFFICULTY - block.total_difficulty) / block.difficulty as u128) as u32;
     let time_left = Duration::milliseconds(AVERAGE_BLOCK_TIME_ESTIMATE).mul(blocks_left as i32);
-    let estimated_date_time = Utc::now() + time_left;
+    let estimated_date_time = Utc::now().trunc_subsecs(0) + time_left;
 
     let merge_ttd_countdown = MergeEstimate {
         block_number: block.number,
