@@ -24,6 +24,7 @@ struct MergeEstimate {
     #[serde(serialize_with = "to_u64_string")]
     difficulty: Difficulty,
     estimated_date_time: DateTime<Utc>,
+    timestamp: DateTime<Utc>,
     #[serde(serialize_with = "to_u128_string")]
     total_difficulty: TotalDifficulty,
 }
@@ -41,6 +42,7 @@ pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
         blocks_left,
         difficulty: block.difficulty,
         estimated_date_time,
+        timestamp: block.timestamp,
         total_difficulty: block.total_difficulty,
     };
 
