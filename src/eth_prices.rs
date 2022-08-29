@@ -31,6 +31,9 @@ pub async fn heal_eth_prices() {
     tracing_subscriber::fmt::init();
 
     tracing::debug!("healing missing eth prices");
+    let max_distance_in_minutes: i64 = std::env::args().collect::<Vec<String>>()[1]
+        .parse::<i64>()
+        .unwrap_or(10);
 
     tracing::debug!("getting all eth prices");
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
@@ -75,8 +78,11 @@ pub async fn heal_eth_prices() {
         if !known_minutes.contains(&timestamp) {
             let timestamp_date_time = Utc.timestamp(timestamp, 0);
             tracing::debug!("missing minute: {}", timestamp_date_time);
-            let price_usd =
-                ftx::get_closest_price_by_minute(timestamp_date_time, Duration::minutes(5)).await;
+            let price_usd = ftx::get_closest_price_by_minute(
+                timestamp_date_time,
+                Duration::minutes(max_distance_in_minutes),
+            )
+            .await;
             match price_usd {
                 None => {
                     tracing::debug!(
