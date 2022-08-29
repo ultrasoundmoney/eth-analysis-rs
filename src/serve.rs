@@ -188,7 +188,8 @@ pub async fn start_server() {
                 ETH_SUPPLY_PARTS_CACHE_KEY => {
                     tracing::debug!("eth supply cache update");
                     let eth_supply =
-                        key_value_store::get_value(&mut connection, MERGE_ESTIMATE_CACHE_KEY).await;
+                        key_value_store::get_value(&mut connection, ETH_SUPPLY_PARTS_CACHE_KEY)
+                            .await;
 
                     let mut cache_wlock = shared_state_cache_update_clone
                         .cache
