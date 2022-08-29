@@ -559,6 +559,7 @@ dependencies = [
  "dialoguer",
  "etag",
  "eventsource",
+ "format-url",
  "futures",
  "lazy_static",
  "num-bigint",
@@ -641,6 +642,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fc25a87fa4fd2094bffb06925852034d90a17f0d1e05197d4956d3555752191"
 dependencies = [
  "matches",
+ "percent-encoding",
+]
+
+[[package]]
+name = "format-url"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1fbdc38b1a912f18ce325ccef959d0171bc873cb83c801479822330e4424b98"
+dependencies = [
  "percent-encoding",
 ]
 
