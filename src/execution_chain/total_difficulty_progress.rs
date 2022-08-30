@@ -29,12 +29,16 @@ async fn get_total_difficulty_by_day<'a>(executor: impl PgExecutor<'a>) -> Vec<P
     sqlx::query_as::<_, ProgressForDay>(
         "
             SELECT DISTINCT ON
-                (timestamp::DATE) timestamp, total_difficulty::FLOAT8, number
+                (DATE_TRUNC('hour', timestamp)) timestamp,
+                total_difficulty::FLOAT8,
+                number
             FROM
                 blocks_next
             WHERE
                 timestamp >= '2022-08-01'::DATE
-            ORDER BY timestamp::DATE ASC
+            ORDER BY
+                DATE_TRUNC('hour', timestamp),
+                timestamp ASC
         ",
     )
     .fetch_all(executor)
@@ -46,11 +50,11 @@ async fn get_current_total_difficulty<'a>(executor: impl PgExecutor<'a>) -> Prog
     sqlx::query_as::<_, ProgressForDay>(
         "
             SELECT
-                timestamp, total_difficulty::FLOAT8, number
+                timestamp,
+                total_difficulty::FLOAT8,
+                number
             FROM
                 blocks_next
-            WHERE
-                timestamp::DATE = NOW()::DATE
             ORDER BY
                 timestamp DESC
             LIMIT 1
