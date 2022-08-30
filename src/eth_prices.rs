@@ -31,8 +31,10 @@ pub async fn heal_eth_prices() {
     tracing_subscriber::fmt::init();
 
     tracing::debug!("healing missing eth prices");
-    let max_distance_in_minutes: i64 = std::env::args().collect::<Vec<String>>()[1]
-        .parse::<i64>()
+    let max_distance_in_minutes: i64 = std::env::args()
+        .collect::<Vec<String>>()
+        .get(1)
+        .and_then(|str| str.parse::<i64>().ok())
         .unwrap_or(10);
 
     tracing::debug!("getting all eth prices");
