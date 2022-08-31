@@ -23,11 +23,14 @@ use crate::key_value_store;
 
 type StateExtension = Extension<Arc<State>>;
 
+type Hash = String;
+type CachedValue = RwLock<Option<(Value, Hash)>>;
+
 #[derive(Debug)]
 struct Cache {
-    difficulty_by_day: RwLock<Option<Value>>,
-    eth_supply: RwLock<Option<Value>>,
-    merge_estimate: RwLock<Option<Value>>,
+    total_difficulty_progress: CachedValue,
+    eth_supply_parts: CachedValue,
+    merge_estimate: CachedValue,
 }
 
 pub struct State {
@@ -47,10 +50,10 @@ fn hash_from_json(v: &Value) -> String {
 }
 
 async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
-    let eth_supply = state.cache.eth_supply.read().unwrap();
+    let eth_supply = state.cache.eth_supply_parts.read().unwrap();
     match &*eth_supply {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some(eth_supply) => {
+        Some((eth_supply, hash)) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
@@ -58,7 +61,6 @@ async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
                 HeaderValue::from_static("max-age=4, stale-while-revalidate=60"),
             );
 
-            let hash = hash_from_json(&eth_supply);
             let etag = EntityTag::strong(&hash);
             headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
 
@@ -68,10 +70,10 @@ async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
 }
 
 async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoResponse {
-    let difficulty_by_day = state.cache.difficulty_by_day.read().unwrap();
+    let difficulty_by_day = state.cache.total_difficulty_progress.read().unwrap();
     match &*difficulty_by_day {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some(difficulty_by_day) => {
+        Some((difficulty_by_day, hash)) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
@@ -79,7 +81,6 @@ async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoRespon
                 HeaderValue::from_static("max-age=600, stale-while-revalidate=86400"),
             );
 
-            let hash = hash_from_json(&difficulty_by_day);
             let etag = EntityTag::strong(&hash);
             headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
 
@@ -92,7 +93,7 @@ async fn get_merge_estimate(state: StateExtension) -> impl IntoResponse {
     let merge_estimate = state.cache.merge_estimate.read().unwrap();
     match &*merge_estimate {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some(merge_estimate) => {
+        Some((merge_estimate, hash)) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
@@ -100,13 +101,26 @@ async fn get_merge_estimate(state: StateExtension) -> impl IntoResponse {
                 HeaderValue::from_static("max-age=4, stale-while-revalidate=14400"),
             );
 
-            let hash = hash_from_json(&merge_estimate);
             let etag = EntityTag::strong(&hash);
             headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
 
             (headers, Json(merge_estimate).into_response()).into_response()
         }
     }
+}
+
+async fn get_value_hash_pair(
+    connection: &mut PgConnection,
+    key: &CacheKey<'_>,
+) -> Option<(Value, String)> {
+    let value = key_value_store::get_value(connection, &key.to_string()).await?;
+    let hash = hash_from_json(&value);
+    Some((value, hash))
+}
+
+async fn get_value_hash_lock(connection: &mut PgConnection, key: &CacheKey<'_>) -> CachedValue {
+    let pair = get_value_hash_pair(connection, key).await;
+    RwLock::new(pair)
 }
 
 pub async fn start_server() {
@@ -119,24 +133,13 @@ pub async fn start_server() {
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
     tracing::debug!("warming up total difficulty progress cache");
-    let difficulty_by_day = {
-        let difficulty_by_day =
-            key_value_store::get_value(&mut connection, TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY).await;
-        RwLock::new(difficulty_by_day)
-    };
-    let merge_estimate = {
-        let merge_estimate =
-            key_value_store::get_value(&mut connection, MERGE_ESTIMATE_CACHE_KEY).await;
-        RwLock::new(merge_estimate)
-    };
-    let eth_supply = {
-        let eth_supply =
-            key_value_store::get_value(&mut connection, ETH_SUPPLY_PARTS_CACHE_KEY).await;
-        RwLock::new(eth_supply)
-    };
+    let total_difficulty_progress =
+        get_value_hash_lock(&mut connection, &CacheKey::TotalDifficultyProgress).await;
+    let merge_estimate = get_value_hash_lock(&mut connection, &CacheKey::MergeEstimate).await;
+    let eth_supply_parts = get_value_hash_lock(&mut connection, &CacheKey::EthSupplyParts).await;
     let cache = Arc::new(Cache {
-        difficulty_by_day,
-        eth_supply,
+        total_difficulty_progress,
+        eth_supply_parts,
         merge_estimate,
     });
 
@@ -159,45 +162,46 @@ pub async fn start_server() {
             match payload_cache_key {
                 CacheKey::TotalDifficultyProgress => {
                     tracing::debug!("total difficulty progress cache update");
-                    let difficulty_by_day = key_value_store::get_value(
-                        &mut connection,
-                        TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY,
-                    )
-                    .await;
+                    let pair =
+                        get_value_hash_pair(&mut connection, &CacheKey::TotalDifficultyProgress)
+                            .await;
 
                     let mut cache_wlock = shared_state_cache_update_clone
                         .cache
-                        .difficulty_by_day
+                        .total_difficulty_progress
                         .write()
                         .unwrap();
-                    *cache_wlock = difficulty_by_day;
+
+                    *cache_wlock = pair;
                 }
                 CacheKey::MergeEstimate => {
                     tracing::debug!("merge estimate cache update");
-                    let merge_estimate =
-                        key_value_store::get_value(&mut connection, MERGE_ESTIMATE_CACHE_KEY).await;
+                    let pair = get_value_hash_pair(&mut connection, &CacheKey::MergeEstimate).await;
 
                     let mut cache_wlock = shared_state_cache_update_clone
                         .cache
                         .merge_estimate
                         .write()
                         .unwrap();
-                    *cache_wlock = merge_estimate;
+
+                    *cache_wlock = pair;
                 }
                 CacheKey::EthSupplyParts => {
                     tracing::debug!("eth supply cache update");
-                    let eth_supply =
-                        key_value_store::get_value(&mut connection, ETH_SUPPLY_PARTS_CACHE_KEY)
-                            .await;
+                    let pair =
+                        get_value_hash_pair(&mut connection, &CacheKey::EthSupplyParts).await;
 
                     let mut cache_wlock = shared_state_cache_update_clone
                         .cache
-                        .eth_supply
+                        .eth_supply_parts
                         .write()
                         .unwrap();
-                    *cache_wlock = eth_supply;
+
+                    *cache_wlock = pair;
                 }
-                _ => (),
+                key => {
+                    tracing::debug!("received unsupported cache key: {key:?}, skipping");
+                }
             }
         }
     });
