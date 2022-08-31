@@ -1,13 +1,72 @@
+use std::fmt::Display;
+
 use sqlx::PgExecutor;
 
-pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: &str) {
-    tracing::debug!("publishing cache update: {}", key);
+#[derive(Debug)]
+pub enum CacheKey<'a> {
+    Custom(&'a str),
+    EffectiveBalanceSum,
+    EthSupplyParts,
+    IssuanceBreakdown,
+    MergeEstimate,
+    SupplyProjectionInputs,
+    TotalDifficultyProgress,
+    ValidatorRewards,
+}
+
+impl Display for CacheKey<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Custom(key) => write!(f, "{key}"),
+            Self::EffectiveBalanceSum => write!(f, "effective-balance-sum"),
+            Self::EthSupplyParts => write!(f, "eth-supply-parts"),
+            Self::IssuanceBreakdown => write!(f, "issuance-breakdown"),
+            Self::MergeEstimate => write!(f, "merge-estimate"),
+            Self::SupplyProjectionInputs => write!(f, "supply-projection-inputs"),
+            Self::TotalDifficultyProgress => write!(f, "total-difficulty-progress"),
+            Self::ValidatorRewards => write!(f, "validator-rewards"),
+        }
+    }
+}
+
+impl<'a> CacheKey<'a> {
+    pub fn to_db_key(&self) -> &'a str {
+        match self {
+            &Self::Custom(key) => key,
+            &Self::EffectiveBalanceSum => "effective-balance-sum",
+            &Self::EthSupplyParts => "eth-supply-parts",
+            &Self::IssuanceBreakdown => "issuance-breakdown",
+            &Self::MergeEstimate => "merge-estimate",
+            &Self::SupplyProjectionInputs => "supply-projection-inputs",
+            &Self::TotalDifficultyProgress => "total-difficulty-progress",
+            &Self::ValidatorRewards => "validator-rewards",
+        }
+    }
+}
+
+impl<'a> From<&'a str> for CacheKey<'a> {
+    fn from(key: &'a str) -> Self {
+        match key {
+            "effective-balance-sum" => Self::EffectiveBalanceSum,
+            "eth-supply-parts" => Self::EthSupplyParts,
+            "issuance-breakdown" => Self::IssuanceBreakdown,
+            "merge-estimate" => Self::MergeEstimate,
+            "supply-projection-inputs" => Self::SupplyProjectionInputs,
+            "total-difficulty-progress" => Self::TotalDifficultyProgress,
+            "validator-rewards" => Self::ValidatorRewards,
+            key => Self::Custom(key),
+        }
+    }
+}
+
+pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey<'_>) {
+    tracing::debug!("publishing cache update: {}", key.to_string());
 
     sqlx::query!(
         "
             SELECT pg_notify('cache-update', $1)
         ",
-        key
+        key.to_string()
     )
     .execute(executor)
     .await
@@ -33,7 +92,7 @@ mod tests {
         let pool = sqlx::PgPool::connect(&config::get_db_url()).await.unwrap();
 
         let test_key = "test-key";
-        publish_cache_update(&pool, test_key).await;
+        publish_cache_update(&pool, CacheKey::Custom("test-key")).await;
 
         let notification = notification_future.await.unwrap();
 

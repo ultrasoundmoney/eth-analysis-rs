@@ -5,13 +5,13 @@ use serde::Serialize;
 use sqlx::{postgres::PgPoolOptions, Decode};
 
 use crate::{
-    beacon_chain, caching, config,
+    beacon_chain,
+    caching::{self, CacheKey},
+    config,
     eth_units::GWEI_PER_ETH_F64,
     glassnode::{self, GlassnodeDataPoint},
     key_value_store::{self, KeyValue},
 };
-
-const SUPPLY_PROJECTION_INPUTS_CACHE_KEY: &str = "supply-projection-inputs";
 
 #[derive(Decode)]
 pub struct GweiInTimeRow {
@@ -141,19 +141,19 @@ pub async fn update_supply_projection_inputs() {
     key_value_store::set_value(
         &pool,
         KeyValue {
-            key: SUPPLY_PROJECTION_INPUTS_CACHE_KEY,
-            value: serde_json::to_value(supply_projetion_inputs).unwrap(),
+            key: &CacheKey::SupplyProjectionInputs.to_db_key(),
+            value: &serde_json::to_value(supply_projetion_inputs).unwrap(),
         },
     )
     .await;
 
     tracing::debug!("stored fresh projection inputs");
 
-    caching::publish_cache_update(&pool, SUPPLY_PROJECTION_INPUTS_CACHE_KEY).await;
+    caching::publish_cache_update(&pool, CacheKey::SupplyProjectionInputs).await;
 
     tracing::debug!(
         "published {} cache update",
-        SUPPLY_PROJECTION_INPUTS_CACHE_KEY
+        CacheKey::SupplyProjectionInputs
     );
 
     tracing::info!("done updating supply projection inputs")

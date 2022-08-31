@@ -2,13 +2,11 @@ use serde::Serialize;
 use sqlx::{Acquire, PgConnection};
 
 use crate::beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum};
-use crate::caching;
+use crate::caching::{self, CacheKey};
 use crate::execution_chain;
 use crate::execution_chain::ExecutionBalancesSum;
 use crate::key_value_store::{self, KeyValueStr};
 use crate::performance::TimedExt;
-
-pub const ETH_SUPPLY_PARTS_CACHE_KEY: &str = "eth-supply-parts";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,7 +39,7 @@ pub async fn update(executor: &mut PgConnection, beacon_balances_sum: BeaconBala
     key_value_store::set_value_str(
         executor.acquire().await.unwrap(),
         KeyValueStr {
-            key: ETH_SUPPLY_PARTS_CACHE_KEY,
+            key: &CacheKey::EthSupplyParts.to_string(),
             // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
             // as string however.
             value_str: &serde_json::to_string(&eth_supply_parts).unwrap(),
@@ -49,5 +47,5 @@ pub async fn update(executor: &mut PgConnection, beacon_balances_sum: BeaconBala
     )
     .await;
 
-    caching::publish_cache_update(executor, ETH_SUPPLY_PARTS_CACHE_KEY).await;
+    caching::publish_cache_update(executor, CacheKey::EthSupplyParts).await;
 }

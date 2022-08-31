@@ -17,10 +17,8 @@ use sqlx::PgConnection;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use crate::caching::CacheKey;
 use crate::config;
-use crate::eth_supply_parts::ETH_SUPPLY_PARTS_CACHE_KEY;
-use crate::execution_chain::MERGE_ESTIMATE_CACHE_KEY;
-use crate::execution_chain::TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY;
 use crate::key_value_store;
 
 type StateExtension = Extension<Arc<State>>;
@@ -157,8 +155,9 @@ pub async fn start_server() {
     tokio::spawn(async move {
         while let Some(notification) = notification_stream.try_next().await.unwrap() {
             let payload = notification.payload();
-            match payload {
-                TOTAL_DIFFICULTY_PROGRESS_CACHE_KEY => {
+            let payload_cache_key = CacheKey::from(payload);
+            match payload_cache_key {
+                CacheKey::TotalDifficultyProgress => {
                     tracing::debug!("total difficulty progress cache update");
                     let difficulty_by_day = key_value_store::get_value(
                         &mut connection,
@@ -173,7 +172,7 @@ pub async fn start_server() {
                         .unwrap();
                     *cache_wlock = difficulty_by_day;
                 }
-                MERGE_ESTIMATE_CACHE_KEY => {
+                CacheKey::MergeEstimate => {
                     tracing::debug!("merge estimate cache update");
                     let merge_estimate =
                         key_value_store::get_value(&mut connection, MERGE_ESTIMATE_CACHE_KEY).await;
@@ -185,7 +184,7 @@ pub async fn start_server() {
                         .unwrap();
                     *cache_wlock = merge_estimate;
                 }
-                ETH_SUPPLY_PARTS_CACHE_KEY => {
+                CacheKey::EthSupplyParts => {
                     tracing::debug!("eth supply cache update");
                     let eth_supply =
                         key_value_store::get_value(&mut connection, ETH_SUPPLY_PARTS_CACHE_KEY)

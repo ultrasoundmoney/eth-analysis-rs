@@ -1,6 +1,11 @@
 use sqlx::{postgres::PgPoolOptions, PgExecutor};
 
-use crate::{beacon_chain::states::get_last_state, caching, config, eth_units::GweiAmount};
+use crate::{
+    beacon_chain::states::get_last_state,
+    caching::{self, CacheKey},
+    config,
+    eth_units::GweiAmount,
+};
 
 use super::{node::StateRoot, BeaconNode};
 
@@ -67,8 +72,6 @@ async fn store_effective_balance_sum<'a>(
     .unwrap();
 }
 
-const EFFECTIVE_BALANCE_SUM_CACHE_KEY: &str = "effective-balance-sum";
-
 pub async fn update_effective_balance_sum() {
     tracing_subscriber::fmt::init();
 
@@ -94,7 +97,7 @@ pub async fn update_effective_balance_sum() {
 
     store_effective_balance_sum(&db_pool, effective_balance_sum, &last_state.state_root).await;
 
-    caching::publish_cache_update(&db_pool, EFFECTIVE_BALANCE_SUM_CACHE_KEY).await;
+    caching::publish_cache_update(&db_pool, CacheKey::EffectiveBalanceSum).await;
 }
 
 #[cfg(test)]

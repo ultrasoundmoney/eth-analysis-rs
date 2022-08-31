@@ -5,12 +5,11 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{Decode, PgExecutor, PgPool};
 
 use super::{balances, BeaconNode};
+use crate::caching::CacheKey;
 use crate::eth_units::{GweiAmount, GWEI_PER_ETH, GWEI_PER_ETH_F64};
 use crate::execution_chain::LONDON_HARDFORK_TIMESTAMP;
 use crate::key_value_store::KeyValue;
 use crate::{caching, config, key_value_store};
-
-pub const VALIDATOR_REWARDS_CACHE_KEY: &str = "validator-rewards";
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -162,13 +161,13 @@ pub async fn update_validator_rewards() {
     key_value_store::set_value(
         &pool,
         KeyValue {
-            key: VALIDATOR_REWARDS_CACHE_KEY,
-            value: serde_json::to_value(validator_rewards).unwrap(),
+            key: &CacheKey::ValidatorRewards.to_string(),
+            value: &serde_json::to_value(validator_rewards).unwrap(),
         },
     )
     .await;
 
-    caching::publish_cache_update(&pool, VALIDATOR_REWARDS_CACHE_KEY).await;
+    caching::publish_cache_update(&pool, CacheKey::ValidatorRewards).await;
 
     tracing::info!("done updating validator rewards");
 }

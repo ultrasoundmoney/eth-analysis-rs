@@ -1,3 +1,4 @@
+use crate::caching::CacheKey;
 use crate::eth_units::{GweiAmount, GWEI_PER_ETH};
 use crate::key_value_store::KeyValue;
 use crate::{beacon_chain, caching, config, etherscan, key_value_store};
@@ -13,8 +14,6 @@ struct IssuanceBreakdown {
     proof_of_work: GweiAmount,
 }
 
-const ISSUANCE_BREAKDOWN_CACHE_KEY: &str = "issuance-breakdown";
-
 async fn store_issuance_breakdown<'a>(
     pg_executor: impl PgExecutor<'a>,
     issuance_breakdown: &IssuanceBreakdown,
@@ -22,8 +21,8 @@ async fn store_issuance_breakdown<'a>(
     key_value_store::set_value(
         pg_executor,
         KeyValue {
-            key: ISSUANCE_BREAKDOWN_CACHE_KEY,
-            value: serde_json::to_value(issuance_breakdown).unwrap(),
+            key: &CacheKey::IssuanceBreakdown.to_string(),
+            value: &serde_json::to_value(issuance_breakdown).unwrap(),
         },
     )
     .await
@@ -91,7 +90,7 @@ pub async fn update_issuance_breakdown() {
 
     store_issuance_breakdown(&mut connection, &issuance_breakdown).await;
 
-    caching::publish_cache_update(&mut connection, ISSUANCE_BREAKDOWN_CACHE_KEY).await;
+    caching::publish_cache_update(&mut connection, CacheKey::IssuanceBreakdown).await;
 
     tracing::info!("done updating issuance breakdown")
 }

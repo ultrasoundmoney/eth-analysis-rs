@@ -4,15 +4,13 @@ use chrono::{DateTime, Duration, SubsecRound, Utc};
 use serde::Serialize;
 use sqlx::PgPool;
 
-use crate::caching;
+use crate::caching::{self, CacheKey};
 use crate::json_codecs::{to_u128_string, to_u64_string};
 use crate::key_value_store::{self, KeyValue};
 
 use super::node::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
 
 const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
-
-pub const MERGE_ESTIMATE_CACHE_KEY: &str = "merge-estimate";
 
 const AVERAGE_BLOCK_TIME_ESTIMATE: i64 = 13500;
 
@@ -49,11 +47,11 @@ pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
     key_value_store::set_value(
         executor,
         KeyValue {
-            key: MERGE_ESTIMATE_CACHE_KEY,
-            value: serde_json::to_value(merge_ttd_countdown).unwrap(),
+            key: &CacheKey::MergeEstimate.to_string(),
+            value: &serde_json::to_value(merge_ttd_countdown).unwrap(),
         },
     )
     .await;
 
-    caching::publish_cache_update(executor, MERGE_ESTIMATE_CACHE_KEY).await;
+    caching::publish_cache_update(executor, CacheKey::MergeEstimate).await;
 }

@@ -31,7 +31,7 @@ pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<V
 #[derive(Debug, Serialize)]
 pub struct KeyValue<'a> {
     pub key: &'a str,
-    pub value: Value,
+    pub value: &'a Value,
 }
 
 pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key_value: KeyValue<'_>) {
@@ -113,7 +113,7 @@ mod tests {
             &mut transaction,
             KeyValue {
                 key: "test-key",
-                value: serde_json::to_value(&test_json).unwrap(),
+                value: &serde_json::to_value(&test_json).unwrap(),
             },
         )
         .await;
