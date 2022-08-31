@@ -61,7 +61,7 @@ async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
                 HeaderValue::from_static("max-age=4, stale-while-revalidate=60"),
             );
 
-            let etag = EntityTag::strong(&hash);
+            let etag = EntityTag::weak(&hash);
             headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
 
             (headers, Json(eth_supply).into_response()).into_response()
@@ -81,7 +81,7 @@ async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoRespon
                 HeaderValue::from_static("max-age=600, stale-while-revalidate=86400"),
             );
 
-            let etag = EntityTag::strong(&hash);
+            let etag = EntityTag::weak(&hash);
             headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
 
             (headers, Json(difficulty_by_day).into_response()).into_response()
@@ -101,7 +101,7 @@ async fn get_merge_estimate(state: StateExtension) -> impl IntoResponse {
                 HeaderValue::from_static("max-age=4, stale-while-revalidate=14400"),
             );
 
-            let etag = EntityTag::strong(&hash);
+            let etag = EntityTag::weak(&hash);
             headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
 
             (headers, Json(merge_estimate).into_response()).into_response()
