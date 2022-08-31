@@ -49,6 +49,20 @@ fn hash_from_json(v: &Value) -> String {
     hash_from_u8(&v_bytes)
 }
 
+async fn get_value_etag_pair(
+    connection: &mut PgConnection,
+    key: &CacheKey<'_>,
+) -> Option<(Value, String)> {
+    let value = key_value_store::get_value(connection, &key.to_string()).await?;
+    let hash = hash_from_json(&value);
+    Some((value, hash))
+}
+
+async fn get_value_hash_lock(connection: &mut PgConnection, key: &CacheKey<'_>) -> CachedValue {
+    let pair = get_value_etag_pair(connection, key).await;
+    RwLock::new(pair)
+}
+
 async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
     let eth_supply = state.cache.eth_supply_parts.read().unwrap();
     match &*eth_supply {
@@ -61,8 +75,11 @@ async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
                 HeaderValue::from_static("max-age=4, stale-while-revalidate=60"),
             );
 
-            let etag = EntityTag::weak(&hash);
-            headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
+            let etag = EntityTag::strong(&hash);
+            headers.insert(
+                header::ETAG,
+                HeaderValue::from_str(&etag.to_string()).unwrap(),
+            );
 
             (headers, Json(eth_supply).into_response()).into_response()
         }
@@ -81,8 +98,11 @@ async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoRespon
                 HeaderValue::from_static("max-age=600, stale-while-revalidate=86400"),
             );
 
-            let etag = EntityTag::weak(&hash);
-            headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
+            let etag = EntityTag::strong(&hash);
+            headers.insert(
+                header::ETAG,
+                HeaderValue::from_str(&etag.to_string()).unwrap(),
+            );
 
             (headers, Json(difficulty_by_day).into_response()).into_response()
         }
@@ -101,26 +121,15 @@ async fn get_merge_estimate(state: StateExtension) -> impl IntoResponse {
                 HeaderValue::from_static("max-age=4, stale-while-revalidate=14400"),
             );
 
-            let etag = EntityTag::weak(&hash);
-            headers.insert(header::ETAG, HeaderValue::from_str(etag.tag()).unwrap());
+            let etag = EntityTag::strong(&hash);
+            headers.insert(
+                header::ETAG,
+                HeaderValue::from_str(&etag.to_string()).unwrap(),
+            );
 
             (headers, Json(merge_estimate).into_response()).into_response()
         }
     }
-}
-
-async fn get_value_hash_pair(
-    connection: &mut PgConnection,
-    key: &CacheKey<'_>,
-) -> Option<(Value, String)> {
-    let value = key_value_store::get_value(connection, &key.to_string()).await?;
-    let hash = hash_from_json(&value);
-    Some((value, hash))
-}
-
-async fn get_value_hash_lock(connection: &mut PgConnection, key: &CacheKey<'_>) -> CachedValue {
-    let pair = get_value_hash_pair(connection, key).await;
-    RwLock::new(pair)
 }
 
 pub async fn start_server() {
@@ -163,7 +172,7 @@ pub async fn start_server() {
                 CacheKey::TotalDifficultyProgress => {
                     tracing::debug!("total difficulty progress cache update");
                     let pair =
-                        get_value_hash_pair(&mut connection, &CacheKey::TotalDifficultyProgress)
+                        get_value_etag_pair(&mut connection, &CacheKey::TotalDifficultyProgress)
                             .await;
 
                     let mut cache_wlock = shared_state_cache_update_clone
@@ -176,7 +185,7 @@ pub async fn start_server() {
                 }
                 CacheKey::MergeEstimate => {
                     tracing::debug!("merge estimate cache update");
-                    let pair = get_value_hash_pair(&mut connection, &CacheKey::MergeEstimate).await;
+                    let pair = get_value_etag_pair(&mut connection, &CacheKey::MergeEstimate).await;
 
                     let mut cache_wlock = shared_state_cache_update_clone
                         .cache
@@ -189,7 +198,7 @@ pub async fn start_server() {
                 CacheKey::EthSupplyParts => {
                     tracing::debug!("eth supply cache update");
                     let pair =
-                        get_value_hash_pair(&mut connection, &CacheKey::EthSupplyParts).await;
+                        get_value_etag_pair(&mut connection, &CacheKey::EthSupplyParts).await;
 
                     let mut cache_wlock = shared_state_cache_update_clone
                         .cache
