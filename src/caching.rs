@@ -63,13 +63,13 @@ impl<'a> From<&'a str> for CacheKey<'a> {
 }
 
 pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey<'_>) {
-    tracing::debug!("publishing cache update: {}", key.to_string());
+    tracing::debug!("publishing cache update: {}", key.to_db_key());
 
     sqlx::query!(
         "
             SELECT pg_notify('cache-update', $1)
         ",
-        key.to_string()
+        key.to_db_key()
     )
     .execute(executor)
     .await
