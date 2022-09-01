@@ -28,6 +28,7 @@ type CachedValue = RwLock<Option<(Value, Hash)>>;
 
 #[derive(Debug)]
 struct Cache {
+    block_lag: CachedValue,
     eth_supply_parts: CachedValue,
     merge_estimate: CachedValue,
     total_difficulty_progress: CachedValue,
@@ -109,6 +110,9 @@ async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgCo
             let payload = notification.payload();
             let payload_cache_key = CacheKey::from(payload);
             match payload_cache_key {
+                key @ CacheKey::BlockLag => {
+                    update_cache_from_key(&mut connection, &state.cache.block_lag, &key).await
+                }
                 key @ CacheKey::EthSupplyParts => {
                     update_cache_from_key(&mut connection, &state.cache.eth_supply_parts, &key)
                         .await
@@ -144,12 +148,14 @@ pub async fn start_server() {
     tracing::debug!("warming up total difficulty progress cache");
 
     let base_fee_per_gas = get_value_hash_lock(&mut connection, &CacheKey::BaseFeePerGas).await;
+    let block_lag = get_value_hash_lock(&mut connection, &CacheKey::BlockLag).await;
     let eth_supply_parts = get_value_hash_lock(&mut connection, &CacheKey::EthSupplyParts).await;
     let merge_estimate = get_value_hash_lock(&mut connection, &CacheKey::MergeEstimate).await;
     let total_difficulty_progress =
         get_value_hash_lock(&mut connection, &CacheKey::TotalDifficultyProgress).await;
 
     let cache = Arc::new(Cache {
+        block_lag,
         eth_supply_parts,
         merge_estimate,
         total_difficulty_progress,
@@ -162,6 +168,16 @@ pub async fn start_server() {
     update_cache_from_notifications(shared_state.clone(), connection).await;
 
     let app = Router::new()
+        .route(
+            "/api/v2/fees/block-lag",
+            get(|state: StateExtension| async move {
+                get_cached(
+                    &state.clone().cache.block_lag,
+                    "max-age=4, stale-while-revalidate=60",
+                )
+                .await
+            }),
+        )
         .route(
             "/api/v2/fees/eth-supply",
             get(|state: StateExtension| async move {

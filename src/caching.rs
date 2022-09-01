@@ -4,6 +4,7 @@ use sqlx::PgExecutor;
 
 #[derive(Debug)]
 pub enum CacheKey<'a> {
+    BlockLag,
     Custom(&'a str),
     EffectiveBalanceSum,
     EthPrice,
@@ -18,6 +19,7 @@ pub enum CacheKey<'a> {
 impl Display for CacheKey<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::BlockLag => write!(f, "block-lag"),
             Self::Custom(key) => write!(f, "{key}"),
             Self::EffectiveBalanceSum => write!(f, "effective-balance-sum"),
             Self::EthPrice => write!(f, "eth-price"),
@@ -34,6 +36,7 @@ impl Display for CacheKey<'_> {
 impl<'a> CacheKey<'a> {
     pub fn to_db_key(&self) -> &'a str {
         match self {
+            &Self::BlockLag => "block-lag",
             &Self::Custom(key) => key,
             &Self::EffectiveBalanceSum => "effective-balance-sum",
             &Self::EthPrice => "eth-price",
@@ -50,6 +53,7 @@ impl<'a> CacheKey<'a> {
 impl<'a> From<&'a str> for CacheKey<'a> {
     fn from(key: &'a str) -> Self {
         match key {
+            "block-lag" => Self::BlockLag,
             "effective-balance-sum" => Self::EffectiveBalanceSum,
             "eth-supply-parts" => Self::EthSupplyParts,
             "issuance-breakdown" => Self::IssuanceBreakdown,
