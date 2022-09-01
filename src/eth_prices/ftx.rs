@@ -156,7 +156,7 @@ pub async fn get_most_recent_price() -> Option<EthPrice> {
 
     body.result.last().map(|candle| EthPrice {
         timestamp: candle.start_time,
-        price_usd: candle.open,
+        usd: candle.open,
     })
 }
 
@@ -173,29 +173,29 @@ mod tests {
     #[tokio::test]
     async fn get_missing_price_by_minute_test() {
         let missing_minute = utc_from_str_unsafe("2021-10-22T07:40:00Z");
-        let price_usd = get_price_by_minute(missing_minute).await;
-        assert_eq!(price_usd, None);
+        let usd = get_price_by_minute(missing_minute).await;
+        assert_eq!(usd, None);
     }
 
     #[tokio::test]
     async fn get_price_by_minute_test() {
         let existing_minute = utc_from_str_unsafe("2021-10-22T07:35:00Z");
-        let price_usd = get_price_by_minute(existing_minute).await;
-        assert_eq!(price_usd, Some(4135.924229398));
+        let usd = get_price_by_minute(existing_minute).await;
+        assert_eq!(usd, Some(4135.924229398));
     }
 
     #[tokio::test]
     async fn get_missing_closest_price_by_minute_test() {
         let missing_plus_one = utc_from_str_unsafe("2021-10-22T07:37:00Z");
-        let price_usd = get_closest_price_by_minute(missing_plus_one, Duration::minutes(1)).await;
-        assert_eq!(price_usd, None);
+        let usd = get_closest_price_by_minute(missing_plus_one, Duration::minutes(1)).await;
+        assert_eq!(usd, None);
     }
 
     #[tokio::test]
     async fn get_closest_price_by_minute_test() {
         let existing_plus_two = utc_from_str_unsafe("2021-10-22T07:37:00Z");
-        let price_usd = get_closest_price_by_minute(existing_plus_two, Duration::minutes(2)).await;
-        assert_eq!(price_usd, Some(4135.924229398));
+        let usd = get_closest_price_by_minute(existing_plus_two, Duration::minutes(2)).await;
+        assert_eq!(usd, Some(4135.924229398));
     }
 
     #[test]

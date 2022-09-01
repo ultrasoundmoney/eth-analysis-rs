@@ -23,7 +23,7 @@ struct EthPriceTimestamp {
 pub struct EthPrice {
     timestamp: DateTime<Utc>,
     #[sqlx(rename = "ethusd")]
-    price_usd: f64,
+    usd: f64,
 }
 
 async fn get_most_recent_price(executor: &mut PgConnection) -> EthPrice {
@@ -76,28 +76,28 @@ pub async fn record_eth_price() {
             }
             Some(most_recent_price) => {
                 if last_price == most_recent_price {
-                    tracing::debug!("most recent eth price is equal to last stored price: {}, minute: {}, skipping", last_price.timestamp, last_price.price_usd);
+                    tracing::debug!("most recent eth price is equal to last stored price: {}, minute: {}, skipping", last_price.timestamp, last_price.usd);
                 }
 
                 if last_price.timestamp == most_recent_price.timestamp {
                     tracing::debug!(
                         "most recent price is same minute as last: {}, but price: {} -> {}",
                         last_price.timestamp,
-                        last_price.price_usd,
-                        most_recent_price.price_usd
+                        last_price.usd,
+                        most_recent_price.usd
                     );
                 } else {
                     tracing::debug!(
                         "storing new most recent eth price, minute: {}, price: {}",
                         most_recent_price.timestamp,
-                        most_recent_price.price_usd
+                        most_recent_price.usd
                     );
                 }
 
                 store_price(
                     &mut connection,
                     most_recent_price.timestamp,
-                    most_recent_price.price_usd,
+                    most_recent_price.usd,
                 )
                 .await;
                 last_price = most_recent_price.clone();
@@ -171,21 +171,21 @@ pub async fn heal_eth_prices() {
         if !known_minutes.contains(&timestamp) {
             let timestamp_date_time = Utc.timestamp(timestamp, 0);
             tracing::debug!("missing minute: {}", timestamp_date_time);
-            let price_usd = ftx::get_closest_price_by_minute(
+            let usd = ftx::get_closest_price_by_minute(
                 timestamp_date_time,
                 Duration::minutes(max_distance_in_minutes),
             )
             .await;
-            match price_usd {
+            match usd {
                 None => {
                     tracing::debug!(
                         "FTX didn't have a price either for: {}",
                         timestamp_date_time
                     );
                 }
-                Some(price_usd) => {
+                Some(usd) => {
                     tracing::debug!("found a price on FTX, adding it to the DB");
-                    store_price(&mut connection, timestamp_date_time, price_usd).await;
+                    store_price(&mut connection, timestamp_date_time, usd).await;
                 }
             }
         }
