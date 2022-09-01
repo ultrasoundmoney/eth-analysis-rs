@@ -8,7 +8,7 @@ use sqlx::{Connection, FromRow, PgConnection, Postgres};
 use tokio::time::sleep;
 
 use crate::{
-    caching::CacheKey,
+    caching::{self, CacheKey},
     config,
     execution_chain::LONDON_HARDFORK_TIMESTAMP,
     key_value_store::{self, KeyValue},
@@ -110,6 +110,8 @@ pub async fn record_eth_price() {
                     },
                 )
                 .await;
+
+                caching::publish_cache_update(&mut connection, CacheKey::EthPrice).await;
             }
         }
         sleep(std::time::Duration::from_secs(10)).await;
