@@ -28,9 +28,9 @@ type CachedValue = RwLock<Option<(Value, Hash)>>;
 
 #[derive(Debug)]
 struct Cache {
-    total_difficulty_progress: CachedValue,
     eth_supply_parts: CachedValue,
     merge_estimate: CachedValue,
+    total_difficulty_progress: CachedValue,
 }
 
 pub struct State {
@@ -63,62 +63,15 @@ async fn get_value_hash_lock(connection: &mut PgConnection, key: &CacheKey<'_>) 
     RwLock::new(pair)
 }
 
-async fn get_eth_supply(state: StateExtension) -> impl IntoResponse {
-    let eth_supply = state.cache.eth_supply_parts.read().unwrap();
-    match &*eth_supply {
-        None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some((eth_supply, hash)) => {
-            let mut headers = HeaderMap::new();
-
-            headers.insert(
-                header::CACHE_CONTROL,
-                HeaderValue::from_static("max-age=4, stale-while-revalidate=60"),
-            );
-
-            let etag = EntityTag::strong(&hash);
-            headers.insert(
-                header::ETAG,
-                HeaderValue::from_str(&etag.to_string()).unwrap(),
-            );
-
-            (headers, Json(eth_supply).into_response()).into_response()
-        }
-    }
-}
-
-async fn get_total_difficulty_progress(state: StateExtension) -> impl IntoResponse {
-    let difficulty_by_day = state.cache.total_difficulty_progress.read().unwrap();
-    match &*difficulty_by_day {
-        None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some((difficulty_by_day, hash)) => {
-            let mut headers = HeaderMap::new();
-
-            headers.insert(
-                header::CACHE_CONTROL,
-                HeaderValue::from_static("max-age=600, stale-while-revalidate=86400"),
-            );
-
-            let etag = EntityTag::strong(&hash);
-            headers.insert(
-                header::ETAG,
-                HeaderValue::from_str(&etag.to_string()).unwrap(),
-            );
-
-            (headers, Json(difficulty_by_day).into_response()).into_response()
-        }
-    }
-}
-
-async fn get_merge_estimate(state: StateExtension) -> impl IntoResponse {
-    let merge_estimate = state.cache.merge_estimate.read().unwrap();
-    match &*merge_estimate {
+async fn get_cached<'a>(cached_value: &CachedValue, cache_control: &str) -> impl IntoResponse {
+    match &*cached_value.read().unwrap() {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         Some((merge_estimate, hash)) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
                 header::CACHE_CONTROL,
-                HeaderValue::from_static("max-age=4, stale-while-revalidate=14400"),
+                HeaderValue::from_str(cache_control).unwrap(),
             );
 
             let etag = EntityTag::strong(&hash);
@@ -132,6 +85,53 @@ async fn get_merge_estimate(state: StateExtension) -> impl IntoResponse {
     }
 }
 
+async fn update_cache_from_key(
+    connection: &mut PgConnection,
+    cached_value: &CachedValue,
+    cache_key: &CacheKey<'_>,
+) {
+    tracing::debug!("{} cache update", cache_key);
+    let pair = get_value_etag_pair(connection, cache_key).await;
+    let mut cache_wlock = cached_value.write().unwrap();
+    *cache_wlock = pair;
+}
+
+async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgConnection) {
+    tracing::debug!("setting up listening for cache updates");
+    let mut listener = sqlx::postgres::PgListener::connect(&config::get_db_url())
+        .await
+        .unwrap();
+    listener.listen("cache-update").await.unwrap();
+    let mut notification_stream = listener.into_stream();
+
+    tokio::spawn(async move {
+        while let Some(notification) = notification_stream.try_next().await.unwrap() {
+            let payload = notification.payload();
+            let payload_cache_key = CacheKey::from(payload);
+            match payload_cache_key {
+                key @ CacheKey::EthSupplyParts => {
+                    update_cache_from_key(&mut connection, &state.cache.eth_supply_parts, &key)
+                        .await
+                }
+                key @ CacheKey::MergeEstimate => {
+                    update_cache_from_key(&mut connection, &state.cache.merge_estimate, &key).await
+                }
+                key @ CacheKey::TotalDifficultyProgress => {
+                    update_cache_from_key(
+                        &mut connection,
+                        &state.cache.total_difficulty_progress,
+                        &key,
+                    )
+                    .await
+                }
+                key => {
+                    tracing::debug!("received unsupported cache key: {key:?}, skipping");
+                }
+            }
+        }
+    });
+}
+
 pub async fn start_server() {
     tracing_subscriber::fmt::init();
 
@@ -142,85 +142,69 @@ pub async fn start_server() {
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
     tracing::debug!("warming up total difficulty progress cache");
+
+    let base_fee_per_gas = get_value_hash_lock(&mut connection, &CacheKey::BaseFeePerGas).await;
+    let eth_supply_parts = get_value_hash_lock(&mut connection, &CacheKey::EthSupplyParts).await;
+    let merge_estimate = get_value_hash_lock(&mut connection, &CacheKey::MergeEstimate).await;
     let total_difficulty_progress =
         get_value_hash_lock(&mut connection, &CacheKey::TotalDifficultyProgress).await;
-    let merge_estimate = get_value_hash_lock(&mut connection, &CacheKey::MergeEstimate).await;
-    let eth_supply_parts = get_value_hash_lock(&mut connection, &CacheKey::EthSupplyParts).await;
+
     let cache = Arc::new(Cache {
-        total_difficulty_progress,
         eth_supply_parts,
         merge_estimate,
+        total_difficulty_progress,
     });
 
     tracing::debug!("cache warming done");
 
     let shared_state = Arc::new(State { cache });
 
-    tracing::debug!("setting up listening for cache updates");
-    let mut listener = sqlx::postgres::PgListener::connect(&config::get_db_url())
-        .await
-        .unwrap();
-    listener.listen("cache-update").await.unwrap();
-    let mut notification_stream = listener.into_stream();
-
-    let shared_state_cache_update_clone = shared_state.clone();
-    tokio::spawn(async move {
-        while let Some(notification) = notification_stream.try_next().await.unwrap() {
-            let payload = notification.payload();
-            let payload_cache_key = CacheKey::from(payload);
-            match payload_cache_key {
-                CacheKey::TotalDifficultyProgress => {
-                    tracing::debug!("total difficulty progress cache update");
-                    let pair =
-                        get_value_etag_pair(&mut connection, &CacheKey::TotalDifficultyProgress)
-                            .await;
-
-                    let mut cache_wlock = shared_state_cache_update_clone
-                        .cache
-                        .total_difficulty_progress
-                        .write()
-                        .unwrap();
-
-                    *cache_wlock = pair;
-                }
-                CacheKey::MergeEstimate => {
-                    tracing::debug!("merge estimate cache update");
-                    let pair = get_value_etag_pair(&mut connection, &CacheKey::MergeEstimate).await;
-
-                    let mut cache_wlock = shared_state_cache_update_clone
-                        .cache
-                        .merge_estimate
-                        .write()
-                        .unwrap();
-
-                    *cache_wlock = pair;
-                }
-                CacheKey::EthSupplyParts => {
-                    tracing::debug!("eth supply cache update");
-                    let pair =
-                        get_value_etag_pair(&mut connection, &CacheKey::EthSupplyParts).await;
-
-                    let mut cache_wlock = shared_state_cache_update_clone
-                        .cache
-                        .eth_supply_parts
-                        .write()
-                        .unwrap();
-
-                    *cache_wlock = pair;
-                }
-                key => {
-                    tracing::debug!("received unsupported cache key: {key:?}, skipping");
-                }
-            }
-        }
-    });
+    update_cache_from_notifications(shared_state.clone(), connection).await;
 
     let app = Router::new()
-        .route("/api/v2/fees/eth-supply", get(get_eth_supply))
-        .route("/api/v2/fees/merge-estimate", get(get_merge_estimate))
+        .route(
+            "/api/v2/fees/eth-supply",
+            get(|state: StateExtension| async move {
+                get_cached(
+                    &state.clone().cache.eth_supply_parts,
+                    "max-age=4, stale-while-revalidate=60",
+                )
+                .await
+                .into_response()
+            }),
+        )
+        .route(
+            "/api/v2/fees/eth-supply-parts",
+            get(|state: StateExtension| async move {
+                get_cached(
+                    &state.clone().cache.eth_supply_parts,
+                    "max-age=4, stale-while-revalidate=60",
+                )
+                .await
+                .into_response()
+            }),
+        )
+        .route(
+            "/api/v2/fees/merge-estimate",
+            get(|state: StateExtension| async move {
+                get_cached(
+                    &state.clone().cache.merge_estimate,
+                    "max-age=4, stale-while-revalidate=14400",
+                )
+                .await
+                .into_response()
+            }),
+        )
         .route(
             "/api/v2/fees/total-difficulty-progress",
-            get(get_total_difficulty_progress),
+            get(|state: StateExtension| async move {
+                get_cached(
+                    &state.clone().cache.total_difficulty_progress,
+                    "max-age=600, stale-while-revalidate=86400",
+                )
+                .await
+                .into_response()
+            }),
         )
         .route("/healthz", get(|| async { StatusCode::OK }))
         .layer(Extension(shared_state));
