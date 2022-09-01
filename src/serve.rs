@@ -28,6 +28,7 @@ type CachedValue = RwLock<Option<(Value, Hash)>>;
 
 #[derive(Debug)]
 struct Cache {
+    base_fee_per_gas: CachedValue,
     block_lag: CachedValue,
     eth_price: CachedValue,
     eth_supply_parts: CachedValue,
@@ -93,7 +94,7 @@ async fn update_cache_from_key(
     cache_key: &CacheKey<'_>,
 ) {
     tracing::debug!("{} cache update", cache_key);
-    let pair = get_value_etag_pair(connection, cache_key).await;
+    let pair = get_value_etag_pair(connection, &CacheKey::TotalDifficultyProgress).await;
     let mut cache_wlock = cached_value.write().unwrap();
     *cache_wlock = pair;
 }
@@ -111,6 +112,10 @@ async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgCo
             let payload = notification.payload();
             let payload_cache_key = CacheKey::from(payload);
             match payload_cache_key {
+                key @ CacheKey::BaseFeePerGas => {
+                    update_cache_from_key(&mut connection, &state.cache.base_fee_per_gas, &key)
+                        .await
+                }
                 key @ CacheKey::BlockLag => {
                     update_cache_from_key(&mut connection, &state.cache.block_lag, &key).await
                 }
@@ -160,6 +165,7 @@ pub async fn start_server() {
         get_value_hash_lock(&mut connection, &CacheKey::TotalDifficultyProgress).await;
 
     let cache = Arc::new(Cache {
+        base_fee_per_gas,
         block_lag,
         eth_price,
         eth_supply_parts,
@@ -174,6 +180,17 @@ pub async fn start_server() {
     update_cache_from_notifications(shared_state.clone(), connection).await;
 
     let app = Router::new()
+        .route(
+            "/api/v2/fees/base-fee-per-gas",
+            get(|state: StateExtension| async move {
+                get_cached(
+                    &state.clone().cache.base_fee_per_gas,
+                    "max-age=4, stale-while-revalidate=60",
+                )
+                .await
+                .into_response()
+            }),
+        )
         .route(
             "/api/v2/fees/block-lag",
             get(|state: StateExtension| async move {

@@ -21,6 +21,7 @@ use super::node::BlockNumber;
 use super::node::Head;
 use crate::config;
 use crate::execution_chain;
+use crate::execution_chain::base_fee_per_gas;
 use crate::execution_chain::block_store::BlockStore;
 use crate::execution_chain::merge_estimate;
 use crate::execution_chain::ExecutionNode;
@@ -58,6 +59,7 @@ async fn sync_by_hash(
     if is_synced {
         tracing::debug!("we're synced, running on_new_head for skippables");
         merge_estimate::on_new_head(executor, &block).await;
+        base_fee_per_gas::on_new_head(executor, &block).await;
     }
 }
 

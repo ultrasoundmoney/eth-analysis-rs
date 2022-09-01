@@ -4,6 +4,7 @@ use sqlx::PgExecutor;
 
 #[derive(Debug)]
 pub enum CacheKey<'a> {
+    BaseFeePerGas,
     BlockLag,
     Custom(&'a str),
     EffectiveBalanceSum,
@@ -19,6 +20,7 @@ pub enum CacheKey<'a> {
 impl Display for CacheKey<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::BaseFeePerGas => write!(f, "base-fee-per-gas"),
             Self::BlockLag => write!(f, "block-lag"),
             Self::Custom(key) => write!(f, "{key}"),
             Self::EffectiveBalanceSum => write!(f, "effective-balance-sum"),
@@ -36,6 +38,7 @@ impl Display for CacheKey<'_> {
 impl<'a> CacheKey<'a> {
     pub fn to_db_key(&self) -> &'a str {
         match self {
+            &Self::BaseFeePerGas => "base-fee-per-gas",
             &Self::BlockLag => "block-lag",
             &Self::Custom(key) => key,
             &Self::EffectiveBalanceSum => "effective-balance-sum",
@@ -53,8 +56,10 @@ impl<'a> CacheKey<'a> {
 impl<'a> From<&'a str> for CacheKey<'a> {
     fn from(key: &'a str) -> Self {
         match key {
+            "base-fee-per-gas" => Self::BaseFeePerGas,
             "block-lag" => Self::BlockLag,
             "effective-balance-sum" => Self::EffectiveBalanceSum,
+            "eth-price" => Self::EthPrice,
             "eth-supply-parts" => Self::EthSupplyParts,
             "issuance-breakdown" => Self::IssuanceBreakdown,
             "merge-estimate" => Self::MergeEstimate,
