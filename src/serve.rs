@@ -94,7 +94,7 @@ async fn update_cache_from_key(
     cache_key: &CacheKey<'_>,
 ) {
     tracing::debug!("{} cache update", cache_key);
-    let pair = get_value_etag_pair(connection, &CacheKey::TotalDifficultyProgress).await;
+    let pair = get_value_etag_pair(connection, &cache_key).await;
     let mut cache_wlock = cached_value.write().unwrap();
     *cache_wlock = pair;
 }
