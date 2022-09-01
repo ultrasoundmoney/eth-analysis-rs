@@ -203,3 +203,63 @@ pub async fn heal_eth_prices() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::SubsecRound;
+
+    use crate::db_testing;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn store_price_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+        let test_price = EthPrice {
+            timestamp: Utc::now().trunc_subsecs(0),
+            usd: 0.0,
+        };
+
+        store_price(&mut transaction, test_price.timestamp, test_price.usd).await;
+        let eth_price = get_most_recent_price(&mut transaction).await;
+        assert_eq!(eth_price, test_price);
+    }
+
+    #[tokio::test]
+    async fn get_most_recent_price_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+        let test_price_1 = EthPrice {
+            timestamp: Utc::now().trunc_subsecs(0) - Duration::seconds(10),
+            usd: 0.0,
+        };
+        let test_price_2 = EthPrice {
+            timestamp: Utc::now().trunc_subsecs(0),
+            usd: 1.0,
+        };
+
+        store_price(&mut transaction, test_price_1.timestamp, test_price_1.usd).await;
+        store_price(&mut transaction, test_price_2.timestamp, test_price_2.usd).await;
+        let eth_price = get_most_recent_price(&mut transaction).await;
+        assert_eq!(eth_price, test_price_2);
+    }
+
+    #[tokio::test]
+    async fn update_eth_price_with_most_recent_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+        let test_price = EthPrice {
+            timestamp: Utc::now().trunc_subsecs(0) - Duration::minutes(10),
+            usd: 0.0,
+        };
+
+        let mut last_price = test_price.clone();
+
+        update_eth_price_with_most_recent(&mut transaction, &mut last_price).await;
+
+        let eth_price = get_most_recent_price(&mut transaction).await;
+
+        assert_ne!(eth_price, test_price);
+    }
+}
