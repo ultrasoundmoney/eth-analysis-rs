@@ -39,7 +39,7 @@ pub async fn update(executor: &mut PgConnection, beacon_balances_sum: BeaconBala
     key_value_store::set_value_str(
         executor.acquire().await.unwrap(),
         KeyValueStr {
-            key: &CacheKey::EthSupplyParts.to_string(),
+            key: &CacheKey::EthSupplyParts.to_db_key(),
             // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
             // as string however.
             value_str: &serde_json::to_string(&eth_supply_parts).unwrap(),

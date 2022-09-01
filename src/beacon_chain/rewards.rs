@@ -161,7 +161,7 @@ pub async fn update_validator_rewards() {
     key_value_store::set_value(
         &pool,
         KeyValue {
-            key: &CacheKey::ValidatorRewards.to_string(),
+            key: &CacheKey::ValidatorRewards.to_db_key(),
             value: &serde_json::to_value(validator_rewards).unwrap(),
         },
     )

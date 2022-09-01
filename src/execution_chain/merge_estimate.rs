@@ -47,7 +47,7 @@ pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
     key_value_store::set_value(
         executor,
         KeyValue {
-            key: &CacheKey::MergeEstimate.to_string(),
+            key: &CacheKey::MergeEstimate.to_db_key(),
             value: &serde_json::to_value(merge_ttd_countdown).unwrap(),
         },
     )

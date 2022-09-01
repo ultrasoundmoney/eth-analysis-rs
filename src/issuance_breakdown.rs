@@ -21,7 +21,7 @@ async fn store_issuance_breakdown<'a>(
     key_value_store::set_value(
         pg_executor,
         KeyValue {
-            key: &CacheKey::IssuanceBreakdown.to_string(),
+            key: &CacheKey::IssuanceBreakdown.to_db_key(),
             value: &serde_json::to_value(issuance_breakdown).unwrap(),
         },
     )

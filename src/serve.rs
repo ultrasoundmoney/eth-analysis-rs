@@ -53,7 +53,7 @@ async fn get_value_etag_pair(
     connection: &mut PgConnection,
     key: &CacheKey<'_>,
 ) -> Option<(Value, String)> {
-    let value = key_value_store::get_value(connection, &key.to_string()).await?;
+    let value = key_value_store::get_value(connection, &key.to_db_key()).await?;
     let hash = hash_from_json(&value);
     Some((value, hash))
 }

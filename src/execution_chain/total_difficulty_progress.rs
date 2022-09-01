@@ -93,7 +93,7 @@ pub async fn update_total_difficulty_progress() {
     key_value_store::set_value(
         &mut connection,
         KeyValue {
-            key: &CacheKey::TotalDifficultyProgress.to_string(),
+            key: &CacheKey::TotalDifficultyProgress.to_db_key(),
             value: &serde_json::to_value(&total_difficulty_progress).unwrap(),
         },
     )
