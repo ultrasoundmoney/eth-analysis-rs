@@ -1,5 +1,6 @@
 use std::time::{Duration, SystemTime};
 
+use chrono::{DateTime, TimeZone, Utc};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::json;
@@ -57,7 +58,7 @@ struct ExecutionResponse {
 }
 
 async fn get_current_execution_block_number() -> u32 {
-    reqwest::get("https://api.ultrasound.money/fees/all")
+    reqwest::get("https://ultrasound.money/api/fees/grouped-analysis-1")
         .await
         .unwrap()
         .json::<ExecutionResponse>()
@@ -83,7 +84,7 @@ pub struct EthSupplyResponse {
 }
 
 async fn get_current_beacon_slot() -> u32 {
-    reqwest::get("https://api.ultrasound.money/fees/eth-supply")
+    reqwest::get("https://ultrasound.money/api/fees/eth-supply")
         .await
         .unwrap()
         .json::<EthSupplyResponse>()
@@ -94,7 +95,7 @@ async fn get_current_beacon_slot() -> u32 {
 }
 
 async fn get_current_execution_delta_block_number() -> u32 {
-    reqwest::get("https://api.ultrasound.money/fees/eth-supply")
+    reqwest::get("https://ultrasound.money/api/fees/eth-supply")
         .await
         .unwrap()
         .json::<EthSupplyResponse>()
@@ -102,6 +103,18 @@ async fn get_current_execution_delta_block_number() -> u32 {
         .unwrap()
         .execution_balances_sum
         .block_number
+}
+
+fn date_time_from_system_time(system_time: SystemTime) -> DateTime<Utc> {
+    chrono::Utc.timestamp(
+        system_time
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .try_into()
+            .unwrap(),
+        0,
+    )
 }
 
 const PHOENIX_MAX_LIFESPAN: Duration = Duration::from_secs(60 * 6);
@@ -127,22 +140,22 @@ pub async fn monitor_critical_services() {
     loop {
         let current_execution_block_number = get_current_execution_block_number().await;
         if last_seen_execution_block_number != current_execution_block_number {
-            tracing::debug!( "last seen execution block number: {last_seen_execution_block_number}, current block number: {current_execution_block_number}, rebirth phoenix");
             execution_phoenix_birth = SystemTime::now();
+            tracing::debug!( "last seen execution block number: {last_seen_execution_block_number}, current block number: {current_execution_block_number}, rebirth phoenix at {:?}",  date_time_from_system_time(execution_phoenix_birth));
             last_seen_execution_block_number = current_execution_block_number;
         }
 
         let current_execution_delta_block_number = get_current_execution_delta_block_number().await;
         if last_seen_execution_delta_block_number != current_execution_delta_block_number {
-            tracing::debug!( "last seen execution delta block number: {last_seen_execution_delta_block_number}, current block number: {current_execution_delta_block_number}, rebirth phoenix");
             execution_delta_phoenix_birth = SystemTime::now();
+            tracing::debug!( "last seen execution delta block number: {last_seen_execution_delta_block_number}, current block number: {current_execution_delta_block_number}, rebirth phoenix at {:?}", date_time_from_system_time(execution_delta_phoenix_birth));
             last_seen_execution_delta_block_number = current_execution_delta_block_number;
         }
 
         let current_beacon_slot = get_current_beacon_slot().await;
         if last_seen_beacon_slot != current_beacon_slot {
-            tracing::debug!( "last seen beacon slot: {last_seen_beacon_slot}, current slot: {current_beacon_slot}, rebirth phoenix");
             beacon_slot_phoenix_birth = SystemTime::now();
+            tracing::debug!( "last seen beacon slot: {last_seen_beacon_slot}, current slot: {current_beacon_slot}, rebirth phoenix at {:?}", date_time_from_system_time(beacon_slot_phoenix_birth));
             last_seen_beacon_slot = current_beacon_slot;
         }
 
