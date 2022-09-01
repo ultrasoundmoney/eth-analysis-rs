@@ -29,6 +29,7 @@ type CachedValue = RwLock<Option<(Value, Hash)>>;
 #[derive(Debug)]
 struct Cache {
     block_lag: CachedValue,
+    eth_price: CachedValue,
     eth_supply_parts: CachedValue,
     merge_estimate: CachedValue,
     total_difficulty_progress: CachedValue,
@@ -113,6 +114,9 @@ async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgCo
                 key @ CacheKey::BlockLag => {
                     update_cache_from_key(&mut connection, &state.cache.block_lag, &key).await
                 }
+                key @ CacheKey::EthPrice => {
+                    update_cache_from_key(&mut connection, &state.cache.eth_price, &key).await
+                }
                 key @ CacheKey::EthSupplyParts => {
                     update_cache_from_key(&mut connection, &state.cache.eth_supply_parts, &key)
                         .await
@@ -149,6 +153,7 @@ pub async fn start_server() {
 
     let base_fee_per_gas = get_value_hash_lock(&mut connection, &CacheKey::BaseFeePerGas).await;
     let block_lag = get_value_hash_lock(&mut connection, &CacheKey::BlockLag).await;
+    let eth_price = get_value_hash_lock(&mut connection, &CacheKey::EthPrice).await;
     let eth_supply_parts = get_value_hash_lock(&mut connection, &CacheKey::EthSupplyParts).await;
     let merge_estimate = get_value_hash_lock(&mut connection, &CacheKey::MergeEstimate).await;
     let total_difficulty_progress =
@@ -156,6 +161,7 @@ pub async fn start_server() {
 
     let cache = Arc::new(Cache {
         block_lag,
+        eth_price,
         eth_supply_parts,
         merge_estimate,
         total_difficulty_progress,
@@ -176,6 +182,17 @@ pub async fn start_server() {
                     "max-age=4, stale-while-revalidate=60",
                 )
                 .await
+            }),
+        )
+        .route(
+            "/api/v2/fees/eth-price",
+            get(|state: StateExtension| async move {
+                get_cached(
+                    &state.clone().cache.eth_price,
+                    "max-age=60, stale-while-revalidate=600",
+                )
+                .await
+                .into_response()
             }),
         )
         .route(
