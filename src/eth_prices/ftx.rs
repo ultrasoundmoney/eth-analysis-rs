@@ -5,6 +5,8 @@ use chrono::{DateTime, Duration};
 use format_url::FormatUrl;
 use serde::Deserialize;
 
+use super::EthPrice;
+
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct FtxCandle {
@@ -121,6 +123,43 @@ pub async fn get_closest_price_by_minute(
     }
 }
 
+enum SupportedResolution {
+    Minute,
+}
+
+impl ToString for SupportedResolution {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Minute => "60".to_string(),
+        }
+    }
+}
+
+pub async fn get_most_recent_price() -> Option<EthPrice> {
+    let now = Utc::now();
+
+    // We return a price up to five minutes old.
+    let start_time = now - Duration::minutes(5);
+
+    let url = FormatUrl::new(FTX_API)
+        .with_path_template("/api/indexes/ETH/candles")
+        .with_query_params(vec![
+            ("resolution", &SupportedResolution::Minute.to_string()),
+            ("start_time", &start_time.timestamp().to_string()),
+            ("end_time", &now.timestamp().to_string()),
+        ])
+        .format_url();
+
+    let res = reqwest::get(url).await.unwrap();
+
+    let body = res.json::<PriceResponse>().await.unwrap();
+
+    body.result.last().map(|candle| EthPrice {
+        timestamp: candle.start_time,
+        price_usd: candle.open,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,5 +247,10 @@ mod tests {
 
         let closest = find_closest_price(&prices, utc_from_str_unsafe("2021-01-01T00:03:00Z"));
         assert_eq!(*closest, prices[0]);
+    }
+
+    #[tokio::test]
+    async fn get_most_recent_price_test() {
+        get_most_recent_price().await;
     }
 }

@@ -6,6 +6,7 @@ use sqlx::PgExecutor;
 pub enum CacheKey<'a> {
     Custom(&'a str),
     EffectiveBalanceSum,
+    EthPrice,
     EthSupplyParts,
     IssuanceBreakdown,
     MergeEstimate,
@@ -19,6 +20,7 @@ impl Display for CacheKey<'_> {
         match self {
             Self::Custom(key) => write!(f, "{key}"),
             Self::EffectiveBalanceSum => write!(f, "effective-balance-sum"),
+            Self::EthPrice => write!(f, "eth-price"),
             Self::EthSupplyParts => write!(f, "eth-supply-parts"),
             Self::IssuanceBreakdown => write!(f, "issuance-breakdown"),
             Self::MergeEstimate => write!(f, "merge-estimate"),
@@ -34,6 +36,7 @@ impl<'a> CacheKey<'a> {
         match self {
             &Self::Custom(key) => key,
             &Self::EffectiveBalanceSum => "effective-balance-sum",
+            &Self::EthPrice => "eth-price",
             &Self::EthSupplyParts => "eth-supply-parts",
             &Self::IssuanceBreakdown => "issuance-breakdown",
             &Self::MergeEstimate => "merge-estimate",

@@ -3,13 +3,43 @@ mod ftx;
 use std::collections::HashSet;
 
 use chrono::{DateTime, Duration, DurationRound, TimeZone, Utc};
+use serde::Serialize;
 use sqlx::{Connection, FromRow, PgConnection, Postgres};
+use tokio::time::sleep;
 
-use crate::{config, execution_chain::LONDON_HARDFORK_TIMESTAMP};
+use crate::{
+    caching::CacheKey,
+    config,
+    execution_chain::LONDON_HARDFORK_TIMESTAMP,
+    key_value_store::{self, KeyValue},
+};
 
 #[derive(Debug, FromRow)]
-struct EthPrice {
+struct EthPriceTimestamp {
     timestamp: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, FromRow, PartialEq, Serialize)]
+pub struct EthPrice {
+    timestamp: DateTime<Utc>,
+    #[sqlx(rename = "ethusd")]
+    price_usd: f64,
+}
+
+async fn get_most_recent_price(executor: &mut PgConnection) -> EthPrice {
+    sqlx::query_as::<Postgres, EthPrice>(
+        "
+            SELECT
+                timestamp, ethusd
+            FROM
+                eth_prices
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ",
+    )
+    .fetch_one(executor)
+    .await
+    .unwrap()
 }
 
 async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd: f64) {
@@ -18,6 +48,8 @@ async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd:
             INSERT INTO
                 eth_prices (timestamp, ethusd)
             VALUES ($1, $2)
+            ON CONFLICT (timestamp) DO UPDATE SET
+                ethusd = excluded.ethusd
         ",
     )
     .bind(timestamp)
@@ -27,10 +59,67 @@ async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd:
     .unwrap();
 }
 
+pub async fn record_eth_price() {
+    tracing_subscriber::fmt::init();
+
+    tracing::info!("recording eth prices");
+
+    let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+
+    let mut last_price = get_most_recent_price(&mut connection).await;
+
+    loop {
+        let most_recent_price = ftx::get_most_recent_price().await;
+        match most_recent_price {
+            None => {
+                tracing::debug!("no recent eth price found");
+            }
+            Some(most_recent_price) => {
+                if last_price == most_recent_price {
+                    tracing::debug!("most recent eth price is equal to last stored price: {}, minute: {}, skipping", last_price.timestamp, last_price.price_usd);
+                }
+
+                if last_price.timestamp == most_recent_price.timestamp {
+                    tracing::debug!(
+                        "most recent price is same minute as last: {}, but price: {} -> {}",
+                        last_price.timestamp,
+                        last_price.price_usd,
+                        most_recent_price.price_usd
+                    );
+                } else {
+                    tracing::debug!(
+                        "storing new most recent eth price, minute: {}, price: {}",
+                        most_recent_price.timestamp,
+                        most_recent_price.price_usd
+                    );
+                }
+
+                store_price(
+                    &mut connection,
+                    most_recent_price.timestamp,
+                    most_recent_price.price_usd,
+                )
+                .await;
+                last_price = most_recent_price.clone();
+
+                key_value_store::set_value(
+                    &mut connection,
+                    KeyValue {
+                        key: CacheKey::EthPrice.to_db_key(),
+                        value: &serde_json::to_value(&most_recent_price).unwrap(),
+                    },
+                )
+                .await;
+            }
+        }
+        sleep(std::time::Duration::from_secs(10)).await;
+    }
+}
+
 pub async fn heal_eth_prices() {
     tracing_subscriber::fmt::init();
 
-    tracing::debug!("healing missing eth prices");
+    tracing::info!("healing missing eth prices");
     let max_distance_in_minutes: i64 = std::env::args()
         .collect::<Vec<String>>()
         .get(1)
@@ -39,7 +128,7 @@ pub async fn heal_eth_prices() {
 
     tracing::debug!("getting all eth prices");
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
-    let eth_prices = sqlx::query_as::<Postgres, EthPrice>(
+    let eth_prices = sqlx::query_as::<Postgres, EthPriceTimestamp>(
         "
             SELECT
                 timestamp
