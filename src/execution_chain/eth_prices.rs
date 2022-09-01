@@ -41,7 +41,7 @@ pub async fn get_eth_price_by_block(
               timestamp,
               ethusd
             FROM eth_prices
-            ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1 )))
+            ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))
             LIMIT 1
         ",
     )
