@@ -59,6 +59,62 @@ async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd:
     .unwrap();
 }
 
+async fn update_eth_price_with_most_recent(
+    connection: &mut PgConnection,
+    last_price: &mut EthPrice,
+) {
+    let most_recent_price = ftx::get_most_recent_price().await;
+    match most_recent_price {
+        None => {
+            tracing::debug!("no recent eth price found");
+        }
+        Some(most_recent_price) => {
+            if last_price == &most_recent_price {
+                tracing::debug!(
+                    "most recent eth price is equal to last stored price: {}, minute: {}, skipping",
+                    last_price.timestamp,
+                    last_price.usd
+                );
+            }
+
+            if last_price.timestamp == most_recent_price.timestamp {
+                tracing::debug!(
+                    "most recent price is same minute as last: {}, but price: {} -> {}",
+                    last_price.timestamp,
+                    last_price.usd,
+                    most_recent_price.usd
+                );
+            } else {
+                tracing::debug!(
+                    "storing new most recent eth price, minute: {}, price: {}",
+                    most_recent_price.timestamp,
+                    most_recent_price.usd
+                );
+            }
+
+            store_price(
+                connection,
+                most_recent_price.timestamp,
+                most_recent_price.usd,
+            )
+            .await;
+
+            *last_price = most_recent_price.clone();
+
+            key_value_store::set_value(
+                sqlx::Acquire::acquire(&mut *connection).await.unwrap(),
+                KeyValue {
+                    key: CacheKey::EthPrice.to_db_key(),
+                    value: &serde_json::to_value(&most_recent_price).unwrap(),
+                },
+            )
+            .await;
+
+            caching::publish_cache_update(connection, CacheKey::EthPrice).await;
+        }
+    }
+}
+
 pub async fn record_eth_price() {
     tracing_subscriber::fmt::init();
 
@@ -69,51 +125,7 @@ pub async fn record_eth_price() {
     let mut last_price = get_most_recent_price(&mut connection).await;
 
     loop {
-        let most_recent_price = ftx::get_most_recent_price().await;
-        match most_recent_price {
-            None => {
-                tracing::debug!("no recent eth price found");
-            }
-            Some(most_recent_price) => {
-                if last_price == most_recent_price {
-                    tracing::debug!("most recent eth price is equal to last stored price: {}, minute: {}, skipping", last_price.timestamp, last_price.usd);
-                }
-
-                if last_price.timestamp == most_recent_price.timestamp {
-                    tracing::debug!(
-                        "most recent price is same minute as last: {}, but price: {} -> {}",
-                        last_price.timestamp,
-                        last_price.usd,
-                        most_recent_price.usd
-                    );
-                } else {
-                    tracing::debug!(
-                        "storing new most recent eth price, minute: {}, price: {}",
-                        most_recent_price.timestamp,
-                        most_recent_price.usd
-                    );
-                }
-
-                store_price(
-                    &mut connection,
-                    most_recent_price.timestamp,
-                    most_recent_price.usd,
-                )
-                .await;
-                last_price = most_recent_price.clone();
-
-                key_value_store::set_value(
-                    &mut connection,
-                    KeyValue {
-                        key: CacheKey::EthPrice.to_db_key(),
-                        value: &serde_json::to_value(&most_recent_price).unwrap(),
-                    },
-                )
-                .await;
-
-                caching::publish_cache_update(&mut connection, CacheKey::EthPrice).await;
-            }
-        }
+        update_eth_price_with_most_recent(&mut connection, &mut last_price).await;
         sleep(std::time::Duration::from_secs(10)).await;
     }
 }
