@@ -27,6 +27,7 @@ pub struct EthPrice {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EthPriceStats {
     timestamp: DateTime<Utc>,
     usd: f64,
