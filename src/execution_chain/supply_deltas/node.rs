@@ -17,11 +17,11 @@ pub struct SupplyDeltaF {
     block: u32,
     burn: Wei,
     destruct: Option<Wei>,
+    fixed_reward: Wei,
     hash: String,
-    issuance: Option<Wei>,
     parent_hash: String,
-    subsidy: Wei,
-    uncles: Wei,
+    supply_delta: Option<Wei>,
+    uncles_reward: Wei,
 }
 
 impl From<SupplyDeltaMessage> for SupplyDelta {
@@ -32,11 +32,11 @@ impl From<SupplyDeltaMessage> for SupplyDelta {
             block_hash: f.hash,
             block_number: f.block,
             fee_burn: f.burn,
-            fixed_reward: f.subsidy,
+            fixed_reward: f.fixed_reward,
             parent_hash: f.parent_hash,
             self_destruct: f.destruct.unwrap_or(0),
-            supply_delta: f.issuance.unwrap_or(0),
-            uncles_reward: f.uncles,
+            supply_delta: f.supply_delta.unwrap_or(0),
+            uncles_reward: f.uncles_reward,
         }
     }
 }
@@ -56,7 +56,7 @@ fn make_supply_delta_subscribe_message(greater_than_or_equal_to: &u32) -> String
     let msg = json!({
         "id": 0,
         "method": "eth_subscribe",
-        "params": ["issuance", greater_than_or_equal_to]
+        "params": ["supplyDelta", greater_than_or_equal_to]
     });
 
     serde_json::to_string(&msg).unwrap()
@@ -89,9 +89,15 @@ pub fn stream_supply_deltas_from(greater_than_or_equal_to: u32) -> impl Stream<I
             }
 
             let message_text = message.into_text().unwrap();
-            let supply_delta_message =
-                serde_json::from_str::<SupplyDeltaMessage>(&message_text).unwrap();
-            let supply_delta = SupplyDelta::from(supply_delta_message);
+            let supply_delta: SupplyDelta = {
+                serde_json::from_str::<SupplyDeltaMessage>(&message_text)
+                    .map(|message| message.into())
+                    .or_else(|_| {
+                        serde_json::from_str::<SupplyDeltaMessage>(&message_text)
+                            .map(|message| message.into())
+                    })
+                    .unwrap()
+            };
             tx.send(supply_delta).await.unwrap();
         }
     });
@@ -167,9 +173,10 @@ pub async fn get_supply_delta_by_block_number(
             }
 
             let message_text = message.into_text().unwrap();
-            let supply_delta_message =
-                serde_json::from_str::<SupplyDeltaMessage>(&message_text).unwrap();
-            let supply_delta = SupplyDelta::from(supply_delta_message);
+            let supply_delta: SupplyDelta =
+                serde_json::from_str::<SupplyDeltaMessage>(&message_text)
+                    .map(|message| message.into())
+                    .unwrap();
             return Ok(supply_delta);
         }
 

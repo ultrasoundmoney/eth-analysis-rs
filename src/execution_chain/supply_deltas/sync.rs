@@ -105,13 +105,14 @@ async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &st
     // don't have all supply deltas and so have to contend with a snapshot eth supply as a
     // "jumping off point".
     if block_hash == GENESIS_PARENT_HASH {
-        panic!("missing hardcoded genesis parent balances sum")
+        unimplemented!("missing hardcoded genisis parent, that is, pre-genesis balances sum");
     }
 
     if block_hash == SUPPLY_SNAPSHOT_15082718.block_hash {
         return SUPPLY_SNAPSHOT_15082718.balances_sum;
     }
 
+    // Missing this special hash used in testing is okay.
     if block_hash == "0xtestparent" {
         return 0;
     }
