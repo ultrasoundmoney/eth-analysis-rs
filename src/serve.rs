@@ -30,7 +30,7 @@ type CachedValue = RwLock<Option<(Value, Hash)>>;
 struct Cache {
     base_fee_per_gas: CachedValue,
     block_lag: CachedValue,
-    eth_price: CachedValue,
+    eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
     merge_estimate: CachedValue,
     total_difficulty_progress: CachedValue,
@@ -120,7 +120,7 @@ async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgCo
                     update_cache_from_key(&mut connection, &state.cache.block_lag, &key).await
                 }
                 key @ CacheKey::EthPrice => {
-                    update_cache_from_key(&mut connection, &state.cache.eth_price, &key).await
+                    update_cache_from_key(&mut connection, &state.cache.eth_price_stats, &key).await
                 }
                 key @ CacheKey::EthSupplyParts => {
                     update_cache_from_key(&mut connection, &state.cache.eth_supply_parts, &key)
@@ -158,7 +158,7 @@ pub async fn start_server() {
 
     let base_fee_per_gas = get_value_hash_lock(&mut connection, &CacheKey::BaseFeePerGas).await;
     let block_lag = get_value_hash_lock(&mut connection, &CacheKey::BlockLag).await;
-    let eth_price = get_value_hash_lock(&mut connection, &CacheKey::EthPrice).await;
+    let eth_price_stats = get_value_hash_lock(&mut connection, &CacheKey::EthPrice).await;
     let eth_supply_parts = get_value_hash_lock(&mut connection, &CacheKey::EthSupplyParts).await;
     let merge_estimate = get_value_hash_lock(&mut connection, &CacheKey::MergeEstimate).await;
     let total_difficulty_progress =
@@ -167,7 +167,7 @@ pub async fn start_server() {
     let cache = Arc::new(Cache {
         base_fee_per_gas,
         block_lag,
-        eth_price,
+        eth_price_stats,
         eth_supply_parts,
         merge_estimate,
         total_difficulty_progress,
@@ -202,10 +202,10 @@ pub async fn start_server() {
             }),
         )
         .route(
-            "/api/v2/fees/eth-price",
+            "/api/v2/fees/eth-price-stats",
             get(|state: StateExtension| async move {
                 get_cached(
-                    &state.clone().cache.eth_price,
+                    &state.clone().cache.eth_price_stats,
                     "max-age=60, stale-while-revalidate=600",
                 )
                 .await

@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Duration, DurationRound, TimeZone, Utc};
 use serde::Serialize;
-use sqlx::{Connection, FromRow, PgConnection, Postgres};
+use sqlx::{postgres::PgRow, Connection, FromRow, PgConnection, Postgres, Row};
 use tokio::time::sleep;
 
 use crate::{
@@ -19,11 +19,18 @@ struct EthPriceTimestamp {
     timestamp: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, FromRow, PartialEq, Serialize)]
+#[derive(Clone, Debug, FromRow, PartialEq)]
 pub struct EthPrice {
     timestamp: DateTime<Utc>,
     #[sqlx(rename = "ethusd")]
     usd: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EthPriceStats {
+    timestamp: DateTime<Utc>,
+    usd: f64,
+    h24_change: f64,
 }
 
 async fn get_most_recent_price(executor: &mut PgConnection) -> EthPrice {
@@ -57,6 +64,59 @@ async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd:
     .execute(executor)
     .await
     .unwrap();
+}
+
+#[allow(dead_code)]
+async fn get_h24_average(executor: &mut PgConnection) -> f64 {
+    sqlx::query(
+        "
+            SELECT
+                AVG(ethusd) AS average
+            FROM
+                eth_prices
+            WHERE timestamp >= NOW() - '24 hours'::INTERVAL
+        ",
+    )
+    .map(|row: PgRow| row.get::<f64, _>("average"))
+    .fetch_one(executor)
+    .await
+    .unwrap()
+}
+
+async fn get_price_h24_ago(executor: &mut PgConnection, age_limit: Duration) -> Option<EthPrice> {
+    sqlx::query_as::<Postgres, EthPrice>(
+        "
+            WITH
+              eth_price_distances AS (
+                SELECT
+                  ethusd,
+                  timestamp,
+                  ABS(
+                    EXTRACT(
+                      epoch
+                      FROM
+                        (timestamp - (NOW() - '24 hours':: INTERVAL))
+                    )
+                  ) AS distance_seconds
+                FROM
+                  eth_prices
+                ORDER BY
+                  distance_seconds ASC
+              )
+            SELECT ethusd, timestamp
+            FROM eth_price_distances
+            WHERE distance_seconds <= 600
+            LIMIT 1
+        ",
+    )
+    .bind(age_limit.num_seconds())
+    .fetch_optional(executor)
+    .await
+    .unwrap()
+}
+
+fn calc_h24_change(current_price: &EthPrice, price_h24_ago: &EthPrice) -> f64 {
+    (current_price.usd - price_h24_ago.usd) / price_h24_ago.usd
 }
 
 async fn update_eth_price_with_most_recent(
@@ -99,13 +159,23 @@ async fn update_eth_price_with_most_recent(
             )
             .await;
 
-            *last_price = most_recent_price.clone();
+            *last_price = most_recent_price;
+
+            let price_h24_ago = get_price_h24_ago(connection, Duration::minutes(10))
+                .await
+                .expect("24h old price should be available within 10min of now - 24h");
+
+            let eth_price_stats = EthPriceStats {
+                timestamp: last_price.timestamp,
+                usd: last_price.usd,
+                h24_change: calc_h24_change(&last_price, &price_h24_ago),
+            };
 
             key_value_store::set_value(
                 sqlx::Acquire::acquire(&mut *connection).await.unwrap(),
                 KeyValue {
                     key: CacheKey::EthPrice.to_db_key(),
-                    value: &serde_json::to_value(&most_recent_price).unwrap(),
+                    value: &serde_json::to_value(&eth_price_stats).unwrap(),
                 },
             )
             .await;
@@ -254,6 +324,8 @@ mod tests {
             usd: 0.0,
         };
 
+        store_price(&mut transaction, Utc::now() - Duration::hours(24), 0.0).await;
+
         let mut last_price = test_price.clone();
 
         update_eth_price_with_most_recent(&mut transaction, &mut last_price).await;
@@ -261,5 +333,57 @@ mod tests {
         let eth_price = get_most_recent_price(&mut transaction).await;
 
         assert_ne!(eth_price, test_price);
+    }
+
+    #[tokio::test]
+    async fn get_h24_average_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+        let test_price_1 = EthPrice {
+            timestamp: Utc::now() - Duration::hours(23),
+            usd: 10.0,
+        };
+        let test_price_2 = EthPrice {
+            timestamp: Utc::now(),
+            usd: 20.0,
+        };
+
+        store_price(&mut transaction, test_price_1.timestamp, test_price_1.usd).await;
+        store_price(&mut transaction, test_price_2.timestamp, test_price_2.usd).await;
+
+        let price_h24_average = get_h24_average(&mut transaction).await;
+        assert_eq!(price_h24_average, 15.0);
+    }
+
+    #[tokio::test]
+    async fn get_price_h24_ago_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let test_price = EthPrice {
+            timestamp: Utc::now().trunc_subsecs(0) - Duration::hours(24),
+            usd: 0.0,
+        };
+
+        store_price(&mut transaction, test_price.timestamp, test_price.usd).await;
+
+        let price = get_price_h24_ago(&mut transaction, Duration::minutes(10)).await;
+        assert_eq!(price, Some(test_price));
+    }
+
+    #[tokio::test]
+    async fn get_price_h24_ago_limit_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let test_price = EthPrice {
+            timestamp: Utc::now().trunc_subsecs(0) - Duration::hours(25),
+            usd: 0.0,
+        };
+
+        store_price(&mut transaction, test_price.timestamp, test_price.usd).await;
+
+        let price = get_price_h24_ago(&mut transaction, Duration::minutes(10)).await;
+        assert_eq!(price, None);
     }
 }
