@@ -345,7 +345,10 @@ pub async fn resync_all() {
         .await
         .map_or(0, |minute| minute + 1);
 
-    tracing::debug!("starting at {start_minute}");
+    tracing::debug!(
+        "starting at {}",
+        Utc.timestamp(london_minute_timestamp.into(), 0) + Duration::minutes((start_minute).into())
+    );
 
     let mut progress = pit_wall::Progress::new(
         "resync eth prices",
