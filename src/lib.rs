@@ -31,6 +31,7 @@ pub use execution_chain::sync_execution_blocks;
 pub use execution_chain::sync_execution_supply_deltas;
 pub use execution_chain::update_total_difficulty_progress;
 pub use execution_chain::write_blocks_from_august;
+pub use execution_chain::write_blocks_from_london;
 pub use execution_chain::write_execution_heads_log;
 pub use execution_chain::write_execution_supply_deltas;
 pub use execution_chain::write_execution_supply_deltas_log;
