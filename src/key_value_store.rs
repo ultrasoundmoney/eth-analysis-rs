@@ -4,13 +4,11 @@ use serde::Serialize;
 use serde_json::Value;
 use sqlx::PgExecutor;
 
-#[allow(dead_code)]
 struct KeyValueFromDb {
     value: Option<Value>,
 }
 
 // Do we need a distinction between key/value pair isn't there and value is null?
-#[allow(dead_code)]
 pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<Value> {
     tracing::debug!("getting key: {}", key);
 
