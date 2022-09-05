@@ -33,11 +33,7 @@ pub struct KeyValue<'a> {
 }
 
 pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key_value: KeyValue<'_>) {
-    tracing::debug!(
-        "storing key: {}, value: {:?}",
-        &key_value.key,
-        &key_value.value
-    );
+    tracing::debug!("storing key: {}", &key_value.key,);
 
     sqlx::query!(
         "
@@ -59,11 +55,7 @@ pub struct KeyValueStr<'a> {
 }
 
 pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key_value: KeyValueStr<'_>) {
-    tracing::debug!(
-        "storing key: {}, value: {:?}",
-        &key_value.key,
-        &key_value.value_str
-    );
+    tracing::debug!("storing key: {}", &key_value.key,);
 
     sqlx::query(
         "
