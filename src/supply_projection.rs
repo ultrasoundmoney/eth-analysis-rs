@@ -10,7 +10,7 @@ use crate::{
     config,
     eth_units::GWEI_PER_ETH_F64,
     glassnode::{self, GlassnodeDataPoint},
-    key_value_store::{self, KeyValue},
+    key_value_store,
 };
 
 #[derive(Decode)]
@@ -140,10 +140,8 @@ pub async fn update_supply_projection_inputs() {
 
     key_value_store::set_value(
         &pool,
-        KeyValue {
-            key: &CacheKey::SupplyProjectionInputs.to_db_key(),
-            value: &serde_json::to_value(supply_projetion_inputs).unwrap(),
-        },
+        &CacheKey::SupplyProjectionInputs.to_db_key(),
+        &serde_json::to_value(supply_projetion_inputs).unwrap(),
     )
     .await;
 

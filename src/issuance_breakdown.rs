@@ -1,6 +1,5 @@
 use crate::caching::CacheKey;
 use crate::eth_units::{GweiAmount, GWEI_PER_ETH};
-use crate::key_value_store::KeyValue;
 use crate::{beacon_chain, caching, config, etherscan, key_value_store};
 use serde::Serialize;
 use sqlx::{PgConnection, PgExecutor};
@@ -20,10 +19,8 @@ async fn store_issuance_breakdown<'a>(
 ) {
     key_value_store::set_value(
         pg_executor,
-        KeyValue {
-            key: &CacheKey::IssuanceBreakdown.to_db_key(),
-            value: &serde_json::to_value(issuance_breakdown).unwrap(),
-        },
+        &CacheKey::IssuanceBreakdown.to_db_key(),
+        &serde_json::to_value(issuance_breakdown).unwrap(),
     )
     .await
 }

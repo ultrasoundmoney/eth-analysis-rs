@@ -6,7 +6,7 @@ use sqlx::PgPool;
 
 use crate::caching::{self, CacheKey};
 use crate::json_codecs::{to_u128_string, to_u64_string};
-use crate::key_value_store::{self, KeyValue};
+use crate::key_value_store;
 
 use super::node::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
 
@@ -46,10 +46,8 @@ pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
 
     key_value_store::set_value(
         executor,
-        KeyValue {
-            key: &CacheKey::MergeEstimate.to_db_key(),
-            value: &serde_json::to_value(merge_ttd_countdown).unwrap(),
-        },
+        &CacheKey::MergeEstimate.to_db_key(),
+        &serde_json::to_value(merge_ttd_countdown).unwrap(),
     )
     .await;
 

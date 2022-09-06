@@ -4,8 +4,7 @@ use sqlx::{Connection, FromRow, PgConnection, PgExecutor};
 
 use crate::{
     caching::{self, CacheKey},
-    config,
-    key_value_store::{self, KeyValue},
+    config, key_value_store,
 };
 
 #[derive(Debug, FromRow, PartialEq, Serialize)]
@@ -92,10 +91,8 @@ pub async fn update_total_difficulty_progress() {
 
     key_value_store::set_value(
         &mut connection,
-        KeyValue {
-            key: &CacheKey::TotalDifficultyProgress.to_db_key(),
-            value: &serde_json::to_value(&total_difficulty_progress).unwrap(),
-        },
+        &CacheKey::TotalDifficultyProgress.to_db_key(),
+        &serde_json::to_value(&total_difficulty_progress).unwrap(),
     )
     .await;
 

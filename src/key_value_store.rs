@@ -1,61 +1,43 @@
-use std::fmt::Debug;
-
-use serde::Serialize;
 use serde_json::Value;
-use sqlx::PgExecutor;
-
-struct KeyValueFromDb {
-    value: Option<Value>,
-}
+use sqlx::{postgres::PgRow, PgExecutor, Row};
 
 // Do we need a distinction between key/value pair isn't there and value is null?
 pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<Value> {
     tracing::debug!("getting key: {}", key);
 
-    sqlx::query_as!(
-        KeyValueFromDb,
-        r#"
+    sqlx::query(
+        "
             SELECT value FROM key_value_store
             WHERE key = $1
-        "#,
-        key
+        ",
     )
+    .bind(key)
+    .map(|row: PgRow| row.get::<Option<Value>, _>("value"))
     .fetch_optional(executor)
     .await
     .unwrap()
-    .and_then(|kv| kv.value)
+    .flatten()
 }
 
-#[derive(Debug, Serialize)]
-pub struct KeyValue<'a> {
-    pub key: &'a str,
-    pub value: &'a Value,
-}
+pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Value) {
+    tracing::debug!("storing key: {}", &key,);
 
-pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key_value: KeyValue<'_>) {
-    tracing::debug!("storing key: {}", &key_value.key,);
-
-    sqlx::query!(
+    sqlx::query(
         "
             INSERT INTO key_value_store (key, value) VALUES ($1, $2)
             ON CONFLICT (key) DO UPDATE SET
                 value = excluded.value
         ",
-        key_value.key,
-        key_value.value
     )
+    .bind(key)
+    .bind(value)
     .execute(executor)
     .await
     .unwrap();
 }
 
-pub struct KeyValueStr<'a> {
-    pub key: &'a str,
-    pub value_str: &'a str,
-}
-
-pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key_value: KeyValueStr<'_>) {
-    tracing::debug!("storing key: {}", &key_value.key,);
+pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key: &str, value_str: &str) {
+    tracing::debug!("storing key: {}", &key,);
 
     sqlx::query(
         "
@@ -64,8 +46,8 @@ pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key_value: KeyValu
                 value = excluded.value
         ",
     )
-    .bind(key_value.key)
-    .bind(key_value.value_str)
+    .bind(key)
+    .bind(value_str)
     .execute(executor)
     .await
     .unwrap();
@@ -73,12 +55,11 @@ pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key_value: KeyValu
 
 #[cfg(test)]
 mod tests {
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use serde_json::json;
-    use serial_test::serial;
     use sqlx::{Connection, PgConnection};
 
-    use crate::config;
+    use crate::{config, db_testing};
 
     use super::*;
 
@@ -89,9 +70,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn get_set_value_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_json = TestJson {
@@ -101,10 +81,8 @@ mod tests {
 
         set_value(
             &mut transaction,
-            KeyValue {
-                key: "test-key",
-                value: &serde_json::to_value(&test_json).unwrap(),
-            },
+            "test-key",
+            &serde_json::to_value(&test_json).unwrap(),
         )
         .await;
 
@@ -117,7 +95,26 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
+    async fn get_null_value_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        set_value(
+            &mut transaction,
+            "test-key",
+            &serde_json::to_value(json!(None::<String>)).unwrap(),
+        )
+        .await;
+
+        let test_json_from_db = serde_json::from_value::<Option<String>>(
+            get_value(&mut transaction, "test-key").await.unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(test_json_from_db, None)
+    }
+
+    #[tokio::test]
     async fn set_value_str_test() {
         let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
         let mut transaction = connection.begin().await.unwrap();
@@ -133,14 +130,7 @@ mod tests {
         }))
         .unwrap();
 
-        set_value_str(
-            &mut transaction,
-            KeyValueStr {
-                key: "test-key",
-                value_str: &test_json_str,
-            },
-        )
-        .await;
+        set_value_str(&mut transaction, "test-key", &test_json_str).await;
 
         let test_json_from_db = serde_json::from_value::<TestJson>(
             get_value(&mut transaction, "test-key").await.unwrap(),

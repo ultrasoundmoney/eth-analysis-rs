@@ -4,7 +4,7 @@ use sqlx::PgPool;
 
 use crate::{
     caching::{self, CacheKey},
-    key_value_store::{self, KeyValue},
+    key_value_store,
 };
 
 use super::node::ExecutionNodeBlock;
@@ -25,10 +25,8 @@ pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
 
     key_value_store::set_value(
         executor,
-        KeyValue {
-            key: &CacheKey::BaseFeePerGas.to_db_key(),
-            value: &serde_json::to_value(base_fee_per_gas).unwrap(),
-        },
+        &CacheKey::BaseFeePerGas.to_db_key(),
+        &serde_json::to_value(base_fee_per_gas).unwrap(),
     )
     .await;
 

@@ -8,7 +8,6 @@ use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
 use crate::eth_units::{GweiAmount, GWEI_PER_ETH, GWEI_PER_ETH_F64};
 use crate::execution_chain::LONDON_HARDFORK_TIMESTAMP;
-use crate::key_value_store::KeyValue;
 use crate::{caching, config, key_value_store};
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -160,10 +159,8 @@ pub async fn update_validator_rewards() {
 
     key_value_store::set_value(
         &pool,
-        KeyValue {
-            key: &CacheKey::ValidatorRewards.to_db_key(),
-            value: &serde_json::to_value(validator_rewards).unwrap(),
-        },
+        &CacheKey::ValidatorRewards.to_db_key(),
+        &serde_json::to_value(validator_rewards).unwrap(),
     )
     .await;
 

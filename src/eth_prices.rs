@@ -12,7 +12,7 @@ use crate::{
     caching::{self, CacheKey},
     config,
     execution_chain::LONDON_HARDFORK_TIMESTAMP,
-    key_value_store::{self, KeyValue},
+    key_value_store,
 };
 
 #[derive(Debug, FromRow)]
@@ -175,10 +175,8 @@ async fn update_eth_price_with_most_recent(
 
             key_value_store::set_value(
                 sqlx::Acquire::acquire(&mut *connection).await.unwrap(),
-                KeyValue {
-                    key: CacheKey::EthPrice.to_db_key(),
-                    value: &serde_json::to_value(&eth_price_stats).unwrap(),
-                },
+                CacheKey::EthPrice.to_db_key(),
+                &serde_json::to_value(&eth_price_stats).unwrap(),
             )
             .await;
 
