@@ -250,7 +250,7 @@ pub async fn start_server() {
             get(|state: StateExtension| async move {
                 get_cached(
                     &state.clone().cache.total_difficulty_progress,
-                    "max-age=600, stale-while-revalidate=86400",
+                    "max-age=60, stale-while-revalidate=86400",
                 )
                 .await
                 .into_response()
