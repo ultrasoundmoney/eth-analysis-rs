@@ -111,6 +111,8 @@ pub async fn get_closest_price_by_minute(
     let body = reqwest::get(url)
         .await
         .unwrap()
+        .error_for_status()
+        .unwrap()
         .json::<PriceResponse>()
         .await
         .unwrap();
