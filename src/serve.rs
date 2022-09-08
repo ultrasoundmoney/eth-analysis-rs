@@ -29,6 +29,7 @@ type CachedValue = RwLock<Option<(Value, Hash)>>;
 #[derive(Debug)]
 struct Cache {
     base_fee_per_gas: CachedValue,
+    base_fees_over_time: CachedValue,
     block_lag: CachedValue,
     eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
@@ -137,6 +138,10 @@ async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgCo
                     )
                     .await
                 }
+                key @ CacheKey::BaseFeeOverTime => {
+                    update_cache_from_key(&mut connection, &state.cache.base_fees_over_time, &key)
+                        .await
+                }
                 key => {
                     tracing::debug!("received unsupported cache key: {key:?}, skipping");
                 }
@@ -157,6 +162,8 @@ pub async fn start_server() {
     tracing::debug!("warming up total difficulty progress cache");
 
     let base_fee_per_gas = get_value_hash_lock(&mut connection, &CacheKey::BaseFeePerGas).await;
+    let base_fees_over_time =
+        get_value_hash_lock(&mut connection, &CacheKey::BaseFeeOverTime).await;
     let block_lag = get_value_hash_lock(&mut connection, &CacheKey::BlockLag).await;
     let eth_price_stats = get_value_hash_lock(&mut connection, &CacheKey::EthPrice).await;
     let eth_supply_parts = get_value_hash_lock(&mut connection, &CacheKey::EthSupplyParts).await;
@@ -166,6 +173,7 @@ pub async fn start_server() {
 
     let cache = Arc::new(Cache {
         base_fee_per_gas,
+        base_fees_over_time,
         block_lag,
         eth_price_stats,
         eth_supply_parts,
@@ -251,6 +259,17 @@ pub async fn start_server() {
                 get_cached(
                     &state.clone().cache.total_difficulty_progress,
                     "max-age=60, stale-while-revalidate=86400",
+                )
+                .await
+                .into_response()
+            }),
+        )
+        .route(
+            "/api/v2/fees/base-fees-over-time",
+            get(|state: StateExtension| async move {
+                get_cached(
+                    &state.clone().cache.base_fees_over_time,
+                    "max-age=600, stale-while-revalidate=3600",
                 )
                 .await
                 .into_response()

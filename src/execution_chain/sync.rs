@@ -21,7 +21,7 @@ use super::node::BlockNumber;
 use super::node::Head;
 use crate::config;
 use crate::execution_chain;
-use crate::execution_chain::base_fee_per_gas;
+use crate::execution_chain::base_fees;
 use crate::execution_chain::block_store::BlockStore;
 use crate::execution_chain::merge_estimate;
 use crate::execution_chain::ExecutionNode;
@@ -35,7 +35,7 @@ async fn rollback_numbers(block_store: &mut BlockStore<'_>, greater_than_or_equa
 async fn sync_by_hash(
     block_store: &mut BlockStore<'_>,
     execution_node: &mut ExecutionNode,
-    executor: &PgPool,
+    db_pool: &PgPool,
     hash: &str,
 ) {
     let block = execution_node
@@ -43,7 +43,7 @@ async fn sync_by_hash(
         .await
         .expect("block not to disappear between deciding to add it and adding it");
 
-    let mut connection = executor.acquire().await.unwrap();
+    let mut connection = db_pool.acquire().await.unwrap();
     let eth_price = eth_prices::get_eth_price_by_block(&mut *connection, &block)
         .await
         .expect("eth price close to block to be available");
@@ -58,8 +58,8 @@ async fn sync_by_hash(
     // until we're in-sync with the chain again.
     if is_synced {
         tracing::debug!("we're synced, running on_new_head for skippables");
-        merge_estimate::on_new_head(executor, &block).await;
-        base_fee_per_gas::on_new_head(executor, &block).await;
+        merge_estimate::on_new_block(db_pool, &block).await;
+        base_fees::on_new_block(db_pool, &block).await;
     }
 }
 
