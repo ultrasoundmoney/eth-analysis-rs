@@ -4,7 +4,7 @@ mod node;
 pub mod snapshot;
 mod sync;
 
-pub use export::write_deltas;
+pub use export::{summary_from_deltas_csv, write_deltas};
 pub use logs::write_deltas_log;
 pub use node::{stream_supply_delta_chunks, stream_supply_deltas_from};
 pub use sync::add_delta;

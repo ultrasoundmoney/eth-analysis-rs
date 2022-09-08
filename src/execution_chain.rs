@@ -21,6 +21,8 @@ use lazy_static::lazy_static;
 pub use logs::write_heads_log as write_execution_heads_log;
 pub use node::{stream_new_heads, ExecutionNode};
 pub use supply_deltas::stream_supply_delta_chunks;
+pub use supply_deltas::stream_supply_deltas_from;
+pub use supply_deltas::summary_from_deltas_csv;
 pub use supply_deltas::sync_deltas as sync_execution_supply_deltas;
 pub use supply_deltas::write_deltas as write_execution_supply_deltas;
 pub use supply_deltas::write_deltas_log as write_execution_supply_deltas_log;
