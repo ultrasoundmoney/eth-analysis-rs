@@ -27,7 +27,7 @@ struct MergeEstimate {
     total_difficulty: TotalDifficulty,
 }
 
-pub async fn on_new_head(executor: &PgPool, block: &ExecutionNodeBlock) {
+pub async fn on_new_block(executor: &PgPool, block: &ExecutionNodeBlock) {
     tracing::debug!("updating merge TTD countdown");
 
     let blocks_left =
