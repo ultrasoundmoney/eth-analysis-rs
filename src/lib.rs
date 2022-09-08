@@ -27,6 +27,7 @@ pub use eth_prices::heal_eth_prices;
 pub use eth_prices::record_eth_price;
 pub use eth_prices::resync_all;
 pub use eth_supply_parts::update as update_total_supply;
+pub use execution_chain::summary_from_deltas_csv;
 pub use execution_chain::sync_execution_blocks;
 pub use execution_chain::sync_execution_supply_deltas;
 pub use execution_chain::update_total_difficulty_progress;
