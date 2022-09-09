@@ -1,6 +1,9 @@
 use chrono::{DateTime, Datelike, Duration, TimeZone, Utc};
 use lazy_static::lazy_static;
 
+// pub const SECONDS_PER_SLOT: u8 = 12;
+// pub const SLOTS_PER_EPOCH: u8 = 32;
+
 lazy_static! {
     pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp(1606824023, 0);
 }
