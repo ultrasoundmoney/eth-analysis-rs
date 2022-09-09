@@ -191,7 +191,9 @@ mod tests {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        states::store_state(&mut transaction, "0xtest_root", &0).await;
+        states::store_state(&mut transaction, "0xtest_root", &0)
+            .await
+            .unwrap();
         store_effective_balance_sum(&mut transaction, GweiAmount(10), &"0xtest_root".to_string())
             .await;
 

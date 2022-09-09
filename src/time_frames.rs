@@ -28,6 +28,7 @@ impl From<LimitedTimeFrame> for PgInterval {
 }
 
 pub enum TimeFrame {
+    #[allow(dead_code)]
     All,
     LimitedTimeFrame(LimitedTimeFrame),
 }
