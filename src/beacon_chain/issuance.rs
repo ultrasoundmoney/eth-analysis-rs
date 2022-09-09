@@ -1,5 +1,7 @@
-use chrono::{Duration, DurationRound};
-use sqlx::PgExecutor;
+use std::thread::current;
+
+use chrono::{DateTime, Duration, DurationRound, Utc};
+use sqlx::{postgres::PgRow, Acquire, PgConnection, PgExecutor, Row};
 
 use crate::{
     eth_units::GweiAmount,
@@ -63,17 +65,30 @@ pub async fn get_issuance_by_start_of_day<'a>(
     })
 }
 
-pub async fn get_current_issuance<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result<GweiAmount> {
-    sqlx::query!(
+pub struct BeaconIssuance {
+    pub gwei: GweiAmount,
+    timestamp: DateTime<Utc>,
+}
+
+pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> BeaconIssuance {
+    sqlx::query(
         "
-            SELECT gwei FROM beacon_issuance
+            SELECT gwei, timestamp FROM beacon_issuance
             ORDER BY timestamp DESC
             LIMIT 1
-        "
+        ",
     )
-    .fetch_one(pool)
+    .map(|row: PgRow| {
+        let timestamp = row.get::<DateTime<Utc>, _>("timestamp");
+        let gwei = row.get::<i64, _>("gwei") as u64;
+        BeaconIssuance {
+            timestamp,
+            gwei: GweiAmount(gwei),
+        }
+    })
+    .fetch_one(executor)
     .await
-    .map(|row| GweiAmount(row.gwei as u64))
+    .unwrap()
 }
 
 pub async fn delete_issuances<'a>(connection: impl PgExecutor<'a>, greater_than_or_equal: &Slot) {
@@ -92,14 +107,42 @@ pub async fn delete_issuances<'a>(connection: impl PgExecutor<'a>, greater_than_
     .unwrap();
 }
 
+pub async fn get_day7_ago_issuance(
+    executor: impl PgExecutor<'_>,
+    last_timestamp: DateTime<Utc>,
+) -> GweiAmount {
+    sqlx::query(
+        "
+
+            SELECT
+                gwei
+            FROM
+                beacon_issuance
+            WHERE timestamp = $1 - '7 days'::INTERVAL
+        ",
+    )
+    .bind(last_timestamp)
+    .map(|row: PgRow| {
+        let gwei_i64 = row.get::<i64, _>("gwei") as u64;
+        GweiAmount(gwei_i64)
+    })
+    .fetch_one(executor)
+    .await
+    .unwrap()
+}
+
+pub async fn get_last_week_issuance(executor: &mut PgConnection) -> GweiAmount {
+    let current_issuance = get_current_issuance(executor.acquire().await.unwrap()).await;
+    let day7_ago_issuance = get_day7_ago_issuance(executor, current_issuance.timestamp).await;
+    current_issuance.gwei - day7_ago_issuance
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
-    use serial_test::serial;
-    use sqlx::{Connection, PgConnection};
 
     use super::*;
-    use crate::{beacon_chain::states::store_state, config};
+    use crate::{beacon_chain::states::store_state, db_testing};
 
     #[test]
     fn calc_issuance_test() {
@@ -113,7 +156,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn timestamp_is_start_of_day_test() {
         let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
         let mut transaction = connection.begin().await.unwrap();
@@ -144,7 +186,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn get_current_issuance_test() {
         let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
         let mut transaction = connection.begin().await.unwrap();
@@ -208,5 +249,75 @@ mod tests {
             .unwrap();
 
         assert_eq!(issuance_by_day_after.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn get_day7_ago_issuance_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xtest_issuance_1", &3599)
+            .await
+            .unwrap();
+
+        store_state(&mut transaction, "0xtest_issuance_2", &10799)
+            .await
+            .unwrap();
+
+        store_issuance_for_day(
+            &mut transaction,
+            "0xtest_issuance_1",
+            &FirstOfDaySlot::new(&3599).unwrap(),
+            &GweiAmount(100),
+        )
+        .await;
+
+        store_issuance_for_day(
+            &mut transaction,
+            "0xtest_issuance_2",
+            &FirstOfDaySlot::new(&53999).unwrap(),
+            &GweiAmount(110),
+        )
+        .await;
+
+        let current_issuance = get_current_issuance(&mut transaction).await;
+        let day7_ago_issuance =
+            get_day7_ago_issuance(&mut transaction, current_issuance.timestamp).await;
+
+        assert_eq!(day7_ago_issuance, GweiAmount(100));
+    }
+
+    #[tokio::test]
+    async fn get_last_week_issuance_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xtest_issuance_1", &3599)
+            .await
+            .unwrap();
+
+        store_state(&mut transaction, "0xtest_issuance_2", &10799)
+            .await
+            .unwrap();
+
+        store_issuance_for_day(
+            &mut transaction,
+            "0xtest_issuance_1",
+            &FirstOfDaySlot::new(&3599).unwrap(),
+            &GweiAmount(100),
+        )
+        .await;
+
+        store_issuance_for_day(
+            &mut transaction,
+            "0xtest_issuance_2",
+            &FirstOfDaySlot::new(&53999).unwrap(),
+            &GweiAmount(110),
+        )
+        .await;
+
+        let issuance = get_last_week_issuance(&mut transaction).await;
+
+        assert_eq!(issuance, GweiAmount(10));
     }
 }

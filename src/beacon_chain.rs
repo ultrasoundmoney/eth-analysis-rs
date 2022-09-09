@@ -16,6 +16,7 @@ pub use effective_balance_sum::{
 };
 pub use issuance::get_current_issuance;
 pub use issuance::get_issuance_by_start_of_day;
+pub use issuance::get_last_week_issuance;
 pub use node::BeaconNode;
 pub use rewards::update_validator_rewards;
 pub use states::Slot;
