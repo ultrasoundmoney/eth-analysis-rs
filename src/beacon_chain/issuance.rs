@@ -1,5 +1,3 @@
-use std::thread::current;
-
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use sqlx::{postgres::PgRow, Acquire, PgConnection, PgExecutor, Row};
 
@@ -157,7 +155,7 @@ mod tests {
 
     #[tokio::test]
     async fn timestamp_is_start_of_day_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance", &3599)
@@ -187,7 +185,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_current_issuance_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance_1", &3599)
@@ -214,14 +212,14 @@ mod tests {
         )
         .await;
 
-        let current_issuance = get_current_issuance(&mut transaction).await.unwrap();
+        let current_issuance = get_current_issuance(&mut transaction).await.gwei;
 
         assert_eq!(current_issuance, GweiAmount(110));
     }
 
     #[tokio::test]
     async fn delete_issuance_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance", &3599)
