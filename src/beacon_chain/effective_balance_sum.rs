@@ -127,11 +127,10 @@ pub async fn update_effective_balance_sum() {
 
 #[cfg(test)]
 mod tests {
-    use sqlx::{Connection, PgConnection};
+    use sqlx::Connection;
 
     use crate::beacon_chain::states;
     use crate::beacon_chain::BeaconNode;
-    use crate::config;
     use crate::db_testing;
 
     use super::*;
@@ -152,7 +151,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_store_effective_balance_sum_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         states::store_state(&mut transaction, "0xstate_root", &0)
@@ -174,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_not_stored_effective_balance_sum_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         states::store_state(&mut transaction, "0xstate_root", &0)
