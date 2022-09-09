@@ -37,3 +37,18 @@ impl From<LimitedTimeFrame> for TimeFrame {
         TimeFrame::LimitedTimeFrame(limited_time_frame)
     }
 }
+
+impl TimeFrame {
+    pub fn get_epoch_count(self) -> f64 {
+        match self {
+            TimeFrame::All => unimplemented!(),
+            TimeFrame::LimitedTimeFrame(limited_time_frame) => match limited_time_frame {
+                LimitedTimeFrame::Day1 => 225.0,
+                LimitedTimeFrame::Day30 => 6750.0,
+                LimitedTimeFrame::Day7 => 1575.0,
+                LimitedTimeFrame::Hour1 => 9.375,
+                LimitedTimeFrame::Minute5 => 0.78125,
+            },
+        }
+    }
+}

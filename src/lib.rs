@@ -18,6 +18,7 @@ mod phoenix;
 mod serve;
 mod supply_projection;
 mod time;
+mod time_frames;
 
 pub use beacon_chain::{
     sync_beacon_states, update_effective_balance_sum, update_validator_rewards,

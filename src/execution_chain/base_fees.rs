@@ -4,11 +4,14 @@ use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 
 use crate::{
+    beacon_chain::get_last_stored_effective_balance_sum,
     caching::{self, CacheKey},
+    eth_units::GweiAmount,
     key_value_store,
+    time_frames::{LimitedTimeFrame, TimeFrame},
 };
 
-use super::node::ExecutionNodeBlock;
+use super::node::{BlockNumber, ExecutionNodeBlock};
 
 #[derive(Debug, Serialize)]
 struct BaseFeePerGas {
@@ -38,37 +41,57 @@ type WeiU64 = u64;
 
 #[derive(Debug, PartialEq, Serialize)]
 struct BaseFeeAtTime {
+    block_number: BlockNumber,
     wei: WeiU64,
-    timestamp: DateTime<Utc>,
 }
 
 #[derive(Serialize)]
 struct BaseFeeOverTime {
-    block_number: u32,
+    block_number: BlockNumber,
     d1: Vec<BaseFeeAtTime>,
+    barrier: f64,
 }
 
 async fn get_base_fee_over_time_d1<'a>(executor: impl PgExecutor<'a>) -> Vec<BaseFeeAtTime> {
     sqlx::query(
         "
             SELECT
-                timestamp,
+                number,
                 base_fee_per_gas
             FROM
                 blocks_next
             WHERE
-                timestamp >= NOW() - '1 day'::INTERVAL
+                timestamp >= NOW() - '1 hour'::INTERVAL
             ORDER BY number DESC
         ",
     )
     .map(|row: PgRow| {
         let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
-        let timestamp = row.get::<DateTime<Utc>, _>("timestamp");
-        BaseFeeAtTime { wei, timestamp }
+        let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
+        BaseFeeAtTime { wei, block_number }
     })
     .fetch_all(executor)
     .await
     .unwrap()
+}
+
+const BASE_REWARD_FACTOR: u8 = 64;
+const APPROXIMATE_GAS_USED_PER_BLOCK: u32 = 15_000_000u32;
+
+fn get_issuance_time_frame(
+    time_frame: TimeFrame,
+    GweiAmount(effective_balance_sum): GweiAmount,
+) -> f64 {
+    let effective_balance_sum = effective_balance_sum as f64;
+    let max_issuance_per_epoch = (((BASE_REWARD_FACTOR as f64) * effective_balance_sum)
+        / (effective_balance_sum.sqrt().floor()))
+    .trunc();
+    let issuance = max_issuance_per_epoch * time_frame.get_epoch_count();
+    return issuance;
+}
+
+fn get_barrier(issuance_gwei: f64, block_count: u32) -> f64 {
+    issuance_gwei / block_count as f64 / APPROXIMATE_GAS_USED_PER_BLOCK as f64
 }
 
 async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock) {
@@ -76,7 +99,15 @@ async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock
 
     let base_fees_d1 = get_base_fee_over_time_d1(executor).await;
 
+    let effective_balance_sum = get_last_stored_effective_balance_sum(executor).await;
+    let issuance_d1 = get_issuance_time_frame(
+        TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+        effective_balance_sum,
+    );
+    let barrier = get_barrier(issuance_d1, base_fees_d1.len().try_into().unwrap());
+
     let base_fees_over_time = BaseFeeOverTime {
+        barrier,
         block_number: block.number,
         d1: base_fees_d1,
     };
@@ -136,8 +167,29 @@ mod tests {
             base_fees_d1,
             vec![BaseFeeAtTime {
                 wei: 1,
-                timestamp: test_block.timestamp
+                block_number: 0
             }]
         );
+    }
+
+    const SLOT_4658998_EFFECTIVE_BALANCE_SUM: u64 = 13607320000000000;
+
+    #[test]
+    fn get_issuance_test() {
+        let issuance = get_issuance_time_frame(
+            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+            GweiAmount(SLOT_4658998_EFFECTIVE_BALANCE_SUM),
+        );
+        assert_eq!(issuance, 69990251296.875);
+    }
+
+    #[test]
+    fn get_barrier_test() {
+        let issuance = get_issuance_time_frame(
+            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+            GweiAmount(SLOT_4658998_EFFECTIVE_BALANCE_SUM),
+        );
+        let barrier = get_barrier(issuance, 300);
+        assert_eq!(barrier, 15.553389177083334);
     }
 }
