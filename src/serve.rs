@@ -265,7 +265,7 @@ pub async fn start_server() {
             }),
         )
         .route(
-            "/api/v2/fees/base-fees-over-time",
+            "/api/v2/fees/base-fee-over-time",
             get(|state: StateExtension| async move {
                 get_cached(
                     &state.clone().cache.base_fees_over_time,

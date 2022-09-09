@@ -43,7 +43,7 @@ struct BaseFeeAtTime {
 }
 
 #[derive(Serialize)]
-struct BaseFeesOverTime {
+struct BaseFeeOverTime {
     block_number: u32,
     d1: Vec<BaseFeeAtTime>,
 }
@@ -76,7 +76,7 @@ async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock
 
     let base_fees_d1 = get_base_fee_over_time_d1(executor).await;
 
-    let base_fees_over_time = BaseFeesOverTime {
+    let base_fees_over_time = BaseFeeOverTime {
         block_number: block.number,
         d1: base_fees_d1,
     };
