@@ -4,11 +4,11 @@ use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 
 use crate::{
-    beacon_chain::get_last_stored_effective_balance_sum,
+    beacon_chain,
     caching::{self, CacheKey},
     eth_units::GweiAmount,
     key_value_store,
-    time_frames::{LimitedTimeFrame, TimeFrame},
+    time_frames::TimeFrame,
 };
 
 use super::node::{BlockNumber, ExecutionNodeBlock};
@@ -52,7 +52,7 @@ struct BaseFeeOverTime {
     barrier: f64,
 }
 
-async fn get_base_fee_over_time_d1<'a>(executor: impl PgExecutor<'a>) -> Vec<BaseFeeAtTime> {
+async fn get_base_fee_over_time<'a>(executor: impl PgExecutor<'a>) -> Vec<BaseFeeAtTime> {
     sqlx::query(
         "
             SELECT
@@ -78,6 +78,7 @@ async fn get_base_fee_over_time_d1<'a>(executor: impl PgExecutor<'a>) -> Vec<Bas
 const BASE_REWARD_FACTOR: u8 = 64;
 const APPROXIMATE_GAS_USED_PER_BLOCK: u32 = 15_000_000u32;
 
+#[allow(dead_code)]
 fn get_issuance_time_frame(
     time_frame: TimeFrame,
     GweiAmount(effective_balance_sum): GweiAmount,
@@ -90,30 +91,32 @@ fn get_issuance_time_frame(
     return issuance;
 }
 
-const APPROXIMATE_NUMBER_OF_BLOCKS_PER_HOUR: i32 = 300;
+const APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK: i32 = 50400;
 
 fn get_barrier(issuance_gwei: f64) -> f64 {
     issuance_gwei
-        / APPROXIMATE_NUMBER_OF_BLOCKS_PER_HOUR as f64
+        / APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK as f64
         / APPROXIMATE_GAS_USED_PER_BLOCK as f64
 }
 
 async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock) {
     tracing::debug!("updating base fee over time");
 
-    let base_fees_d1 = get_base_fee_over_time_d1(executor).await;
+    let base_fees = get_base_fee_over_time(executor).await;
 
-    let effective_balance_sum = get_last_stored_effective_balance_sum(executor).await;
-    let issuance_d1 = get_issuance_time_frame(
-        TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-        effective_balance_sum,
-    );
-    let barrier = get_barrier(issuance_d1);
+    let issuance =
+        beacon_chain::get_last_week_issuance(&mut executor.acquire().await.unwrap()).await;
+
+    tracing::debug!("issuance: {issuance}");
+
+    let barrier = get_barrier(issuance.0 as f64);
+
+    tracing::debug!("barrier: {barrier}");
 
     let base_fees_over_time = BaseFeeOverTime {
         barrier,
         block_number: block.number,
-        d1: base_fees_d1,
+        d1: base_fees,
     };
 
     key_value_store::set_value(
@@ -165,7 +168,7 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
 
-        let base_fees_d1 = get_base_fee_over_time_d1(&mut transaction).await;
+        let base_fees_d1 = get_base_fee_over_time(&mut transaction).await;
 
         assert_eq!(
             base_fees_d1,
@@ -189,11 +192,8 @@ mod tests {
 
     #[test]
     fn get_barrier_test() {
-        let issuance = get_issuance_time_frame(
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-            GweiAmount(SLOT_4658998_EFFECTIVE_BALANCE_SUM),
-        );
+        let issuance = 1.124159e+13;
         let barrier = get_barrier(issuance);
-        assert_eq!(barrier, 15.553389177083334);
+        assert_eq!(barrier, 14.869828042328042);
     }
 }
