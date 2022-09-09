@@ -1,4 +1,7 @@
-use sqlx::{postgres::PgPoolOptions, PgExecutor};
+use sqlx::{
+    postgres::{PgPoolOptions, PgRow},
+    PgExecutor, Row,
+};
 
 use crate::{
     beacon_chain::states::get_last_state,
@@ -45,6 +48,28 @@ pub async fn get_stored_effective_balance_sum(
 
     row.effective_balance_sum
         .map(|effective_balance_sum| GweiAmount(effective_balance_sum as u64))
+}
+
+pub async fn get_last_stored_effective_balance_sum(executor: impl PgExecutor<'_>) -> GweiAmount {
+    sqlx::query(
+        "
+            SELECT
+                effective_balance_sum
+            FROM
+                beacon_states
+            WHERE
+                effective_balance_sum IS NOT NULL
+            ORDER BY slot DESC
+            LIMIT 1
+        ",
+    )
+    .map(|row: PgRow| {
+        let effective_balance_sum_i64 = row.get::<i64, _>("effective_balance_sum");
+        GweiAmount(effective_balance_sum_i64.try_into().unwrap())
+    })
+    .fetch_one(executor)
+    .await
+    .expect("should have at least one effective balance sum stored before getting the last")
 }
 
 async fn store_effective_balance_sum<'a>(
@@ -107,6 +132,7 @@ mod tests {
     use crate::beacon_chain::states;
     use crate::beacon_chain::BeaconNode;
     use crate::config;
+    use crate::db_testing;
 
     use super::*;
 
@@ -159,5 +185,20 @@ mod tests {
             get_stored_effective_balance_sum(&mut transaction, &"0xstate_root".to_string()).await;
 
         assert_eq!(stored_effective_balance_sum, None)
+    }
+
+    #[tokio::test]
+    async fn get_last_stored_effective_balance_sum_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        states::store_state(&mut transaction, "0xtest_root", &0).await;
+        store_effective_balance_sum(&mut transaction, GweiAmount(10), &"0xtest_root".to_string())
+            .await;
+
+        let last_stored_effective_balance_sum =
+            get_last_stored_effective_balance_sum(&mut transaction).await;
+
+        assert_eq!(last_stored_effective_balance_sum, GweiAmount(10));
     }
 }
