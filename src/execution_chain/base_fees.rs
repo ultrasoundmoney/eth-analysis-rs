@@ -90,8 +90,12 @@ fn get_issuance_time_frame(
     return issuance;
 }
 
-fn get_barrier(issuance_gwei: f64, block_count: u32) -> f64 {
-    issuance_gwei / block_count as f64 / APPROXIMATE_GAS_USED_PER_BLOCK as f64
+const APPROXIMATE_NUMBER_OF_BLOCKS_PER_HOUR: i32 = 300;
+
+fn get_barrier(issuance_gwei: f64) -> f64 {
+    issuance_gwei
+        / APPROXIMATE_NUMBER_OF_BLOCKS_PER_HOUR as f64
+        / APPROXIMATE_GAS_USED_PER_BLOCK as f64
 }
 
 async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock) {
@@ -104,7 +108,7 @@ async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock
         TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
         effective_balance_sum,
     );
-    let barrier = get_barrier(issuance_d1, base_fees_d1.len().try_into().unwrap());
+    let barrier = get_barrier(issuance_d1);
 
     let base_fees_over_time = BaseFeeOverTime {
         barrier,
@@ -189,7 +193,7 @@ mod tests {
             TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
             GweiAmount(SLOT_4658998_EFFECTIVE_BALANCE_SUM),
         );
-        let barrier = get_barrier(issuance, 300);
+        let barrier = get_barrier(issuance);
         assert_eq!(barrier, 15.553389177083334);
     }
 }
