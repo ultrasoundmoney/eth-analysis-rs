@@ -1,16 +1,14 @@
-mod gas_market;
-
 use chrono::{DateTime, Utc};
-use futures::join;
+use futures::try_join;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    eth_units::GweiNewtype,
+    eth_units::{GweiF64, GweiNewtype},
     key_value_store,
-    time_frames::TimeFrame,
+    time_frames::{LimitedTimeFrame, TimeFrame},
 };
 
 use super::node::{BlockNumber, ExecutionNodeBlock};
@@ -21,7 +19,8 @@ struct BaseFeePerGas {
     wei: u64,
 }
 
-async fn update_last_base_fee(executor: &PgPool, block: &ExecutionNodeBlock) {
+// Find a way to wrap the result of this fn in Ok whilst using try_join!
+async fn update_last_base_fee(executor: &PgPool, block: &ExecutionNodeBlock) -> anyhow::Result<()> {
     tracing::debug!("updating current base fee");
 
     let base_fee_per_gas = BaseFeePerGas {
@@ -37,6 +36,8 @@ async fn update_last_base_fee(executor: &PgPool, block: &ExecutionNodeBlock) {
     .await;
 
     caching::publish_cache_update(executor, CacheKey::BaseFeePerGas).await;
+
+    Ok(())
 }
 
 type WeiU64 = u64;
@@ -101,7 +102,104 @@ fn get_barrier(issuance_gwei: f64) -> f64 {
         / APPROXIMATE_GAS_USED_PER_BLOCK as f64
 }
 
-async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock) {
+async fn get_base_fee_per_gas_average(
+    executor: impl PgExecutor<'_>,
+    time_frame: TimeFrame,
+) -> sqlx::Result<GweiF64> {
+    match time_frame {
+        TimeFrame::All => {
+            tracing::warn!("getting average fee for time frame 'all' is slow, and may be incorrect depending on blocks_next backfill status");
+            sqlx::query(
+                "
+                    SELECT
+                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
+                    FROM
+                        blocks_next
+                ",
+            )
+            .map(|row: PgRow| row.get::<f64, _>("average"))
+            .fetch_one(executor)
+            .await
+        },
+        TimeFrame::LimitedTimeFrame(limited_time_frame) => {
+            sqlx::query(
+                "
+                    SELECT
+                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
+                    FROM
+                        blocks_next
+                    WHERE
+                        timestamp >= NOW() - $1
+                ",
+            )
+            .bind(limited_time_frame.get_postgres_interval())
+            .map(|row: PgRow| row.get::<f64, _>("average"))
+            .fetch_one(executor)
+            .await
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct BaseFeePerGasMinMax {
+    min: GweiF64,
+    max: GweiF64,
+}
+
+async fn get_base_fee_per_gas_min_max(
+    executor: impl PgExecutor<'_>,
+    time_frame: TimeFrame,
+) -> sqlx::Result<BaseFeePerGasMinMax> {
+    match time_frame {
+        TimeFrame::All => {
+            tracing::warn!("getting the min and max base fee per gas for all blocks is low, and may be incorrect depending on blocks_next backfill status");
+            sqlx::query(
+                "
+                    SELECT
+                        MIN(base_fee_per_gas),
+                        MAX(base_fee_per_gas)
+                    FROM
+                        blocks_next
+                    WHERE
+                    
+                ",
+            )
+            .map(|row: PgRow| {
+                let min = row.get::<i64, _>("min") as f64;
+                let max = row.get::<i64, _>("max") as f64;
+                BaseFeePerGasMinMax { min, max }
+            })
+            .fetch_one(executor)
+            .await
+        }
+        TimeFrame::LimitedTimeFrame(limited_time_frame) => {
+            sqlx::query(
+                "
+                    SELECT
+                        MIN(base_fee_per_gas),
+                        MAX(base_fee_per_gas)
+                    FROM
+                        blocks_next
+                        WHERE
+                            timestamp >= NOW() - $1
+                ",
+            )
+            .bind(limited_time_frame.get_postgres_interval())
+            .map(|row: PgRow| {
+                let min = row.get::<i64, _>("min") as f64;
+                let max = row.get::<i64, _>("max") as f64;
+                BaseFeePerGasMinMax { min, max }
+            })
+            .fetch_one(executor)
+            .await
+        }
+    }
+}
+
+async fn update_base_fee_stats(
+    executor: &PgPool,
+    block: &ExecutionNodeBlock,
+) -> anyhow::Result<()> {
     tracing::debug!("updating base fee over time");
 
     let base_fees = get_base_fee_over_time(executor).await;
@@ -115,7 +213,7 @@ async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock
 
     tracing::debug!("barrier: {barrier}");
 
-    let base_fees_over_time = BaseFeeOverTime {
+    let base_fee_over_time = BaseFeeOverTime {
         barrier,
         block_number: block.number,
         d1: base_fees,
@@ -124,26 +222,56 @@ async fn update_base_fee_over_time(executor: &PgPool, block: &ExecutionNodeBlock
     key_value_store::set_value(
         executor,
         CacheKey::BaseFeeOverTime.to_db_key(),
-        &serde_json::to_value(base_fees_over_time).unwrap(),
+        &serde_json::to_value(base_fee_over_time).unwrap(),
     )
     .await;
 
     caching::publish_cache_update(executor, CacheKey::BaseFeeOverTime).await;
+
+    let BaseFeePerGasMinMax { min, max } =
+        get_base_fee_per_gas_min_max(executor, TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1)).await?;
+
+    let average = get_base_fee_per_gas_average(executor, TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1)).await?;
+
+    let base_fee_per_gas_stats = BaseFeePerGasStats { min, max, average, barrier };
+
+    key_value_store::set_value(
+        executor,
+        CacheKey::BaseFeePerGasStats.to_db_key(),
+        &serde_json::to_value(base_fee_per_gas_stats).unwrap(),
+    )
+    .await;
+
+    caching::publish_cache_update(executor, CacheKey::BaseFeePerGasStats).await;
+
+    Ok(())
 }
 
-pub async fn on_new_block<'a>(db_pool: &PgPool, block: &ExecutionNodeBlock) {
-    join!(
+#[derive(Serialize)]
+struct BaseFeePerGasStats {
+    average: GweiF64,
+    barrier: GweiF64,
+    max: GweiF64,
+    min: GweiF64,
+}
+
+pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> anyhow::Result<()> {
+    try_join!(
         update_last_base_fee(db_pool, block),
-        update_base_fee_over_time(db_pool, block)
-    );
+        update_base_fee_stats(db_pool, block)
+    )?;
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::SubsecRound;
+    use chrono::{Duration, SubsecRound};
     use sqlx::Acquire;
 
-    use crate::{db_testing, execution_chain::block_store::BlockStore, time_frames::LimitedTimeFrame};
+    use crate::{
+        db_testing, execution_chain::block_store::BlockStore, time_frames::LimitedTimeFrame,
+    };
 
     use super::*;
 
@@ -197,5 +325,113 @@ mod tests {
         let issuance = 1.124159e+13;
         let barrier = get_barrier(issuance);
         assert_eq!(barrier, 14.869828042328042);
+    }
+
+    #[tokio::test]
+    async fn get_average_fee_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let mut block_store = BlockStore::new(&mut *transaction);
+        let test_block_1 = ExecutionNodeBlock {
+            gas_used: 10,
+            base_fee_per_gas: 10,
+            ..make_test_block()
+        };
+        let test_block_2 = ExecutionNodeBlock {
+            gas_used: 20,
+            base_fee_per_gas: 20,
+            hash: "0xtest2".to_string(),
+            parent_hash: "0xtest".to_string(),
+            number: 1,
+            ..make_test_block()
+        };
+
+        block_store.store_block(&test_block_1, 0.0).await;
+        block_store.store_block(&test_block_2, 0.0).await;
+
+        let average_base_fee_per_gas = get_base_fee_per_gas_average(
+            &mut transaction,
+            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(average_base_fee_per_gas, 16.666666666666668);
+    }
+
+    #[tokio::test]
+    async fn get_average_fee_within_range_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let mut block_store = BlockStore::new(&mut *transaction);
+        let test_block_in_range = ExecutionNodeBlock {
+            gas_used: 10,
+            base_fee_per_gas: 10,
+            hash: "0xtest1".to_string(),
+            ..make_test_block()
+        };
+        let test_block_outside_range = ExecutionNodeBlock {
+            gas_used: 20,
+            base_fee_per_gas: 20,
+            timestamp: Utc::now().trunc_subsecs(0) - Duration::minutes(6),
+            hash: "0xtest2".to_string(),
+            parent_hash: "0xtest".to_string(),
+            number: 1,
+            ..make_test_block()
+        };
+
+        block_store.store_block(&test_block_in_range, 0.0).await;
+        block_store
+            .store_block(&test_block_outside_range, 0.0)
+            .await;
+
+        let average_base_fee_per_gas = get_base_fee_per_gas_average(
+            &mut transaction,
+            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Minute5),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(average_base_fee_per_gas, 10.0);
+    }
+
+    #[tokio::test]
+    async fn get_base_fee_per_gas_min_max_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let mut block_store = BlockStore::new(&mut *transaction);
+        let test_block_1 = ExecutionNodeBlock {
+            gas_used: 10,
+            base_fee_per_gas: 10,
+            hash: "0xtest1".to_string(),
+            ..make_test_block()
+        };
+        let test_block_2 = ExecutionNodeBlock {
+            gas_used: 20,
+            base_fee_per_gas: 20,
+            hash: "0xtest2".to_string(),
+            parent_hash: "0xtest".to_string(),
+            number: 1,
+            ..make_test_block()
+        };
+
+        block_store.store_block(&test_block_1, 0.0).await;
+        block_store.store_block(&test_block_2, 0.0).await;
+
+        let base_fee_per_gas_min_max =
+            get_base_fee_per_gas_min_max(&mut transaction, TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1))
+                .await
+                .unwrap();
+
+        assert_eq!(
+            base_fee_per_gas_min_max,
+            BaseFeePerGasMinMax {
+                min: 10.0,
+                max: 20.0
+            }
+        );
     }
 }

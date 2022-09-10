@@ -6,6 +6,7 @@ use sqlx::PgExecutor;
 pub enum CacheKey<'a> {
     BaseFeeOverTime,
     BaseFeePerGas,
+    BaseFeePerGasStats,
     BlockLag,
     Custom(&'a str),
     EffectiveBalanceSum,
@@ -23,6 +24,7 @@ impl Display for CacheKey<'_> {
         match self {
             Self::BaseFeeOverTime => write!(f, "base-fee-over-time"),
             Self::BaseFeePerGas => write!(f, "current-base-fee"),
+            Self::BaseFeePerGasStats => write!(f, "base-fee-per-gas-stats"),
             Self::BlockLag => write!(f, "block-lag"),
             Self::Custom(key) => write!(f, "{key}"),
             Self::EffectiveBalanceSum => write!(f, "effective-balance-sum"),
@@ -42,6 +44,7 @@ impl<'a> CacheKey<'a> {
         match self {
             &Self::BaseFeeOverTime => "base-fee-over-time",
             &Self::BaseFeePerGas => "current-base-fee",
+            &Self::BaseFeePerGasStats => "base-fee-per-gas-stats",
             &Self::BlockLag => "block-lag",
             &Self::Custom(key) => key,
             &Self::EffectiveBalanceSum => "effective-balance-sum",
@@ -61,6 +64,7 @@ impl<'a> From<&'a str> for CacheKey<'a> {
         match key {
             "base-fee-over-time" => Self::BaseFeeOverTime,
             "current-base-fee" => Self::BaseFeePerGas,
+            "base-fee-per-gas-stats" => Self::BaseFeePerGasStats,
             "block-lag" => Self::BlockLag,
             "effective-balance-sum" => Self::EffectiveBalanceSum,
             "eth-price" => Self::EthPrice,

@@ -59,7 +59,7 @@ async fn sync_by_hash(
     if is_synced {
         tracing::debug!("we're synced, running on_new_head for skippables");
         merge_estimate::on_new_block(db_pool, &block).await;
-        base_fees::on_new_block(db_pool, &block).await;
+        base_fees::on_new_block(db_pool, &block).await.unwrap();
     }
 }
 

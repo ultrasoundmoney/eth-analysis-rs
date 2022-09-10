@@ -27,6 +27,38 @@ impl From<LimitedTimeFrame> for PgInterval {
     }
 }
 
+impl LimitedTimeFrame {
+    pub fn get_postgres_interval(&self) -> PgInterval {
+        match self {
+            LimitedTimeFrame::Day1 => PgInterval {
+                months: 0,
+                days: 1,
+                microseconds: 0,
+            },
+            LimitedTimeFrame::Day30 => PgInterval {
+                months: 0,
+                days: 30,
+                microseconds: 0,
+            },
+            LimitedTimeFrame::Day7 => PgInterval {
+                months: 0,
+                days: 7,
+                microseconds: 0,
+            },
+            LimitedTimeFrame::Hour1 => PgInterval {
+                months: 0,
+                days: 0,
+                microseconds: Duration::hours(1).num_microseconds().unwrap(),
+            },
+            LimitedTimeFrame::Minute5 => PgInterval {
+                months: 0,
+                days: 0,
+                microseconds: Duration::minutes(5).num_microseconds().unwrap(),
+            },
+        }
+    }
+}
+
 pub enum TimeFrame {
     #[allow(dead_code)]
     All,

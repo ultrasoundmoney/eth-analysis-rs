@@ -10,7 +10,10 @@ pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
 pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
 
+#[allow(dead_code)]
 pub type Gwei = u64;
+
+pub type GweiF64 = f64;
 
 // TODO: Decide if using a NewType is worth it.
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
