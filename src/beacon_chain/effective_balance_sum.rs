@@ -50,6 +50,7 @@ pub async fn get_stored_effective_balance_sum(
         .map(|effective_balance_sum| GweiNewtype(effective_balance_sum as u64))
 }
 
+#[allow(dead_code)]
 pub async fn get_last_stored_effective_balance_sum(executor: impl PgExecutor<'_>) -> GweiNewtype {
     sqlx::query(
         "
