@@ -228,12 +228,26 @@ async fn update_base_fee_stats(
 
     caching::publish_cache_update(executor, CacheKey::BaseFeeOverTime).await;
 
-    let BaseFeePerGasMinMax { min, max } =
-        get_base_fee_per_gas_min_max(executor, TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1)).await?;
+    let BaseFeePerGasMinMax { min, max } = get_base_fee_per_gas_min_max(
+        executor,
+        TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+    )
+    .await?;
 
-    let average = get_base_fee_per_gas_average(executor, TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1)).await?;
+    let average = get_base_fee_per_gas_average(
+        executor,
+        TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+    )
+    .await?;
 
-    let base_fee_per_gas_stats = BaseFeePerGasStats { min, max, average, barrier };
+    let base_fee_per_gas_stats = BaseFeePerGasStats {
+        min,
+        max,
+        average,
+        barrier,
+        block_number: block.number,
+        timestamp: block.timestamp,
+    };
 
     key_value_store::set_value(
         executor,
@@ -251,8 +265,10 @@ async fn update_base_fee_stats(
 struct BaseFeePerGasStats {
     average: GweiF64,
     barrier: GweiF64,
+    block_number: u32,
     max: GweiF64,
     min: GweiF64,
+    timestamp: DateTime<Utc>,
 }
 
 pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> anyhow::Result<()> {
@@ -421,10 +437,12 @@ mod tests {
         block_store.store_block(&test_block_1, 0.0).await;
         block_store.store_block(&test_block_2, 0.0).await;
 
-        let base_fee_per_gas_min_max =
-            get_base_fee_per_gas_min_max(&mut transaction, TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1))
-                .await
-                .unwrap();
+        let base_fee_per_gas_min_max = get_base_fee_per_gas_min_max(
+            &mut transaction,
+            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
             base_fee_per_gas_min_max,
