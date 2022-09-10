@@ -6,7 +6,7 @@ use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    eth_units::{GweiF64, GweiNewtype},
+    eth_units::{GweiNewtype, WeiF64},
     key_value_store,
     time_frames::{LimitedTimeFrame, TimeFrame},
 };
@@ -105,7 +105,7 @@ fn get_barrier(issuance_gwei: f64) -> f64 {
 async fn get_base_fee_per_gas_average(
     executor: impl PgExecutor<'_>,
     time_frame: TimeFrame,
-) -> sqlx::Result<GweiF64> {
+) -> sqlx::Result<WeiF64> {
     match time_frame {
         TimeFrame::All => {
             tracing::warn!("getting average fee for time frame 'all' is slow, and may be incorrect depending on blocks_next backfill status");
@@ -142,8 +142,8 @@ async fn get_base_fee_per_gas_average(
 
 #[derive(Debug, PartialEq)]
 struct BaseFeePerGasMinMax {
-    min: GweiF64,
-    max: GweiF64,
+    min: WeiF64,
+    max: WeiF64,
 }
 
 async fn get_base_fee_per_gas_min_max(
@@ -263,11 +263,11 @@ async fn update_base_fee_stats(
 
 #[derive(Serialize)]
 struct BaseFeePerGasStats {
-    average: GweiF64,
-    barrier: GweiF64,
+    average: WeiF64,
+    barrier: WeiF64,
     block_number: u32,
-    max: GweiF64,
-    min: GweiF64,
+    max: WeiF64,
+    min: WeiF64,
     timestamp: DateTime<Utc>,
 }
 
