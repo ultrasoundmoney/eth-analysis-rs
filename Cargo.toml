@@ -8,7 +8,7 @@ axum = "0.5"
 anyhow = "1"
 async-tungstenite = { version = "0.17", features = ["tokio-runtime"] }
 base64 = "0.13"
-cached = "0.37"
+cached = "0.39"
 chrono = { version = "0.4", features = ["serde"] }
 console = "0.15"
 csv = "1"
