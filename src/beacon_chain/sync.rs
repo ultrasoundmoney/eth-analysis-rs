@@ -12,7 +12,7 @@ use sqlx::PgPool;
 use crate::beacon_chain::blocks::get_last_block_slot;
 use crate::config;
 use crate::eth_supply_parts;
-use crate::eth_units::GweiAmount;
+use crate::eth_units::GweiNewtype;
 use crate::json_codecs::from_u32_string;
 use crate::performance::TimedExt;
 
@@ -86,8 +86,8 @@ async fn store_state_with_block(
     state_root: &str,
     slot: &u32,
     header: &BeaconHeaderSignedEnvelope,
-    deposit_sum: &GweiAmount,
-    deposit_sum_aggregated: &GweiAmount,
+    deposit_sum: &GweiNewtype,
+    deposit_sum_aggregated: &GweiNewtype,
 ) {
     let mut transaction = pool.begin().await.unwrap();
 

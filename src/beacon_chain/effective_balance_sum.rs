@@ -7,17 +7,17 @@ use crate::{
     beacon_chain::states::get_last_state,
     caching::{self, CacheKey},
     config,
-    eth_units::GweiAmount,
+    eth_units::GweiNewtype,
 };
 
 use super::{node::StateRoot, BeaconNode};
 
-async fn get_effective_balance_sum(beacon_node: &BeaconNode, state_root: &StateRoot) -> GweiAmount {
+async fn get_effective_balance_sum(beacon_node: &BeaconNode, state_root: &StateRoot) -> GweiNewtype {
     beacon_node
         .get_validators_by_state(state_root)
         .await
         .map(|validators| {
-            validators.iter().fold(GweiAmount(0), |sum, validator| {
+            validators.iter().fold(GweiNewtype(0), |sum, validator| {
                 sum + validator.effective_balance
             })
         })
@@ -28,7 +28,7 @@ async fn get_effective_balance_sum(beacon_node: &BeaconNode, state_root: &StateR
 pub async fn get_stored_effective_balance_sum(
     executor: impl PgExecutor<'_>,
     state_root: &StateRoot,
-) -> Option<GweiAmount> {
+) -> Option<GweiNewtype> {
     // Although we expect not to have an effective_balance_sum for many state_roots we do expect
     // all requested state_roots to be in the DB.
     let row = sqlx::query!(
@@ -47,10 +47,10 @@ pub async fn get_stored_effective_balance_sum(
     .unwrap();
 
     row.effective_balance_sum
-        .map(|effective_balance_sum| GweiAmount(effective_balance_sum as u64))
+        .map(|effective_balance_sum| GweiNewtype(effective_balance_sum as u64))
 }
 
-pub async fn get_last_stored_effective_balance_sum(executor: impl PgExecutor<'_>) -> GweiAmount {
+pub async fn get_last_stored_effective_balance_sum(executor: impl PgExecutor<'_>) -> GweiNewtype {
     sqlx::query(
         "
             SELECT
@@ -65,7 +65,7 @@ pub async fn get_last_stored_effective_balance_sum(executor: impl PgExecutor<'_>
     )
     .map(|row: PgRow| {
         let effective_balance_sum_i64 = row.get::<i64, _>("effective_balance_sum");
-        GweiAmount(effective_balance_sum_i64.try_into().unwrap())
+        GweiNewtype(effective_balance_sum_i64.try_into().unwrap())
     })
     .fetch_one(executor)
     .await
@@ -74,7 +74,7 @@ pub async fn get_last_stored_effective_balance_sum(executor: impl PgExecutor<'_>
 
 async fn store_effective_balance_sum<'a>(
     executor: impl PgExecutor<'a>,
-    effective_balance_sum: GweiAmount,
+    effective_balance_sum: GweiNewtype,
     state_root: &StateRoot,
 ) {
     let gwei_i64: i64 = effective_balance_sum
@@ -138,7 +138,7 @@ mod tests {
     const SLOT_0_STATE_ROOT: &str =
         "0x7e76880eb67bbdc86250aa578958e9d0675e64e714337855204fb5abaaf82c2b";
 
-    const SLOT_0_EFFECTIVE_BALANCES_SUM: GweiAmount = GweiAmount(674016000000000);
+    const SLOT_0_EFFECTIVE_BALANCES_SUM: GweiNewtype = GweiNewtype(674016000000000);
 
     #[tokio::test]
     async fn get_effective_balance_sum_test() {
@@ -160,7 +160,7 @@ mod tests {
 
         store_effective_balance_sum(
             &mut transaction,
-            GweiAmount(10),
+            GweiNewtype(10),
             &"0xstate_root".to_string(),
         )
         .await;
@@ -168,7 +168,7 @@ mod tests {
         let stored_effective_balance_sum =
             get_stored_effective_balance_sum(&mut transaction, &"0xstate_root".to_string()).await;
 
-        assert_eq!(stored_effective_balance_sum, Some(GweiAmount(10)))
+        assert_eq!(stored_effective_balance_sum, Some(GweiNewtype(10)))
     }
 
     #[tokio::test]
@@ -194,12 +194,12 @@ mod tests {
         states::store_state(&mut transaction, "0xtest_root", &0)
             .await
             .unwrap();
-        store_effective_balance_sum(&mut transaction, GweiAmount(10), &"0xtest_root".to_string())
+        store_effective_balance_sum(&mut transaction, GweiNewtype(10), &"0xtest_root".to_string())
             .await;
 
         let last_stored_effective_balance_sum =
             get_last_stored_effective_balance_sum(&mut transaction).await;
 
-        assert_eq!(last_stored_effective_balance_sum, GweiAmount(10));
+        assert_eq!(last_stored_effective_balance_sum, GweiNewtype(10));
     }
 }

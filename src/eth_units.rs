@@ -10,23 +10,24 @@ pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
 pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
 
+pub type Gwei = u64;
+
+// TODO: Decide if using a NewType is worth it.
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
 // ~9_000_000_000 ETH, which is more than the entire supply.
 // When converting to f64 however, max safe is 2^53, so anything more than ~9M ETH will lose
 // accuracy. i.e. don't put this into JSON for amounts >9M ETH.
-// TODO: Guard against overflow.
-// Consider replacing with simple type alias.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(transparent)]
-pub struct GweiAmount(pub u64);
+pub struct GweiNewtype(pub u64);
 
-impl fmt::Display for GweiAmount {
+impl fmt::Display for GweiNewtype {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} gwei", self.0)
     }
 }
 
-impl GweiAmount {
+impl GweiNewtype {
     pub fn new(gwei: u64) -> Self {
         Self(gwei)
     }
@@ -40,21 +41,21 @@ impl GweiAmount {
     }
 }
 
-impl From<GweiAmount> for i64 {
-    fn from(GweiAmount(amount): GweiAmount) -> Self {
+impl From<GweiNewtype> for i64 {
+    fn from(GweiNewtype(amount): GweiNewtype) -> Self {
         i64::try_from(amount).unwrap()
     }
 }
 
-impl From<i64> for GweiAmount {
+impl From<i64> for GweiNewtype {
     fn from(gwei_i64: i64) -> Self {
-        GweiAmount(u64::try_from(gwei_i64).expect("failed to convert i64 into GweiAmount {}"))
+        GweiNewtype(u64::try_from(gwei_i64).expect("failed to convert i64 into GweiAmount {}"))
     }
 }
 
-impl From<String> for GweiAmount {
+impl From<String> for GweiNewtype {
     fn from(gwei_str: String) -> Self {
-        GweiAmount(
+        GweiNewtype(
             gwei_str
                 .parse::<u64>()
                 .expect("amount to be a string of a gwei amount that fits into u64"),
@@ -62,25 +63,25 @@ impl From<String> for GweiAmount {
     }
 }
 
-impl Add<GweiAmount> for GweiAmount {
+impl Add<GweiNewtype> for GweiNewtype {
     type Output = Self;
 
-    fn add(self, GweiAmount(rhs): Self) -> Self::Output {
-        let GweiAmount(lhs) = self;
-        GweiAmount(lhs + rhs)
+    fn add(self, GweiNewtype(rhs): Self) -> Self::Output {
+        let GweiNewtype(lhs) = self;
+        GweiNewtype(lhs + rhs)
     }
 }
 
-impl Sub<GweiAmount> for GweiAmount {
+impl Sub<GweiNewtype> for GweiNewtype {
     type Output = Self;
 
-    fn sub(self, GweiAmount(rhs): GweiAmount) -> Self::Output {
-        let GweiAmount(lhs) = self;
-        GweiAmount(lhs - rhs)
+    fn sub(self, GweiNewtype(rhs): GweiNewtype) -> Self::Output {
+        let GweiNewtype(lhs) = self;
+        GweiNewtype(lhs - rhs)
     }
 }
 
-impl From<WeiString> for GweiAmount {
+impl From<WeiString> for GweiNewtype {
     fn from(WeiString(amount_str): WeiString) -> Self {
         let gwei_u128 = u128::from_str(&amount_str).unwrap() / u128::from(GWEI_PER_ETH);
         let gwei_u64 = u64::try_from(gwei_u128).unwrap();
@@ -91,7 +92,7 @@ impl From<WeiString> for GweiAmount {
 struct GweiAmountVisitor;
 
 impl<'de> Visitor<'de> for GweiAmountVisitor {
-    type Value = GweiAmount;
+    type Value = GweiNewtype;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter
@@ -103,7 +104,7 @@ impl<'de> Visitor<'de> for GweiAmountVisitor {
         E: de::Error,
     {
         v.parse::<u64>()
-            .map(|gwei_u64| GweiAmount(gwei_u64))
+            .map(|gwei_u64| GweiNewtype(gwei_u64))
             .map_err(|error| {
                 de::Error::invalid_value(
                     de::Unexpected::Str(&format!("unexpected value: {}, error: {}", v, error)),
@@ -116,18 +117,18 @@ impl<'de> Visitor<'de> for GweiAmountVisitor {
     where
         E: de::Error,
     {
-        Ok(GweiAmount(u64::try_from(v).unwrap()))
+        Ok(GweiNewtype(u64::try_from(v).unwrap()))
     }
 
     fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
-        Ok(GweiAmount(v))
+        Ok(GweiNewtype(v))
     }
 }
 
-impl<'de> Deserialize<'de> for GweiAmount {
+impl<'de> Deserialize<'de> for GweiNewtype {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -136,7 +137,7 @@ impl<'de> Deserialize<'de> for GweiAmount {
     }
 }
 
-pub fn to_gwei_string<S>(gwei: &GweiAmount, serializer: S) -> Result<S::Ok, S::Error>
+pub fn to_gwei_string<S>(gwei: &GweiNewtype, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -157,28 +158,28 @@ mod tests {
     #[test]
     fn gwei_from_wei_string_test() {
         let wei_string = WeiString("118068179561500000000000000".to_string());
-        let gwei = GweiAmount::from(wei_string);
-        assert_eq!(gwei, GweiAmount(118068179561500000));
+        let gwei = GweiNewtype::from(wei_string);
+        assert_eq!(gwei, GweiNewtype(118068179561500000));
     }
 
     #[test]
     fn gwei_from_string_test() {
-        let gwei = GweiAmount::from("1234567890".to_string());
-        assert_eq!(gwei, GweiAmount(1234567890));
+        let gwei = GweiNewtype::from("1234567890".to_string());
+        assert_eq!(gwei, GweiNewtype(1234567890));
     }
 
     #[test]
     fn gwei_add_test() {
-        assert_eq!(GweiAmount(1) + GweiAmount(1), GweiAmount(2));
+        assert_eq!(GweiNewtype(1) + GweiNewtype(1), GweiNewtype(2));
     }
 
     #[test]
     fn gwei_sub_test() {
-        assert_eq!(GweiAmount(1) - GweiAmount(1), GweiAmount(0));
+        assert_eq!(GweiNewtype(1) - GweiNewtype(1), GweiNewtype(0));
     }
 
     #[test]
     fn gwei_from_eth() {
-        assert_eq!(GweiAmount::from_eth(1), GweiAmount(GWEI_PER_ETH))
+        assert_eq!(GweiNewtype::from_eth(1), GweiNewtype(GWEI_PER_ETH))
     }
 }

@@ -6,7 +6,7 @@ use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    eth_units::GweiAmount,
+    eth_units::GweiNewtype,
     key_value_store,
     time_frames::TimeFrame,
 };
@@ -81,7 +81,7 @@ const APPROXIMATE_GAS_USED_PER_BLOCK: u32 = 15_000_000u32;
 #[allow(dead_code)]
 fn get_issuance_time_frame(
     time_frame: TimeFrame,
-    GweiAmount(effective_balance_sum): GweiAmount,
+    GweiNewtype(effective_balance_sum): GweiNewtype,
 ) -> f64 {
     let effective_balance_sum = effective_balance_sum as f64;
     let max_issuance_per_epoch = (((BASE_REWARD_FACTOR as f64) * effective_balance_sum)
@@ -185,7 +185,7 @@ mod tests {
     fn get_issuance_test() {
         let issuance = get_issuance_time_frame(
             TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-            GweiAmount(SLOT_4658998_EFFECTIVE_BALANCE_SUM),
+            GweiNewtype(SLOT_4658998_EFFECTIVE_BALANCE_SUM),
         );
         assert_eq!(issuance, 69990251296.875);
     }

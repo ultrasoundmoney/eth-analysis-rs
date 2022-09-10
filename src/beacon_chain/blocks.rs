@@ -1,6 +1,6 @@
 use sqlx::{postgres::PgRow, PgConnection, PgExecutor, Row};
 
-use crate::eth_units::GweiAmount;
+use crate::eth_units::GweiNewtype;
 
 use super::{node::BeaconHeaderSignedEnvelope, Slot};
 
@@ -10,7 +10,7 @@ pub const GENESIS_PARENT_ROOT: &str =
 pub async fn get_deposit_sum_from_block_root<'a>(
     executor: impl PgExecutor<'a>,
     block_root: &str,
-) -> sqlx::Result<GweiAmount> {
+) -> sqlx::Result<GweiNewtype> {
     let deposit_sum_aggregated = sqlx::query!(
         "
             SELECT deposit_sum_aggregated FROM beacon_blocks
@@ -50,8 +50,8 @@ pub async fn store_block<'a>(
     executor: &mut PgConnection,
     state_root: &str,
     header: &BeaconHeaderSignedEnvelope,
-    deposit_sum: &GweiAmount,
-    deposit_sum_aggregated: &GweiAmount,
+    deposit_sum: &GweiNewtype,
+    deposit_sum_aggregated: &GweiNewtype,
 ) {
     sqlx::query!(
         "
@@ -173,8 +173,8 @@ mod tests {
                     },
                 },
             },
-            &GweiAmount(0),
-            &GweiAmount(0),
+            &GweiNewtype(0),
+            &GweiNewtype(0),
         )
         .await;
 
@@ -206,8 +206,8 @@ mod tests {
                     },
                 },
             },
-            &GweiAmount(0),
-            &GweiAmount(0),
+            &GweiNewtype(0),
+            &GweiNewtype(0),
         )
         .await;
 
@@ -247,8 +247,8 @@ mod tests {
                     },
                 },
             },
-            &GweiAmount(0),
-            &GweiAmount(0),
+            &GweiNewtype(0),
+            &GweiNewtype(0),
         )
         .await;
 
@@ -278,8 +278,8 @@ mod tests {
                     },
                 },
             },
-            &GweiAmount(0),
-            &GweiAmount(0),
+            &GweiNewtype(0),
+            &GweiNewtype(0),
         )
         .await;
 

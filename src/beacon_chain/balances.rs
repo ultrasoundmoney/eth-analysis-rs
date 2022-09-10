@@ -2,17 +2,17 @@ use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
 use sqlx::PgExecutor;
 
-use crate::eth_units::{to_gwei_string, GweiAmount};
+use crate::eth_units::{to_gwei_string, GweiNewtype};
 use crate::supply_projection::{GweiInTime, GweiInTimeRow};
 
 use super::beacon_time::FirstOfDaySlot;
 use super::node::ValidatorBalance;
 use super::{beacon_time, states, BeaconNode, Slot};
 
-pub fn sum_validator_balances(validator_balances: Vec<ValidatorBalance>) -> GweiAmount {
+pub fn sum_validator_balances(validator_balances: Vec<ValidatorBalance>) -> GweiNewtype {
     validator_balances
         .iter()
-        .fold(GweiAmount(0), |sum, validator_balance| {
+        .fold(GweiNewtype(0), |sum, validator_balance| {
             sum + validator_balance.balance
         })
 }
@@ -21,7 +21,7 @@ pub async fn store_validator_sum_for_day<'a>(
     pool: impl PgExecutor<'a>,
     state_root: &str,
     FirstOfDaySlot(slot): &FirstOfDaySlot,
-    gwei: &GweiAmount,
+    gwei: &GweiNewtype,
 ) {
     let gwei: i64 = gwei.to_owned().into();
 
@@ -41,7 +41,7 @@ pub async fn store_validator_sum_for_day<'a>(
 pub async fn get_last_effective_balance_sum<'a>(
     executor: impl PgExecutor<'a>,
     beacon_node: &BeaconNode,
-) -> anyhow::Result<GweiAmount> {
+) -> anyhow::Result<GweiNewtype> {
     let last_state_root = states::get_last_state(executor)
         .await
         .expect("can't calculate a last effective balance with an empty beacon_states table")
@@ -51,7 +51,7 @@ pub async fn get_last_effective_balance_sum<'a>(
         .get_validators_by_state(&last_state_root)
         .await
         .map(|validators| {
-            validators.iter().fold(GweiAmount(0), |sum, validator| {
+            validators.iter().fold(GweiNewtype(0), |sum, validator| {
                 sum + validator.effective_balance
             })
         })
@@ -107,7 +107,7 @@ pub async fn delete_validator_sums<'a>(
 pub struct BeaconBalancesSum {
     pub slot: Slot,
     #[serde(serialize_with = "to_gwei_string")]
-    pub balances_sum: GweiAmount,
+    pub balances_sum: GweiNewtype,
 }
 
 #[cfg(test)]
@@ -132,7 +132,7 @@ mod tests {
             &mut transaction,
             "0xtest_balances",
             &FirstOfDaySlot::new(&17999).unwrap(),
-            &GweiAmount(100),
+            &GweiNewtype(100),
         )
         .await;
 
@@ -161,7 +161,7 @@ mod tests {
             &mut transaction,
             "0xtest_balances",
             &FirstOfDaySlot::new(&17999).unwrap(),
-            &GweiAmount(100),
+            &GweiNewtype(100),
         )
         .await;
 

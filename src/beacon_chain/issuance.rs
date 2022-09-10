@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration, DurationRound, Utc};
 use sqlx::{postgres::PgRow, Acquire, PgConnection, PgExecutor, Row};
 
 use crate::{
-    eth_units::GweiAmount,
+    eth_units::GweiNewtype,
     supply_projection::{GweiInTime, GweiInTimeRow},
 };
 
@@ -15,7 +15,7 @@ pub async fn store_issuance_for_day<'a>(
     executor: impl PgExecutor<'a>,
     state_root: &str,
     FirstOfDaySlot(slot): &FirstOfDaySlot,
-    gwei: &GweiAmount,
+    gwei: &GweiNewtype,
 ) {
     let gwei: i64 = gwei.to_owned().into();
 
@@ -33,9 +33,9 @@ pub async fn store_issuance_for_day<'a>(
 }
 
 pub fn calc_issuance(
-    validator_balances_sum_gwei: &GweiAmount,
-    deposit_sum_aggregated: &GweiAmount,
-) -> GweiAmount {
+    validator_balances_sum_gwei: &GweiNewtype,
+    deposit_sum_aggregated: &GweiNewtype,
+) -> GweiNewtype {
     *validator_balances_sum_gwei - *deposit_sum_aggregated
 }
 
@@ -64,7 +64,7 @@ pub async fn get_issuance_by_start_of_day<'a>(
 }
 
 pub struct BeaconIssuance {
-    pub gwei: GweiAmount,
+    pub gwei: GweiNewtype,
     timestamp: DateTime<Utc>,
 }
 
@@ -81,7 +81,7 @@ pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> BeaconIssuan
         let gwei = row.get::<i64, _>("gwei") as u64;
         BeaconIssuance {
             timestamp,
-            gwei: GweiAmount(gwei),
+            gwei: GweiNewtype(gwei),
         }
     })
     .fetch_one(executor)
@@ -108,7 +108,7 @@ pub async fn delete_issuances<'a>(connection: impl PgExecutor<'a>, greater_than_
 pub async fn get_day7_ago_issuance(
     executor: impl PgExecutor<'_>,
     last_timestamp: DateTime<Utc>,
-) -> GweiAmount {
+) -> GweiNewtype {
     sqlx::query(
         "
 
@@ -122,14 +122,14 @@ pub async fn get_day7_ago_issuance(
     .bind(last_timestamp)
     .map(|row: PgRow| {
         let gwei_i64 = row.get::<i64, _>("gwei") as u64;
-        GweiAmount(gwei_i64)
+        GweiNewtype(gwei_i64)
     })
     .fetch_one(executor)
     .await
     .unwrap()
 }
 
-pub async fn get_last_week_issuance(executor: &mut PgConnection) -> GweiAmount {
+pub async fn get_last_week_issuance(executor: &mut PgConnection) -> GweiNewtype {
     let current_issuance = get_current_issuance(executor.acquire().await.unwrap()).await;
     let day7_ago_issuance = get_day7_ago_issuance(executor, current_issuance.timestamp).await;
     current_issuance.gwei - day7_ago_issuance
@@ -144,12 +144,12 @@ mod tests {
 
     #[test]
     fn calc_issuance_test() {
-        let validator_balances_sum_gwei = GweiAmount(100);
-        let deposit_sum_aggregated = GweiAmount(50);
+        let validator_balances_sum_gwei = GweiNewtype(100);
+        let deposit_sum_aggregated = GweiNewtype(50);
 
         assert_eq!(
             calc_issuance(&validator_balances_sum_gwei, &deposit_sum_aggregated),
-            GweiAmount(50)
+            GweiNewtype(50)
         )
     }
 
@@ -166,7 +166,7 @@ mod tests {
             &mut transaction,
             "0xtest_issuance",
             &FirstOfDaySlot::new(&3599).unwrap(),
-            &GweiAmount(100),
+            &GweiNewtype(100),
         )
         .await;
 
@@ -200,7 +200,7 @@ mod tests {
             &mut transaction,
             "0xtest_issuance_1",
             &FirstOfDaySlot::new(&3599).unwrap(),
-            &GweiAmount(100),
+            &GweiNewtype(100),
         )
         .await;
 
@@ -208,13 +208,13 @@ mod tests {
             &mut transaction,
             "0xtest_issuance_2",
             &FirstOfDaySlot::new(&10799).unwrap(),
-            &GweiAmount(110),
+            &GweiNewtype(110),
         )
         .await;
 
         let current_issuance = get_current_issuance(&mut transaction).await.gwei;
 
-        assert_eq!(current_issuance, GweiAmount(110));
+        assert_eq!(current_issuance, GweiNewtype(110));
     }
 
     #[tokio::test]
@@ -230,7 +230,7 @@ mod tests {
             &mut transaction,
             "0xtest_issuance",
             &FirstOfDaySlot::new(&3599).unwrap(),
-            &GweiAmount(100),
+            &GweiNewtype(100),
         )
         .await;
 
@@ -266,7 +266,7 @@ mod tests {
             &mut transaction,
             "0xtest_issuance_1",
             &FirstOfDaySlot::new(&3599).unwrap(),
-            &GweiAmount(100),
+            &GweiNewtype(100),
         )
         .await;
 
@@ -274,7 +274,7 @@ mod tests {
             &mut transaction,
             "0xtest_issuance_2",
             &FirstOfDaySlot::new(&53999).unwrap(),
-            &GweiAmount(110),
+            &GweiNewtype(110),
         )
         .await;
 
@@ -282,7 +282,7 @@ mod tests {
         let day7_ago_issuance =
             get_day7_ago_issuance(&mut transaction, current_issuance.timestamp).await;
 
-        assert_eq!(day7_ago_issuance, GweiAmount(100));
+        assert_eq!(day7_ago_issuance, GweiNewtype(100));
     }
 
     #[tokio::test]
@@ -302,7 +302,7 @@ mod tests {
             &mut transaction,
             "0xtest_issuance_1",
             &FirstOfDaySlot::new(&3599).unwrap(),
-            &GweiAmount(100),
+            &GweiNewtype(100),
         )
         .await;
 
@@ -310,12 +310,12 @@ mod tests {
             &mut transaction,
             "0xtest_issuance_2",
             &FirstOfDaySlot::new(&53999).unwrap(),
-            &GweiAmount(110),
+            &GweiNewtype(110),
         )
         .await;
 
         let issuance = get_last_week_issuance(&mut transaction).await;
 
-        assert_eq!(issuance, GweiAmount(10));
+        assert_eq!(issuance, GweiNewtype(10));
     }
 }

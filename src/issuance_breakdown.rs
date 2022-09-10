@@ -1,16 +1,16 @@
 use crate::caching::CacheKey;
-use crate::eth_units::{GweiAmount, GWEI_PER_ETH};
+use crate::eth_units::{GweiNewtype, GWEI_PER_ETH};
 use crate::{beacon_chain, caching, config, etherscan, key_value_store};
 use serde::Serialize;
 use sqlx::{PgConnection, PgExecutor};
 
 #[derive(Debug, Serialize)]
 struct IssuanceBreakdown {
-    crowd_sale: GweiAmount,
-    early_contributors: GweiAmount,
-    ethereum_foundation: GweiAmount,
-    proof_of_stake: GweiAmount,
-    proof_of_work: GweiAmount,
+    crowd_sale: GweiNewtype,
+    early_contributors: GweiNewtype,
+    ethereum_foundation: GweiNewtype,
+    proof_of_stake: GweiNewtype,
+    proof_of_work: GweiNewtype,
 }
 
 async fn store_issuance_breakdown<'a>(
@@ -36,18 +36,18 @@ pub async fn update_issuance_breakdown() {
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
-    let crowd_sale = GweiAmount::from_eth_f64(60_108_506.26);
+    let crowd_sale = GweiNewtype::from_eth_f64(60_108_506.26);
     tracing::debug!("crowd sale: {} ETH", crowd_sale.0 / GWEI_PER_ETH);
 
-    let early_contributors_without_vitalik = GweiAmount::from_eth_f64(8_418_324.49);
-    let vitalik = GweiAmount::from_eth_f64(696_940.59);
+    let early_contributors_without_vitalik = GweiNewtype::from_eth_f64(8_418_324.49);
+    let vitalik = GweiNewtype::from_eth_f64(696_940.59);
     let early_contributors = early_contributors_without_vitalik + vitalik;
     tracing::debug!(
         "early contributors: {} ETH",
         early_contributors.0 / GWEI_PER_ETH
     );
 
-    let ethereum_foundation = GweiAmount::from_eth_f64(3_483_159.75);
+    let ethereum_foundation = GweiNewtype::from_eth_f64(3_483_159.75);
     tracing::debug!(
         "ethereum foundation: {} ETH",
         ethereum_foundation.0 / GWEI_PER_ETH
@@ -65,10 +65,10 @@ pub async fn update_issuance_breakdown() {
 
     tracing::debug!(
         "eth supply without beacon issuance, with burnt fees: {} ETH",
-        GweiAmount::from(eth_supply_2.eth_supply.clone()).0 / GWEI_PER_ETH
+        GweiNewtype::from(eth_supply_2.eth_supply.clone()).0 / GWEI_PER_ETH
     );
 
-    let proof_of_work = GweiAmount::from(eth_supply_2.eth_supply)
+    let proof_of_work = GweiNewtype::from(eth_supply_2.eth_supply)
         - crowd_sale
         - ethereum_foundation
         - early_contributors;

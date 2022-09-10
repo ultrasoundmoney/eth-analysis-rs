@@ -3,7 +3,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::config;
-use crate::eth_units::GweiAmount;
+use crate::eth_units::GweiNewtype;
 use crate::json_codecs::from_u32_string;
 use crate::performance::TimedExt;
 
@@ -22,7 +22,7 @@ enum BlockId {
 
 #[derive(Debug, Deserialize)]
 pub struct Deposit {
-    pub amount: GweiAmount,
+    pub amount: GweiNewtype,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,7 +94,7 @@ fn make_state_root_url(slot: &u32) -> String {
 
 #[derive(Debug, Deserialize)]
 pub struct ValidatorBalance {
-    pub balance: GweiAmount,
+    pub balance: GweiNewtype,
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,7 +161,7 @@ fn make_validators_by_state_url(state_root: &str) -> String {
 
 #[derive(Debug, Deserialize)]
 pub struct Validator {
-    pub effective_balance: GweiAmount,
+    pub effective_balance: GweiNewtype,
 }
 
 #[derive(Debug, Deserialize)]

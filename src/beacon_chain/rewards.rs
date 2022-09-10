@@ -6,14 +6,14 @@ use sqlx::{Decode, PgExecutor, PgPool};
 
 use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
-use crate::eth_units::{GweiAmount, GWEI_PER_ETH, GWEI_PER_ETH_F64};
+use crate::eth_units::{GweiNewtype, GWEI_PER_ETH, GWEI_PER_ETH_F64};
 use crate::execution_chain::LONDON_HARDFORK_TIMESTAMP;
 use crate::{caching, config, key_value_store};
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidatorReward {
-    annual_reward: GweiAmount,
+    annual_reward: GweiNewtype,
     apr: f64,
 }
 
@@ -26,7 +26,7 @@ struct TipsSinceLondonRow {
     tips_since_london: f64,
 }
 
-async fn get_tips_since_london<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result<GweiAmount> {
+async fn get_tips_since_london<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result<GweiNewtype> {
     sqlx::query_as!(
         TipsSinceLondonRow,
         r#"
@@ -35,14 +35,14 @@ async fn get_tips_since_london<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result<Gw
     )
     .fetch_one(pool)
     .await
-    .map(|row| GweiAmount(row.tips_since_london.round() as u64))
+    .map(|row| GweiNewtype(row.tips_since_london.round() as u64))
 }
 
 async fn get_tips_reward<'a>(
     executor: impl PgExecutor<'a>,
-    effective_balance_sum: GweiAmount,
+    effective_balance_sum: GweiNewtype,
 ) -> sqlx::Result<ValidatorReward> {
-    let GweiAmount(tips_since_london) = get_tips_since_london(executor).await?;
+    let GweiNewtype(tips_since_london) = get_tips_since_london(executor).await?;
     tracing::debug!("tips since london {}", tips_since_london);
 
     let tips_per_year = tips_since_london as f64 / get_days_since_london() as f64 * 365.25;
@@ -59,7 +59,7 @@ async fn get_tips_reward<'a>(
     tracing::debug!("tips APR {}", apr);
 
     Ok(ValidatorReward {
-        annual_reward: GweiAmount(tips_earned_per_year_per_validator.round() as u64),
+        annual_reward: GweiNewtype(tips_earned_per_year_per_validator.round() as u64),
         apr,
     })
 }
@@ -74,7 +74,7 @@ const EPOCHS_PER_YEAR: f64 = 365.25 * EPOCHS_PER_DAY;
 const BASE_REWARD_FACTOR: u8 = 64;
 
 // Consider staying in Gwei until the last moment instead of converting early.
-pub fn get_issuance_reward(GweiAmount(effective_balance_sum): GweiAmount) -> ValidatorReward {
+pub fn get_issuance_reward(GweiNewtype(effective_balance_sum): GweiNewtype) -> ValidatorReward {
     let active_validators = effective_balance_sum as f64 / GWEI_PER_ETH_F64 / 32f64;
 
     // Balance at stake (Gwei)
@@ -104,7 +104,7 @@ pub fn get_issuance_reward(GweiAmount(effective_balance_sum): GweiAmount) -> Val
     tracing::debug!("APR: {:.2}%", apr * 100f64);
 
     ValidatorReward {
-        annual_reward: GweiAmount(annual_reward as u64),
+        annual_reward: GweiNewtype(annual_reward as u64),
         apr,
     }
 }
@@ -133,7 +133,7 @@ async fn get_validator_rewards<'a>(
         issuance: issuance_reward,
         tips: tips_reward,
         mev: ValidatorReward {
-            annual_reward: GweiAmount((0.3 * GWEI_PER_ETH_F64) as u64),
+            annual_reward: GweiNewtype((0.3 * GWEI_PER_ETH_F64) as u64),
             apr: 0.01,
         },
     }

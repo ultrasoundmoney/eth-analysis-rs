@@ -2,26 +2,26 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, Row};
 
-use crate::eth_units::{to_gwei_string, GweiAmount};
+use crate::eth_units::{to_gwei_string, GweiNewtype};
 
 use super::blocks::get_deposit_sum_from_block_root;
 use super::node::BeaconBlock;
 use super::states::Slot;
 
-pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiAmount {
+pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
     block
         .body
         .deposits
         .iter()
-        .fold(GweiAmount(0), |sum, deposit| sum + deposit.data.amount)
+        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.data.amount)
 }
 
 pub async fn get_deposit_sum_aggregated<'a>(
     executor: impl PgExecutor<'a>,
     block: &BeaconBlock,
-) -> sqlx::Result<GweiAmount> {
+) -> sqlx::Result<GweiNewtype> {
     let parent_deposit_sum_aggregated = if block.slot == 0 {
-        GweiAmount(0)
+        GweiNewtype(0)
     } else {
         get_deposit_sum_from_block_root(executor, &block.parent_root).await?
     };
@@ -35,7 +35,7 @@ pub async fn get_deposit_sum_aggregated<'a>(
 #[serde(rename_all = "camelCase")]
 pub struct BeaconDepositsSum {
     #[serde(serialize_with = "to_gwei_string")]
-    deposits_sum: GweiAmount,
+    deposits_sum: GweiNewtype,
     slot: Slot,
 }
 
@@ -94,8 +94,8 @@ mod tests {
                     },
                 },
             },
-            &GweiAmount(0),
-            &GweiAmount(1),
+            &GweiNewtype(0),
+            &GweiNewtype(1),
         )
         .await;
 
@@ -104,7 +104,7 @@ mod tests {
         assert_eq!(
             deposits_sum,
             BeaconDepositsSum {
-                deposits_sum: GweiAmount(1),
+                deposits_sum: GweiNewtype(1),
                 slot: 0
             }
         );
