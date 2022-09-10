@@ -1,3 +1,5 @@
+mod gas_market;
+
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
@@ -141,7 +143,7 @@ mod tests {
     use chrono::SubsecRound;
     use sqlx::Acquire;
 
-    use crate::{db_testing, execution_chain::block_store::BlockStore};
+    use crate::{db_testing, execution_chain::block_store::BlockStore, time_frames::LimitedTimeFrame};
 
     use super::*;
 
