@@ -60,6 +60,8 @@ pub async fn get_deposits_sum<'a>(executor: impl PgExecutor<'a>) -> BeaconDeposi
 
 #[cfg(test)]
 mod tests {
+    use sqlx::Acquire;
+
     use super::super::blocks::store_block;
     use super::super::states::store_state;
     use super::*;
@@ -67,14 +69,11 @@ mod tests {
     use crate::beacon_chain::node::BeaconHeader;
     use crate::beacon_chain::node::BeaconHeaderEnvelope;
     use crate::beacon_chain::node::BeaconHeaderSignedEnvelope;
-    use crate::config;
-    use serial_test::serial;
-    use sqlx::{Connection, PgConnection};
+    use crate::db_testing;
 
     #[tokio::test]
-    #[serial]
     async fn get_deposits_sum_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)

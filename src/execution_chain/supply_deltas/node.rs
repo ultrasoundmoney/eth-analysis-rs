@@ -265,14 +265,13 @@ mod tests {
     use core::panic;
     use std::time::Duration;
 
-    use serial_test::serial;
-    use sqlx::Connection;
-    use sqlx::PgConnection;
+    use sqlx::Acquire;
     use tokio::time::timeout;
+
+    use crate::db_testing;
 
     use super::super::add_delta;
     use super::*;
-    use crate::config;
 
     #[ignore]
     #[tokio::test]
@@ -297,9 +296,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_get_latest_synced_supply_delta_number() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
@@ -322,9 +320,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_get_latest_synced_supply_delta_number_empty() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let latest_synced_supply_delta_number =

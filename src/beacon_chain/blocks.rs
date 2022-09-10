@@ -119,20 +119,20 @@ pub async fn delete_blocks<'a>(connection: impl PgExecutor<'a>, greater_than_or_
 
 #[cfg(test)]
 mod tests {
+    use sqlx::Connection;
+
     use super::*;
     use crate::{
         beacon_chain::{
             node::{BeaconHeader, BeaconHeaderEnvelope},
             states::store_state,
         },
-        config,
+        config, db_testing,
     };
-    use serial_test::serial;
-    use sqlx::{Connection, PgConnection};
-
+    
     #[tokio::test]
     async fn get_is_genesis_known_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let is_hash_known = get_is_hash_known(&mut transaction, GENESIS_PARENT_ROOT).await;
@@ -142,7 +142,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_hash_not_known_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let is_hash_known = get_is_hash_known(&mut transaction, "0xnot_there").await;
@@ -151,9 +151,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn get_is_hash_known_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)
@@ -184,9 +183,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn store_block_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)

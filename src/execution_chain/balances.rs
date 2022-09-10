@@ -36,18 +36,16 @@ pub async fn get_balances_sum<'a>(executor: impl PgExecutor<'a>) -> ExecutionBal
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
-    use sqlx::{Connection, PgConnection};
+    use sqlx::Connection;
 
     use super::super::supply_deltas::add_delta;
     use super::*;
-    use crate::config;
+    use crate::db_testing;
     use crate::execution_chain::SupplyDelta;
 
     #[tokio::test]
-    #[serial]
     async fn get_balances_sum_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
