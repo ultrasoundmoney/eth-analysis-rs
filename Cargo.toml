@@ -37,6 +37,3 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-
-[dev-dependencies]
-serial_test = "0.8"
