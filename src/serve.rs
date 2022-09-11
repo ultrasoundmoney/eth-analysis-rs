@@ -68,7 +68,7 @@ async fn get_value_hash_lock(connection: &mut PgConnection, key: &CacheKey<'_>) 
     RwLock::new(pair)
 }
 
-async fn get_cached<'a>(cached_value: &CachedValue, cache_control: &str) -> impl IntoResponse {
+async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
     match &*cached_value.read().unwrap() {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         Some((merge_estimate, hash)) => {
@@ -76,7 +76,7 @@ async fn get_cached<'a>(cached_value: &CachedValue, cache_control: &str) -> impl
 
             headers.insert(
                 header::CACHE_CONTROL,
-                HeaderValue::from_str(cache_control).unwrap(),
+                HeaderValue::from_str("max-age=4, s-maxage=1, stale-while-revalidate=60").unwrap(),
             );
 
             let etag = EntityTag::strong(&hash);
@@ -198,107 +198,80 @@ pub async fn start_server() {
 
     update_cache_from_notifications(shared_state.clone(), connection).await;
 
-    let app = Router::new()
-        .route(
-            "/api/v2/fees/base-fee-per-gas",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.base_fee_per_gas,
-                    "max-age=4, stale-while-revalidate=60",
-                )
-                .await
-                .into_response()
-            }),
-        )
-        .route(
-            "/api/v2/fees/block-lag",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.block_lag,
-                    "max-age=4, stale-while-revalidate=60",
-                )
-                .await
-            }),
-        )
-        .route(
-            "/api/v2/fees/eth-price-stats",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.eth_price_stats,
-                    "max-age=60, stale-while-revalidate=600",
-                )
-                .await
-                .into_response()
-            }),
-        )
-        .route(
-            "/api/v2/fees/eth-supply",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.eth_supply_parts,
-                    "max-age=4, stale-while-revalidate=60",
-                )
-                .await
-                .into_response()
-            }),
-        )
-        .route(
-            "/api/v2/fees/eth-supply-parts",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.eth_supply_parts,
-                    "max-age=4, stale-while-revalidate=60",
-                )
-                .await
-                .into_response()
-            }),
-        )
-        .route(
-            "/api/v2/fees/merge-estimate",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.merge_estimate,
-                    "max-age=4, stale-while-revalidate=14400",
-                )
-                .await
-                .into_response()
-            }),
-        )
-        .route(
-            "/api/v2/fees/total-difficulty-progress",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.total_difficulty_progress,
-                    "max-age=60, stale-while-revalidate=86400",
-                )
-                .await
-                .into_response()
-            }),
-        )
-        .route(
-            "/api/v2/fees/base-fee-over-time",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.base_fee_over_time,
-                    "max-age=60, stale-while-revalidate=3600",
-                )
-                .await
-                .into_response()
-            }),
-        )
-        .route(
-            "/api/v2/fees/base-fee-per-gas-stats",
-            get(|state: StateExtension| async move {
-                get_cached(
-                    &state.clone().cache.base_fee_per_gas_stats,
-                    "max-age=60, stale-while-revalidate=3600",
-                )
-                .await
-                .into_response()
-            }),
-        )
-        .route("/healthz", get(|| async { StatusCode::OK }))
-        .layer(Extension(shared_state));
+    let app =
+        Router::new()
+            .route(
+                "/api/v2/fees/base-fee-per-gas",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.base_fee_per_gas)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/block-lag",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.block_lag).await
+                }),
+            )
+            .route(
+                "/api/v2/fees/eth-price-stats",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.eth_price_stats)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/eth-supply",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.eth_supply_parts)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/eth-supply-parts",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.eth_supply_parts)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/merge-estimate",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.merge_estimate)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/total-difficulty-progress",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.total_difficulty_progress)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/base-fee-over-time",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.base_fee_over_time)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/base-fee-per-gas-stats",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.base_fee_per_gas_stats)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route("/healthz", get(|| async { StatusCode::OK }))
+            .layer(Extension(shared_state));
 
     let port = config::get_env_var("PORT").unwrap_or("3002".to_string());
 
