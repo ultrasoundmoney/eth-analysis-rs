@@ -1,7 +1,11 @@
 use axum::http::header;
 use axum::http::HeaderMap;
 use axum::http::HeaderValue;
+use axum::http::Request;
+use axum::middleware;
+use axum::middleware::Next;
 use axum::response::IntoResponse;
+use axum::response::Response;
 use axum::routing::get;
 use axum::Extension;
 use axum::Json;
@@ -10,8 +14,6 @@ use etag::EntityTag;
 use futures::TryStreamExt;
 use reqwest::StatusCode;
 use serde_json::Value;
-use sha1::Digest;
-use sha1::Sha1;
 use sqlx::Connection;
 use sqlx::PgConnection;
 use std::sync::Arc;
@@ -23,8 +25,7 @@ use crate::key_value_store;
 
 type StateExtension = Extension<Arc<State>>;
 
-type Hash = String;
-type CachedValue = RwLock<Option<(Value, Hash)>>;
+type CachedValue = RwLock<Option<Value>>;
 
 #[derive(Debug)]
 struct Cache {
@@ -42,36 +43,31 @@ pub struct State {
     cache: Arc<Cache>,
 }
 
-fn hash_from_u8(text: &[u8]) -> String {
-    let mut hasher = Sha1::new();
-    hasher.update(text);
-    let hash = hasher.finalize();
-    base64::encode(hash)
-}
-
-fn hash_from_json(v: &Value) -> String {
-    let v_bytes = serde_json::to_vec(v).unwrap();
-    hash_from_u8(&v_bytes)
-}
-
-async fn get_value_etag_pair(
-    connection: &mut PgConnection,
-    key: &CacheKey<'_>,
-) -> Option<(Value, String)> {
-    let value = key_value_store::get_value(connection, &key.to_db_key()).await?;
-    let hash = hash_from_json(&value);
-    Some((value, hash))
-}
-
 async fn get_value_hash_lock(connection: &mut PgConnection, key: &CacheKey<'_>) -> CachedValue {
-    let pair = get_value_etag_pair(connection, key).await;
-    RwLock::new(pair)
+    let value = key_value_store::get_value(connection, &key.to_db_key()).await;
+    RwLock::new(value)
+}
+
+async fn etag_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+    let if_none_match = req.headers().get(header::IF_NONE_MATCH).cloned();
+    match if_none_match {
+        Some(if_none_match) => {
+            let res = next.run(req).await;
+            let etag = res.headers().get(header::ETAG);
+            match etag {
+                Some(etag) if etag == if_none_match => Ok(StatusCode::NOT_MODIFIED.into_response()),
+                Some(_) | None => Ok(res),
+            }
+        }
+        None => Ok(next.run(req).await),
+    }
 }
 
 async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
-    match &*cached_value.read().unwrap() {
+    let cached_value_inner = cached_value.read().unwrap();
+    match &*cached_value_inner {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some((merge_estimate, hash)) => {
+        Some(merge_estimate) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
@@ -79,7 +75,7 @@ async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
                 HeaderValue::from_str("max-age=4, s-maxage=1, stale-while-revalidate=60").unwrap(),
             );
 
-            let etag = EntityTag::strong(&hash);
+            let etag = EntityTag::from_data(&serde_json::to_vec(cached_value).unwrap());
             headers.insert(
                 header::ETAG,
                 HeaderValue::from_str(&etag.to_string()).unwrap(),
@@ -96,9 +92,9 @@ async fn update_cache_from_key(
     cache_key: &CacheKey<'_>,
 ) {
     tracing::debug!("{} cache update", cache_key);
-    let pair = get_value_etag_pair(connection, &cache_key).await;
+    let value = key_value_store::get_value(connection, &cache_key.to_db_key()).await;
     let mut cache_wlock = cached_value.write().unwrap();
-    *cache_wlock = pair;
+    *cache_wlock = value;
 }
 
 async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgConnection) {
@@ -271,7 +267,8 @@ pub async fn start_server() {
                 }),
             )
             .route("/healthz", get(|| async { StatusCode::OK }))
-            .layer(Extension(shared_state));
+            .layer(Extension(shared_state))
+            .layer(middleware::from_fn(etag_middleware));
 
     let port = config::get_env_var("PORT").unwrap_or("3002".to_string());
 
