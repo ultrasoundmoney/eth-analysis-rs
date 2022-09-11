@@ -50,9 +50,9 @@ struct BaseFeeAtTime {
 
 #[derive(Serialize)]
 struct BaseFeeOverTime {
+    barrier: WeiF64,
     block_number: BlockNumber,
     d1: Vec<BaseFeeAtTime>,
-    barrier: f64,
 }
 
 async fn get_base_fee_over_time<'a>(executor: impl PgExecutor<'a>) -> Vec<BaseFeeAtTime> {
