@@ -57,36 +57,26 @@ async fn etag_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, 
     match if_none_match_header_value {
         None => Ok(next.run(req).await),
         Some(if_none_match_header_value) => {
-            let if_none_match = if_none_match_header_value.to_str();
-            match if_none_match {
-                Err(err) => {
-                    tracing::error!("failed to convert if-none-match header to string {err}");
-                    Ok(next.run(req).await)
-                }
-                Ok(if_none_match) => {
-                    let res = next.run(req).await;
-                    let res_etag_header = res.headers().get(header::ETAG);
-                    match res_etag_header {
-                        Some(etag_header) => {
-                            let etag = etag_header
-                                .to_str()
-                                .expect(
-                                    "our own etag response header should be convertable to string",
-                                )
-                                .parse::<EntityTag>()
-                                .expect("our own etag response to be parseable as etag");
+            let if_none_match_etag = if_none_match_header_value
+                .to_str()
+                .unwrap()
+                .parse::<EntityTag>()
+                .unwrap();
 
-                            let if_none_match_etag = if_none_match
-                                .parse::<EntityTag>()
-                                .expect("request etag should be parseable as etag");
+            let res = next.run(req).await;
+            let etag = res
+                .headers()
+                .get(header::ETAG)
+                .and_then(|etag_header| etag_header.to_str().ok())
+                .and_then(|etag_str| etag_str.parse::<EntityTag>().ok());
 
-                            if etag.strong_eq(&if_none_match_etag) {
-                                Ok(StatusCode::NOT_MODIFIED.into_response())
-                            } else {
-                                Ok(res)
-                            }
-                        }
-                        None => Ok(res),
+            match etag {
+                None => Ok(res),
+                Some(etag) => {
+                    if etag.weak_eq(&if_none_match_etag) {
+                        Ok(StatusCode::NOT_MODIFIED.into_response())
+                    } else {
+                        Ok(res)
                     }
                 }
             }
@@ -107,7 +97,9 @@ async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
                     .unwrap(),
             );
 
-            let etag = EntityTag::from_data(&serde_json::to_vec(cached_value).unwrap());
+            let etag = EntityTag::weak(
+                EntityTag::from_data(&serde_json::to_vec(cached_value).unwrap()).tag(),
+            );
             headers.insert(
                 header::ETAG,
                 HeaderValue::from_str(&etag.to_string()).unwrap(),
