@@ -62,41 +62,68 @@ async fn etag_middleware<B: std::fmt::Debug>(
     req: Request<B>,
     next: Next<B>,
 ) -> Result<Response, StatusCode> {
-    let if_none_match_header_value = req.headers().get(header::IF_NONE_MATCH).cloned();
-    match if_none_match_header_value {
+    let if_none_match_header = req.headers().get(header::IF_NONE_MATCH).cloned();
+    let path = req.uri().path().to_owned();
+    let res = next.run(req).await;
+    let (mut parts, mut body) = res.into_parts();
+    let body = body.borrow_mut().data().await;
+
+    match body {
         None => {
-            let path = req.uri().path().to_owned();
-            let (part, mut res) = next.run(req).await.into_parts();
-            let bytes = res.borrow_mut().data().await.unwrap().unwrap();
-            let etag = EntityTag::from_data(&bytes);
-
-            event!(
-                Level::DEBUG,
-                path,
-                etag = etag.to_string(),
-                "no if-none-match header"
-            );
-
-            Ok((part, bytes).into_response())
+            event!(Level::TRACE, path, "response without body, skipping etag");
+            Ok(parts.into_response())
         }
-        Some(if_none_match_header_value) => {
-            let if_none_match = if_none_match_header_value.to_str().unwrap();
-            let if_none_match_etag = if_none_match.parse::<EntityTag>().unwrap();
-            let path = req.uri().path().to_owned();
-            let (part, mut res) = next.run(req).await.into_parts();
-            let bytes = res.borrow_mut().data().await.unwrap().unwrap();
-            let etag = EntityTag::from_data(&bytes);
-            let matching = etag.strong_eq(&if_none_match_etag);
+        Some(body) => {
+            let body = body.unwrap();
 
-            event!(
-                Level::DEBUG,
-                path,
-                etag = etag.to_string(),
-                matching,
-                "if-none-match" = if_none_match_etag.to_string()
-            );
+            match if_none_match_header {
+                None => {
+                    let etag = EntityTag::from_data(&body);
 
-            Ok((part, bytes).into_response())
+                    parts.headers.insert(
+                        header::ETAG,
+                        HeaderValue::from_str(&etag.to_string()).unwrap(),
+                    );
+
+                    event!(
+                        Level::TRACE,
+                        path,
+                        etag = etag.to_string(),
+                        "no if-none-match header"
+                    );
+
+                    Ok((parts, body).into_response())
+                }
+                Some(if_none_match) => {
+                    let if_none_match_etag = if_none_match
+                        .to_str()
+                        .unwrap()
+                        .parse::<EntityTag>()
+                        .unwrap();
+                    let etag = EntityTag::from_data(&body);
+
+                    parts.headers.insert(
+                        header::ETAG,
+                        HeaderValue::from_str(&etag.to_string()).unwrap(),
+                    );
+
+                    let some_match = etag.strong_eq(&if_none_match_etag);
+
+                    event!(
+                        Level::TRACE,
+                        path,
+                        etag = etag.to_string(),
+                        some_match,
+                        "if-none-match" = if_none_match_etag.to_string()
+                    );
+
+                    if some_match {
+                        Ok((StatusCode::NOT_MODIFIED, parts).into_response())
+                    } else {
+                        Ok((parts, body).into_response())
+                    }
+                }
+            }
         }
     }
 }
@@ -113,12 +140,6 @@ async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
                 HeaderValue::from_str("public, max-age=4, s-maxage=1, stale-while-revalidate=60")
                     .unwrap(),
             );
-
-            // let etag = EntityTag::from_data(&serde_json::to_vec(cached_value).unwrap());
-            // headers.insert(
-            //     header::ETAG,
-            //     HeaderValue::from_str(&etag.to_string()).unwrap(),
-            // );
 
             (headers, Json(merge_estimate).into_response()).into_response()
         }
@@ -327,9 +348,9 @@ pub async fn start_server() {
             )
             .layer(
                 ServiceBuilder::new()
-                    .layer(Extension(shared_state))
+                    .layer(middleware::from_fn(etag_middleware))
                     .layer(CompressionLayer::new())
-                    .layer(middleware::from_fn(etag_middleware)),
+                    .layer(Extension(shared_state))
             );
 
     let port = config::get_env_var("PORT").unwrap_or("3002".to_string());
