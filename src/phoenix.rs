@@ -84,7 +84,7 @@ pub struct EthSupplyResponse {
 }
 
 async fn get_current_beacon_slot() -> u32 {
-    reqwest::get("https://ultrasound.money/api/fees/eth-supply")
+    reqwest::get("https://ultrasound.money/api/v2/fees/eth-supply-parts")
         .await
         .unwrap()
         .json::<EthSupplyResponse>()
@@ -95,7 +95,7 @@ async fn get_current_beacon_slot() -> u32 {
 }
 
 async fn get_current_execution_delta_block_number() -> u32 {
-    reqwest::get("https://ultrasound.money/api/fees/eth-supply")
+    reqwest::get("https://ultrasound.money/api/v2/fees/eth-supply-parts")
         .await
         .unwrap()
         .json::<EthSupplyResponse>()
