@@ -609,6 +609,7 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio 1.20.1",
+ "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",

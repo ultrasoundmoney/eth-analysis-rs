@@ -19,6 +19,8 @@ use sqlx::PgExecutor;
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::sync::RwLock;
+use tower::ServiceBuilder;
+use tower_http::compression::CompressionLayer;
 
 use crate::caching::CacheKey;
 use crate::config;
@@ -310,8 +312,12 @@ pub async fn start_server() {
                     StatusCode::OK
                 }),
             )
-            .layer(Extension(shared_state))
-            .layer(middleware::from_fn(etag_middleware));
+            .layer(
+                ServiceBuilder::new()
+                    .layer(Extension(shared_state))
+                    .layer(CompressionLayer::new())
+                    .layer(middleware::from_fn(etag_middleware)),
+            );
 
     let port = config::get_env_var("PORT").unwrap_or("3002".to_string());
 
