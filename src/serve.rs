@@ -12,7 +12,6 @@ use axum::Json;
 use axum::Router;
 use etag::EntityTag;
 use futures::TryStreamExt;
-use reqwest::header::IF_NONE_MATCH;
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::Connection;
