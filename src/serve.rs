@@ -12,6 +12,7 @@ use axum::Json;
 use axum::Router;
 use etag::EntityTag;
 use futures::TryStreamExt;
+use reqwest::header::IF_NONE_MATCH;
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::Connection;
@@ -42,7 +43,7 @@ struct Cache {
 
 pub struct State {
     cache: Arc<Cache>,
-    db_pool: PgPool
+    db_pool: PgPool,
 }
 
 async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey<'_>) -> CachedValue {
@@ -51,17 +52,44 @@ async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey<'_>
 }
 
 async fn etag_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
-    let if_none_match = req.headers().get(header::IF_NONE_MATCH).cloned();
-    match if_none_match {
-        Some(if_none_match) => {
-            let res = next.run(req).await;
-            let etag = res.headers().get(header::ETAG);
-            match etag {
-                Some(etag) if etag == if_none_match => Ok(StatusCode::NOT_MODIFIED.into_response()),
-                Some(_) | None => Ok(res),
+    let if_none_match_header_value = req.headers().get(header::IF_NONE_MATCH).cloned();
+    match if_none_match_header_value {
+        None => Ok(next.run(req).await),
+        Some(if_none_match_header_value) => {
+            let if_none_match = if_none_match_header_value.to_str();
+            match if_none_match {
+                Err(err) => {
+                    tracing::error!("failed to convert if-none-match header to string {err}");
+                    Ok(next.run(req).await)
+                }
+                Ok(if_none_match) => {
+                    let res = next.run(req).await;
+                    let res_etag_header = res.headers().get(header::ETAG);
+                    match res_etag_header {
+                        Some(etag_header) => {
+                            let etag = etag_header
+                                .to_str()
+                                .expect(
+                                    "our own etag response header should be convertable to string",
+                                )
+                                .parse::<EntityTag>()
+                                .expect("our own etag response to be parseable as etag");
+
+                            let if_none_match_etag = if_none_match
+                                .parse::<EntityTag>()
+                                .expect("request etag should be parseable as etag");
+
+                            if etag.strong_eq(&if_none_match_etag) {
+                                Ok(StatusCode::NOT_MODIFIED.into_response())
+                            } else {
+                                Ok(res)
+                            }
+                        }
+                        None => Ok(res),
+                    }
+                }
             }
         }
-        None => Ok(next.run(req).await),
     }
 }
 
