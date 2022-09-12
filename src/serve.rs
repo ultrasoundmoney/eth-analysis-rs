@@ -234,14 +234,6 @@ pub async fn start_server() {
                 }),
             )
             .route(
-                "/api/v2/fees/eth-supply",
-                get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.eth_supply_parts)
-                        .await
-                        .into_response()
-                }),
-            )
-            .route(
                 "/api/v2/fees/eth-supply-parts",
                 get(|state: StateExtension| async move {
                     get_cached(&state.clone().cache.eth_supply_parts)
