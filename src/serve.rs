@@ -23,6 +23,10 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
+use tracing::event;
+use tracing::span;
+use tracing::Instrument;
+use tracing::Level;
 
 use crate::caching::CacheKey;
 use crate::config;
@@ -54,24 +58,44 @@ async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey<'_>
     RwLock::new(value)
 }
 
-async fn etag_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+async fn etag_middleware<B: std::fmt::Debug>(
+    req: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode> {
     let if_none_match_header_value = req.headers().get(header::IF_NONE_MATCH).cloned();
     match if_none_match_header_value {
         None => {
-            tracing::debug!("req: {}, no if-none-match header present", req.uri().path());
-            Ok(next.run(req).await)
-        }
-        Some(if_none_match_header_value) => {
             let path = req.uri().path().to_owned();
             let (part, mut res) = next.run(req).await.into_parts();
             let bytes = res.borrow_mut().data().await.unwrap().unwrap();
             let etag = EntityTag::from_data(&bytes);
-            tracing::debug!(
-                "req: {}, if-none-match: {:?}, etag: {}",
+
+            event!(
+                Level::DEBUG,
                 path,
-                if_none_match_header_value,
-                etag
+                etag = etag.to_string(),
+                "no if-none-match header"
             );
+
+            Ok((part, bytes).into_response())
+        }
+        Some(if_none_match_header_value) => {
+            let if_none_match = if_none_match_header_value.to_str().unwrap();
+            let if_none_match_etag = if_none_match.parse::<EntityTag>().unwrap();
+            let path = req.uri().path().to_owned();
+            let (part, mut res) = next.run(req).await.into_parts();
+            let bytes = res.borrow_mut().data().await.unwrap().unwrap();
+            let etag = EntityTag::from_data(&bytes);
+            let matching = etag.strong_eq(&if_none_match_etag);
+
+            event!(
+                Level::DEBUG,
+                path,
+                etag = etag.to_string(),
+                matching,
+                "if-none-match" = if_none_match_etag.to_string()
+            );
+
             Ok((part, bytes).into_response())
         }
     }
@@ -106,23 +130,33 @@ async fn update_cache_from_key(
     cached_value: &CachedValue,
     cache_key: &CacheKey<'_>,
 ) {
-    tracing::debug!("{} cache update", cache_key);
+    event!(
+        Level::DEBUG,
+        cache_key = cache_key.to_string(),
+        "cache update",
+    );
     let value = key_value_store::get_value(connection, &cache_key.to_db_key()).await;
     let mut cache_wlock = cached_value.write().unwrap();
     *cache_wlock = value;
 }
 
 async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
-    tracing::debug!("setting up listening for cache updates");
     let mut listener = sqlx::postgres::PgListener::connect(&config::get_db_url())
         .await
         .unwrap();
     listener.listen("cache-update").await.unwrap();
+    event!(Level::DEBUG, "listening for cache updates");
+
     let mut notification_stream = listener.into_stream();
     let mut connection = db_pool.acquire().await.unwrap();
 
     tokio::spawn(async move {
-        while let Some(notification) = notification_stream.try_next().await.unwrap() {
+        while let Some(notification) = notification_stream
+            .try_next()
+            .instrument(span!(Level::INFO, "cache update"))
+            .await
+            .unwrap()
+        {
             let payload = notification.payload();
             let payload_cache_key = CacheKey::from(payload);
             match payload_cache_key {
@@ -164,7 +198,11 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
                     .await
                 }
                 key => {
-                    tracing::debug!("received unsupported cache key: {key:?}, skipping");
+                    event!(
+                        Level::DEBUG,
+                        "cache_key" = key.to_string(),
+                        "unspported cache update, skipping"
+                    );
                 }
             }
         }
@@ -180,7 +218,7 @@ pub async fn start_server() {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    tracing::debug!("warming up total difficulty progress cache");
+    event!(Level::DEBUG, "warming cache");
 
     let base_fee_per_gas = get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGas).await;
     let base_fee_over_time = get_value_hash_lock(&db_pool, &CacheKey::BaseFeeOverTime).await;
@@ -203,7 +241,7 @@ pub async fn start_server() {
         total_difficulty_progress,
     });
 
-    tracing::debug!("cache warming done");
+    event!(Level::INFO, "cache ready");
 
     let shared_state = Arc::new(State { cache, db_pool });
 
@@ -296,7 +334,7 @@ pub async fn start_server() {
 
     let port = config::get_env_var("PORT").unwrap_or("3002".to_string());
 
-    tracing::info!("listening on {port}");
+    event!(Level::INFO, port, "server listening");
     axum::Server::bind(&format!("0.0.0.0:{port}").parse().unwrap())
         .serve(app.into_make_service())
         .await
