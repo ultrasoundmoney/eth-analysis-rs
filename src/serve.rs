@@ -1,3 +1,4 @@
+use axum::body::HttpBody;
 use axum::http::header;
 use axum::http::HeaderMap;
 use axum::http::HeaderValue;
@@ -17,6 +18,7 @@ use serde_json::Value;
 use sqlx::Connection;
 use sqlx::PgExecutor;
 use sqlx::PgPool;
+use std::borrow::BorrowMut;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tower::ServiceBuilder;
@@ -55,31 +57,22 @@ async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey<'_>
 async fn etag_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
     let if_none_match_header_value = req.headers().get(header::IF_NONE_MATCH).cloned();
     match if_none_match_header_value {
-        None => Ok(next.run(req).await),
+        None => {
+            tracing::debug!("req: {}, no if-none-match header present", req.uri().path());
+            Ok(next.run(req).await)
+        }
         Some(if_none_match_header_value) => {
-            let if_none_match_etag = if_none_match_header_value
-                .to_str()
-                .unwrap()
-                .parse::<EntityTag>()
-                .unwrap();
-
-            let res = next.run(req).await;
-            let etag = res
-                .headers()
-                .get(header::ETAG)
-                .and_then(|etag_header| etag_header.to_str().ok())
-                .and_then(|etag_str| etag_str.parse::<EntityTag>().ok());
-
-            match etag {
-                None => Ok(res),
-                Some(etag) => {
-                    if etag.weak_eq(&if_none_match_etag) {
-                        Ok(StatusCode::NOT_MODIFIED.into_response())
-                    } else {
-                        Ok(res)
-                    }
-                }
-            }
+            let path = req.uri().path().to_owned();
+            let (part, mut res) = next.run(req).await.into_parts();
+            let bytes = res.borrow_mut().data().await.unwrap().unwrap();
+            let etag = EntityTag::from_data(&bytes);
+            tracing::debug!(
+                "req: {}, if-none-match: {:?}, etag: {}",
+                path,
+                if_none_match_header_value,
+                etag
+            );
+            Ok((part, bytes).into_response())
         }
     }
 }
@@ -97,13 +90,11 @@ async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
                     .unwrap(),
             );
 
-            let etag = EntityTag::weak(
-                EntityTag::from_data(&serde_json::to_vec(cached_value).unwrap()).tag(),
-            );
-            headers.insert(
-                header::ETAG,
-                HeaderValue::from_str(&etag.to_string()).unwrap(),
-            );
+            // let etag = EntityTag::from_data(&serde_json::to_vec(cached_value).unwrap());
+            // headers.insert(
+            //     header::ETAG,
+            //     HeaderValue::from_str(&etag.to_string()).unwrap(),
+            // );
 
             (headers, Json(merge_estimate).into_response()).into_response()
         }
