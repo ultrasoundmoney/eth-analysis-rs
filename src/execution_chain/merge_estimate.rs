@@ -1,6 +1,7 @@
 use std::ops::Mul;
 
 use chrono::{DateTime, Duration, SubsecRound, Utc};
+use lazy_static::lazy_static;
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -12,7 +13,9 @@ use super::node::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
 
 const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
 
-const AVERAGE_BLOCK_TIME_ESTIMATE: i64 = 13500;
+lazy_static! {
+    static ref AVERAGE_BLOCK_TIME_ESTIMATE: Duration = Duration::seconds(14);
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,7 +35,7 @@ pub async fn on_new_block(executor: &PgPool, block: &ExecutionNodeBlock) {
 
     let blocks_left =
         ((TOTAL_TERMINAL_DIFFICULTY - block.total_difficulty) / block.difficulty as u128) as u32;
-    let time_left = Duration::milliseconds(AVERAGE_BLOCK_TIME_ESTIMATE).mul(blocks_left as i32);
+    let time_left = AVERAGE_BLOCK_TIME_ESTIMATE.mul(blocks_left as i32);
     let estimated_date_time = Utc::now().trunc_subsecs(0) + time_left;
 
     let merge_ttd_countdown = MergeEstimate {
