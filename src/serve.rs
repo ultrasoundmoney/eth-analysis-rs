@@ -15,7 +15,8 @@ use futures::TryStreamExt;
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::Connection;
-use sqlx::PgConnection;
+use sqlx::PgExecutor;
+use sqlx::PgPool;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -41,9 +42,10 @@ struct Cache {
 
 pub struct State {
     cache: Arc<Cache>,
+    db_pool: PgPool
 }
 
-async fn get_value_hash_lock(connection: &mut PgConnection, key: &CacheKey<'_>) -> CachedValue {
+async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey<'_>) -> CachedValue {
     let value = key_value_store::get_value(connection, &key.to_db_key()).await;
     RwLock::new(value)
 }
@@ -87,7 +89,7 @@ async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
 }
 
 async fn update_cache_from_key(
-    connection: &mut PgConnection,
+    connection: impl PgExecutor<'_>,
     cached_value: &CachedValue,
     cache_key: &CacheKey<'_>,
 ) {
@@ -97,13 +99,14 @@ async fn update_cache_from_key(
     *cache_wlock = value;
 }
 
-async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgConnection) {
+async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
     tracing::debug!("setting up listening for cache updates");
     let mut listener = sqlx::postgres::PgListener::connect(&config::get_db_url())
         .await
         .unwrap();
     listener.listen("cache-update").await.unwrap();
     let mut notification_stream = listener.into_stream();
+    let mut connection = db_pool.acquire().await.unwrap();
 
     tokio::spawn(async move {
         while let Some(notification) = notification_stream.try_next().await.unwrap() {
@@ -158,24 +161,23 @@ async fn update_cache_from_notifications(state: Arc<State>, mut connection: PgCo
 pub async fn start_server() {
     tracing_subscriber::fmt::init();
 
-    let mut connection = PgConnection::connect(&config::get_db_url_with_name("eth-analysis-serve"))
+    let db_pool = PgPool::connect(&config::get_db_url_with_name("eth-analysis-serve"))
         .await
         .unwrap();
 
-    sqlx::migrate!().run(&mut connection).await.unwrap();
+    sqlx::migrate!().run(&db_pool).await.unwrap();
 
     tracing::debug!("warming up total difficulty progress cache");
 
-    let base_fee_per_gas = get_value_hash_lock(&mut connection, &CacheKey::BaseFeePerGas).await;
-    let base_fee_over_time = get_value_hash_lock(&mut connection, &CacheKey::BaseFeeOverTime).await;
-    let base_fee_per_gas_stats =
-        get_value_hash_lock(&mut connection, &CacheKey::BaseFeePerGasStats).await;
-    let block_lag = get_value_hash_lock(&mut connection, &CacheKey::BlockLag).await;
-    let eth_price_stats = get_value_hash_lock(&mut connection, &CacheKey::EthPrice).await;
-    let eth_supply_parts = get_value_hash_lock(&mut connection, &CacheKey::EthSupplyParts).await;
-    let merge_estimate = get_value_hash_lock(&mut connection, &CacheKey::MergeEstimate).await;
+    let base_fee_per_gas = get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGas).await;
+    let base_fee_over_time = get_value_hash_lock(&db_pool, &CacheKey::BaseFeeOverTime).await;
+    let base_fee_per_gas_stats = get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGasStats).await;
+    let block_lag = get_value_hash_lock(&db_pool, &CacheKey::BlockLag).await;
+    let eth_price_stats = get_value_hash_lock(&db_pool, &CacheKey::EthPrice).await;
+    let eth_supply_parts = get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts).await;
+    let merge_estimate = get_value_hash_lock(&db_pool, &CacheKey::MergeEstimate).await;
     let total_difficulty_progress =
-        get_value_hash_lock(&mut connection, &CacheKey::TotalDifficultyProgress).await;
+        get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress).await;
 
     let cache = Arc::new(Cache {
         base_fee_per_gas,
@@ -190,9 +192,9 @@ pub async fn start_server() {
 
     tracing::debug!("cache warming done");
 
-    let shared_state = Arc::new(State { cache });
+    let shared_state = Arc::new(State { cache, db_pool });
 
-    update_cache_from_notifications(shared_state.clone(), connection).await;
+    update_cache_from_notifications(shared_state.clone(), &shared_state.db_pool).await;
 
     let app =
         Router::new()
@@ -266,7 +268,20 @@ pub async fn start_server() {
                         .into_response()
                 }),
             )
-            .route("/healthz", get(|| async { StatusCode::OK }))
+            .route(
+                "/healthz",
+                get(|state: StateExtension| async move {
+                    let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
+                    StatusCode::OK
+                }),
+            )
+            .route(
+                "/api/v2/fees/healthz",
+                get(|state: StateExtension| async move {
+                    let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
+                    StatusCode::OK
+                }),
+            )
             .layer(Extension(shared_state))
             .layer(middleware::from_fn(etag_middleware));
 
