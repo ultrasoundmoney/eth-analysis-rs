@@ -74,7 +74,7 @@ async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
 
             headers.insert(
                 header::CACHE_CONTROL,
-                HeaderValue::from_str("max-age=4, s-maxage=1, stale-while-revalidate=60").unwrap(),
+                HeaderValue::from_str("public, max-age=4, s-maxage=1, stale-while-revalidate=60").unwrap(),
             );
 
             let etag = EntityTag::from_data(&serde_json::to_vec(cached_value).unwrap());
