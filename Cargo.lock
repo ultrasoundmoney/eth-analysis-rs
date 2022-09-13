@@ -589,6 +589,7 @@ dependencies = [
  "async-tungstenite",
  "axum",
  "base64",
+ "bytes 1.2.1",
  "cached",
  "chrono",
  "console",

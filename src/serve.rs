@@ -11,13 +11,18 @@ use axum::routing::get;
 use axum::Extension;
 use axum::Json;
 use axum::Router;
+use bytes::BufMut;
 use etag::EntityTag;
+use futures::FutureExt;
+use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::pin_mut;
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::Connection;
 use sqlx::PgExecutor;
 use sqlx::PgPool;
+use std::borrow::Borrow;
 use std::borrow::BorrowMut;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -66,19 +71,27 @@ async fn etag_middleware<B: std::fmt::Debug>(
     let path = req.uri().path().to_owned();
     let res = next.run(req).await;
     let (mut parts, mut body) = res.into_parts();
-    let body = body.borrow_mut().data().await;
 
-    match body {
-        None => {
+    let bytes = {
+        let mut body_bytes = vec![];
+
+        while let Some(inner) = body.data().await {
+            let bytes = inner.unwrap();
+            body_bytes.put(bytes);
+        }
+
+        body_bytes
+    };
+
+    match bytes.len() == 0 {
+        true => {
             event!(Level::TRACE, path, "response without body, skipping etag");
             Ok(parts.into_response())
         }
-        Some(body) => {
-            let body = body.unwrap();
-
+        false => {
             match if_none_match_header {
                 None => {
-                    let etag = EntityTag::from_data(&body);
+                    let etag = EntityTag::from_data(&bytes);
 
                     parts.headers.insert(
                         header::ETAG,
@@ -92,7 +105,7 @@ async fn etag_middleware<B: std::fmt::Debug>(
                         "no if-none-match header"
                     );
 
-                    Ok((parts, body).into_response())
+                    Ok((parts, bytes).into_response())
                 }
                 Some(if_none_match) => {
                     let if_none_match_etag = if_none_match
@@ -100,7 +113,7 @@ async fn etag_middleware<B: std::fmt::Debug>(
                         .unwrap()
                         .parse::<EntityTag>()
                         .unwrap();
-                    let etag = EntityTag::from_data(&body);
+                    let etag = EntityTag::from_data(&bytes);
 
                     parts.headers.insert(
                         header::ETAG,
@@ -120,7 +133,7 @@ async fn etag_middleware<B: std::fmt::Debug>(
                     if some_match {
                         Ok((StatusCode::NOT_MODIFIED, parts).into_response())
                     } else {
-                        Ok((parts, body).into_response())
+                        Ok((parts, bytes).into_response())
                     }
                 }
             }
