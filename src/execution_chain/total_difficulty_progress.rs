@@ -143,6 +143,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_difficulty_by_day_asc_test() {
+        let mut db = db_testing::get_test_db().await;
+        let mut transaction = db.begin().await.unwrap();
+        let mut block_store = BlockStore::new(&mut *transaction);
+        let test_block_1 = make_test_block();
+        let test_block_2 = ExecutionNodeBlock {
+            hash: "0xtest2".to_owned(),
+            number: 1,
+            parent_hash: "0xtest".to_owned(),
+            timestamp: Utc::now().trunc_subsecs(0) + Duration::days(1),
+            total_difficulty: 20,
+            ..make_test_block()
+        };
+
+        block_store.store_block(&test_block_1, 0.0).await;
+        block_store.store_block(&test_block_2, 0.0).await;
+
+        let progress_by_day = get_total_difficulty_by_day(&mut *transaction).await;
+
+        assert_eq!(
+            progress_by_day,
+            vec![
+                ProgressForDay {
+                    number: 0,
+                    timestamp: test_block_1.timestamp,
+                    total_difficulty: 10.0
+                },
+                ProgressForDay {
+                    number: 1,
+                    timestamp: test_block_2.timestamp,
+                    total_difficulty: 20.0
+                }
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn get_current_total_difficulty_test() {
         let mut db = db_testing::get_test_db().await;
         let mut transaction = db.begin().await.unwrap();
