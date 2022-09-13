@@ -7,6 +7,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use sqlx::{postgres::PgRow, Connection, FromRow, PgConnection, Postgres, Row};
 use tokio::time::sleep;
+use tracing::{event, Level};
 
 use crate::{
     caching::{self, CacheKey},
@@ -128,29 +129,32 @@ async fn update_eth_price_with_most_recent(
     let most_recent_price = ftx::get_most_recent_price().await;
     match most_recent_price {
         None => {
-            tracing::debug!("no recent eth price found");
+            event!(Level::DEBUG, "no recent eth price found");
         }
         Some(most_recent_price) => {
             if last_price == &most_recent_price {
-                tracing::debug!(
-                    "most recent eth price is equal to last stored price: {}, minute: {}, skipping",
-                    last_price.timestamp,
-                    last_price.usd
+                event!(
+                    Level::DEBUG,
+                    price = last_price.usd,
+                    minute = last_price.timestamp.to_string(),
+                    "most recent eth price is equal to last stored price, skipping",
                 );
             }
 
             if last_price.timestamp == most_recent_price.timestamp {
-                tracing::debug!(
-                    "most recent price is same minute as last: {}, but price: {} -> {}",
-                    last_price.timestamp,
-                    last_price.usd,
-                    most_recent_price.usd
+                event!(
+                    Level::DEBUG,
+                    minute = last_price.timestamp.to_string(),
+                    last_price = last_price.usd,
+                    most_recent_price = most_recent_price.usd,
+                    "found more recent price for existing minute",
                 );
             } else {
-                tracing::debug!(
-                    "storing new most recent eth price, minute: {}, price: {}",
-                    most_recent_price.timestamp,
-                    most_recent_price.usd
+                event!(
+                    Level::DEBUG,
+                    timestamp = most_recent_price.timestamp.to_string(),
+                    price = most_recent_price.usd,
+                    "new most recent price",
                 );
             }
 
@@ -188,7 +192,7 @@ async fn update_eth_price_with_most_recent(
 pub async fn record_eth_price() {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("recording eth prices");
+    event!(Level::INFO,"recording eth prices");
 
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
 
@@ -203,14 +207,14 @@ pub async fn record_eth_price() {
 pub async fn heal_eth_prices() {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("healing missing eth prices");
+    event!(Level::INFO,"healing missing eth prices");
     let max_distance_in_minutes: i64 = std::env::args()
         .collect::<Vec<String>>()
         .get(1)
         .and_then(|str| str.parse::<i64>().ok())
         .unwrap_or(10);
 
-    tracing::debug!("getting all eth prices");
+    event!(Level::DEBUG,"getting all eth prices");
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
     let eth_prices = sqlx::query_as::<Postgres, EthPriceTimestamp>(
         "
@@ -228,14 +232,15 @@ pub async fn heal_eth_prices() {
         panic!("no eth prices found, are you running against a DB with prices?")
     }
 
-    tracing::debug!("building set of known minutes");
+    event!(Level::DEBUG, "building set of known minutes");
     let mut known_minutes = HashSet::new();
 
     for eth_price in eth_prices.iter() {
         known_minutes.insert(eth_price.timestamp.timestamp());
     }
 
-    tracing::debug!(
+    event!(
+        Level::DEBUG,
         "walking through all minutes since London hardfork to look for missing minutes"
     );
 
@@ -252,7 +257,7 @@ pub async fn heal_eth_prices() {
         let timestamp = london_minute_timestamp + minute_n * 60;
         if !known_minutes.contains(&timestamp) {
             let timestamp_date_time = Utc.timestamp(timestamp, 0);
-            tracing::debug!("missing minute: {}", timestamp_date_time);
+            event!(Level::DEBUG, minute = timestamp_date_time.to_string(), "missing minute");
             let usd = ftx::get_closest_price_by_minute(
                 timestamp_date_time,
                 Duration::minutes(max_distance_in_minutes),
@@ -260,13 +265,15 @@ pub async fn heal_eth_prices() {
             .await;
             match usd {
                 None => {
-                    tracing::debug!(
-                        "FTX didn't have a price either for: {}",
-                        timestamp_date_time
+                    event!(
+                        Level::DEBUG,
+                        timestamp = timestamp_date_time.to_string(),
+                        "no FTX price available",
+                        
                     );
                 }
                 Some(usd) => {
-                    tracing::debug!("found a price on FTX, adding it to the DB");
+                    event!(Level::DEBUG, "found a price on FTX, adding it to the DB");
                     store_price(&mut connection, timestamp_date_time, usd).await;
                 }
             }
@@ -317,7 +324,7 @@ async fn set_last_synced_minute(executor: &mut PgConnection, minute: u32) {
 pub async fn resync_all() {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("resyncing all eth prices");
+    event!(Level::INFO, "resyncing all eth prices");
     let max_distance_in_minutes: i64 = std::env::args()
         .collect::<Vec<String>>()
         .get(1)
@@ -326,7 +333,7 @@ pub async fn resync_all() {
 
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
 
-    tracing::debug!("walking through all minutes since London hardfork");
+    event!(Level::DEBUG, "walking through all minutes since London hardfork");
 
     let duration_since_london =
         Utc::now().duration_round(Duration::minutes(1)).unwrap() - *LONDON_HARDFORK_TIMESTAMP;
@@ -343,7 +350,8 @@ pub async fn resync_all() {
         .await
         .map_or(0, |minute| minute + 1);
 
-    tracing::debug!(
+    event!(
+        Level::DEBUG,
         "starting at {}",
         Utc.timestamp(london_minute_timestamp.into(), 0) + Duration::minutes((start_minute).into())
     );
@@ -365,9 +373,10 @@ pub async fn resync_all() {
 
         match usd {
             None => {
-                tracing::debug!(
-                    "FTX didn't have a price either for: {}",
-                    timestamp_date_time
+                event!(
+                    Level::DEBUG,
+                    timestamp = timestamp_date_time.to_string(),
+                    "no FTX price available",
                 );
             }
             Some(usd) => {
@@ -379,10 +388,10 @@ pub async fn resync_all() {
 
         // Every 100 minutes, store which minute we last resynced.
         if minute_n != 0 && minute_n % 100 == 0 {
-            tracing::debug!("100 minutes synced, checkpointing at {timestamp_date_time}");
+            event!(Level::DEBUG, timestamp = timestamp_date_time.to_string(), "100 minutes synced, checkpointing");
             set_last_synced_minute(&mut connection, minute_n).await;
 
-            tracing::info!("{}", progress.get_progress_string());
+            event!(Level::INFO, "{}", progress.get_progress_string());
         };
     }
 }

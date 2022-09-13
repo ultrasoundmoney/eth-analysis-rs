@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use futures::try_join;
 use serde::Serialize;
-use sqlx::{postgres::PgRow, test_block_on, PgExecutor, PgPool, Row};
+use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
+use tracing::{event, Level, Instrument, debug_span};
 
 use crate::{
     beacon_chain,
@@ -21,7 +22,7 @@ struct BaseFeePerGas {
 
 // Find a way to wrap the result of this fn in Ok whilst using try_join!
 async fn update_last_base_fee(executor: &PgPool, block: &ExecutionNodeBlock) -> anyhow::Result<()> {
-    tracing::debug!("updating current base fee");
+    event!(Level::DEBUG, "updating current base fee");
 
     let base_fee_per_gas = BaseFeePerGas {
         timestamp: block.timestamp,
@@ -108,7 +109,7 @@ async fn get_base_fee_per_gas_average(
 ) -> sqlx::Result<WeiF64> {
     match time_frame {
         TimeFrame::All => {
-            tracing::warn!("getting average fee for time frame 'all' is slow, and may be incorrect depending on blocks_next backfill status");
+            event!(Level::WARN, "getting average fee for time frame 'all' is slow, and may be incorrect depending on blocks_next backfill status");
             sqlx::query(
                 "
                     SELECT
@@ -152,7 +153,7 @@ async fn get_base_fee_per_gas_min_max(
 ) -> sqlx::Result<BaseFeePerGasMinMax> {
     match time_frame {
         TimeFrame::All => {
-            tracing::warn!("getting the min and max base fee per gas for all blocks is low, and may be incorrect depending on blocks_next backfill status");
+            event!(Level::WARN, "getting the min and max base fee per gas for all blocks is low, and may be incorrect depending on blocks_next backfill status");
             sqlx::query(
                 "
                     SELECT
@@ -200,18 +201,18 @@ async fn update_base_fee_stats(
     executor: &PgPool,
     block: &ExecutionNodeBlock,
 ) -> anyhow::Result<()> {
-    tracing::debug!("updating base fee over time");
+    event!(Level::DEBUG, "updating base fee over time");
 
     let base_fees = get_base_fee_over_time(executor).await;
 
     let issuance =
         beacon_chain::get_last_week_issuance(&mut executor.acquire().await.unwrap()).await;
 
-    tracing::debug!("issuance: {issuance}");
+    event!(Level::DEBUG, "issuance: {issuance}");
 
     let barrier = get_barrier(issuance.0 as f64);
 
-    tracing::debug!("barrier: {barrier}");
+    event!(Level::DEBUG, "barrier: {barrier}");
 
     let base_fee_over_time = BaseFeeOverTime {
         barrier,
@@ -273,8 +274,8 @@ struct BaseFeePerGasStats {
 
 pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> anyhow::Result<()> {
     try_join!(
-        update_last_base_fee(db_pool, block),
-        update_base_fee_stats(db_pool, block)
+        update_last_base_fee(db_pool, block).instrument(debug_span!("update_last_base_fee")),
+        update_base_fee_stats(db_pool, block).instrument(debug_span!("update_base_fee_stats"))
     )?;
 
     Ok(())
@@ -282,7 +283,7 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> anyho
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, SubsecRound, DurationRound};
+    use chrono::{Duration, SubsecRound};
     use sqlx::Acquire;
 
     use crate::{

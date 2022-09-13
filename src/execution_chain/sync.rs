@@ -10,6 +10,8 @@ use futures::SinkExt;
 use futures::Stream;
 use futures::StreamExt;
 use sqlx::PgPool;
+use tracing::Level;
+use tracing::event;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::iter::Iterator;
@@ -227,11 +229,11 @@ fn get_historic_stream(block_range: BlockRange) -> impl Stream<Item = Head> {
 }
 
 async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Head> {
-    tracing::debug!("streaming heads from {gte_slot}");
+    event!(Level::DEBUG, "streaming heads from {gte_slot}");
 
     let mut execution_node = ExecutionNode::connect().await;
     let last_block_on_start = execution_node.get_latest_block().await;
-    tracing::debug!("last block on chain: {}", &last_block_on_start.number);
+    event!(Level::DEBUG, "last block on chain: {}", &last_block_on_start.number);
 
     // We stream heads as requested until caught up with the chain and then pass heads as they come
     // in from our node. The only way to be sure how high we should stream, is to wait for the
