@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use futures::try_join;
 use serde::Serialize;
-use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
+use sqlx::{postgres::PgRow, test_block_on, PgExecutor, PgPool, Row};
 
 use crate::{
     beacon_chain,
@@ -65,7 +65,7 @@ async fn get_base_fee_over_time<'a>(executor: impl PgExecutor<'a>) -> Vec<BaseFe
                 blocks_next
             WHERE
                 timestamp >= NOW() - '1 hour'::INTERVAL
-            ORDER BY number DESC
+            ORDER BY number ASC
         ",
     )
     .map(|row: PgRow| {
@@ -282,7 +282,7 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> anyho
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, SubsecRound};
+    use chrono::{Duration, SubsecRound, DurationRound};
     use sqlx::Acquire;
 
     use crate::{
@@ -322,6 +322,41 @@ mod tests {
                 wei: 1,
                 block_number: 0
             }]
+        );
+    }
+
+    #[tokio::test]
+    async fn get_base_fee_over_time_asc_test() {
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let mut block_store = BlockStore::new(&mut *transaction);
+        let test_block_1 = make_test_block();
+        let test_block_2 = ExecutionNodeBlock {
+            hash: "0xtest2".to_string(),
+            parent_hash: "0xtest".to_string(),
+            number: 1,
+            timestamp: Utc::now() + Duration::days(1),
+            ..make_test_block()
+        };
+
+        block_store.store_block(&test_block_1, 0.0).await;
+        block_store.store_block(&test_block_2, 0.0).await;
+
+        let base_fees_h1 = get_base_fee_over_time(&mut transaction).await;
+
+        assert_eq!(
+            base_fees_h1,
+            vec![
+                BaseFeeAtTime {
+                    wei: 1,
+                    block_number: 0
+                },
+                BaseFeeAtTime {
+                    wei: 1,
+                    block_number: 1
+                }
+            ]
         );
     }
 
