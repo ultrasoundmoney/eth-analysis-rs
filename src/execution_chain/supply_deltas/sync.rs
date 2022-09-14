@@ -1,5 +1,5 @@
 use futures::StreamExt;
-use sqlx::postgres::{PgConnection, PgRow};
+use sqlx::postgres::{PgConnection, PgRow, PgQueryResult};
 use sqlx::{Connection, PgExecutor, Row};
 use std::collections::VecDeque;
 use std::str::FromStr;
@@ -99,6 +99,23 @@ async fn store_delta<'a>(executor: impl PgExecutor<'a>, supply_delta: &SupplyDel
     .unwrap();
 }
 
+async fn store_execution_supply(executor: impl PgExecutor<'_>, supply_delta: &SupplyDelta, balances: &i128) -> sqlx::Result<PgQueryResult> {
+    sqlx::query(
+        "
+            INSERT INTO execution_supply (
+                block_hash,
+                block_number,
+                balances_sum
+            ) VALUES ($1, $2, $3::NUMERIC)
+       ",
+    )
+    .bind(supply_delta.block_hash.clone())
+    .bind(supply_delta.block_number as i32)
+    .bind(balances.to_string())
+    .execute(executor)
+    .await
+}
+
 async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> i128 {
     // Instead of the genesis parent_hash being absent, it is set to GENESIS_PARENT_HASH.
     // We'd like to have all supply deltas making only an exception for the genesis hash, but we
@@ -150,21 +167,7 @@ pub async fn add_delta<'a>(connection: &mut PgConnection, supply_delta: &SupplyD
     let balances = get_balances_at_hash(&mut transaction, &supply_delta.parent_hash).await
         + supply_delta.supply_delta;
 
-    sqlx::query(
-        "
-            INSERT INTO execution_supply (
-                block_hash,
-                block_number,
-                balances_sum
-            ) VALUES ($1, $2, $3::NUMERIC)
-       ",
-    )
-    .bind(supply_delta.block_hash.clone())
-    .bind(supply_delta.block_number as i32)
-    .bind(balances.to_string())
-    .execute(&mut transaction)
-    .await
-    .unwrap();
+    store_execution_supply(&mut transaction, supply_delta, &balances).await.unwrap();
 
     transaction.commit().await.unwrap();
 }
