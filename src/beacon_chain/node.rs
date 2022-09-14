@@ -320,6 +320,7 @@ impl BeaconNode {
             .await
     }
 
+    #[allow(dead_code)]
     pub async fn get_last_header(&self) -> reqwest::Result<BeaconHeaderSignedEnvelope> {
         self.get_header(&BlockId::Head)
             .await

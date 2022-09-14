@@ -5,7 +5,7 @@ mod config;
 #[cfg(test)]
 mod db_testing;
 mod eth_prices;
-mod eth_supply_parts;
+mod eth_supply;
 mod eth_units;
 mod etherscan;
 mod execution_chain;
@@ -29,7 +29,7 @@ pub use check_beacon_state_gaps::check_beacon_state_gaps;
 pub use eth_prices::heal_eth_prices;
 pub use eth_prices::record_eth_price;
 pub use eth_prices::resync_all;
-pub use eth_supply_parts::update as update_total_supply;
+pub use eth_supply::update as update_total_supply;
 pub use execution_chain::summary_from_deltas_csv;
 pub use execution_chain::sync_execution_blocks;
 pub use execution_chain::sync_execution_supply_deltas;

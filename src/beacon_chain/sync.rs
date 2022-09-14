@@ -1,7 +1,9 @@
+use anyhow::Result;
 use sqlx::{Acquire, PgConnection, PgExecutor, Row};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+use tracing::{debug, info, warn};
 
 use balances::BeaconBalancesSum;
 use futures::{SinkExt, Stream, StreamExt};
@@ -11,7 +13,7 @@ use sqlx::PgPool;
 
 use crate::beacon_chain::blocks::get_last_block_slot;
 use crate::config;
-use crate::eth_supply_parts;
+use crate::eth_supply;
 use crate::eth_units::GweiNewtype;
 use crate::json_codecs::from_u32_string;
 use crate::performance::TimedExt;
@@ -116,7 +118,11 @@ async fn store_state_with_block(
     transaction.commit().await.unwrap();
 }
 
-async fn sync_slot(connection: &mut PgConnection, beacon_node: &BeaconNode, slot: &u32) {
+async fn sync_slot(
+    connection: &mut PgConnection,
+    beacon_node: &BeaconNode,
+    slot: &u32,
+) -> Result<()> {
     let state_root = beacon_node.get_state_root_by_slot(slot).await.unwrap();
 
     let header = beacon_node.get_header_by_slot(slot).await.unwrap();
@@ -169,27 +175,20 @@ async fn sync_slot(connection: &mut PgConnection, beacon_node: &BeaconNode, slot
         }
     };
 
-    // Keep track of the last validator balances.
-    // A bit wasteful to call the node every time, but fast and correct. Perhaps there is a better
-    // way.
-    let last_header = beacon_node.get_last_header().await.unwrap();
-    let is_last_slot_to_sync = *slot == last_header.header.message.slot;
-    if is_last_slot_to_sync {
-        tracing::debug!("syncing last slot in range, updating validator balances");
-        let validator_balances = beacon_node
-            .get_validator_balances(&state_root)
-            .await
-            .unwrap();
-        let validator_balances_sum = balances::sum_validator_balances(validator_balances);
-        eth_supply_parts::update(
-            connection,
-            BeaconBalancesSum {
-                balances_sum: validator_balances_sum,
-                slot: slot.clone(),
-            },
-        )
-        .await;
-    }
+    debug!("updating validator balances");
+    let validator_balances = beacon_node
+        .get_validator_balances(&state_root)
+        .await
+        .unwrap();
+    let validator_balances_sum = balances::sum_validator_balances(validator_balances);
+    eth_supply::update(
+        connection,
+        BeaconBalancesSum {
+            balances_sum: validator_balances_sum,
+            slot: slot.clone(),
+        },
+    )
+    .await?;
 
     if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
         // Always calculate the validator balances for the first of day slot.
@@ -216,14 +215,16 @@ async fn sync_slot(connection: &mut PgConnection, beacon_node: &BeaconNode, slot
             .await;
         }
     }
+
+    Ok(())
 }
 
 async fn sync_slots(
     connection: &mut PgConnection,
     beacon_node: &BeaconNode,
     slot_range: &SlotRange,
-) {
-    tracing::debug!(
+) -> Result<()> {
+    debug!(
         "syncing slots gte {}, and lte {}, {} slots total",
         slot_range.greater_than_or_equal,
         slot_range.less_than_or_equal,
@@ -233,8 +234,10 @@ async fn sync_slots(
     for slot in slot_range.greater_than_or_equal..=slot_range.less_than_or_equal {
         sync_slot(connection, beacon_node, &slot)
             .timed("sync slot")
-            .await;
+            .await?;
     }
+
+    Ok(())
 }
 
 #[allow(dead_code)]
@@ -279,15 +282,15 @@ async fn stream_heads() -> impl Stream<Item = HeadEvent> {
                 Some(ref event_type) if event_type == "head" => {
                     let head = serde_json::from_str::<HeadEvent>(&event.data).unwrap();
 
-                    tracing::debug!("received new head {:#?}", head);
+                    debug!("received new head {:#?}", head);
 
                     tx.send(head).await.unwrap();
                 }
                 Some(event) => {
-                    tracing::warn!("received a server event that was not a head: {}", event);
+                    warn!(event, "received a server event that was not a head");
                 }
                 None => {
-                    tracing::debug!("received an empty server event");
+                    debug!("received an empty server event");
                 }
             }
         }
@@ -321,11 +324,11 @@ fn get_historic_stream(slot_range: SlotRange) -> impl Stream<Item = HeadEvent> {
 }
 
 async fn stream_heads_from(gte_slot: Slot) -> impl Stream<Item = HeadEvent> {
-    tracing::debug!("streaming heads from {gte_slot}");
+    debug!("streaming heads from {gte_slot}");
 
     let beacon_node = BeaconNode::new();
     let last_block_on_start = beacon_node.get_last_block().await.unwrap();
-    tracing::debug!("last block on chain: {}", &last_block_on_start.slot);
+    debug!("last block on chain: {}", &last_block_on_start.slot);
 
     // We stream heads as requested until caught up with the chain and then pass heads as they come
     // in from our node. The only way to be sure how high we should stream, is to wait for the
@@ -365,7 +368,7 @@ async fn get_is_slot_known(connection: &mut PgConnection, slot: &Slot) -> bool {
 }
 
 async fn rollback_slots<'a>(db_pool: &PgPool, greater_than_or_equal: &Slot) {
-    tracing::debug!("rolling back data based on slots gte {greater_than_or_equal}");
+    debug!("rolling back data based on slots gte {greater_than_or_equal}");
     let mut transaction = db_pool.begin().await.unwrap();
     blocks::delete_blocks(&mut transaction, greater_than_or_equal).await;
     issuance::delete_issuances(&mut transaction, greater_than_or_equal).await;
@@ -421,7 +424,7 @@ async fn sync_head(
     beacon_node: &BeaconNode,
     heads_queue: HeadsQueue,
     head_to_sync: HeadToSync,
-) {
+) -> Result<()> {
     let head_event = match head_to_sync {
         HeadToSync::Fetched(head) => head,
         HeadToSync::Refetch(slot) => {
@@ -437,7 +440,7 @@ async fn sync_head(
         }
     };
 
-    tracing::debug!("sync head from slot: {}", head_event.slot);
+    debug!(slot = head_event.slot, "sync head from slot");
 
     match get_next_step(
         &mut db_pool.acquire().await.unwrap(),
@@ -448,7 +451,7 @@ async fn sync_head(
     .await
     {
         NextStep::HandleGap => {
-            tracing::warn!("parent of block at slot {} is missing, dropping min(our last block.slot, new block.slot) and queueing all blocks gte the received block, block: {}", head_event.slot, head_event.block);
+            warn!(slot = head_event.slot, received_block = head_event.block, "parent of block of slot is missing, dropping min(our last block.slot, new block.slot) and queueing all blocks gte the received block");
 
             let last_block_slot = get_last_block_slot(&mut db_pool.acquire().await.unwrap())
                 .await
@@ -460,7 +463,7 @@ async fn sync_head(
             rollback_slots(db_pool, &lowest_slot).await;
 
             for slot in (lowest_slot..=head_event.slot).rev() {
-                tracing::debug!("queueing {slot} for sync after dropping");
+                debug!("queueing {slot} for sync after dropping");
                 heads_queue
                     .lock()
                     .unwrap()
@@ -468,10 +471,10 @@ async fn sync_head(
             }
         }
         NextStep::HandleHeadFork => {
-            tracing::info!(
-                "block at slot {} creates a fork, rolling back our last block - {}",
-                head_event.slot,
-                head_event.block
+            info!(
+                slot = head_event.slot,
+                last_block = head_event.block,
+                "block at slot creates a fork, rolling back our last block",
             );
 
             rollback_slots(db_pool, &head_event.slot).await;
@@ -496,9 +499,11 @@ async fn sync_head(
                 },
             )
             .timed("sync slots")
-            .await;
+            .await?;
         }
-    }
+    };
+
+    Ok(())
 }
 
 async fn estimate_slots_remaining<'a>(
@@ -517,10 +522,10 @@ enum HeadToSync {
 }
 type HeadsQueue = Arc<Mutex<VecDeque<HeadToSync>>>;
 
-pub async fn sync_beacon_states() {
+pub async fn sync_beacon_states() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("syncing beacon states");
+    info!("syncing beacon states");
 
     let db_pool = PgPoolOptions::new()
         .max_connections(3)
@@ -567,13 +572,15 @@ pub async fn sync_beacon_states() {
                     // the front of the queue.
                     sync_head(&db_pool, &beacon_node, heads_queue.clone(), next_head)
                         .timed("sync head")
-                        .await;
+                        .await?;
                 }
             }
 
             progress.inc_work_done();
         }
     }
+
+    Ok(())
 }
 
 #[cfg(test)]

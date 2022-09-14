@@ -38,14 +38,15 @@ type CachedValue = RwLock<Option<Value>>;
 
 #[derive(Debug)]
 struct Cache {
+    base_fee_over_time: CachedValue,
     base_fee_per_gas: CachedValue,
     base_fee_per_gas_stats: CachedValue,
-    base_fee_over_time: CachedValue,
     block_lag: CachedValue,
     eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
     merge_estimate: CachedValue,
     merge_status: CachedValue,
+    supply_since_merge: CachedValue,
     total_difficulty_progress: CachedValue,
 }
 
@@ -222,6 +223,9 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
                 key @ CacheKey::MergeStatus => {
                     update_cache_from_key(&mut connection, &state.cache.merge_status, &key).await
                 }
+                key @ CacheKey::SupplySinceMerge => {
+                    update_cache_from_key(&mut connection, &state.cache.supply_since_merge, &key).await
+                }
                 key @ CacheKey::TotalDifficultyProgress => {
                     update_cache_from_key(
                         &mut connection,
@@ -261,6 +265,7 @@ pub async fn start_server() {
     let eth_supply_parts = get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts).await;
     let merge_estimate = get_value_hash_lock(&db_pool, &CacheKey::MergeEstimate).await;
     let merge_status = get_value_hash_lock(&db_pool, &CacheKey::MergeStatus).await;
+    let supply_since_merge = get_value_hash_lock(&db_pool, &CacheKey::SupplySinceMerge).await;
     let total_difficulty_progress =
         get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress).await;
 
@@ -273,6 +278,7 @@ pub async fn start_server() {
         eth_supply_parts,
         merge_estimate,
         merge_status,
+        supply_since_merge,
         total_difficulty_progress,
     });
 
@@ -362,6 +368,9 @@ pub async fn start_server() {
             )
             .route("/api/v2/fees/merge-stats", get(|state:StateExtension| async move {
                 get_cached(&state.clone().cache.merge_status).await.into_response()
+            }))
+            .route("/api/v2/fees/supply-since-merge", get(|state:StateExtension| async move {
+                get_cached(&state.clone().cache.supply_since_merge).await.into_response()
             }))
             .layer(
                 ServiceBuilder::new()
