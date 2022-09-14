@@ -24,6 +24,14 @@ pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<V
     .flatten()
 }
 
+pub async fn get_raw_caching_value(
+    executor: impl PgExecutor<'_>,
+    cache_key: &CacheKey<'_>,
+) -> Option<Value> {
+    get_value(executor, cache_key.to_db_key()).await
+}
+
+#[allow(dead_code)]
 pub async fn get_caching_value<'a, T>(
     executor: impl PgExecutor<'a>,
     cache_key: &CacheKey<'_>,
