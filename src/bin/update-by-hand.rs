@@ -1,3 +1,4 @@
+use anyhow::Result;
 use console::Term;
 use dialoguer::{Input, MultiSelect, Select};
 use serde::Serialize;
@@ -17,7 +18,7 @@ struct EthInDefi {
     timestamp: i64,
 }
 
-async fn set_eth_in_defi_for_env(env: &str, eth: f64) -> Result<(), Box<dyn Error>> {
+async fn set_eth_in_defi_for_env(env: &str, eth: f64) -> Result<()> {
     let db_url = env::var(format!("DATABASE_URL_{}", env.to_uppercase())).expect(
         "three database url env vars DATABASE_URL_DEV, DATABASE_URL_STAG, and DATABASE_URL_PROD",
     );
@@ -63,7 +64,7 @@ async fn set_eth_in_defi_for_env(env: &str, eth: f64) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-async fn set_eth_in_defi() -> Result<(), Box<dyn Error>> {
+async fn set_eth_in_defi() -> Result<()> {
     let env_options = vec!["dev", "stag", "prod"];
     let selected_envs: Vec<String> = MultiSelect::new()
         .items(&env_options)
