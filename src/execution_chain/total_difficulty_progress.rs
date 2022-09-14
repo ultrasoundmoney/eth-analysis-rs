@@ -26,24 +26,17 @@ struct DifficultyProgress {
 async fn get_total_difficulty_by_hour(executor: impl PgExecutor<'_>) -> Vec<ProgressForDay> {
     sqlx::query_as::<_, ProgressForDay>(
         "
-            WITH first_of_hour_timestamps AS (
-                SELECT
-                    MIN(timestamp)
-                FROM
-                    blocks_next
-                WHERE
-                     timestamp >= '2022-09-10'::DATE
-                GROUP BY
-                     DATE_TRUNC('hour', timestamp)
-            )
-            SELECT 
+            SELECT
+                DISTINCT ON (DATE_TRUNC('hour', timestamp))
                 timestamp,
                 total_difficulty::FLOAT8,
                 number
             FROM
-                blocks_next
-            WHERE EXISTS (SELECT 1 FROM first_of_hour_timestamps WHERE first_of_hour_timestamps.min = blocks_next.timestamp)
-            ORDER BY timestamp ASC
+                blocks_next 
+            WHERE
+                timestamp >= '2022-09-10'::DATE
+            ORDER BY
+                DATE_TRUNC('hour', timestamp), timestamp
         ",
     )
     .fetch_all(executor)
