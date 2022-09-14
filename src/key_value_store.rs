@@ -1,9 +1,14 @@
+use anyhow::Result;
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 use sqlx::{postgres::PgRow, PgExecutor, Row};
+use tracing::debug;
+
+use crate::caching::CacheKey;
 
 // Do we need a distinction between key/value pair isn't there and value is null?
 pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<Value> {
-    tracing::debug!("getting key: {}", key);
+    debug!(key = key, "getting key value pair");
 
     sqlx::query(
         "
@@ -19,8 +24,23 @@ pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<V
     .flatten()
 }
 
+pub async fn get_caching_value<'a, T>(
+    executor: impl PgExecutor<'a>,
+    cache_key: &CacheKey<'_>,
+) -> Result<Option<T>>
+where T: for<'de> Deserialize<'de>
+{
+    match get_value(executor, cache_key.to_db_key()).await {
+        None => Ok(None),
+        Some(value) => {
+            let decoded_value: T = serde_json::from_value::<T>(value)?;
+            Ok(Some(decoded_value))
+        }
+    }
+}
+
 pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Value) {
-    tracing::debug!("storing key: {}", &key,);
+    debug!("storing key: {}", &key,);
 
     sqlx::query(
         "
@@ -36,8 +56,22 @@ pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Val
     .unwrap();
 }
 
+pub async fn set_caching_value<'a>(
+    executor: impl PgExecutor<'a>,
+    cache_key: &CacheKey<'_>,
+    value: impl Serialize,
+) -> Result<()> {
+    set_value(
+        executor,
+        cache_key.to_db_key(),
+        &serde_json::to_value(value)?,
+    )
+    .await;
+    Ok(())
+}
+
 pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key: &str, value_str: &str) {
-    tracing::debug!("storing key: {}", &key,);
+    debug!(key = key, "storing key value pair");
 
     sqlx::query(
         "
