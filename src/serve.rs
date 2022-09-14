@@ -219,6 +219,9 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
                 key @ CacheKey::MergeEstimate => {
                     update_cache_from_key(&mut connection, &state.cache.merge_estimate, &key).await
                 }
+                key @ CacheKey::MergeStatus => {
+                    update_cache_from_key(&mut connection, &state.cache.merge_status, &key).await
+                }
                 key @ CacheKey::TotalDifficultyProgress => {
                     update_cache_from_key(
                         &mut connection,
