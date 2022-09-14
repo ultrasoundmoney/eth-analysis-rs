@@ -256,8 +256,9 @@ impl BlockStore<'_> {
 mod tests {
     use chrono::{Duration, DurationRound, Utc};
 
+    use crate::db_testing;
+
     use super::*;
-    use crate::db_testing::get_test_db;
 
     fn make_test_block() -> ExecutionNodeBlock {
         ExecutionNodeBlock {
@@ -274,7 +275,7 @@ mod tests {
 
     #[tokio::test]
     async fn store_block_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
@@ -290,7 +291,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_block_by_number_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
@@ -304,7 +305,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_blocks_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
@@ -329,7 +330,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_block_by_hash_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
@@ -341,7 +342,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_block_by_number_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
@@ -353,7 +354,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_first_parent_hash_known_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
 
@@ -363,7 +364,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_parent_hash_known_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
@@ -375,7 +376,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_number_known_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
@@ -387,7 +388,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_empty_last_block_number_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
 
@@ -396,7 +397,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_block_number_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
@@ -408,7 +409,7 @@ mod tests {
 
     #[tokio::test]
     async fn is_empty_empty_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
 
@@ -417,7 +418,7 @@ mod tests {
 
     #[tokio::test]
     async fn is_empty_not_empty_test() {
-        let mut db = get_test_db().await;
+        let mut db = db_testing::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
