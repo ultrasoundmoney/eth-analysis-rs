@@ -42,6 +42,7 @@ impl FirstOfDaySlot {
     }
 }
 
+#[allow(dead_code)]
 fn get_is_first_of_minute(slot: &Slot) -> bool {
     match slot.cmp(&0) {
         Ordering::Equal => true,
@@ -59,6 +60,7 @@ fn get_is_first_of_minute(slot: &Slot) -> bool {
 pub struct FirstOfMinuteSlot(pub Slot);
 
 impl FirstOfMinuteSlot {
+    #[allow(dead_code)]
     pub fn new(slot: &u32) -> Option<Self> {
         dbg!(get_date_time_from_slot(slot));
         if get_is_first_of_minute(slot) {
