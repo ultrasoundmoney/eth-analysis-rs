@@ -189,9 +189,21 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
             let payload = notification.payload();
             let payload_cache_key = CacheKey::from(payload);
             match payload_cache_key {
+                key @ CacheKey::BaseFeeOverTime => {
+                    update_cache_from_key(&mut connection, &state.cache.base_fee_over_time, &key)
+                        .await
+                }
                 key @ CacheKey::BaseFeePerGas => {
                     update_cache_from_key(&mut connection, &state.cache.base_fee_per_gas, &key)
                         .await
+                }
+                key @ CacheKey::BaseFeePerGasStats => {
+                    update_cache_from_key(
+                        &mut connection,
+                        &state.cache.base_fee_per_gas_stats,
+                        &key,
+                    )
+                    .await
                 }
                 key @ CacheKey::BlockLag => {
                     update_cache_from_key(&mut connection, &state.cache.block_lag, &key).await
@@ -210,18 +222,6 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
                     update_cache_from_key(
                         &mut connection,
                         &state.cache.total_difficulty_progress,
-                        &key,
-                    )
-                    .await
-                }
-                key @ CacheKey::BaseFeeOverTime => {
-                    update_cache_from_key(&mut connection, &state.cache.base_fee_over_time, &key)
-                        .await
-                }
-                key @ CacheKey::BaseFeePerGasStats => {
-                    update_cache_from_key(
-                        &mut connection,
-                        &state.cache.base_fee_per_gas_stats,
                         &key,
                     )
                     .await
