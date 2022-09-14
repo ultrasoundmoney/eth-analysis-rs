@@ -22,4 +22,5 @@ pub use merge_stats::update_merge_stats_by_hand;
 pub use node::BeaconNode;
 pub use rewards::update_validator_rewards;
 pub use states::Slot;
+pub use states::store_state;
 pub use sync::sync_beacon_states;
