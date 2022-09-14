@@ -420,6 +420,51 @@ async fn get_next_step(
     NextStep::AddToExisting
 }
 
+async fn ensure_last_synced_slot_has_block(executor: &mut PgConnection) -> Result<()> {
+    debug!("ensuring we start syncing on a slot with a block");
+
+    let last_state = states::get_last_state(executor).await;
+
+    match last_state {
+        // Never synced a slot, done!
+        None => {
+            debug!("never synced a slot, no rollback needed");
+        }
+        Some(last_state) => {
+            let last_block = blocks::get_last_block_slot(executor).await;
+            match last_block {
+                // Synced a slot but never a block, done!
+                None => {
+                    debug!(
+                        last_state.slot,
+                        "synced slots, but never blocks, rollback to genesis"
+                    );
+                    rollback_slots(executor, &0).await;
+                }
+                Some(last_block) => {
+                    // Synced a slot and a block, are slots ahead of blocks?
+                    match last_state.slot.cmp(&last_block) {
+                        Ordering::Less => {
+                            panic!("we've synced less slots than blocks, this should never happen!")
+                        }
+                        Ordering::Equal => debug!(
+                            state_slot = last_state.slot,
+                            block_slot = last_block,
+                            "equal state and block slot, no rollback needed"
+                        ),
+                        Ordering::Greater => {
+                            debug!("states are ahead of blocks, rolling back to last block slot");
+                            rollback_slots(executor, &(last_block + 1)).await;
+                        }
+                    };
+                }
+            };
+        }
+    };
+
+    Ok(())
+}
+
 async fn sync_head(
     db_pool: &PgPool,
     beacon_node: &BeaconNode,
@@ -537,6 +582,8 @@ pub async fn sync_beacon_states() -> Result<()> {
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let beacon_node = BeaconNode::new();
+
+    ensure_last_synced_slot_has_block(&mut db_pool.acquire().await.unwrap()).await?;
 
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
 
