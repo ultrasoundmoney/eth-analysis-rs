@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    ops::{Add, Sub},
+    ops::{Add, Sub, Div},
     str::FromStr,
 };
 
@@ -9,6 +9,8 @@ use serde::{de, de::Visitor, Deserialize, Serialize, Serializer};
 pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
 pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
+
+pub const WEI_PER_GWEI: u64 = 1_000_000_000;
 
 pub type WeiF64 = f64;
 
@@ -47,6 +49,14 @@ impl GweiNewtype {
     pub fn from_eth_f64(eth: f64) -> Self {
         Self((eth * GWEI_PER_ETH_F64) as u64)
     }
+
+    pub fn into_wei(&self) -> Wei {
+        self.0 as i128 * WEI_PER_GWEI as i128
+    }
+
+    pub fn into_eth(&self) -> EthF64 {
+        self.0 as f64 / GWEI_PER_ETH_F64
+    }
 }
 
 impl From<GweiNewtype> for i64 {
@@ -71,6 +81,12 @@ impl From<String> for GweiNewtype {
     }
 }
 
+impl From<GweiNewtype> for f64 {
+    fn from(gwei: GweiNewtype) -> Self {
+        gwei.0 as f64
+    }
+}
+
 impl Add<GweiNewtype> for GweiNewtype {
     type Output = Self;
 
@@ -86,6 +102,16 @@ impl Sub<GweiNewtype> for GweiNewtype {
     fn sub(self, GweiNewtype(rhs): GweiNewtype) -> Self::Output {
         let GweiNewtype(lhs) = self;
         GweiNewtype(lhs - rhs)
+    }
+}
+
+impl Div<GweiNewtype> for GweiNewtype {
+    type Output = Self;
+
+    fn div(self, GweiNewtype(rhs): GweiNewtype) -> Self::Output {
+
+        let GweiNewtype(lhs) = self;
+        GweiNewtype(lhs / rhs)
     }
 }
 
