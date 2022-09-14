@@ -23,7 +23,7 @@ struct DifficultyProgress {
     total_difficulty_by_day: Vec<ProgressForDay>,
 }
 
-async fn get_total_difficulty_by_day<'a>(executor: impl PgExecutor<'a>) -> Vec<ProgressForDay> {
+async fn get_total_difficulty_by_hour(executor: impl PgExecutor<'_>) -> Vec<ProgressForDay> {
     sqlx::query_as::<_, ProgressForDay>(
         "
             WITH first_of_hour_timestamps AS (
@@ -77,7 +77,7 @@ pub async fn update_total_difficulty_progress() {
 
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
 
-    let mut total_difficulty_by_day = get_total_difficulty_by_day(&mut connection).await;
+    let mut total_difficulty_by_hour = get_total_difficulty_by_hour(&mut connection).await;
 
     // Get the most recent total difficulty for today.
     let current_total_difficulty = get_current_total_difficulty(&mut connection).await;
@@ -87,13 +87,13 @@ pub async fn update_total_difficulty_progress() {
 
     // Replace today's total difficulty with the most current one, this let's us report that our
     // graph is updated every 10 min.
-    total_difficulty_by_day.pop();
-    total_difficulty_by_day.push(current_total_difficulty);
+    total_difficulty_by_hour.pop();
+    total_difficulty_by_hour.push(current_total_difficulty);
 
     let total_difficulty_progress = DifficultyProgress {
         block_number,
         timestamp,
-        total_difficulty_by_day,
+        total_difficulty_by_day: total_difficulty_by_hour,
     };
 
     key_value_store::set_value(
@@ -138,7 +138,7 @@ mod tests {
         let test_block = make_test_block();
 
         block_store.store_block(&test_block, 0.0).await;
-        let progress_by_day = get_total_difficulty_by_day(&mut *transaction).await;
+        let progress_by_day = get_total_difficulty_by_hour(&mut *transaction).await;
         assert_eq!(
             progress_by_day,
             vec![ProgressForDay {
@@ -167,7 +167,7 @@ mod tests {
         block_store.store_block(&test_block_1, 0.0).await;
         block_store.store_block(&test_block_2, 0.0).await;
 
-        let progress_by_day = get_total_difficulty_by_day(&mut *transaction).await;
+        let progress_by_day = get_total_difficulty_by_hour(&mut *transaction).await;
 
         assert_eq!(
             progress_by_day,
