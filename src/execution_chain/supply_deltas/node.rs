@@ -268,9 +268,8 @@ mod tests {
     use sqlx::Acquire;
     use tokio::time::timeout;
 
-    use crate::db_testing;
+    use crate::{db_testing, execution_chain::supply_deltas::add_delta};
 
-    use super::super::add_delta;
     use super::*;
 
     #[ignore]
