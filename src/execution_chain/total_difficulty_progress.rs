@@ -44,7 +44,7 @@ async fn get_total_difficulty_by_hour(executor: impl PgExecutor<'_>) -> Vec<Prog
     .unwrap()
 }
 
-async fn get_current_total_difficulty<'a>(executor: impl PgExecutor<'a>) -> ProgressForDay {
+async fn get_current_total_difficulty(executor: impl PgExecutor<'_>) -> ProgressForDay {
     sqlx::query_as::<_, ProgressForDay>(
         "
             SELECT
@@ -123,15 +123,16 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[tokio::test]
     async fn get_difficulty_by_day_test() {
         let mut db = db_testing::get_test_db().await;
         let mut transaction = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *transaction);
+        let mut block_store = BlockStore::new(&mut transaction);
         let test_block = make_test_block();
 
         block_store.store_block(&test_block, 0.0).await;
-        let progress_by_day = get_total_difficulty_by_hour(&mut *transaction).await;
+        let progress_by_day = get_total_difficulty_by_hour(&mut transaction).await;
         assert_eq!(
             progress_by_day,
             vec![ProgressForDay {
@@ -142,11 +143,12 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[tokio::test]
     async fn get_difficulty_by_day_asc_test() {
         let mut db = db_testing::get_test_db().await;
         let mut transaction = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *transaction);
+        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_1 = make_test_block();
         let test_block_2 = ExecutionNodeBlock {
             hash: "0xtest2".to_owned(),
@@ -160,7 +162,7 @@ mod tests {
         block_store.store_block(&test_block_1, 0.0).await;
         block_store.store_block(&test_block_2, 0.0).await;
 
-        let progress_by_day = get_total_difficulty_by_hour(&mut *transaction).await;
+        let progress_by_day = get_total_difficulty_by_hour(&mut transaction).await;
 
         assert_eq!(
             progress_by_day,
@@ -179,11 +181,12 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[tokio::test]
     async fn get_current_total_difficulty_test() {
         let mut db = db_testing::get_test_db().await;
         let mut transaction = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *transaction);
+        let mut block_store = BlockStore::new(&mut transaction);
         let test_block = make_test_block();
         let test_block_2 = ExecutionNodeBlock {
             hash: "0xtest2".to_owned(),
@@ -196,7 +199,7 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
         block_store.store_block(&test_block_2, 0.0).await;
-        let progress_by_day = get_current_total_difficulty(&mut *transaction).await;
+        let progress_by_day = get_current_total_difficulty(&mut transaction).await;
         assert_eq!(
             progress_by_day,
             ProgressForDay {
