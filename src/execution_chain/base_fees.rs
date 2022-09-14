@@ -284,7 +284,6 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> anyho
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, SubsecRound};
-    use serial_test::serial;
     use sqlx::Acquire;
 
     use crate::{
