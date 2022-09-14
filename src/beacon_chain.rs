@@ -1,5 +1,5 @@
 mod balances;
-mod beacon_time;
+pub mod beacon_time;
 mod blocks;
 mod deposits;
 mod effective_balance_sum;

@@ -1,5 +1,9 @@
-use chrono::{DateTime, Datelike, Duration, TimeZone, Utc};
+use std::cmp::Ordering;
+
+use chrono::{DateTime, Datelike, Duration, TimeZone, Utc, Timelike};
 use lazy_static::lazy_static;
+
+use super::Slot;
 
 // pub const SECONDS_PER_SLOT: u8 = 12;
 // pub const SLOTS_PER_EPOCH: u8 = 32;
@@ -8,25 +12,25 @@ lazy_static! {
     pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp(1606824023, 0);
 }
 
-pub fn get_date_time_from_slot(slot: &u32) -> DateTime<Utc> {
+pub fn get_date_time_from_slot(slot: &Slot) -> DateTime<Utc> {
     *GENESIS_TIMESTAMP + Duration::seconds((slot * 12).into())
 }
 
-pub fn get_is_first_of_day(slot: &u32) -> bool {
-    match slot {
-        slot if *slot == 0 => true,
-        slot if *slot > 0 => {
-            let day_of_month_previous_slot = get_date_time_from_slot(&(slot - 1)).day();
-            let day_of_month = get_date_time_from_slot(&slot).day();
+pub fn get_is_first_of_day(slot: &Slot) -> bool {
+    match slot.cmp(&0) {
+        Ordering::Equal => true,
+        Ordering::Greater => {
+            let day_previous_slot = get_date_time_from_slot(&(slot - 1)).day();
+            let day = get_date_time_from_slot(&slot).day();
 
-            return day_of_month_previous_slot != day_of_month;
+            return day_previous_slot != day;
         }
-        _ => panic!("slot must be larger than zero, got {}", slot),
+        Ordering::Less => panic!("slot must be larger than zero, got {}", slot),
     }
 }
 
 #[derive(Debug)]
-pub struct FirstOfDaySlot(pub u32);
+pub struct FirstOfDaySlot(pub Slot);
 
 impl FirstOfDaySlot {
     pub fn new(slot: &u32) -> Option<Self> {
@@ -38,25 +42,58 @@ impl FirstOfDaySlot {
     }
 }
 
+fn get_is_first_of_minute(slot: &Slot) -> bool {
+    match slot.cmp(&0) {
+        Ordering::Equal => true,
+        Ordering::Greater => {
+            let minute_of_previous_slot = get_date_time_from_slot(&(slot - 1)).minute();
+            let minute_of_slot = get_date_time_from_slot(&slot).minute();
+
+            return minute_of_previous_slot != minute_of_slot;
+        }
+        Ordering::Less => panic!("slot must be larger than zero, got {}", slot),
+    }
+}
+
+#[derive(Debug)]
+pub struct FirstOfMinuteSlot(pub Slot);
+
+impl FirstOfMinuteSlot {
+    pub fn new(slot: &u32) -> Option<Self> {
+        dbg!(get_date_time_from_slot(slot));
+        if get_is_first_of_minute(slot) {
+            Some(FirstOfMinuteSlot(*slot))
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+
     #[test]
-    fn test_first_of_day() {
-        assert!(get_is_first_of_day(&0));
-        assert!(get_is_first_of_day(&3599));
+    fn first_of_day_genesis_test() {
+
+        assert!(FirstOfDaySlot::new(&0).is_some());
     }
 
     #[test]
-    fn test_not_first_of_day() {
-        assert!(!get_is_first_of_day(&1));
-        assert!(!get_is_first_of_day(&3598));
-        assert!(!get_is_first_of_day(&3600));
+    fn first_of_day_test() {
+        assert!(FirstOfDaySlot::new(&3599).is_some());
     }
 
     #[test]
-    fn test_get_timestamp() {
+    fn not_first_of_day_test() {
+        assert!(!FirstOfDaySlot::new(&1).is_some());
+        assert!(!FirstOfDaySlot::new(&3598).is_some());
+        assert!(!FirstOfDaySlot::new(&3600).is_some());
+    }
+
+    #[test]
+    fn get_timestamp_test() {
         assert_eq!(
             get_date_time_from_slot(&0),
             "2020-12-01T12:00:23Z".parse::<DateTime<Utc>>().unwrap()
@@ -68,15 +105,32 @@ mod tests {
     }
 
     #[test]
-    fn test_start_of_day() {
+    fn start_of_day_test() {
         assert!(FirstOfDaySlot::new(&0).is_some());
         assert!(FirstOfDaySlot::new(&3599).is_some());
     }
 
     #[test]
-    fn test_not_start_of_day() {
+    fn not_start_of_day_test() {
         assert!(FirstOfDaySlot::new(&1).is_none());
         assert!(FirstOfDaySlot::new(&3598).is_none());
         assert!(FirstOfDaySlot::new(&3600).is_none());
+    }
+
+    #[test]
+    fn first_of_minute_genesis_test() {
+        assert!(FirstOfMinuteSlot::new(&0).is_some());
+    }
+
+    #[test]
+    fn first_of_minute_test() {
+        assert!(FirstOfMinuteSlot::new(&4).is_some());
+    }
+
+    #[test]
+    fn not_first_of_minute_test() {
+
+        assert!(FirstOfMinuteSlot::new(&3).is_none());
+        assert!(FirstOfMinuteSlot::new(&5).is_none());
     }
 }
