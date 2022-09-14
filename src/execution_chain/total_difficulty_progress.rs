@@ -34,7 +34,7 @@ async fn get_total_difficulty_by_hour(executor: impl PgExecutor<'_>) -> Vec<Prog
             FROM
                 blocks_next 
             WHERE
-                timestamp >= '2022-09-10'::DATE
+                timestamp >= '2022-09-14'::DATE
             ORDER BY
                 DATE_TRUNC('hour', timestamp), timestamp
         ",
