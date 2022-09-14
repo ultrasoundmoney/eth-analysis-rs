@@ -102,7 +102,7 @@ pub async fn delete_validator_sums<'a>(
     .unwrap();
 }
 
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BeaconBalancesSum {
     pub slot: Slot,

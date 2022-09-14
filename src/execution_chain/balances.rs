@@ -5,7 +5,7 @@ use std::str::FromStr;
 use crate::eth_units::Wei;
 use crate::json_codecs::to_i128_string;
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionBalancesSum {
     pub block_number: u32,
