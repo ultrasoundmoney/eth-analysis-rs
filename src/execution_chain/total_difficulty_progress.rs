@@ -102,7 +102,6 @@ pub async fn update_total_difficulty_progress() {
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, SubsecRound};
-    use serial_test::serial;
 
     use crate::{
         db_testing,
