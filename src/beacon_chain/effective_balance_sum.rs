@@ -114,7 +114,7 @@ pub async fn update_effective_balance_sum() {
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let beacon_node = BeaconNode::new();
-    let last_state = get_last_state(&db_pool)
+    let last_state = get_last_state(&mut db_pool.acquire().await.unwrap())
         .await
         .expect("at least one beacon slot to be synced before updating effective balances");
 

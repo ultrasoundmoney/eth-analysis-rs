@@ -6,22 +6,25 @@
 //! code, adding more tests, and improving designs. This side should slowly take over more
 //! responsibilities.
 
+use anyhow::Result;
 use futures::SinkExt;
 use futures::Stream;
 use futures::StreamExt;
+use sqlx::PgConnection;
 use sqlx::PgPool;
-use tracing::Level;
-use tracing::event;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::iter::Iterator;
 use std::sync::Arc;
 use std::sync::Mutex;
+use tracing::event;
+use tracing::Level;
 
 use super::eth_prices;
 use super::node::BlockNumber;
 use super::node::Head;
 use crate::config;
+use crate::eth_supply;
 use crate::execution_chain;
 use crate::execution_chain::base_fees;
 use crate::execution_chain::block_store::BlockStore;
@@ -29,9 +32,15 @@ use crate::execution_chain::merge_estimate;
 use crate::execution_chain::ExecutionNode;
 use crate::performance::TimedExt;
 
-async fn rollback_numbers(block_store: &mut BlockStore<'_>, greater_than_or_equal: &BlockNumber) {
+async fn rollback_numbers<'a>(
+    executor: &mut PgConnection,
+    block_store: &mut BlockStore<'a>,
+    greater_than_or_equal: &BlockNumber,
+) -> Result<()> {
     tracing::debug!("rolling back data based on numbers gte {greater_than_or_equal}");
+    eth_supply::rollback_supply_by_block(executor, greater_than_or_equal).await?;
     block_store.delete_blocks(&greater_than_or_equal).await;
+    Ok(())
 }
 
 async fn sync_by_hash(
@@ -97,7 +106,7 @@ async fn sync_head(
     db_pool: &PgPool,
     heads_queue: HeadsQueue,
     head_to_sync: HeadToSync,
-) {
+) -> Result<()> {
     let head_event = match head_to_sync {
         HeadToSync::Fetched(head) => head,
         HeadToSync::Refetch(block_number) => execution_node
@@ -121,7 +130,7 @@ async fn sync_head(
             // Head number may be lower than our last synced. Roll back gte lowest of the two.
             let lowest_number = last_block_number.min(head_event.number);
 
-            rollback_numbers(store, &lowest_number).await;
+            rollback_numbers(&mut db_pool.acquire().await.unwrap(), store, &lowest_number).await?;
 
             for number in (lowest_number..=head_event.number).rev() {
                 tracing::debug!("queueing {number} for sync after dropping");
@@ -138,7 +147,12 @@ async fn sync_head(
                 head_event.hash
             );
 
-            rollback_numbers(store, &head_event.number).await;
+            rollback_numbers(
+                &mut db_pool.acquire().await.unwrap(),
+                store,
+                &head_event.number,
+            )
+            .await?;
 
             heads_queue
                 .lock()
@@ -150,7 +164,9 @@ async fn sync_head(
                 .timed("sync numbers")
                 .await;
         }
-    }
+    };
+
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -233,7 +249,11 @@ async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Head> {
 
     let mut execution_node = ExecutionNode::connect().await;
     let last_block_on_start = execution_node.get_latest_block().await;
-    event!(Level::DEBUG, "last block on chain: {}", &last_block_on_start.number);
+    event!(
+        Level::DEBUG,
+        "last block on chain: {}",
+        &last_block_on_start.number
+    );
 
     // We stream heads as requested until caught up with the chain and then pass heads as they come
     // in from our node. The only way to be sure how high we should stream, is to wait for the
@@ -268,7 +288,7 @@ enum HeadToSync {
 }
 type HeadsQueue = Arc<Mutex<VecDeque<HeadToSync>>>;
 
-pub async fn sync_blocks() {
+pub async fn sync_blocks() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     tracing::info!("syncing execution blocks");
@@ -314,28 +334,29 @@ pub async fn sync_blocks() {
                         next_head,
                     )
                     .timed("sync head")
-                    .await;
+                    .await?;
                 }
             }
         }
-    }
+    };
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
-    use sqlx::Acquire;
 
-    use crate::db_testing::get_test_db;
-    use crate::execution_chain::node::ExecutionNodeBlock;
+    use crate::{execution_chain::node::ExecutionNodeBlock, db_testing};
 
     use super::*;
 
     #[tokio::test]
     async fn rollback_last_first_test() {
-        let mut db = get_test_db().await;
-        let mut connection = db.acquire().await.unwrap();
-        let mut block_store = BlockStore::new(&mut connection);
+        // This test should use transiactions somehow.
+        let db = PgPool::connect(&db_testing::get_test_db_url()).await.unwrap();
+        let connection = &mut db.acquire().await.unwrap();
+        let mut block_store = BlockStore::new(connection);
 
         block_store
             .store_block(
@@ -369,7 +390,7 @@ mod tests {
             )
             .await;
 
-        rollback_numbers(&mut block_store, &0).await;
+        rollback_numbers(&mut db.acquire().await.unwrap(), &mut block_store, &0).await.unwrap();
 
         // This should blow up if the order is backwards but its not obvious how. Consider using
         // mockall to create a mock instance of block_store so we can observe whether

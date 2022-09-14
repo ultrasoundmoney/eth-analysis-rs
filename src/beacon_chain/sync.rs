@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{Acquire, PgConnection, PgExecutor, Row};
+use sqlx::{Acquire, PgConnection, Row};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -345,7 +345,7 @@ async fn stream_heads_from(gte_slot: Slot) -> impl Stream<Item = HeadEvent> {
 }
 
 async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = HeadEvent> {
-    let last_synced_state = get_last_state(db).await;
+    let last_synced_state = get_last_state(&mut db.acquire().await.unwrap()).await;
     let next_slot_to_sync = last_synced_state.map_or(0, |state| state.slot + 1);
     stream_heads_from(next_slot_to_sync).await
 }
@@ -367,9 +367,10 @@ async fn get_is_slot_known(connection: &mut PgConnection, slot: &Slot) -> bool {
     .get("exists")
 }
 
-async fn rollback_slots<'a>(db_pool: &PgPool, greater_than_or_equal: &Slot) {
+async fn rollback_slots(executor: &mut PgConnection, greater_than_or_equal: &Slot) {
     debug!("rolling back data based on slots gte {greater_than_or_equal}");
-    let mut transaction = db_pool.begin().await.unwrap();
+    let mut transaction = executor.begin().await.unwrap();
+    eth_supply::rollback_supply_by_slot(&mut transaction, greater_than_or_equal).await.unwrap();
     blocks::delete_blocks(&mut transaction, greater_than_or_equal).await;
     issuance::delete_issuances(&mut transaction, greater_than_or_equal).await;
     balances::delete_validator_sums(&mut transaction, greater_than_or_equal).await;
@@ -460,7 +461,7 @@ async fn sync_head(
             // Head slot may be lower than our last synced. Roll back gte lowest of the two.
             let lowest_slot = last_block_slot.min(head_event.slot);
 
-            rollback_slots(db_pool, &lowest_slot).await;
+            rollback_slots(&mut db_pool.acquire().await.unwrap(), &lowest_slot).await;
 
             for slot in (lowest_slot..=head_event.slot).rev() {
                 debug!("queueing {slot} for sync after dropping");
@@ -477,7 +478,7 @@ async fn sync_head(
                 "block at slot creates a fork, rolling back our last block",
             );
 
-            rollback_slots(db_pool, &head_event.slot).await;
+            rollback_slots(&mut db_pool.acquire().await.unwrap(), &head_event.slot).await;
 
             heads_queue
                 .lock()
@@ -507,7 +508,7 @@ async fn sync_head(
 }
 
 async fn estimate_slots_remaining<'a>(
-    executor: impl PgExecutor<'a>,
+    executor: &mut PgConnection,
     beacon_node: &BeaconNode,
 ) -> u32 {
     let last_on_chain = beacon_node.get_last_block().await.unwrap();
@@ -543,7 +544,7 @@ pub async fn sync_beacon_states() -> Result<()> {
 
     let mut progress = pit_wall::Progress::new(
         "sync beacon states",
-        estimate_slots_remaining(&db_pool, &beacon_node)
+        estimate_slots_remaining(&mut db_pool.acquire().await.unwrap(), &beacon_node)
             .await
             .into(),
     );

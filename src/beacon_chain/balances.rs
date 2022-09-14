@@ -1,6 +1,6 @@
 use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
-use sqlx::PgExecutor;
+use sqlx::{PgExecutor, PgConnection};
 
 use crate::eth_units::{to_gwei_string, GweiNewtype};
 use crate::supply_projection::{GweiInTime, GweiInTimeRow};
@@ -39,7 +39,7 @@ pub async fn store_validator_sum_for_day<'a>(
 }
 
 pub async fn get_last_effective_balance_sum<'a>(
-    executor: impl PgExecutor<'a>,
+    executor: &mut PgConnection,
     beacon_node: &BeaconNode,
 ) -> anyhow::Result<GweiNewtype> {
     let last_state_root = states::get_last_state(executor)

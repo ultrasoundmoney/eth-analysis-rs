@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::postgres::{PgQueryResult, PgRow};
 use sqlx::{Acquire, PgConnection, Row};
+use tracing::debug;
 
 use crate::beacon_chain::{self, beacon_time, BeaconBalancesSum, BeaconDepositsSum, Slot};
 use crate::caching::{self, CacheKey};
@@ -25,10 +26,53 @@ fn get_supply(eth_supply_parts: &EthSupplyParts) -> Wei {
         - eth_supply_parts.beacon_deposits_sum.deposits_sum.into_wei()
 }
 
+pub async fn rollback_supply_by_block(
+    executor: &mut PgConnection,
+    greater_than_or_equal: &BlockNumber,
+) -> sqlx::Result<PgQueryResult> {
+    sqlx::query(
+        "
+            DELETE FROM
+                eth_supply
+            WHERE
+                block_number >= $1
+        ",
+    )
+    .bind(*greater_than_or_equal as i32)
+    .execute(executor)
+    .await
+}
+
+pub async fn rollback_supply_by_slot(
+    executor: &mut PgConnection,
+    greater_than_or_equal: &Slot,
+) -> sqlx::Result<PgQueryResult> {
+    sqlx::query(
+        "
+            DELETE FROM
+                eth_supply
+            WHERE
+                deposits_slot >= $1
+                OR balances_slot >= $1
+        ",
+    )
+    .bind(*greater_than_or_equal as i32)
+    .execute(executor)
+    .await
+}
+
 async fn store(
     executor: &mut PgConnection,
     eth_supply_parts: &EthSupplyParts,
 ) -> sqlx::Result<PgQueryResult> {
+    let timestamp =
+        beacon_time::get_date_time_from_slot(&eth_supply_parts.beacon_balances_sum.slot);
+    let block_number = eth_supply_parts.execution_balances_sum.block_number;
+    let deposits_slot = eth_supply_parts.beacon_deposits_sum.slot;
+    let balances_slot = eth_supply_parts.beacon_balances_sum.slot;
+
+    debug!(timestamp = timestamp.to_string(), block_number, deposits_slot, balances_slot, "storing new eth supply");
+
     sqlx::query(
         "
             INSERT INTO
@@ -37,12 +81,10 @@ async fn store(
                 ($1, $2, $3, $4, $5::NUMERIC)
         ",
     )
-    .bind(beacon_time::get_date_time_from_slot(
-        &eth_supply_parts.beacon_balances_sum.slot,
-    ))
-    .bind(eth_supply_parts.execution_balances_sum.block_number as i32)
-    .bind(eth_supply_parts.beacon_deposits_sum.slot as i32)
-    .bind(eth_supply_parts.beacon_balances_sum.slot as i32)
+    .bind(timestamp)
+    .bind(block_number as i32)
+    .bind(deposits_slot as i32)
+    .bind(balances_slot as i32)
     .bind(get_supply(&eth_supply_parts).to_string())
     .execute(executor)
     .await
@@ -164,6 +206,8 @@ async fn update_supply_parts(
     executor: &mut PgConnection,
     eth_supply_parts: &EthSupplyParts,
 ) -> Result<()> {
+    debug!("updating supply parts");
+
     key_value_store::set_value_str(
         executor.acquire().await.unwrap(),
         &CacheKey::EthSupplyParts.to_db_key(),
@@ -205,11 +249,11 @@ pub async fn update(
     executor: &mut PgConnection,
     beacon_balances_sum: BeaconBalancesSum,
 ) -> Result<()> {
+    debug!(slot = beacon_balances_sum.slot, "updating eth supply");
+
     let eth_supply_parts = get_supply_parts(executor, beacon_balances_sum).await?;
 
     update_supply_parts(executor, &eth_supply_parts).await?;
-
-    store(executor, &eth_supply_parts).await?;
 
     update_supply_since_merge(executor, &eth_supply_parts).await?;
 
@@ -221,9 +265,12 @@ mod tests {
     use chrono::SubsecRound;
 
     use crate::{
+        beacon_chain::{
+            BeaconHeader, BeaconHeaderEnvelope, BeaconHeaderSignedEnvelope, GENESIS_PARENT_ROOT,
+        },
         db_testing,
         eth_units::{GweiNewtype, WEI_PER_GWEI},
-        execution_chain::{ExecutionNodeBlock, add_delta, SupplyDelta}, beacon_chain::{BeaconHeaderSignedEnvelope, BeaconHeaderEnvelope, BeaconHeader, GENESIS_PARENT_ROOT},
+        execution_chain::{add_delta, ExecutionNodeBlock, SupplyDelta},
     };
 
     use super::*;
@@ -311,7 +358,8 @@ mod tests {
 
         add_delta(&mut transaction, &supply_delta_test).await;
 
-        let execution_balances_sum = execution_chain::get_closest_balances_sum(&mut transaction, Utc::now()).await?;
+        let execution_balances_sum =
+            execution_chain::get_closest_balances_sum(&mut transaction, Utc::now()).await?;
         let beacon_balances_sum = BeaconBalancesSum {
             balances_sum: GweiNewtype(20),
             slot: 0,

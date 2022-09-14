@@ -1,4 +1,4 @@
-use sqlx::PgExecutor;
+use sqlx::{PgExecutor, PgConnection};
 
 // Beacon chain slots are defined as 12 second periods starting from genesis. With u32 our program
 // would overflow when the slot number passes 4_294_967_295. u32::MAX * 12 seconds = ~1633 years.
@@ -27,7 +27,7 @@ impl From<BeaconStateRow> for BeaconState {
     }
 }
 
-pub async fn get_last_state<'a>(executor: impl PgExecutor<'a>) -> Option<BeaconState> {
+pub async fn get_last_state(executor: &mut PgConnection) -> Option<BeaconState> {
     sqlx::query_as!(
         BeaconStateRow,
         r#"
