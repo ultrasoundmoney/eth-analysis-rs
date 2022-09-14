@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use sqlx::PgExecutor;
+use tracing::debug;
 
 #[derive(Debug)]
 pub enum CacheKey<'a> {
@@ -88,7 +89,7 @@ impl<'a> From<&'a str> for CacheKey<'a> {
 }
 
 pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey<'_>) {
-    tracing::debug!("publishing cache update: {}", key.to_db_key());
+    debug!(key = key.to_string(), "publishing cache update");
 
     sqlx::query!(
         "
