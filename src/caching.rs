@@ -16,6 +16,7 @@ pub enum CacheKey<'a> {
     MergeEstimate,
     MergeStatus,
     SupplyProjectionInputs,
+    SupplySinceMerge,
     TotalDifficultyProgress,
     ValidatorRewards,
 }
@@ -35,6 +36,7 @@ impl Display for CacheKey<'_> {
             Self::MergeEstimate => write!(f, "merge-estimate"),
             Self::MergeStatus => write!(f, "merge-status"),
             Self::SupplyProjectionInputs => write!(f, "supply-projection-inputs"),
+            Self::SupplySinceMerge => write!(f, "supply-since-merge"),
             Self::TotalDifficultyProgress => write!(f, "total-difficulty-progress"),
             Self::ValidatorRewards => write!(f, "validator-rewards"),
         }
@@ -56,6 +58,7 @@ impl<'a> CacheKey<'a> {
             &Self::MergeEstimate => "merge-estimate",
             &Self::MergeStatus => "merge-status",
             &Self::SupplyProjectionInputs => "supply-projection-inputs",
+            &Self::SupplySinceMerge => "supply-since-merge",
             &Self::TotalDifficultyProgress => "total-difficulty-progress",
             &Self::ValidatorRewards => "validator-rewards",
         }
@@ -76,6 +79,7 @@ impl<'a> From<&'a str> for CacheKey<'a> {
             "merge-estimate" => Self::MergeEstimate,
             "merge-status" => Self::MergeStatus,
             "supply-projection-inputs" => Self::SupplyProjectionInputs,
+            "supply-since-merge" => Self::SupplySinceMerge,
             "total-difficulty-progress" => Self::TotalDifficultyProgress,
             "validator-rewards" => Self::ValidatorRewards,
             key => Self::Custom(key),
