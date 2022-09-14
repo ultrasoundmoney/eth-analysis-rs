@@ -55,7 +55,7 @@ pub struct State {
 }
 
 async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey<'_>) -> CachedValue {
-    let value = key_value_store::get_value(connection, &key.to_db_key()).await;
+    let value = key_value_store::get_raw_caching_value(connection, key).await;
     RwLock::new(value)
 }
 
@@ -165,7 +165,7 @@ async fn update_cache_from_key(
         cache_key = cache_key.to_string(),
         "cache update",
     );
-    let value = key_value_store::get_value(connection, &cache_key.to_db_key()).await;
+    let value = key_value_store::get_raw_caching_value(connection, cache_key).await;
     let mut cache_wlock = cached_value.write().unwrap();
     *cache_wlock = value;
 }
