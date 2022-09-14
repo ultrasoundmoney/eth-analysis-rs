@@ -307,12 +307,11 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn get_base_fee_over_time_d1_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut *transaction);
+        let mut block_store = BlockStore::new(&mut transaction);
         let test_block = make_test_block();
 
         block_store.store_block(&test_block, 0.0).await;
@@ -329,12 +328,11 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn get_base_fee_over_time_asc_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut *transaction);
+        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_1 = make_test_block();
         let test_block_2 = ExecutionNodeBlock {
             hash: "0xtest2".to_string(),
@@ -383,12 +381,11 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn get_average_fee_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut *transaction);
+        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_1 = ExecutionNodeBlock {
             gas_used: 10,
             base_fee_per_gas: 10,
@@ -417,12 +414,11 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn get_average_fee_within_range_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut *transaction);
+        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_in_range = ExecutionNodeBlock {
             gas_used: 10,
             base_fee_per_gas: 10,
@@ -455,12 +451,11 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn get_base_fee_per_gas_min_max_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut *transaction);
+        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_1 = ExecutionNodeBlock {
             gas_used: 10,
             base_fee_per_gas: 10,

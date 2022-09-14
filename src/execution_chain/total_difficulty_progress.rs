@@ -102,6 +102,7 @@ pub async fn update_total_difficulty_progress() {
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, SubsecRound};
+    use serial_test::serial;
 
     use crate::{
         db_testing,
@@ -123,7 +124,6 @@ mod tests {
         }
     }
 
-    #[ignore]
     #[tokio::test]
     async fn get_difficulty_by_day_test() {
         let mut db = db_testing::get_test_db().await;
@@ -143,7 +143,6 @@ mod tests {
         );
     }
 
-    #[ignore]
     #[tokio::test]
     async fn get_difficulty_by_day_asc_test() {
         let mut db = db_testing::get_test_db().await;
@@ -181,7 +180,6 @@ mod tests {
         );
     }
 
-    #[ignore]
     #[tokio::test]
     async fn get_current_total_difficulty_test() {
         let mut db = db_testing::get_test_db().await;

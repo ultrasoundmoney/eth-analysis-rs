@@ -26,4 +26,4 @@ jobs:
       - name: Build
         run: cargo build
       - name: Run tests
-        run: cargo test -- --nocapture
+        run: cargo test -- --nocapture --test-threads=1
