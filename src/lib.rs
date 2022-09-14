@@ -19,9 +19,11 @@ mod serve;
 mod supply_projection;
 mod time;
 mod time_frames;
+mod update_by_hand;
 
 pub use beacon_chain::{
     sync_beacon_states, update_effective_balance_sum, update_validator_rewards,
+    update_merge_stats_by_hand
 };
 pub use check_beacon_state_gaps::check_beacon_state_gaps;
 pub use eth_prices::heal_eth_prices;
@@ -41,3 +43,4 @@ pub use issuance_breakdown::update_issuance_breakdown;
 pub use phoenix::monitor_critical_services;
 pub use serve::start_server;
 pub use supply_projection::update_supply_projection_inputs;
+pub use update_by_hand::run_cli as update_by_hand;
