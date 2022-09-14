@@ -18,6 +18,8 @@ pub type Gwei = u64;
 #[allow(dead_code)]
 pub type GweiF64 = f64;
 
+pub type EthF64 = f64;
+
 // TODO: Decide if using a NewType is worth it.
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
 // ~9_000_000_000 ETH, which is more than the entire supply.

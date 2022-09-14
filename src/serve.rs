@@ -45,6 +45,7 @@ struct Cache {
     eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
     merge_estimate: CachedValue,
+    merge_status: CachedValue,
     total_difficulty_progress: CachedValue,
 }
 
@@ -136,7 +137,7 @@ async fn etag_middleware<B: std::fmt::Debug>(
     }
 }
 
-async fn get_cached<'a>(cached_value: &CachedValue) -> impl IntoResponse {
+async fn get_cached(cached_value: &CachedValue) -> impl IntoResponse {
     let cached_value_inner = cached_value.read().unwrap();
     match &*cached_value_inner {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
@@ -256,6 +257,7 @@ pub async fn start_server() {
     let eth_price_stats = get_value_hash_lock(&db_pool, &CacheKey::EthPrice).await;
     let eth_supply_parts = get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts).await;
     let merge_estimate = get_value_hash_lock(&db_pool, &CacheKey::MergeEstimate).await;
+    let merge_status = get_value_hash_lock(&db_pool, &CacheKey::MergeStatus).await;
     let total_difficulty_progress =
         get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress).await;
 
@@ -267,6 +269,7 @@ pub async fn start_server() {
         eth_price_stats,
         eth_supply_parts,
         merge_estimate,
+        merge_status,
         total_difficulty_progress,
     });
 
@@ -354,6 +357,9 @@ pub async fn start_server() {
                     StatusCode::OK
                 }),
             )
+            .route("/api/v2/fees/merge-stats", get(|state:StateExtension| async move {
+                get_cached(&state.clone().cache.merge_status).await.into_response()
+            }))
             .layer(
                 ServiceBuilder::new()
                     .layer(middleware::from_fn(etag_middleware))

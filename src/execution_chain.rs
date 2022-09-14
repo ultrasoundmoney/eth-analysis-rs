@@ -19,7 +19,7 @@ pub use export_blocks::write_blocks_from_august;
 pub use export_blocks::write_blocks_from_london;
 use lazy_static::lazy_static;
 pub use logs::write_heads_log as write_execution_heads_log;
-pub use node::{stream_new_heads, ExecutionNode, ExecutionNodeBlock};
+pub use node::{stream_new_heads, ExecutionNode, ExecutionNodeBlock, BlockNumber};
 pub use supply_deltas::stream_supply_delta_chunks;
 pub use supply_deltas::stream_supply_deltas_from;
 pub use supply_deltas::summary_from_deltas_csv;
