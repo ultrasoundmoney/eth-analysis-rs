@@ -284,6 +284,7 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> anyho
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, SubsecRound};
+    use serial_test::serial;
     use sqlx::Acquire;
 
     use crate::{
@@ -306,6 +307,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn get_base_fee_over_time_d1_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
@@ -327,6 +329,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn get_base_fee_over_time_asc_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
@@ -380,6 +383,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn get_average_fee_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
@@ -413,6 +417,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn get_average_fee_within_range_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
@@ -450,6 +455,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn get_base_fee_per_gas_min_max_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
