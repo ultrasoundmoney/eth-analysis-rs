@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{postgres::PgRow, PgExecutor, Row};
+use sqlx::{postgres::PgRow, PgExecutor, Row, PgConnection};
 use tracing::debug;
 
 use crate::caching::CacheKey;
@@ -31,9 +31,8 @@ pub async fn get_raw_caching_value(
     get_value(executor, cache_key.to_db_key()).await
 }
 
-#[allow(dead_code)]
-pub async fn get_caching_value<'a, T>(
-    executor: impl PgExecutor<'a>,
+pub async fn get_caching_value<T>(
+    executor: &mut PgConnection,
     cache_key: &CacheKey<'_>,
 ) -> Result<Option<T>>
 where

@@ -132,15 +132,15 @@ async fn get_supply_since_merge_by_minute(
 }
 
 #[derive(Debug, PartialEq)]
-struct EthSupply {
+pub struct EthSupply {
     balances_slot: Slot,
     block_number: BlockNumber,
     deposits_slot: Slot,
-    supply: EthF64,
+    pub supply: EthF64,
     timestamp: DateTime<Utc>,
 }
 
-async fn get_current_supply(executor: &mut PgConnection) -> sqlx::Result<EthSupply> {
+pub async fn get_current_supply(executor: &mut PgConnection) -> sqlx::Result<EthSupply> {
     sqlx::query(
         "
             SELECT

@@ -19,6 +19,7 @@ pub use effective_balance_sum::update_effective_balance_sum;
 pub use issuance::get_current_issuance;
 pub use issuance::get_issuance_by_start_of_day;
 pub use issuance::get_last_week_issuance;
+pub use merge_status::update_merge_stats_auto;
 pub use merge_status::update_merge_stats_by_hand;
 pub use node::BeaconHeader;
 pub use node::BeaconHeaderEnvelope;
