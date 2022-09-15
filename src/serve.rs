@@ -27,6 +27,7 @@ use tracing::event;
 use tracing::span;
 use tracing::Instrument;
 use tracing::Level;
+use tracing::error;
 
 use crate::caching::CacheKey;
 use crate::config;
@@ -85,56 +86,58 @@ async fn etag_middleware<B: std::fmt::Debug>(
             event!(Level::TRACE, path, "response without body, skipping etag");
             Ok(parts.into_response())
         }
-        false => {
-            match if_none_match_header {
-                None => {
-                    let etag = EntityTag::from_data(&bytes);
+        false => match if_none_match_header {
+            None => {
+                let etag = EntityTag::from_data(&bytes);
 
-                    parts.headers.insert(
-                        header::ETAG,
-                        HeaderValue::from_str(&etag.to_string()).unwrap(),
-                    );
+                parts.headers.insert(
+                    header::ETAG,
+                    HeaderValue::from_str(&etag.to_string()).unwrap(),
+                );
 
-                    event!(
-                        Level::TRACE,
-                        path,
-                        etag = etag.to_string(),
-                        "no if-none-match header"
-                    );
+                event!(
+                    Level::TRACE,
+                    path,
+                    etag = etag.to_string(),
+                    "no if-none-match header"
+                );
 
-                    Ok((parts, bytes).into_response())
-                }
-                Some(if_none_match) => {
-                    let if_none_match_etag = if_none_match
-                        .to_str()
-                        .unwrap()
-                        .parse::<EntityTag>()
-                        .unwrap();
-                    let etag = EntityTag::from_data(&bytes);
-
-                    parts.headers.insert(
-                        header::ETAG,
-                        HeaderValue::from_str(&etag.to_string()).unwrap(),
-                    );
-
-                    let some_match = etag.strong_eq(&if_none_match_etag);
-
-                    event!(
-                        Level::TRACE,
-                        path,
-                        etag = etag.to_string(),
-                        some_match,
-                        "if-none-match" = if_none_match_etag.to_string()
-                    );
-
-                    if some_match {
-                        Ok((StatusCode::NOT_MODIFIED, parts).into_response())
-                    } else {
+                Ok((parts, bytes).into_response())
+            }
+            Some(if_none_match) => {
+                let if_none_match_etag = if_none_match.to_str().unwrap().parse::<EntityTag>();
+                match if_none_match_etag {
+                    Err(err) => {
+                        error!("{}", err);
                         Ok((parts, bytes).into_response())
+                    }
+                    Ok(if_none_match_etag) => {
+                        let etag = EntityTag::from_data(&bytes);
+
+                        parts.headers.insert(
+                            header::ETAG,
+                            HeaderValue::from_str(&etag.to_string()).unwrap(),
+                        );
+
+                        let some_match = etag.strong_eq(&if_none_match_etag);
+
+                        event!(
+                            Level::TRACE,
+                            path,
+                            etag = etag.to_string(),
+                            some_match,
+                            "if-none-match" = if_none_match_etag.to_string()
+                        );
+
+                        if some_match {
+                            Ok((StatusCode::NOT_MODIFIED, parts).into_response())
+                        } else {
+                            Ok((parts, bytes).into_response())
+                        }
                     }
                 }
             }
-        }
+        },
     }
 }
 
@@ -224,7 +227,8 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
                     update_cache_from_key(&mut connection, &state.cache.merge_status, &key).await
                 }
                 key @ CacheKey::SupplySinceMerge => {
-                    update_cache_from_key(&mut connection, &state.cache.supply_since_merge, &key).await
+                    update_cache_from_key(&mut connection, &state.cache.supply_since_merge, &key)
+                        .await
                 }
                 key @ CacheKey::TotalDifficultyProgress => {
                     update_cache_from_key(
@@ -366,17 +370,27 @@ pub async fn start_server() {
                     StatusCode::OK
                 }),
             )
-            .route("/api/v2/fees/merge-status", get(|state:StateExtension| async move {
-                get_cached(&state.clone().cache.merge_status).await.into_response()
-            }))
-            .route("/api/v2/fees/supply-since-merge", get(|state:StateExtension| async move {
-                get_cached(&state.clone().cache.supply_since_merge).await.into_response()
-            }))
+            .route(
+                "/api/v2/fees/merge-status",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.merge_status)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/supply-since-merge",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.supply_since_merge)
+                        .await
+                        .into_response()
+                }),
+            )
             .layer(
                 ServiceBuilder::new()
                     .layer(middleware::from_fn(etag_middleware))
                     .layer(CompressionLayer::new())
-                    .layer(Extension(shared_state))
+                    .layer(Extension(shared_state)),
             );
 
     let port = config::get_env_var("PORT").unwrap_or("3002".to_string());
