@@ -71,7 +71,10 @@ async fn store(
     let deposits_slot = eth_supply_parts.beacon_deposits_sum.slot;
     let balances_slot = eth_supply_parts.beacon_balances_sum.slot;
 
-    debug!(timestamp = timestamp.to_string(), block_number, deposits_slot, balances_slot, "storing new eth supply");
+    debug!(
+        timestamp = timestamp.to_string(),
+        block_number, deposits_slot, balances_slot, "storing new eth supply"
+    );
 
     sqlx::query(
         "
@@ -198,6 +201,8 @@ async fn update_supply_since_merge(
 
     key_value_store::set_caching_value(executor, &CacheKey::SupplySinceMerge, supply_since_merge)
         .await?;
+
+    caching::publish_cache_update(executor, CacheKey::SupplySinceMerge).await;
 
     Ok(())
 }

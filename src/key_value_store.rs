@@ -65,7 +65,7 @@ pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Val
 }
 
 pub async fn set_caching_value<'a>(
-    executor: impl PgExecutor<'a>,
+    executor: &mut PgConnection,
     cache_key: &CacheKey<'_>,
     value: impl Serialize,
 ) -> Result<()> {
