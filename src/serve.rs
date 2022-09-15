@@ -14,7 +14,6 @@ use axum::Router;
 use bytes::BufMut;
 use etag::EntityTag;
 use futures::TryStreamExt;
-use futures::future::err;
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::Connection;
@@ -110,6 +109,11 @@ async fn etag_middleware<B: std::fmt::Debug>(
                 match if_none_match_etag {
                     Err(ref err) => {
                         error!("{} - {:?}", err, &if_none_match_etag);
+                        let etag = EntityTag::from_data(&bytes);
+                        parts.headers.insert(
+                            header::ETAG,
+                            HeaderValue::from_str(&etag.to_string()).unwrap(),
+                        );
                         Ok((parts, bytes).into_response())
                     }
                     Ok(if_none_match_etag) => {
