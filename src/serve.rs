@@ -151,7 +151,7 @@ async fn get_cached(cached_value: &CachedValue) -> impl IntoResponse {
 
             headers.insert(
                 header::CACHE_CONTROL,
-                HeaderValue::from_str("public, max-age=4, s-maxage=1, stale-while-revalidate=60")
+                HeaderValue::from_str("public, max-age=4, s-maxage=4, stale-while-revalidate=60")
                     .unwrap(),
             );
 
