@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::{Connection, FromRow, PgConnection, PgExecutor};
+use tracing::info;
 
 use crate::{
     caching::{self, CacheKey},
-    config, key_value_store,
+    config, key_value_store, execution_chain::{TOTAL_TERMINAL_DIFFICULTY, block_store},
 };
 
 #[derive(Debug, FromRow, PartialEq, Serialize)]
@@ -69,6 +70,14 @@ pub async fn update_total_difficulty_progress() {
     tracing::info!("updating total difficulty progress");
 
     let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+
+    let mut block_store = block_store::BlockStore::new(&mut connection);
+    let block_number = block_store.get_last_block_number().await.expect("one block should stored before updating total difficulty progress");
+    let block = block_store.get_block_by_number(&block_number).await.expect("one block should be stored bbefore updating total difficulty progress");
+    if block.total_difficulty >= TOTAL_TERMINAL_DIFFICULTY {
+        info!("merge done, skipping");
+        return ();
+    } 
 
     let mut total_difficulty_by_hour = get_total_difficulty_by_hour(&mut connection).await;
 

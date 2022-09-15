@@ -5,13 +5,13 @@ use lazy_static::lazy_static;
 use serde::Serialize;
 use sqlx::PgPool;
 
+use crate::beacon_chain::update_merge_stats_auto;
 use crate::caching::{self, CacheKey};
+use crate::execution_chain::TOTAL_TERMINAL_DIFFICULTY;
 use crate::json_codecs::{to_u128_string, to_u64_string};
 use crate::key_value_store;
 
 use super::node::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
-
-const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
 
 lazy_static! {
     static ref AVERAGE_BLOCK_TIME_ESTIMATE: Duration = Duration::milliseconds(14400);
@@ -33,26 +33,32 @@ struct MergeEstimate {
 pub async fn on_new_block(executor: &PgPool, block: &ExecutionNodeBlock) {
     tracing::debug!("updating merge TTD countdown");
 
-    let blocks_left =
-        ((TOTAL_TERMINAL_DIFFICULTY - block.total_difficulty) / block.difficulty as u128) as u32;
-    let time_left = AVERAGE_BLOCK_TIME_ESTIMATE.mul(blocks_left as i32);
-    let estimated_date_time = Utc::now().trunc_subsecs(0) + time_left;
+    if block.total_difficulty < TOTAL_TERMINAL_DIFFICULTY {
+        let blocks_left = ((TOTAL_TERMINAL_DIFFICULTY - block.total_difficulty)
+            / block.difficulty as u128) as u32;
+        let time_left = AVERAGE_BLOCK_TIME_ESTIMATE.mul(blocks_left as i32);
+        let estimated_date_time = Utc::now().trunc_subsecs(0) + time_left;
 
-    let merge_ttd_countdown = MergeEstimate {
-        block_number: block.number,
-        blocks_left,
-        difficulty: block.difficulty,
-        estimated_date_time,
-        timestamp: block.timestamp,
-        total_difficulty: block.total_difficulty,
-    };
+        let merge_ttd_countdown = MergeEstimate {
+            block_number: block.number,
+            blocks_left,
+            difficulty: block.difficulty,
+            estimated_date_time,
+            timestamp: block.timestamp,
+            total_difficulty: block.total_difficulty,
+        };
 
-    key_value_store::set_value(
-        executor,
-        &CacheKey::MergeEstimate.to_db_key(),
-        &serde_json::to_value(merge_ttd_countdown).unwrap(),
-    )
-    .await;
+        key_value_store::set_value(
+            executor,
+            &CacheKey::MergeEstimate.to_db_key(),
+            &serde_json::to_value(merge_ttd_countdown).unwrap(),
+        )
+        .await;
 
-    caching::publish_cache_update(executor, CacheKey::MergeEstimate).await;
+        caching::publish_cache_update(executor, CacheKey::MergeEstimate).await;
+    } else {
+        update_merge_stats_auto(&mut executor.acquire().await.unwrap(), block)
+            .await
+            .unwrap();
+    }
 }
