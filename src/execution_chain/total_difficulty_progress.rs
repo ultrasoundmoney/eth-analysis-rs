@@ -27,7 +27,7 @@ async fn get_total_difficulty_by_hour(executor: impl PgExecutor<'_>) -> Vec<Prog
     sqlx::query_as::<_, ProgressForDay>(
         "
             SELECT
-                DISTINCT ON (DATE_TRUNC('hour', timestamp))
+                DISTINCT ON (DATE_TRUNC('minute', timestamp))
                 timestamp,
                 total_difficulty::FLOAT8,
                 number
@@ -36,7 +36,7 @@ async fn get_total_difficulty_by_hour(executor: impl PgExecutor<'_>) -> Vec<Prog
             WHERE
                 timestamp >= '2022-09-15'::DATE
             ORDER BY
-                DATE_TRUNC('hour', timestamp), timestamp
+                DATE_TRUNC('minute', timestamp), timestamp
         ",
     )
     .fetch_all(executor)
