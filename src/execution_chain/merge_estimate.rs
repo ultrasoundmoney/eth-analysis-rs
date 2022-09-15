@@ -14,7 +14,7 @@ use super::node::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
 const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
 
 lazy_static! {
-    static ref AVERAGE_BLOCK_TIME_ESTIMATE: Duration = Duration::seconds(14);
+    static ref AVERAGE_BLOCK_TIME_ESTIMATE: Duration = Duration::seconds(14.4);
 }
 
 #[derive(Serialize)]
