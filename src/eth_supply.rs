@@ -117,7 +117,7 @@ async fn get_supply_since_merge_by_minute(
             FROM
                 eth_supply 
             WHERE
-                timestamp >= '2022-09-13'::DATE
+                timestamp >= '2022-09-15'::DATE
             ORDER BY
                 DATE_TRUNC('minute', timestamp), timestamp
         ",
