@@ -366,7 +366,7 @@ pub async fn start_server() {
                     StatusCode::OK
                 }),
             )
-            .route("/api/v2/fees/merge-stats", get(|state:StateExtension| async move {
+            .route("/api/v2/fees/merge-status", get(|state:StateExtension| async move {
                 get_cached(&state.clone().cache.merge_status).await.into_response()
             }))
             .route("/api/v2/fees/supply-since-merge", get(|state:StateExtension| async move {
