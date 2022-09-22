@@ -1,5 +1,6 @@
 use std::time::{Duration, SystemTime};
 
+use anyhow::Result;
 use chrono::{DateTime, TimeZone, Utc};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
@@ -57,14 +58,15 @@ struct ExecutionResponse {
     number: u32,
 }
 
-async fn get_current_execution_block_number() -> u32 {
-    reqwest::get("https://ultrasound.money/api/fees/grouped-analysis-1")
-        .await
-        .unwrap()
+async fn get_current_execution_block_number() -> Result<u32> {
+    let block_number = reqwest::get("https://ultrasound.money/api/fees/grouped-analysis-1")
+        .await?
+        .error_for_status()?
         .json::<ExecutionResponse>()
-        .await
-        .unwrap()
-        .number
+        .await?
+        .number;
+
+    Ok(block_number)
 }
 
 #[derive(Deserialize)]
@@ -83,26 +85,28 @@ pub struct EthSupplyResponse {
     execution_balances_sum: ExecutionBalancesSum,
 }
 
-async fn get_current_beacon_slot() -> u32 {
-    reqwest::get("https://ultrasound.money/api/v2/fees/eth-supply-parts")
-        .await
-        .unwrap()
+async fn get_current_beacon_slot() -> Result<u32> {
+    let slot = reqwest::get("https://ultrasound.money/api/v2/fees/eth-supply-parts")
+        .await?
+        .error_for_status()?
         .json::<EthSupplyResponse>()
-        .await
-        .unwrap()
+        .await?
         .beacon_balances_sum
-        .slot
+        .slot;
+
+    Ok(slot)
 }
 
-async fn get_current_execution_delta_block_number() -> u32 {
-    reqwest::get("https://ultrasound.money/api/v2/fees/eth-supply-parts")
-        .await
-        .unwrap()
+async fn get_current_execution_delta_block_number() -> Result<u32> {
+    let block_number = reqwest::get("https://ultrasound.money/api/v2/fees/eth-supply-parts")
+        .await?
+        .error_for_status()?
         .json::<EthSupplyResponse>()
-        .await
-        .unwrap()
+        .await?
         .execution_balances_sum
-        .block_number
+        .block_number;
+
+    Ok(block_number)
 }
 
 fn date_time_from_system_time(system_time: SystemTime) -> DateTime<Utc> {
@@ -132,31 +136,40 @@ pub async fn monitor_critical_services() {
     let mut beacon_slot_phoenix_birth = SystemTime::now();
 
     let mut last_alarm_fire = None;
-    let mut last_seen_execution_block_number = get_current_execution_block_number().await;
-    let mut last_seen_execution_delta_block_number =
-        get_current_execution_delta_block_number().await;
-    let mut last_seen_beacon_slot = get_current_beacon_slot().await;
+    let mut last_seen_execution_block_number =
+        get_current_execution_block_number().await.unwrap_or(0);
+    let mut last_seen_execution_delta_block_number = get_current_execution_delta_block_number()
+        .await
+        .unwrap_or(0);
+    let mut last_seen_beacon_slot = get_current_beacon_slot().await.unwrap_or(0);
 
     loop {
         let current_execution_block_number = get_current_execution_block_number().await;
-        if last_seen_execution_block_number != current_execution_block_number {
-            execution_phoenix_birth = SystemTime::now();
-            tracing::debug!( "last seen execution block number: {last_seen_execution_block_number}, current block number: {current_execution_block_number}, rebirth phoenix at {:?}",  date_time_from_system_time(execution_phoenix_birth));
-            last_seen_execution_block_number = current_execution_block_number;
+        if let Ok(current_execution_block_number) = current_execution_block_number {
+            if current_execution_block_number != last_seen_execution_block_number {
+                execution_phoenix_birth = SystemTime::now();
+                tracing::debug!( "last seen execution block number: {last_seen_execution_block_number}, current block number: {current_execution_block_number}, rebirth phoenix at {:?}",  date_time_from_system_time(execution_phoenix_birth));
+                last_seen_execution_block_number = current_execution_block_number;
+            }
         }
 
         let current_execution_delta_block_number = get_current_execution_delta_block_number().await;
-        if last_seen_execution_delta_block_number != current_execution_delta_block_number {
-            execution_delta_phoenix_birth = SystemTime::now();
-            tracing::debug!( "last seen execution delta block number: {last_seen_execution_delta_block_number}, current block number: {current_execution_delta_block_number}, rebirth phoenix at {:?}", date_time_from_system_time(execution_delta_phoenix_birth));
-            last_seen_execution_delta_block_number = current_execution_delta_block_number;
+        if let Ok(current_execution_delta_block_number) = current_execution_delta_block_number {
+            if last_seen_execution_delta_block_number != current_execution_delta_block_number {
+                execution_delta_phoenix_birth = SystemTime::now();
+                tracing::debug!( "last seen execution delta block number: {last_seen_execution_delta_block_number}, current block number: {current_execution_delta_block_number}, rebirth phoenix at {:?}", date_time_from_system_time(execution_delta_phoenix_birth));
+                last_seen_execution_delta_block_number = current_execution_delta_block_number;
+            }
         }
 
         let current_beacon_slot = get_current_beacon_slot().await;
-        if last_seen_beacon_slot != current_beacon_slot {
-            beacon_slot_phoenix_birth = SystemTime::now();
-            tracing::debug!( "last seen beacon slot: {last_seen_beacon_slot}, current slot: {current_beacon_slot}, rebirth phoenix at {:?}", date_time_from_system_time(beacon_slot_phoenix_birth));
-            last_seen_beacon_slot = current_beacon_slot;
+
+        if let Ok(current_beacon_slot) = current_beacon_slot {
+            if last_seen_beacon_slot != current_beacon_slot {
+                beacon_slot_phoenix_birth = SystemTime::now();
+                tracing::debug!( "last seen beacon slot: {last_seen_beacon_slot}, current slot: {current_beacon_slot}, rebirth phoenix at {:?}", date_time_from_system_time(beacon_slot_phoenix_birth));
+                last_seen_beacon_slot = current_beacon_slot;
+            }
         }
 
         let execution_phoenix_lifespan = SystemTime::now()
