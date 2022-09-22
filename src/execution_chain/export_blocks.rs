@@ -9,6 +9,7 @@ use std::{
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
+use tracing::log::{debug, info};
 
 use crate::execution_chain::sync::EXECUTION_BLOCK_NUMBER_AUG_1ST;
 
@@ -63,14 +64,14 @@ struct OutRow {
 pub async fn write_blocks_from_august() {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("writing blocks to CSV");
+    info!("writing blocks to CSV");
 
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
-    tracing::debug!("loading eth prices");
+    debug!("loading eth prices");
 
     let mut eth_prices_csv = csv::Reader::from_path("eth_prices.csv").unwrap();
     let mut iter = eth_prices_csv.deserialize();
@@ -82,7 +83,7 @@ pub async fn write_blocks_from_august() {
         eth_prices.insert(record.number, record.eth_price);
     }
 
-    tracing::debug!("done loading eth prices");
+    debug!("done loading eth prices");
 
     let mut historic_stream = get_historic_stream(&BlockRange {
         greater_than_or_equal: EXECUTION_BLOCK_NUMBER_AUG_1ST,
@@ -114,7 +115,7 @@ pub async fn write_blocks_from_august() {
 
         progress.inc_work_done();
         if block.number % 100 == 0 {
-            tracing::debug!("{}", progress.get_progress_string());
+            debug!("{}", progress.get_progress_string());
         }
     }
 
@@ -135,9 +136,9 @@ fn get_last_written_number(path: &str) -> Option<u32> {
 pub async fn write_blocks_from_london() {
     tracing_subscriber::fmt::init();
 
-    tracing::info!("writing blocks to CSV");
+    info!("writing blocks to CSV");
 
-    tracing::debug!("loading eth prices");
+    debug!("loading eth prices");
 
     let mut eth_prices_csv = csv::Reader::from_path("eth_prices.csv").unwrap();
     let mut iter = eth_prices_csv.deserialize();
@@ -149,7 +150,7 @@ pub async fn write_blocks_from_london() {
         eth_prices.insert(record.number, record.eth_price);
     }
 
-    tracing::debug!("done loading eth prices");
+    debug!("done loading eth prices");
 
     let mut progress = pit_wall::Progress::new(
         "write blocks",
@@ -162,10 +163,10 @@ pub async fn write_blocks_from_london() {
 
     match last_stored {
         None => {
-            tracing::info!("first run, starting at london hardfork");
+            info!("first run, starting at london hardfork");
         }
         Some(last_stored) => {
-            tracing::info!("picking up from previous run, starting at block {last_stored}");
+            info!("picking up from previous run, starting at block {last_stored}");
             // Because we interrupt the writing sometime the last row may be malformed, if a file
             // exists, drop the last line.
             let file = File::open(file_path).unwrap();
@@ -201,7 +202,7 @@ pub async fn write_blocks_from_london() {
 
         progress.inc_work_done();
         if block.number % 100 == 0 {
-            tracing::debug!("{}", progress.get_progress_string());
+            debug!("{}", progress.get_progress_string());
         }
     }
 
