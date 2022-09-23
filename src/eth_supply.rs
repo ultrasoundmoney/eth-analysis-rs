@@ -93,7 +93,7 @@ async fn store(
     .await
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct SupplyAtTime {
     timestamp: DateTime<Utc>,
     supply: EthF64,
@@ -104,29 +104,31 @@ struct SupplySinceMerge {
     balances_slot: Slot,
     block_number: BlockNumber,
     deposits_slot: Slot,
+    #[deprecated = "minute data is getting too large, switch to hourly"]
     supply_by_minute: Vec<SupplyAtTime>,
+    supply_by_hour: Vec<SupplyAtTime>,
     timestamp: DateTime<Utc>,
 }
 
-async fn get_supply_since_merge_by_minute(
+async fn get_supply_since_merge_by_hour(
     executor: &mut PgConnection,
 ) -> sqlx::Result<Vec<SupplyAtTime>> {
     sqlx::query(
         "
             SELECT
-                DISTINCT ON (DATE_TRUNC('minute', timestamp))
-                DATE_TRUNC('minute', timestamp) AS minute_timestamp,
+                DISTINCT ON (DATE_TRUNC('hour', timestamp))
+                DATE_TRUNC('hour', timestamp) AS hour_timestamp,
                 supply::FLOAT8 / 1e18 AS supply
             FROM
                 eth_supply 
             WHERE
                 timestamp >= '2022-09-15T05:00:00'::TIMESTAMPTZ
             ORDER BY
-                DATE_TRUNC('minute', timestamp), timestamp
+                DATE_TRUNC('hour', timestamp), timestamp
         ",
     )
     .map(|row: PgRow| {
-        let timestamp = row.get::<DateTime<Utc>, _>("minute_timestamp");
+        let timestamp = row.get::<DateTime<Utc>, _>("hour_timestamp");
         let supply = (row.get::<f64, _>("supply") * 100.0).round() / 100.0;
         SupplyAtTime { timestamp, supply }
     })
@@ -182,21 +184,22 @@ async fn update_supply_since_merge(
 ) -> Result<()> {
     store(executor, eth_supply_parts).await?;
 
-    let mut supply_by_minute = get_supply_since_merge_by_minute(executor).await?;
+    let mut supply_by_hour = get_supply_since_merge_by_hour(executor).await?;
 
     let most_recent_supply = get_current_supply(executor.acquire().await?).await?;
 
-    supply_by_minute.push(SupplyAtTime {
+    supply_by_hour.push(SupplyAtTime {
         timestamp: most_recent_supply.timestamp,
         supply: most_recent_supply.supply,
     });
 
     let supply_since_merge = SupplySinceMerge {
-        deposits_slot: most_recent_supply.deposits_slot,
         balances_slot: most_recent_supply.balances_slot,
-        timestamp: most_recent_supply.timestamp,
         block_number: most_recent_supply.block_number,
-        supply_by_minute,
+        deposits_slot: most_recent_supply.deposits_slot,
+        supply_by_hour: supply_by_hour.clone(),
+        supply_by_minute: supply_by_hour,
+        timestamp: most_recent_supply.timestamp,
     };
 
     key_value_store::set_caching_value(executor, &CacheKey::SupplySinceMerge, supply_since_merge)
