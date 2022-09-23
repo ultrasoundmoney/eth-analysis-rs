@@ -23,11 +23,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
-use tracing::event;
-use tracing::span;
-use tracing::Instrument;
-use tracing::Level;
-use tracing::error;
+use tracing::{error, event, span, trace, Instrument, Level};
 
 use crate::caching::CacheKey;
 use crate::config;
@@ -83,7 +79,7 @@ async fn etag_middleware<B: std::fmt::Debug>(
 
     match bytes.len() == 0 {
         true => {
-            event!(Level::TRACE, path, "response without body, skipping etag");
+            trace!(path, "response without body, skipping etag");
             Ok(parts.into_response())
         }
         false => match if_none_match_header {
@@ -95,12 +91,7 @@ async fn etag_middleware<B: std::fmt::Debug>(
                     HeaderValue::from_str(&etag.to_string()).unwrap(),
                 );
 
-                event!(
-                    Level::TRACE,
-                    path,
-                    etag = etag.to_string(),
-                    "no if-none-match header"
-                );
+                trace!(path, %etag, "no if-none-match header");
 
                 Ok((parts, bytes).into_response())
             }
@@ -126,12 +117,11 @@ async fn etag_middleware<B: std::fmt::Debug>(
 
                         let some_match = etag.strong_eq(&if_none_match_etag);
 
-                        event!(
-                            Level::TRACE,
+                        trace!(
                             path,
-                            etag = etag.to_string(),
+                            %etag,
                             some_match,
-                            "if-none-match" = if_none_match_etag.to_string()
+                            "if-none-match" = %if_none_match_etag
                         );
 
                         if some_match {
