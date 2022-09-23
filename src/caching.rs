@@ -89,7 +89,7 @@ impl<'a> From<&'a str> for CacheKey<'a> {
 }
 
 pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey<'_>) {
-    debug!(key = key.to_string(), "publishing cache update");
+    debug!(?key, "publishing cache update");
 
     sqlx::query!(
         "
