@@ -1,26 +1,18 @@
-use axum::body::HttpBody;
-use axum::http::header;
-use axum::http::HeaderMap;
-use axum::http::HeaderValue;
-use axum::http::Request;
-use axum::middleware;
-use axum::middleware::Next;
-use axum::response::IntoResponse;
-use axum::response::Response;
-use axum::routing::get;
-use axum::Extension;
-use axum::Json;
-use axum::Router;
+use axum::{
+    body::HttpBody,
+    http::{header, HeaderMap, HeaderValue, Request},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::get,
+    Extension, Json, Router,
+};
 use bytes::BufMut;
 use etag::EntityTag;
 use futures::TryStreamExt;
 use reqwest::StatusCode;
 use serde_json::Value;
-use sqlx::Connection;
-use sqlx::PgExecutor;
-use sqlx::PgPool;
-use std::sync::Arc;
-use std::sync::RwLock;
+use sqlx::{Connection, PgExecutor, PgPool};
+use std::sync::{Arc, RwLock};
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tracing::{error, event, span, trace, Instrument, Level};
