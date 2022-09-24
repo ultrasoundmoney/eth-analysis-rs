@@ -23,7 +23,7 @@ pub fn get_env_var(key: &str) -> Option<String> {
 }
 
 pub fn get_env_var_unsafe(key: &str) -> String {
-    get_env_var(key).expect(&format!("{key} in env"))
+    get_env_var(key).expect(&format!("{key} should exist in env"))
 }
 
 #[cached]
