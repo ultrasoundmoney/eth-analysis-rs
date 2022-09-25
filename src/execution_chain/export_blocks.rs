@@ -1,6 +1,6 @@
 use crate::execution_chain::node::BlockNumber;
 use std::{
-    collections::HashMap,
+    cmp::Ordering,
     fs::{self, File},
     io::{BufRead, BufReader},
     time::SystemTime,
@@ -9,7 +9,7 @@ use std::{
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use tracing::log::{debug, info};
+use tracing::{debug, info, trace, warn};
 
 use crate::execution_chain::sync::EXECUTION_BLOCK_NUMBER_AUG_1ST;
 
@@ -39,10 +39,25 @@ fn get_historic_stream(block_range: &BlockRange) -> impl Stream<Item = Execution
     rx
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
+struct EthPriceRow {
+    usd: f64,
+    timestamp: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct EthPrice {
-    number: u32,
-    eth_price: f64,
+    usd: f64,
+    timestamp: DateTime<Utc>,
+}
+
+impl From<EthPriceRow> for EthPrice {
+    fn from(row: EthPriceRow) -> Self {
+        Self {
+            timestamp: row.timestamp.parse::<DateTime<Utc>>().unwrap(),
+            usd: row.usd,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -61,6 +76,116 @@ struct OutRow {
     total_difficulty: TotalDifficulty,
 }
 
+async fn write_blocks_from(gte_block_number: u32, to_path: &str) {
+    info!("writing blocks to CSV");
+
+    debug!("loading eth prices");
+
+    let mut eth_prices_csv = csv::Reader::from_path("eth_prices.csv")
+        .expect("'eth_prices.csv' file to exist in cwd to read prices from");
+
+    let eth_prices = eth_prices_csv
+        .deserialize::<EthPriceRow>()
+        .map(|row| row.unwrap().into())
+        .collect::<Vec<EthPrice>>();
+
+    debug!("done loading eth prices");
+
+    // We have the one after this in our DB already.
+    const LTE_BLOCK_NUMBER: u32 = 15429946;
+    let mut historic_stream = get_historic_stream(&BlockRange {
+        greater_than_or_equal: gte_block_number,
+        less_than_or_equal: LTE_BLOCK_NUMBER,
+    });
+
+    let mut progress = pit_wall::Progress::new(
+        "write blocks",
+        (LTE_BLOCK_NUMBER - EXECUTION_BLOCK_NUMBER_AUG_1ST).into(),
+    );
+
+    let mut csv_writer = csv::Writer::from_path(&to_path).unwrap();
+
+    let mut closest_price_index = 0;
+    let mut closest_price = eth_prices
+        .get(closest_price_index)
+        .expect("eth prices should have at least one price");
+
+    while let Some(block) = historic_stream.next().await {
+        debug!(block.number, "exporting block");
+
+        // Calculate the distance between the current block and the closest price we had for the last block.
+        let mut distance_closest = closest_price
+            .timestamp
+            .signed_duration_since(block.timestamp)
+            .num_seconds()
+            .abs();
+
+        trace!(distance = distance_closest, "current closest distance");
+
+        // Peek the next price and update the closest until we have the closest.
+        loop {
+            trace!(%block.timestamp, %closest_price.timestamp);
+
+            let next_index = closest_price_index + 1;
+            let peeked_price = eth_prices.get(next_index);
+
+            match peeked_price {
+                None => {
+                    warn!(
+                        ?closest_price,
+                        "no next eth price to peak, using current closest"
+                    );
+                    break;
+                }
+                Some(peeked_price) => {
+                    let distance_peeked = peeked_price
+                        .timestamp
+                        .signed_duration_since(block.timestamp)
+                        .num_seconds()
+                        .abs();
+
+                    trace!(distance = distance_peeked, "candidate distance");
+
+                    match distance_closest.cmp(&distance_peeked) {
+                        Ordering::Greater | Ordering::Equal => {
+                            trace!("found a closer price");
+                            closest_price_index = next_index;
+                            closest_price = peeked_price;
+                            distance_closest = distance_peeked;
+                        }
+                        Ordering::Less => {
+                            trace!("current already closest");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        let out = OutRow {
+            base_fee_per_gas: block.base_fee_per_gas,
+            difficulty: block.difficulty,
+            eth_price: closest_price.usd,
+            gas_used: block.gas_used,
+            hash: block.hash,
+            number: block.number,
+            parent_hash: block.parent_hash,
+            timestamp: block.timestamp,
+            total_difficulty: block.total_difficulty,
+        };
+        csv_writer.serialize(out).unwrap();
+
+        progress.inc_work_done();
+        if block.number % 100 == 0 {
+            info!("{}", progress.get_progress_string());
+        }
+    }
+
+    // A CSV writer maintains an internal buffer, so it's important
+    // to flush the buffer when you're done.
+    csv_writer.flush().unwrap();
+}
+
 pub async fn write_blocks_from_august() {
     tracing_subscriber::fmt::init();
 
@@ -73,58 +198,10 @@ pub async fn write_blocks_from_august() {
 
     debug!("loading eth prices");
 
-    let mut eth_prices_csv = csv::Reader::from_path("eth_prices.csv").unwrap();
-    let mut iter = eth_prices_csv.deserialize();
-
-    let mut eth_prices = HashMap::new();
-
-    while let Some(record) = iter.next() {
-        let record: EthPrice = record.unwrap();
-        eth_prices.insert(record.number, record.eth_price);
-    }
-
-    debug!("done loading eth prices");
-
-    let mut historic_stream = get_historic_stream(&BlockRange {
-        greater_than_or_equal: EXECUTION_BLOCK_NUMBER_AUG_1ST,
-        less_than_or_equal: 15429946,
-    });
-
-    let mut progress = pit_wall::Progress::new(
-        "write blocks",
-        (15429946 - EXECUTION_BLOCK_NUMBER_AUG_1ST).into(),
-    );
-
     let file_path = format!("blocks_from_august_{}.csv", timestamp);
 
-    let mut csv_writer = csv::Writer::from_path(&file_path).unwrap();
-
-    while let Some(block) = historic_stream.next().await {
-        let out = OutRow {
-            base_fee_per_gas: block.base_fee_per_gas,
-            difficulty: block.difficulty,
-            eth_price: *eth_prices.get(&block.number).unwrap(),
-            gas_used: block.gas_used,
-            hash: block.hash,
-            number: block.number,
-            parent_hash: block.parent_hash,
-            timestamp: block.timestamp,
-            total_difficulty: block.total_difficulty,
-        };
-        csv_writer.serialize(out).unwrap();
-
-        progress.inc_work_done();
-        if block.number % 100 == 0 {
-            debug!("{}", progress.get_progress_string());
-        }
-    }
-
-    // A CSV writer maintains an internal buffer, so it's important
-    // to flush the buffer when you're done.
-    csv_writer.flush().unwrap();
+    write_blocks_from(EXECUTION_BLOCK_NUMBER_AUG_1ST, &file_path).await;
 }
-
-const BLOCKS_NEXT_MIN: u32 = 15253306;
 
 fn get_last_written_number(path: &str) -> Option<u32> {
     let mut blocks_from_london_csv = csv::Reader::from_path(path).ok()?;
@@ -138,25 +215,6 @@ pub async fn write_blocks_from_london() {
 
     info!("writing blocks to CSV");
 
-    debug!("loading eth prices");
-
-    let mut eth_prices_csv = csv::Reader::from_path("eth_prices.csv").unwrap();
-    let mut iter = eth_prices_csv.deserialize();
-
-    let mut eth_prices = HashMap::new();
-
-    while let Some(record) = iter.next() {
-        let record: EthPrice = record.unwrap();
-        eth_prices.insert(record.number, record.eth_price);
-    }
-
-    debug!("done loading eth prices");
-
-    let mut progress = pit_wall::Progress::new(
-        "write blocks",
-        Into::<u64>::into(BLOCKS_NEXT_MIN - LONDON_HARDFORK_BLOCK_NUMBER) + 1,
-    );
-
     let file_path = "blocks_from_london.csv";
 
     let last_stored: Option<u32> = get_last_written_number(file_path);
@@ -164,6 +222,7 @@ pub async fn write_blocks_from_london() {
     match last_stored {
         None => {
             info!("first run, starting at london hardfork");
+            write_blocks_from(LONDON_HARDFORK_BLOCK_NUMBER, &file_path).await;
         }
         Some(last_stored) => {
             info!("picking up from previous run, starting at block {last_stored}");
@@ -176,37 +235,7 @@ pub async fn write_blocks_from_london() {
                 .collect::<Vec<String>>();
             let strings = lines_text[0..(lines_text.len() - 1)].join("\n");
             fs::write(file_path, strings.as_bytes()).unwrap();
+            write_blocks_from(last_stored, &file_path).await;
         }
     }
-
-    let mut historic_stream = get_historic_stream(&BlockRange {
-        greater_than_or_equal: last_stored.unwrap_or(LONDON_HARDFORK_BLOCK_NUMBER),
-        less_than_or_equal: BLOCKS_NEXT_MIN - 1,
-    });
-
-    let mut csv_writer = csv::Writer::from_path(&file_path).unwrap();
-
-    while let Some(block) = historic_stream.next().await {
-        let out = OutRow {
-            base_fee_per_gas: block.base_fee_per_gas,
-            difficulty: block.difficulty,
-            eth_price: *eth_prices.get(&block.number).unwrap(),
-            gas_used: block.gas_used,
-            hash: block.hash,
-            number: block.number,
-            parent_hash: block.parent_hash,
-            timestamp: block.timestamp,
-            total_difficulty: block.total_difficulty,
-        };
-        csv_writer.serialize(out).unwrap();
-
-        progress.inc_work_done();
-        if block.number % 100 == 0 {
-            debug!("{}", progress.get_progress_string());
-        }
-    }
-
-    // A CSV writer maintains an internal buffer, so it's important
-    // to flush the buffer when you're done.
-    csv_writer.flush().unwrap();
 }
