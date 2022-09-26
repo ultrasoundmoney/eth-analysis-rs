@@ -214,8 +214,8 @@ pub async fn write_blocks_from_london() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     info!(
-        last_stored = EARLIEST_STORED_DB_BLOCK_NUMBER,
-        "writing blocks from london last stored to CSV"
+        earliest_stored = EARLIEST_STORED_DB_BLOCK_NUMBER,
+        "writing blocks from london to earliest stored, to CSV"
     );
 
     let file_path = "blocks_from_london.csv";
