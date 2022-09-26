@@ -6,6 +6,7 @@ use std::{
     time::SystemTime,
 };
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -76,9 +77,10 @@ struct OutRow {
     total_difficulty: TotalDifficulty,
 }
 
-async fn write_blocks_from(gte_block_number: u32, to_path: &str) {
-    info!("writing blocks to CSV");
+// We have the one after this in our DB already.
+const EARLIEST_STORED_DB_BLOCK_NUMBER: u32 = 15429946;
 
+async fn write_blocks_from(gte_block_number: u32, to_path: &str) -> Result<()> {
     debug!("loading eth prices");
 
     let mut eth_prices_csv = csv::Reader::from_path("eth_prices.csv")
@@ -91,19 +93,17 @@ async fn write_blocks_from(gte_block_number: u32, to_path: &str) {
 
     debug!("done loading eth prices");
 
-    // We have the one after this in our DB already.
-    const LTE_BLOCK_NUMBER: u32 = 15429946;
     let mut historic_stream = get_historic_stream(&BlockRange {
         greater_than_or_equal: gte_block_number,
-        less_than_or_equal: LTE_BLOCK_NUMBER,
+        less_than_or_equal: EARLIEST_STORED_DB_BLOCK_NUMBER,
     });
 
     let mut progress = pit_wall::Progress::new(
         "write blocks",
-        (LTE_BLOCK_NUMBER - EXECUTION_BLOCK_NUMBER_AUG_1ST).into(),
+        (EARLIEST_STORED_DB_BLOCK_NUMBER - gte_block_number).into(),
     );
 
-    let mut csv_writer = csv::Writer::from_path(&to_path).unwrap();
+    let mut csv_writer = csv::Writer::from_path(&to_path)?;
 
     let mut closest_price_index = 0;
     let mut closest_price = eth_prices
@@ -184,12 +184,17 @@ async fn write_blocks_from(gte_block_number: u32, to_path: &str) {
     // A CSV writer maintains an internal buffer, so it's important
     // to flush the buffer when you're done.
     csv_writer.flush().unwrap();
+
+    Ok(())
 }
 
-pub async fn write_blocks_from_august() {
+pub async fn write_blocks_from_august() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    info!("writing blocks to CSV");
+    info!(
+        august_block_number = EXECUTION_BLOCK_NUMBER_AUG_1ST,
+        "writing blocks from august to CSV"
+    );
 
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -200,42 +205,47 @@ pub async fn write_blocks_from_august() {
 
     let file_path = format!("blocks_from_august_{}.csv", timestamp);
 
-    write_blocks_from(EXECUTION_BLOCK_NUMBER_AUG_1ST, &file_path).await;
+    write_blocks_from(EXECUTION_BLOCK_NUMBER_AUG_1ST, &file_path).await?;
+
+    Ok(())
 }
 
-fn get_last_written_number(path: &str) -> Option<u32> {
-    let mut blocks_from_london_csv = csv::Reader::from_path(path).ok()?;
-    let mut iter = blocks_from_london_csv.deserialize();
-    let last_stored: OutRow = iter.next().unwrap().unwrap();
-    Some(last_stored.number)
-}
-
-pub async fn write_blocks_from_london() {
+pub async fn write_blocks_from_london() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    info!("writing blocks to CSV");
+    info!(
+        last_stored = EARLIEST_STORED_DB_BLOCK_NUMBER,
+        "writing blocks from london last stored to CSV"
+    );
 
     let file_path = "blocks_from_london.csv";
 
-    let last_stored: Option<u32> = get_last_written_number(file_path);
-
-    match last_stored {
-        None => {
+    let file = File::open(file_path);
+    match file {
+        Err(_err) => {
             info!("first run, starting at london hardfork");
-            write_blocks_from(LONDON_HARDFORK_BLOCK_NUMBER, &file_path).await;
+            write_blocks_from(LONDON_HARDFORK_BLOCK_NUMBER, &file_path).await?;
         }
-        Some(last_stored) => {
-            info!("picking up from previous run, starting at block {last_stored}");
-            // Because we interrupt the writing sometime the last row may be malformed, if a file
+        Ok(file) => {
+            // Because we interrupt the writing sometimes the last row may be malformed, if a file
             // exists, drop the last line.
-            let file = File::open(file_path).unwrap();
-            let lines_text = BufReader::new(file)
+            let lines_text = BufReader::new(&file)
                 .lines()
                 .map(|x| x.unwrap())
                 .collect::<Vec<String>>();
             let strings = lines_text[0..(lines_text.len() - 1)].join("\n");
-            fs::write(file_path, strings.as_bytes()).unwrap();
-            write_blocks_from(last_stored, &file_path).await;
+            fs::write(file_path, strings.as_bytes())?;
+
+            let mut blocks_from_london_csv = csv::Reader::from_path(file_path)?;
+            let last_stored_block_number = blocks_from_london_csv
+                .deserialize()
+                .last()
+                .map(|row: Result<OutRow, _>| row.unwrap().number)
+                .unwrap_or(LONDON_HARDFORK_BLOCK_NUMBER);
+            info!(last_stored_block_number, "picking up from previous run");
+            write_blocks_from(last_stored_block_number + 1, &file_path).await?;
         }
-    }
+    };
+
+    Ok(())
 }
