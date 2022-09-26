@@ -338,7 +338,7 @@ pub async fn sync_blocks() -> Result<()> {
                 }
             }
         }
-    };
+    }
 
     Ok(())
 }
@@ -347,14 +347,16 @@ pub async fn sync_blocks() -> Result<()> {
 mod tests {
     use chrono::Utc;
 
-    use crate::{execution_chain::node::ExecutionNodeBlock, db_testing};
+    use crate::{db_testing, execution_chain::node::ExecutionNodeBlock};
 
     use super::*;
 
     #[tokio::test]
     async fn rollback_last_first_test() {
         // This test should use transiactions somehow.
-        let db = PgPool::connect(&db_testing::get_test_db_url()).await.unwrap();
+        let db = PgPool::connect(&db_testing::get_test_db_url())
+            .await
+            .unwrap();
         let connection = &mut db.acquire().await.unwrap();
         let mut block_store = BlockStore::new(connection);
 
@@ -390,7 +392,9 @@ mod tests {
             )
             .await;
 
-        rollback_numbers(&mut db.acquire().await.unwrap(), &mut block_store, &0).await.unwrap();
+        rollback_numbers(&mut db.acquire().await.unwrap(), &mut block_store, &0)
+            .await
+            .unwrap();
 
         // This should blow up if the order is backwards but its not obvious how. Consider using
         // mockall to create a mock instance of block_store so we can observe whether
