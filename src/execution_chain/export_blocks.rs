@@ -178,6 +178,7 @@ async fn write_blocks_from(gte_block_number: u32, to_path: &str) -> Result<()> {
         progress.inc_work_done();
         if block.number % 100 == 0 {
             info!("{}", progress.get_progress_string());
+            csv_writer.flush().unwrap();
         }
     }
 
