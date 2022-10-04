@@ -104,8 +104,6 @@ struct SupplySinceMerge {
     balances_slot: Slot,
     block_number: BlockNumber,
     deposits_slot: Slot,
-    #[deprecated = "minute data is getting too large, switch to hourly"]
-    supply_by_minute: Vec<SupplyAtTime>,
     supply_by_hour: Vec<SupplyAtTime>,
     timestamp: DateTime<Utc>,
 }
@@ -198,7 +196,6 @@ async fn update_supply_since_merge(
         block_number: most_recent_supply.block_number,
         deposits_slot: most_recent_supply.deposits_slot,
         supply_by_hour: supply_by_hour.clone(),
-        supply_by_minute: supply_by_hour,
         timestamp: most_recent_supply.timestamp,
     };
 
