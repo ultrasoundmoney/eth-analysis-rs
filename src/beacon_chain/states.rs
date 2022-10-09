@@ -1,8 +1,21 @@
-use sqlx::{PgExecutor, PgConnection};
+use chrono::{DateTime, Utc};
+use sqlx::{PgConnection, PgExecutor};
+
+use super::beacon_time;
 
 // Beacon chain slots are defined as 12 second periods starting from genesis. With u32 our program
 // would overflow when the slot number passes 4_294_967_295. u32::MAX * 12 seconds = ~1633 years.
 pub type Slot = u32;
+
+trait SlotExt {
+    fn get_date_time(&self) -> DateTime<Utc>;
+}
+
+impl SlotExt for Slot {
+    fn get_date_time(&self) -> DateTime<Utc> {
+        beacon_time::get_date_time_from_slot(self)
+    }
+}
 
 struct BeaconStateRow {
     block_root: Option<String>,

@@ -1,4 +1,6 @@
 use anyhow::Result;
+use chrono::Duration;
+use lazy_static::lazy_static;
 use sqlx::{Acquire, PgConnection, Row};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -11,6 +13,7 @@ use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 
+use crate::beacon_chain::beacon_time;
 use crate::beacon_chain::blocks::get_last_block_slot;
 use crate::config;
 use crate::eth_supply;
@@ -24,6 +27,10 @@ use super::node::BeaconHeaderSignedEnvelope;
 use super::states::get_last_state;
 use super::Slot;
 use super::{balances, blocks, deposits, issuance, states, BeaconNode};
+
+lazy_static! {
+    static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(30);
+}
 
 #[derive(Clone)]
 pub struct SlotRange {
@@ -176,19 +183,36 @@ async fn sync_slot(
     };
 
     debug!("updating validator balances");
-    let validator_balances = beacon_node
-        .get_validator_balances(&state_root)
-        .await
-        .unwrap();
-    let validator_balances_sum = balances::sum_validator_balances(validator_balances);
-    eth_supply::update(
-        connection,
-        BeaconBalancesSum {
-            balances_sum: validator_balances_sum,
-            slot: slot.clone(),
-        },
-    )
-    .await?;
+
+    // If we are falling too far behind the head of the chain, skip storing validator balances.
+    let block_lag_duration = {
+        let last_on_chain_slot = beacon_node.get_last_header().await?.header.message.slot;
+        let last_on_chain_slot_date_time =
+            beacon_time::get_date_time_from_slot(&last_on_chain_slot);
+        let slot_date_time = beacon_time::get_date_time_from_slot(slot);
+        last_on_chain_slot_date_time - slot_date_time
+    };
+
+    if block_lag_duration > *BLOCK_LAG_LIMIT {
+        warn!(
+            %block_lag_duration,
+            "block lag over limit, skipping get validator balances"
+        );
+    } else {
+        let validator_balances = beacon_node
+            .get_validator_balances(&state_root)
+            .await
+            .unwrap();
+        let validator_balances_sum = balances::sum_validator_balances(validator_balances);
+        eth_supply::update(
+            connection,
+            BeaconBalancesSum {
+                balances_sum: validator_balances_sum,
+                slot: slot.clone(),
+            },
+        )
+        .await?;
+    }
 
     if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
         // Always calculate the validator balances for the first of day slot.
@@ -370,7 +394,9 @@ async fn get_is_slot_known(connection: &mut PgConnection, slot: &Slot) -> bool {
 async fn rollback_slots(executor: &mut PgConnection, greater_than_or_equal: &Slot) {
     debug!("rolling back data based on slots gte {greater_than_or_equal}");
     let mut transaction = executor.begin().await.unwrap();
-    eth_supply::rollback_supply_by_slot(&mut transaction, greater_than_or_equal).await.unwrap();
+    eth_supply::rollback_supply_by_slot(&mut transaction, greater_than_or_equal)
+        .await
+        .unwrap();
     blocks::delete_blocks(&mut transaction, greater_than_or_equal).await;
     issuance::delete_issuances(&mut transaction, greater_than_or_equal).await;
     balances::delete_validator_sums(&mut transaction, greater_than_or_equal).await;
