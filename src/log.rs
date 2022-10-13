@@ -1,3 +1,10 @@
+use tracing_subscriber::{
+    fmt::{self, Layer},
+    prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter,
+};
+
 use crate::env::{self, Env};
 
 pub fn init_with_env() {
