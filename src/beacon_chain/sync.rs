@@ -19,6 +19,7 @@ use crate::config;
 use crate::eth_supply;
 use crate::eth_units::GweiNewtype;
 use crate::json_codecs::from_u32_string;
+use crate::log;
 use crate::performance::TimedExt;
 
 use super::beacon_time::FirstOfDaySlot;
@@ -595,7 +596,7 @@ enum HeadToSync {
 type HeadsQueue = Arc<Mutex<VecDeque<HeadToSync>>>;
 
 pub async fn sync_beacon_states() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     info!("syncing beacon states");
 

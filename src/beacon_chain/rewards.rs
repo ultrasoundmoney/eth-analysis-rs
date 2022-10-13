@@ -8,7 +8,7 @@ use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
 use crate::eth_units::{GweiNewtype, GWEI_PER_ETH, GWEI_PER_ETH_F64};
 use crate::execution_chain::LONDON_HARDFORK_TIMESTAMP;
-use crate::{caching, config, key_value_store};
+use crate::{caching, config, db, key_value_store, log};
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -140,7 +140,7 @@ async fn get_validator_rewards<'a>(
 }
 
 pub async fn update_validator_rewards() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     tracing::info!("updating validator rewards");
 

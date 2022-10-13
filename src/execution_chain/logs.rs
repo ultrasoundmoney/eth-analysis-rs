@@ -1,3 +1,4 @@
+use crate::log;
 use chrono::SubsecRound;
 use futures::StreamExt;
 use serde::Serialize;
@@ -16,7 +17,7 @@ struct HeadLog {
 }
 
 pub async fn write_heads_log() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     let timestamp = chrono::offset::Utc::now().timestamp();
 

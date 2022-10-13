@@ -1,4 +1,4 @@
-use crate::execution_chain::node::BlockNumber;
+use crate::{execution_chain::node::BlockNumber, log};
 use std::{
     cmp::Ordering,
     fs::{self, File},
@@ -190,7 +190,7 @@ async fn write_blocks_from(gte_block_number: u32, to_path: &str) -> Result<()> {
 }
 
 pub async fn write_blocks_from_august() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     info!(
         august_block_number = EXECUTION_BLOCK_NUMBER_AUG_1ST,
@@ -212,7 +212,7 @@ pub async fn write_blocks_from_august() -> Result<()> {
 }
 
 pub async fn write_blocks_from_london() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     info!(
         earliest_stored = EARLIEST_STORED_DB_BLOCK_NUMBER,

@@ -5,7 +5,9 @@ use tracing::info;
 
 use crate::{
     caching::{self, CacheKey},
-    config, key_value_store, execution_chain::{TOTAL_TERMINAL_DIFFICULTY, block_store},
+    db,
+    execution_chain::{block_store, TOTAL_TERMINAL_DIFFICULTY},
+    key_value_store, log,
 };
 
 #[derive(Debug, FromRow, PartialEq, Serialize)]
@@ -65,7 +67,7 @@ async fn get_current_total_difficulty(executor: impl PgExecutor<'_>) -> Progress
 }
 
 pub async fn update_total_difficulty_progress() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     tracing::info!("updating total difficulty progress");
 

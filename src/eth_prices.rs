@@ -13,7 +13,7 @@ use crate::{
     caching::{self, CacheKey},
     config,
     execution_chain::LONDON_HARDFORK_TIMESTAMP,
-    key_value_store,
+    key_value_store, log,
 };
 
 #[derive(Debug, FromRow)]
@@ -190,7 +190,7 @@ async fn update_eth_price_with_most_recent(
 }
 
 pub async fn record_eth_price() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     event!(Level::INFO,"recording eth prices");
 
@@ -205,7 +205,7 @@ pub async fn record_eth_price() {
 }
 
 pub async fn heal_eth_prices() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     event!(Level::INFO,"healing missing eth prices");
     let max_distance_in_minutes: i64 = std::env::args()
@@ -322,7 +322,7 @@ async fn set_last_synced_minute(executor: &mut PgConnection, minute: u32) {
 }
 
 pub async fn resync_all() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     event!(Level::INFO, "resyncing all eth prices");
     let max_distance_in_minutes: i64 = std::env::args()

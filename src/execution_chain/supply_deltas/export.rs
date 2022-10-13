@@ -1,12 +1,12 @@
 use futures::prelude::*;
 use serde::Deserialize;
 
-use crate::execution_chain;
+use crate::{execution_chain, log};
 
 const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
 
 pub async fn write_deltas() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     let timestamp = crate::time::get_timestamp();
 
@@ -52,7 +52,7 @@ struct SupplyDeltaRowV1 {
 pub const GENESIS_ETH_BALANCE: i128 = 72009990499480000000000000i128;
 
 pub async fn summary_from_deltas_csv() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     tracing::info!("generating summary from deltas csv");
 

@@ -23,14 +23,12 @@ use tracing::Level;
 use super::eth_prices;
 use super::node::BlockNumber;
 use super::node::Head;
-use crate::config;
-use crate::eth_supply;
-use crate::execution_chain;
-use crate::execution_chain::base_fees;
-use crate::execution_chain::block_store::BlockStore;
-use crate::execution_chain::merge_estimate;
-use crate::execution_chain::ExecutionNode;
-use crate::performance::TimedExt;
+use crate::{
+    db, eth_supply,
+    execution_chain::{self, base_fees, block_store::BlockStore, merge_estimate, ExecutionNode},
+    log,
+    performance::TimedExt,
+};
 
 async fn rollback_numbers<'a>(
     executor: &mut PgConnection,
@@ -289,7 +287,7 @@ enum HeadToSync {
 type HeadsQueue = Arc<Mutex<VecDeque<HeadToSync>>>;
 
 pub async fn sync_blocks() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     tracing::info!("syncing execution blocks");
 

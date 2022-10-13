@@ -14,6 +14,7 @@ mod glassnode;
 mod issuance_breakdown;
 mod json_codecs;
 mod key_value_store;
+mod log;
 mod performance;
 mod phoenix;
 mod serve;

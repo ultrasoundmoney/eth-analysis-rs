@@ -7,9 +7,9 @@ use std::sync::{Arc, Mutex};
 
 use super::node::{get_supply_delta_by_block_number, stream_supply_deltas_from_last};
 use super::snapshot::SUPPLY_SNAPSHOT_15082718;
-use crate::config;
 use crate::execution_chain::node::BlockNumber;
 use crate::performance::TimedExt;
+use crate::{config, log};
 
 use super::SupplyDelta;
 
@@ -325,7 +325,7 @@ enum DeltaToSync {
 type DeltasQueue = Arc<Mutex<VecDeque<DeltaToSync>>>;
 
 pub async fn sync_deltas() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     tracing::info!("syncing supply deltas");
 
@@ -486,7 +486,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_reverted_fork() {
-        tracing_subscriber::fmt::init();
+        log::init_with_env();
         // We test:
         // A -> B ---> C
         //   \---> B'

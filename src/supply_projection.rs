@@ -10,7 +10,7 @@ use crate::{
     config,
     eth_units::GWEI_PER_ETH_F64,
     glassnode::{self, GlassnodeDataPoint},
-    key_value_store,
+    key_value_store, log,
 };
 
 #[derive(Decode)]
@@ -75,7 +75,7 @@ struct SupplyProjectionInputs {
 }
 
 pub async fn update_supply_projection_inputs() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     tracing::info!("updating supply projection inputs");
 

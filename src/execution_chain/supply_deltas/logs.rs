@@ -1,4 +1,7 @@
-use crate::execution_chain::{supply_deltas, ExecutionNode};
+use crate::{
+    execution_chain::{supply_deltas, ExecutionNode},
+    log,
+};
 use futures::StreamExt;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -14,7 +17,7 @@ struct SupplyDeltaLog {
 }
 
 pub async fn write_deltas_log() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     let timestamp = chrono::offset::Utc::now().timestamp();
 

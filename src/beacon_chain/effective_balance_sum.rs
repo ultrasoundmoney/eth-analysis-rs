@@ -8,6 +8,7 @@ use crate::{
     caching::{self, CacheKey},
     config,
     eth_units::GweiNewtype,
+    log,
 };
 
 use super::{node::StateRoot, BeaconNode};
@@ -99,7 +100,7 @@ async fn store_effective_balance_sum<'a>(
 }
 
 pub async fn update_effective_balance_sum() {
-    tracing_subscriber::fmt::init();
+    log::init_with_env();
 
     tracing::info!("updating validator rewards");
 
