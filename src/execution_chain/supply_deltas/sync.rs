@@ -496,7 +496,7 @@ mod tests {
         log::init_with_env();
         // We test:
         // A -> B ---> C
-        //   \---> B'
+        //   \--> B'
         // In this scenario we drop B when receiving B', but then get C, which expects parent B.
         // Because we are now missing B, we crash. We're fine on restart, but constant restarting
         // is bad. Our cluster scheduler may stop trying to restart our app if this happens a lot.
