@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use futures::try_join;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
-use tracing::{debug_span, event, warn, Instrument, Level};
+use tracing::{event, Level, Instrument, debug_span};
 
 use crate::{
     beacon_chain,
@@ -46,7 +46,6 @@ type WeiU64 = u64;
 #[derive(Debug, PartialEq, Serialize)]
 struct BaseFeeAtTime {
     block_number: BlockNumber,
-    timestamp: DateTime<Utc>,
     wei: WeiU64,
 }
 
@@ -54,131 +53,30 @@ struct BaseFeeAtTime {
 struct BaseFeeOverTime {
     barrier: WeiF64,
     block_number: BlockNumber,
-    all: Option<Vec<BaseFeeAtTime>>,
     d1: Vec<BaseFeeAtTime>,
-    d30: Vec<BaseFeeAtTime>,
-    d7: Vec<BaseFeeAtTime>,
-    h1: Vec<BaseFeeAtTime>,
-    m5: Vec<BaseFeeAtTime>,
 }
 
-async fn get_base_fee_over_time(
-    executor: impl PgExecutor<'_>,
-    time_frame: TimeFrame,
-) -> sqlx::Result<Vec<BaseFeeAtTime>> {
-    match time_frame {
-        TimeFrame::All => {
-            warn!("getting base fee over time for time frame 'all' is slow, and may be incorrect depending on blocks_next backfill status");
-            sqlx::query(
-                "
-                    SELECT
-                        AVG(base_fee_per_gas) AS base_fee_per_gas,
-                        DATE_TRUNC('day', timestamp) AS timestamp,
-                        MAX(number) AS number
-                    FROM
-                        blocks_next
-                    GROUP BY 2
-                    ORDER BY 2 ASC
-                ",
-            )
-            .map(|row: PgRow| {
-                let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
-                BaseFeeAtTime {
-                    wei,
-                    block_number,
-                    timestamp,
-                }
-            })
-            .fetch_all(executor)
-            .await
-        }
-        TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Minute5)
-        | TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Hour1) => {
-            sqlx::query(
-                "
-                    SELECT
-                        base_fee_per_gas,
-                        number,
-                        timestamp
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= NOW() - $1
-                    ORDER BY number ASC
-                ",
-            )
-            .bind(ltf.get_postgres_interval())
-            .map(|row: PgRow| {
-                let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
-                BaseFeeAtTime {
-                    wei,
-                    block_number,
-                    timestamp,
-                }
-            })
-            .fetch_all(executor)
-            .await
-        }
-        TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Day1) => {
-            sqlx::query(
-                "
-                    SELECT
-                        AVG(base_fee_per_gas) AS base_fee_per_gas,
-                        DATE_TRUNC('minute', timestamp) AS timestamp,
-                        MAX(number) AS number
-                    FROM
-                        blocks_next
-                    GROUP BY 2
-                    ORDER BY 2 ASC
-                ",
-            )
-            .bind(ltf.get_postgres_interval())
-            .map(|row: PgRow| {
-                let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
-                BaseFeeAtTime {
-                    wei,
-                    block_number,
-                    timestamp,
-                }
-            })
-            .fetch_all(executor)
-            .await
-        }
-        TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Day7)
-        | TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Day30) => {
-            sqlx::query(
-                "
-                    SELECT
-                        AVG(base_fee_per_gas) AS base_fee_per_gas,
-                        DATE_TRUNC('hour', timestamp) AS timestamp,
-                        MAX(number) AS number
-                    FROM
-                        blocks_next
-                    GROUP BY 2
-                    ORDER BY 2 ASC
-                ",
-            )
-            .bind(ltf.get_postgres_interval())
-            .map(|row: PgRow| {
-                let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
-                BaseFeeAtTime {
-                    wei,
-                    block_number,
-                    timestamp,
-                }
-            })
-            .fetch_all(executor)
-            .await
-        }
-    }
+async fn get_base_fee_over_time<'a>(executor: impl PgExecutor<'a>) -> Vec<BaseFeeAtTime> {
+    sqlx::query(
+        "
+            SELECT
+                number,
+                base_fee_per_gas
+            FROM
+                blocks_next
+            WHERE
+                timestamp >= NOW() - '1 hour'::INTERVAL
+            ORDER BY number ASC
+        ",
+    )
+    .map(|row: PgRow| {
+        let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
+        let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
+        BaseFeeAtTime { wei, block_number }
+    })
+    .fetch_all(executor)
+    .await
+    .unwrap()
 }
 
 const BASE_REWARD_FACTOR: u8 = 64;
@@ -207,11 +105,11 @@ fn get_barrier(issuance_gwei: f64) -> f64 {
 
 async fn get_base_fee_per_gas_average(
     executor: impl PgExecutor<'_>,
-    time_frame: &TimeFrame,
+    time_frame: TimeFrame,
 ) -> sqlx::Result<WeiF64> {
     match time_frame {
         TimeFrame::All => {
-            warn!("getting average fee for time frame 'all' is slow, and may be incorrect depending on blocks_next backfill status");
+            event!(Level::WARN, "getting average fee for time frame 'all' is slow, and may be incorrect depending on blocks_next backfill status");
             sqlx::query(
                 "
                     SELECT
@@ -251,7 +149,7 @@ struct BaseFeePerGasMinMax {
 
 async fn get_base_fee_per_gas_min_max(
     executor: impl PgExecutor<'_>,
-    time_frame: &TimeFrame,
+    time_frame: TimeFrame,
 ) -> sqlx::Result<BaseFeePerGasMinMax> {
     match time_frame {
         TimeFrame::All => {
@@ -299,23 +197,13 @@ async fn get_base_fee_per_gas_min_max(
     }
 }
 
-async fn get_base_fee_per_gas_stats_time_frame(
-    executor: &PgPool,
-    time_frame: &TimeFrame,
-) -> sqlx::Result<BaseFeePerGasStatsTimeFrame> {
-    let BaseFeePerGasMinMax { min, max } =
-        get_base_fee_per_gas_min_max(executor, time_frame).await?;
-
-    let average = get_base_fee_per_gas_average(executor, time_frame).await?;
-
-    Ok(BaseFeePerGasStatsTimeFrame { min, max, average })
-}
-
 async fn update_base_fee_stats(
     executor: &PgPool,
     block: &ExecutionNodeBlock,
 ) -> anyhow::Result<()> {
     event!(Level::DEBUG, "updating base fee over time");
+
+    let base_fees = get_base_fee_over_time(executor).await;
 
     let issuance =
         beacon_chain::get_last_week_issuance(&mut executor.acquire().await.unwrap()).await;
@@ -329,32 +217,7 @@ async fn update_base_fee_stats(
     let base_fee_over_time = BaseFeeOverTime {
         barrier,
         block_number: block.number,
-        m5: get_base_fee_over_time(
-            executor,
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-        )
-        .await?,
-        h1: get_base_fee_over_time(
-            executor,
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-        )
-        .await?,
-        d1: get_base_fee_over_time(
-            executor,
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day1),
-        )
-        .await?,
-        d7: get_base_fee_over_time(
-            executor,
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day1),
-        )
-        .await?,
-        d30: get_base_fee_over_time(
-            executor,
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day1),
-        )
-        .await?,
-        all: None,
+        d1: base_fees,
     };
 
     key_value_store::set_value(
@@ -366,48 +229,24 @@ async fn update_base_fee_stats(
 
     caching::publish_cache_update(executor, CacheKey::BaseFeeOverTime).await;
 
-    let m5 = get_base_fee_per_gas_stats_time_frame(
+    let BaseFeePerGasMinMax { min, max } = get_base_fee_per_gas_min_max(
         executor,
-        &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+        TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
     )
     .await?;
 
-    let h1 = get_base_fee_per_gas_stats_time_frame(
+    let average = get_base_fee_per_gas_average(
         executor,
-        &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-    )
-    .await?;
-
-    let d1 = get_base_fee_per_gas_stats_time_frame(
-        executor,
-        &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-    )
-    .await?;
-
-    let d7 = get_base_fee_per_gas_stats_time_frame(
-        executor,
-        &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-    )
-    .await?;
-
-    let d30 = get_base_fee_per_gas_stats_time_frame(
-        executor,
-        &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+        TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
     )
     .await?;
 
     let base_fee_per_gas_stats = BaseFeePerGasStats {
-        all: None,
-        average: h1.average,
+        min,
+        max,
+        average,
         barrier,
         block_number: block.number,
-        d1,
-        d30,
-        d7,
-        m5,
-        max: h1.max,
-        min: h1.min,
-        h1,
         timestamp: block.timestamp,
     };
 
@@ -423,29 +262,13 @@ async fn update_base_fee_stats(
     Ok(())
 }
 
-#[derive(Debug, Serialize)]
-struct BaseFeePerGasStatsTimeFrame {
-    average: WeiF64,
-    max: WeiF64,
-    min: WeiF64,
-}
-
 #[derive(Serialize)]
 struct BaseFeePerGasStats {
-    #[deprecated = "use h1 instead"]
     average: WeiF64,
-    #[deprecated = "use h1 instead"]
-    max: WeiF64,
-    #[deprecated = "use h1 instead"]
-    min: WeiF64,
-    all: Option<BaseFeePerGasStatsTimeFrame>,
     barrier: WeiF64,
     block_number: u32,
-    d1: BaseFeePerGasStatsTimeFrame,
-    d30: BaseFeePerGasStatsTimeFrame,
-    d7: BaseFeePerGasStatsTimeFrame,
-    h1: BaseFeePerGasStatsTimeFrame,
-    m5: BaseFeePerGasStatsTimeFrame,
+    max: WeiF64,
+    min: WeiF64,
     timestamp: DateTime<Utc>,
 }
 
@@ -483,7 +306,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_base_fee_over_time_h1_test() {
+    async fn get_base_fee_over_time_d1_test() {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
@@ -492,19 +315,13 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
 
-        let base_fees_d1 = get_base_fee_over_time(
-            &mut transaction,
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-        )
-        .await
-        .unwrap();
+        let base_fees_d1 = get_base_fee_over_time(&mut transaction).await;
 
         assert_eq!(
             base_fees_d1,
             vec![BaseFeeAtTime {
-                block_number: 0,
-                timestamp: test_block.timestamp,
                 wei: 1,
+                block_number: 0
             }]
         );
     }
@@ -527,25 +344,18 @@ mod tests {
         block_store.store_block(&test_block_1, 0.0).await;
         block_store.store_block(&test_block_2, 0.0).await;
 
-        let base_fees_h1 = get_base_fee_over_time(
-            &mut transaction,
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-        )
-        .await
-        .unwrap();
+        let base_fees_h1 = get_base_fee_over_time(&mut transaction).await;
 
         assert_eq!(
             base_fees_h1,
             vec![
                 BaseFeeAtTime {
                     wei: 1,
-                    block_number: 0,
-                    timestamp: test_block_1.timestamp
+                    block_number: 0
                 },
                 BaseFeeAtTime {
                     wei: 1,
-                    block_number: 1,
-                    timestamp: test_block_2.timestamp
+                    block_number: 1
                 }
             ]
         );
@@ -594,7 +404,7 @@ mod tests {
 
         let average_base_fee_per_gas = get_base_fee_per_gas_average(
             &mut transaction,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
         )
         .await
         .unwrap();
@@ -631,7 +441,7 @@ mod tests {
 
         let average_base_fee_per_gas = get_base_fee_per_gas_average(
             &mut transaction,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Minute5),
+            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Minute5),
         )
         .await
         .unwrap();
@@ -665,7 +475,7 @@ mod tests {
 
         let base_fee_per_gas_min_max = get_base_fee_per_gas_min_max(
             &mut transaction,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
         )
         .await
         .unwrap();
