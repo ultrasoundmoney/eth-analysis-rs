@@ -520,7 +520,7 @@ mod tests {
             hash: "0xtest2".to_string(),
             parent_hash: "0xtest".to_string(),
             number: 1,
-            timestamp: Utc::now() + Duration::days(1),
+            timestamp: Utc::now().trunc_subsecs(0) + Duration::days(1),
             ..make_test_block()
         };
 
