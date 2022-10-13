@@ -127,9 +127,9 @@ mod tests {
             node::{BeaconHeader, BeaconHeaderEnvelope},
             states::store_state,
         },
-        config, db_testing,
+        db_testing,
     };
-    
+
     #[tokio::test]
     async fn get_is_genesis_known_test() {
         let mut connection = db_testing::get_test_db().await;
@@ -216,8 +216,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_block_number_none_test() {
-        let pool = sqlx::PgPool::connect(&config::get_db_url()).await.unwrap();
-        let mut transaction = pool.begin().await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
 
         let block_number = get_last_block_slot(&mut transaction).await;
         assert_eq!(block_number, None);
@@ -225,8 +225,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_block_number_some_test() {
-        let pool = sqlx::PgPool::connect(&config::get_db_url()).await.unwrap();
-        let mut transaction = pool.begin().await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)
             .await
@@ -256,8 +256,8 @@ mod tests {
 
     #[tokio::test]
     async fn delete_block_test() {
-        let pool = sqlx::PgPool::connect(&config::get_db_url()).await.unwrap();
-        let mut transaction = pool.begin().await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)
             .await

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{postgres::PgRow, PgExecutor, Row, PgConnection};
+use sqlx::{postgres::PgRow, PgConnection, PgExecutor, Row};
 use tracing::debug;
 
 use crate::caching::CacheKey;
@@ -99,9 +99,9 @@ pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key: &str, value_s
 mod tests {
     use serde::{Deserialize, Serialize};
     use serde_json::json;
-    use sqlx::{Connection, PgConnection};
+    use sqlx::Connection;
 
-    use crate::{config, db_testing};
+    use crate::db_testing;
 
     use super::*;
 
@@ -155,7 +155,7 @@ mod tests {
 
     #[tokio::test]
     async fn set_value_str_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_json = TestJson {
@@ -196,7 +196,9 @@ mod tests {
         )
         .await?;
 
-        let raw_value: Value = get_raw_caching_value(&mut transaction, &CacheKey::MergeStatus).await.unwrap();
+        let raw_value: Value = get_raw_caching_value(&mut transaction, &CacheKey::MergeStatus)
+            .await
+            .unwrap();
 
         assert_eq!(raw_value, serde_json::to_value(test_json).unwrap());
 
@@ -208,12 +210,16 @@ mod tests {
         let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let test_json = TestJson {age: 29, name: "alex".to_string()};
+        let test_json = TestJson {
+            age: 29,
+            name: "alex".to_string(),
+        };
 
         set_caching_value(&mut transaction, &CacheKey::MergeStatus, test_json.clone()).await?;
 
-        let caching_value = get_caching_value::<TestJson>(&mut transaction
-                                              , &CacheKey::MergeStatus).await?.unwrap();
+        let caching_value = get_caching_value::<TestJson>(&mut transaction, &CacheKey::MergeStatus)
+            .await?
+            .unwrap();
 
         assert_eq!(caching_value, test_json);
 

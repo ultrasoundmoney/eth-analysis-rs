@@ -1,6 +1,6 @@
 use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
-use sqlx::{PgExecutor, PgConnection};
+use sqlx::{PgConnection, PgExecutor};
 
 use crate::eth_units::{to_gwei_string, GweiNewtype};
 use crate::supply_projection::{GweiInTime, GweiInTimeRow};
@@ -113,15 +113,15 @@ pub struct BeaconBalancesSum {
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, TimeZone, Utc};
-    use sqlx::{Connection, PgConnection};
+    use sqlx::Connection;
 
-    use crate::{beacon_chain::states::store_state, config};
+    use crate::{beacon_chain::states::store_state, db_testing};
 
     use super::*;
 
     #[tokio::test]
     async fn timestamp_is_start_of_day_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_balances", &17999)
@@ -150,7 +150,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_balance_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_balances", &17999)

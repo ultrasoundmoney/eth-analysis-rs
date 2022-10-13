@@ -94,8 +94,8 @@ pub async fn delete_states<'a>(executor: impl PgExecutor<'a>, greater_than_or_eq
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config, db_testing};
-    use sqlx::{Connection, PgConnection};
+    use crate::db_testing;
+    use sqlx::Connection;
 
     #[tokio::test]
     async fn store_state_test() {
@@ -145,7 +145,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_state_test() {
-        let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)

@@ -104,24 +104,25 @@ pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheK
 
 #[cfg(test)]
 mod tests {
+    use crate::db_testing;
+
     use super::*;
-    use crate::config;
 
     // This test fails sometimes because when run against the actual dev DB many
     // notifications fire on the "cache-update" channel. Needs a test DB to work reliably.
     #[tokio::test]
     async fn test_publish_cache_update() {
-        let mut listener = sqlx::postgres::PgListener::connect(&config::get_db_url())
+        let mut listener = sqlx::postgres::PgListener::connect(&db_testing::get_test_db_url())
             .await
             .unwrap();
         listener.listen("cache-update").await.unwrap();
 
         let notification_future = async { listener.recv().await };
 
-        let pool = sqlx::PgPool::connect(&config::get_db_url()).await.unwrap();
+        let mut connection = db_testing::get_test_db().await;
 
         let test_key = "test-key";
-        publish_cache_update(&pool, CacheKey::Custom("test-key")).await;
+        publish_cache_update(&mut connection, CacheKey::Custom("test-key")).await;
 
         let notification = notification_future.await.unwrap();
 
