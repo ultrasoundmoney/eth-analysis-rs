@@ -4,6 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Instant;
+use tracing::debug;
 
 use crate::env;
 
@@ -41,7 +42,7 @@ where
             Poll::Ready(v) => {
                 if *LOG_PERF {
                     let elapsed = start.elapsed();
-                    tracing::debug!("{} took {:.2?}", this.name, elapsed);
+                    debug!("{} took {:.2?}", this.name, elapsed);
                 }
                 Poll::Ready(v)
             }

@@ -69,7 +69,7 @@ async fn get_current_total_difficulty(executor: impl PgExecutor<'_>) -> Progress
 pub async fn update_total_difficulty_progress() {
     log::init_with_env();
 
-    tracing::info!("updating total difficulty progress");
+    info!("updating total difficulty progress");
 
     let mut connection = PgConnection::connect(&db::get_db_url_with_name(
         "update-total-difficulty-progress",
@@ -78,12 +78,18 @@ pub async fn update_total_difficulty_progress() {
     .unwrap();
 
     let mut block_store = block_store::BlockStore::new(&mut connection);
-    let block_number = block_store.get_last_block_number().await.expect("one block should stored before updating total difficulty progress");
-    let block = block_store.get_block_by_number(&block_number).await.expect("one block should be stored bbefore updating total difficulty progress");
+    let block_number = block_store
+        .get_last_block_number()
+        .await
+        .expect("one block should stored before updating total difficulty progress");
+    let block = block_store
+        .get_block_by_number(&block_number)
+        .await
+        .expect("one block should be stored bbefore updating total difficulty progress");
     if block.total_difficulty >= TOTAL_TERMINAL_DIFFICULTY {
         info!("merge done, skipping");
         return ();
-    } 
+    }
 
     let mut total_difficulty_by_hour = get_total_difficulty_by_hour(&mut connection).await;
 

@@ -7,22 +7,20 @@
 //! responsibilities.
 
 use anyhow::Result;
-use futures::SinkExt;
-use futures::Stream;
-use futures::StreamExt;
-use sqlx::PgConnection;
-use sqlx::PgPool;
-use std::cmp::Ordering;
-use std::collections::VecDeque;
-use std::iter::Iterator;
-use std::sync::Arc;
-use std::sync::Mutex;
-use tracing::event;
-use tracing::Level;
+use futures::{SinkExt, Stream, StreamExt};
+use sqlx::{PgConnection, PgPool};
+use std::{
+    cmp::Ordering,
+    collections::VecDeque,
+    iter::Iterator,
+    sync::{Arc, Mutex},
+};
+use tracing::{debug, event, Level};
 
-use super::eth_prices;
-use super::node::BlockNumber;
-use super::node::Head;
+use super::{
+    eth_prices,
+    node::{BlockNumber, Head},
+};
 use crate::{
     db, eth_supply,
     execution_chain::{self, base_fees, block_store::BlockStore, merge_estimate, ExecutionNode},
@@ -35,7 +33,7 @@ async fn rollback_numbers<'a>(
     block_store: &mut BlockStore<'a>,
     greater_than_or_equal: &BlockNumber,
 ) -> Result<()> {
-    tracing::debug!("rolling back data based on numbers gte {greater_than_or_equal}");
+    debug!("rolling back data based on numbers gte {greater_than_or_equal}");
     eth_supply::rollback_supply_by_block(executor, greater_than_or_equal).await?;
     block_store.delete_blocks(&greater_than_or_equal).await;
     Ok(())

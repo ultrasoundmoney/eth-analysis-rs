@@ -1,5 +1,5 @@
 use futures::StreamExt;
-use sqlx::postgres::{PgConnection, PgRow, PgQueryResult};
+use sqlx::postgres::{PgConnection, PgQueryResult, PgRow};
 use sqlx::{Connection, PgExecutor, Row};
 use std::collections::VecDeque;
 use std::str::FromStr;
@@ -99,7 +99,11 @@ async fn store_delta<'a>(executor: impl PgExecutor<'a>, supply_delta: &SupplyDel
     .unwrap();
 }
 
-async fn store_execution_supply(executor: impl PgExecutor<'_>, supply_delta: &SupplyDelta, balances: &i128) -> sqlx::Result<PgQueryResult> {
+async fn store_execution_supply(
+    executor: impl PgExecutor<'_>,
+    supply_delta: &SupplyDelta,
+    balances: &i128,
+) -> sqlx::Result<PgQueryResult> {
     sqlx::query(
         "
             INSERT INTO execution_supply (
@@ -167,7 +171,9 @@ pub async fn add_delta<'a>(connection: &mut PgConnection, supply_delta: &SupplyD
     let balances = get_balances_at_hash(&mut transaction, &supply_delta.parent_hash).await
         + supply_delta.supply_delta;
 
-    store_execution_supply(&mut transaction, supply_delta, &balances).await.unwrap();
+    store_execution_supply(&mut transaction, supply_delta, &balances)
+        .await
+        .unwrap();
 
     transaction.commit().await.unwrap();
 }

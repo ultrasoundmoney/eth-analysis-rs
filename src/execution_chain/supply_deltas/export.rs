@@ -1,5 +1,6 @@
 use futures::prelude::*;
 use serde::Deserialize;
+use tracing::{debug, info};
 
 use crate::{execution_chain, log};
 
@@ -10,7 +11,7 @@ pub async fn write_deltas() {
 
     let timestamp = crate::time::get_timestamp();
 
-    tracing::info!("writing supply deltas {timestamp}");
+    info!("writing supply deltas {timestamp}");
 
     let mut supply_deltas_rx =
         execution_chain::stream_supply_delta_chunks(0, SUPPLY_DELTA_BUFFER_SIZE, true);
@@ -27,7 +28,7 @@ pub async fn write_deltas() {
         }
 
         progress.inc_work_done_by(SUPPLY_DELTA_BUFFER_SIZE.try_into().unwrap());
-        tracing::debug!("{}", progress.get_progress_string());
+        debug!("{}", progress.get_progress_string());
     }
 
     // A CSV writer maintains an internal buffer, so it's important

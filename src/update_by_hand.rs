@@ -130,7 +130,8 @@ pub async fn set_merge_stats(term: &Term, executor: &mut PgConnection) -> Result
     match confirm.as_str() {
         "y" => {
             println!("confirmed, storing and propagating!");
-            beacon_chain::update_merge_stats_by_hand(executor, timestamp, supply, block_number).await?;
+            beacon_chain::update_merge_stats_by_hand(executor, timestamp, supply, block_number)
+                .await?;
         }
         _ => {
             println!("input not 'y', exiting");

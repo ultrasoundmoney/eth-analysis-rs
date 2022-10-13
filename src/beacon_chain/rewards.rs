@@ -120,10 +120,12 @@ async fn get_validator_rewards<'a>(
     executor: &PgPool,
     beacon_node: &BeaconNode,
 ) -> ValidatorRewards {
-    let last_effective_balance_sum =
-        balances::get_last_effective_balance_sum(&mut executor.acquire().await.unwrap(), beacon_node)
-            .await
-            .unwrap();
+    let last_effective_balance_sum = balances::get_last_effective_balance_sum(
+        &mut executor.acquire().await.unwrap(),
+        beacon_node,
+    )
+    .await
+    .unwrap();
     let issuance_reward = get_issuance_reward(last_effective_balance_sum);
     let tips_reward = get_tips_reward(executor, last_effective_balance_sum)
         .await

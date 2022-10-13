@@ -2,12 +2,9 @@ use chrono::Utc;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use crate::config;
-use crate::eth_units::GweiNewtype;
-use crate::json_codecs::from_u32_string;
-use crate::performance::TimedExt;
+use crate::{eth_units::GweiNewtype, json_codecs::from_u32_string, performance::TimedExt};
 
-use super::{beacon_time, Slot};
+use super::{beacon_time, Slot, BEACON_URL};
 
 #[derive(Debug)]
 enum BlockId {

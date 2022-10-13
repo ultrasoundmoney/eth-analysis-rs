@@ -2,29 +2,28 @@ mod blocks;
 mod decoders;
 mod heads;
 
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::error::Error;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
+use anyhow::Result;
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
     tungstenite::Message,
     WebSocketStream,
 };
 pub use blocks::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
-use futures::channel::mpsc;
-use futures::channel::oneshot;
-use futures::prelude::*;
-use futures::stream::SplitSink;
-use futures::stream::SplitStream;
+use futures::{
+    channel::{mpsc, oneshot},
+    prelude::*,
+    stream::{SplitSink, SplitStream},
+};
 pub use heads::Head;
 use heads::NewHeadMessage;
 use lazy_static::lazy_static;
 use serde::Deserialize;
-use serde_json::json;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio::net::TcpStream;
 
 use crate::env;

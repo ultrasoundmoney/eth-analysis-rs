@@ -5,6 +5,7 @@ use crate::{
 use futures::StreamExt;
 use serde::Serialize;
 use std::collections::HashSet;
+use tracing::{debug, info};
 
 #[derive(Serialize)]
 struct SupplyDeltaLog {
@@ -21,7 +22,7 @@ pub async fn write_deltas_log() {
 
     let timestamp = chrono::offset::Utc::now().timestamp();
 
-    tracing::info!("writing supply delta log {timestamp}");
+    info!("writing supply delta log {timestamp}");
 
     let mut execution_node = ExecutionNode::connect().await;
     let latest_block = execution_node.get_latest_block().await;
@@ -56,6 +57,6 @@ pub async fn write_deltas_log() {
         csv_writer.serialize(supply_delta_log).unwrap();
         csv_writer.flush().unwrap();
 
-        tracing::debug!("wrote supply delta log {}", supply_delta.block_number);
+        debug!("wrote supply delta log {}", supply_delta.block_number);
     }
 }

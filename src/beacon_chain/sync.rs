@@ -1,17 +1,18 @@
 use anyhow::Result;
+use balances::BeaconBalancesSum;
 use chrono::Duration;
+use futures::{SinkExt, Stream, StreamExt};
 use lazy_static::lazy_static;
+use serde::Deserialize;
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use sqlx::{Acquire, PgConnection, Row};
-use std::cmp::Ordering;
-use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::{
+    cmp::Ordering,
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 use tracing::{debug, info, warn};
 
-use balances::BeaconBalancesSum;
-use futures::{SinkExt, Stream, StreamExt};
-use serde::Deserialize;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
 use crate::{
     beacon_chain::{
         balances,
@@ -26,12 +27,7 @@ use crate::{
     performance::TimedExt,
 };
 
-use super::beacon_time::FirstOfDaySlot;
-use super::blocks::get_is_hash_known;
-use super::node::BeaconHeaderSignedEnvelope;
-use super::states::get_last_state;
-use super::Slot;
-use super::{balances, blocks, deposits, issuance, states, BeaconNode};
+use super::{blocks, states, BeaconHeaderSignedEnvelope, BeaconNode, Slot, BEACON_URL};
 
 lazy_static! {
     static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(30);
@@ -374,7 +370,7 @@ async fn stream_heads_from(gte_slot: Slot) -> impl Stream<Item = HeadEvent> {
 }
 
 async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = HeadEvent> {
-    let last_synced_state = get_last_state(&mut db.acquire().await.unwrap()).await;
+    let last_synced_state = states::get_last_state(&mut db.acquire().await.unwrap()).await;
     let next_slot_to_sync = last_synced_state.map_or(0, |state| state.slot + 1);
     stream_heads_from(next_slot_to_sync).await
 }
@@ -428,7 +424,7 @@ async fn get_next_step(
         .unwrap()
         .unwrap();
 
-    let is_parent_known = get_is_hash_known(
+    let is_parent_known = blocks::get_is_hash_known(
         connection.acquire().await.unwrap(),
         &head.header.message.parent_root,
     )
@@ -588,7 +584,9 @@ async fn estimate_slots_remaining<'a>(
     beacon_node: &BeaconNode,
 ) -> u32 {
     let last_on_chain = beacon_node.get_last_block().await.unwrap();
-    let last_synced_slot = get_last_state(executor).await.map_or(0, |state| state.slot);
+    let last_synced_slot = states::get_last_state(executor)
+        .await
+        .map_or(0, |state| state.slot);
     last_on_chain.slot - last_synced_slot
 }
 

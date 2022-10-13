@@ -4,7 +4,7 @@
 use std::env;
 
 use lazy_static::lazy_static;
-use tracing::debug;
+use tracing::{debug, warn};
 
 const SECRET_LOG_BLACKLIST: [&str; 1] = ["DATABASE_URL"];
 
@@ -49,7 +49,7 @@ pub fn get_env() -> Env {
     let env_str = get_env_var("ENV");
     match env_str {
         None => {
-            tracing::warn!("no ENV in env, assuming Dev");
+            warn!("no ENV in env, assuming Dev");
             Env::Dev
         }
         Some(str) => match str.as_ref() {
@@ -72,7 +72,7 @@ lazy_static! {
 
 pub fn get_env_bool(key: &str) -> bool {
     let flag = get_env_var(key).map_or(false, |var| var.to_lowercase() == "true");
-    tracing::debug!("env flag {key}: {flag}");
+    debug!("env flag {key}: {flag}");
     flag
 }
 

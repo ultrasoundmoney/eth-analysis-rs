@@ -131,6 +131,7 @@ const MIN_ALARM_WAIT: Duration = Duration::from_secs(60 * 4);
 
 pub async fn monitor_critical_services() {
     log::init_with_env();
+
     tracing::info!(
         "releasing phoenix, dies after {} seconds",
         PHOENIX_MAX_LIFESPAN.as_secs()

@@ -13,7 +13,10 @@ use crate::{
 
 use super::{node::StateRoot, BeaconNode};
 
-async fn get_effective_balance_sum(beacon_node: &BeaconNode, state_root: &StateRoot) -> GweiNewtype {
+async fn get_effective_balance_sum(
+    beacon_node: &BeaconNode,
+    state_root: &StateRoot,
+) -> GweiNewtype {
     beacon_node
         .get_validators_by_state(state_root)
         .await
@@ -194,8 +197,12 @@ mod tests {
         states::store_state(&mut transaction, "0xtest_root", &0)
             .await
             .unwrap();
-        store_effective_balance_sum(&mut transaction, GweiNewtype(10), &"0xtest_root".to_string())
-            .await;
+        store_effective_balance_sum(
+            &mut transaction,
+            GweiNewtype(10),
+            &"0xtest_root".to_string(),
+        )
+        .await;
 
         let last_stored_effective_balance_sum =
             get_last_stored_effective_balance_sum(&mut transaction).await;

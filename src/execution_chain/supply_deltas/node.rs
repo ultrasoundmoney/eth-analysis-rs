@@ -9,8 +9,9 @@ use sqlx::PgConnection;
 use thiserror::Error;
 use tokio::time::timeout;
 
-use super::sync::get_last_synced_supply_delta_number;
 use crate::{env, eth_units::Wei, execution_chain::SupplyDelta};
+
+use super::sync;
 
 lazy_static! {
     // TODO: set to special GETH_DELTA_FORK_URL
@@ -178,7 +179,7 @@ pub fn stream_supply_deltas_from(
 pub async fn stream_supply_deltas_from_last<'a>(
     executor: &mut PgConnection,
 ) -> impl Stream<Item = SupplyDelta> {
-    let last_synced_supply_delta_number = get_last_synced_supply_delta_number(executor)
+    let last_synced_supply_delta_number = sync::get_last_synced_supply_delta_number(executor)
         .await
         .unwrap_or(super::snapshot::SUPPLY_SNAPSHOT_15082718.block_number);
     stream_supply_deltas_from(last_synced_supply_delta_number + 1, false)
@@ -319,7 +320,7 @@ mod tests {
         add_delta(&mut transaction, &supply_delta_test).await;
 
         let latest_synced_supply_delta_number =
-            get_last_synced_supply_delta_number(&mut transaction).await;
+            sync::get_last_synced_supply_delta_number(&mut transaction).await;
 
         assert_eq!(latest_synced_supply_delta_number, Some(0));
     }
@@ -330,7 +331,7 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let latest_synced_supply_delta_number =
-            get_last_synced_supply_delta_number(&mut transaction).await;
+            sync::get_last_synced_supply_delta_number(&mut transaction).await;
 
         assert_eq!(latest_synced_supply_delta_number, None);
     }
