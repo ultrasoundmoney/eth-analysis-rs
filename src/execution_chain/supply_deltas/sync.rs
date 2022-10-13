@@ -9,7 +9,7 @@ use super::node::{get_supply_delta_by_block_number, stream_supply_deltas_from_la
 use super::snapshot::SUPPLY_SNAPSHOT_15082718;
 use crate::execution_chain::node::BlockNumber;
 use crate::performance::TimedExt;
-use crate::{config, log};
+use crate::{db, log};
 
 use super::SupplyDelta;
 
@@ -329,9 +329,10 @@ pub async fn sync_deltas() {
 
     tracing::info!("syncing supply deltas");
 
-    let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-        .await
-        .unwrap();
+    let mut connection =
+        PgConnection::connect(&db::get_db_url_with_name("sync-execution-supply-deltas"))
+            .await
+            .unwrap();
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
 

@@ -2,6 +2,7 @@ use std::time::{Duration, Instant};
 
 use async_tungstenite::{tokio::connect_async, tungstenite::Message};
 use futures::{channel::mpsc::UnboundedReceiver, SinkExt, Stream, StreamExt};
+use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgConnection;
@@ -9,7 +10,12 @@ use thiserror::Error;
 use tokio::time::timeout;
 
 use super::sync::get_last_synced_supply_delta_number;
-use crate::{eth_units::Wei, execution_chain::SupplyDelta};
+use crate::{env, eth_units::Wei, execution_chain::SupplyDelta};
+
+lazy_static! {
+    // TODO: set to special GETH_DELTA_FORK_URL
+    static ref EXECUTION_URL: String = env::get_env_var_unsafe("GETH_URL");
+}
 
 // We started running supply delta analyzation with Geth months ago (V1). Since we started running this
 // code, superficial things have changed in the fork (V2), we're not sure the superficial changes are
@@ -125,7 +131,7 @@ pub fn stream_supply_deltas_from(
     let (mut tx, rx) = futures::channel::mpsc::unbounded();
 
     tokio::spawn(async move {
-        let url = format!("{}", &crate::config::get_execution_url());
+        let url = format!("{}", &*EXECUTION_URL);
         let mut ws = connect_async(&url).await.unwrap().0;
 
         let deltas_subscribe_message = {
@@ -219,7 +225,7 @@ pub enum SupplyDeltaByBlockNumberError {
 pub async fn get_supply_delta_by_block_number(
     block_number: u32,
 ) -> Result<SupplyDelta, SupplyDeltaByBlockNumberError> {
-    let url = format!("{}", &crate::config::get_execution_url());
+    let url = format!("{}", *EXECUTION_URL);
     let mut ws = connect_async(&url).await.unwrap().0;
 
     let deltas_subscribe_message = make_supply_delta_subscribe_message_v2(&(block_number));

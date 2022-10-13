@@ -1,6 +1,11 @@
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{config, eth_units::WeiString};
+use crate::{env, eth_units::WeiString};
+
+lazy_static! {
+    static ref ETHERSCAN_API_KEY: String = env::get_env_var_unsafe("ETHERSCAN_API_KEY");
+}
 
 const ETHERSCAN_API: &str = "https://api.etherscan.io/api";
 
@@ -16,7 +21,7 @@ fn make_eth_supply_2_url() -> String {
     let params = EthSupply2Params {
         module: "stats",
         action: "ethsupply2",
-        api_key: &config::get_etherscan_api_key(),
+        api_key: &*ETHERSCAN_API_KEY,
     };
 
     format!("{ETHERSCAN_API}?{}", serde_qs::to_string(&params).unwrap())

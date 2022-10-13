@@ -291,7 +291,7 @@ pub async fn sync_blocks() -> Result<()> {
 
     tracing::info!("syncing execution blocks");
 
-    let db_pool = PgPool::connect(&config::get_db_url_with_name("sync-execution-blocks"))
+    let db_pool = PgPool::connect(&db::get_db_url_with_name("sync-execution-blocks"))
         .await
         .unwrap();
 

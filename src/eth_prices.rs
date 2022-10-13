@@ -11,7 +11,7 @@ use tracing::{event, Level};
 
 use crate::{
     caching::{self, CacheKey},
-    config,
+    db,
     execution_chain::LONDON_HARDFORK_TIMESTAMP,
     key_value_store, log,
 };
@@ -194,7 +194,9 @@ pub async fn record_eth_price() {
 
     event!(Level::INFO,"recording eth prices");
 
-    let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+    let mut connection = PgConnection::connect(&db::get_db_url_with_name("record-eth-price"))
+        .await
+        .unwrap();
 
     let mut last_price = get_most_recent_price(&mut connection).await;
 
@@ -215,7 +217,9 @@ pub async fn heal_eth_prices() {
         .unwrap_or(10);
 
     event!(Level::DEBUG,"getting all eth prices");
-    let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+    let mut connection = PgConnection::connect(&db::get_db_url_with_name("heal-eth-prices"))
+        .await
+        .unwrap();
     let eth_prices = sqlx::query_as::<Postgres, EthPriceTimestamp>(
         "
             SELECT
@@ -331,7 +335,9 @@ pub async fn resync_all() {
         .and_then(|str| str.parse::<i64>().ok())
         .unwrap_or(10);
 
-    let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+    let mut connection = PgConnection::connect(&db::get_db_url_with_name("resync-all-prices"))
+        .await
+        .unwrap();
 
     event!(Level::DEBUG, "walking through all minutes since London hardfork");
 

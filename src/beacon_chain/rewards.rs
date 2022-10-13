@@ -8,7 +8,7 @@ use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
 use crate::eth_units::{GweiNewtype, GWEI_PER_ETH, GWEI_PER_ETH_F64};
 use crate::execution_chain::LONDON_HARDFORK_TIMESTAMP;
-use crate::{caching, config, db, key_value_store, log};
+use crate::{caching, db, key_value_store, log};
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -146,7 +146,7 @@ pub async fn update_validator_rewards() {
 
     let pool = PgPoolOptions::new()
         .max_connections(1)
-        .connect(&config::get_db_url_with_name("update-validator-rewards"))
+        .connect(&db::get_db_url_with_name("update-validator-rewards"))
         .await
         .unwrap();
 

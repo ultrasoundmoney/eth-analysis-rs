@@ -160,9 +160,10 @@ async fn update_cache_from_key(
 }
 
 async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
-    let mut listener = sqlx::postgres::PgListener::connect(&config::get_db_url())
-        .await
-        .unwrap();
+    let mut listener =
+        sqlx::postgres::PgListener::connect(&db::get_db_url_with_name("serve-rs-cache-update"))
+            .await
+            .unwrap();
     listener.listen("cache-update").await.unwrap();
     event!(Level::DEBUG, "listening for cache updates");
 
@@ -238,7 +239,7 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
 pub async fn start_server() {
     log::init_with_env();
 
-    let db_pool = PgPool::connect(&config::get_db_url_with_name("eth-analysis-serve"))
+    let db_pool = PgPool::connect(&db::get_db_url_with_name("eth-analysis-serve"))
         .await
         .unwrap();
 

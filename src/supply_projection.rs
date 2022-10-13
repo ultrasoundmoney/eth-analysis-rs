@@ -7,7 +7,7 @@ use sqlx::{postgres::PgPoolOptions, Decode};
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    config,
+    db,
     eth_units::GWEI_PER_ETH_F64,
     glassnode::{self, GlassnodeDataPoint},
     key_value_store, log,
@@ -81,7 +81,7 @@ pub async fn update_supply_projection_inputs() {
 
     let pool = PgPoolOptions::new()
         .max_connections(1)
-        .connect(&config::get_db_url_with_name("supply_projection_inputs"))
+        .connect(&db::get_db_url_with_name("supply_projection_inputs"))
         .await
         .unwrap();
 

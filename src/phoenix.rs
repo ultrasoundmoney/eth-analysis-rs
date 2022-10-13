@@ -2,12 +2,17 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
 use chrono::{DateTime, TimeZone, Utc};
+use lazy_static::lazy_static;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::json;
 use tokio::time::sleep;
 
 use crate::{env, log};
+
+lazy_static! {
+    static ref OPSGENIE_API_KEY: String = env::get_env_var_unsafe("OPSGENIE_API_KEY");
+}
 
 #[derive(Deserialize)]
 struct OpsGenieError {
@@ -20,7 +25,7 @@ async fn fire_alarm(name: &str) {
     let mut headers = HeaderMap::new();
     headers.insert(
         "Authorization",
-        HeaderValue::from_str(&format!("GenieKey {}", config::get_opsgenie_api_key())).unwrap(),
+        HeaderValue::from_str(&format!("GenieKey {}", *OPSGENIE_API_KEY)).unwrap(),
     );
 
     let res = client

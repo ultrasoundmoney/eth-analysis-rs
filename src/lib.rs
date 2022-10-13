@@ -1,7 +1,7 @@
 mod beacon_chain;
 mod caching;
 mod check_beacon_state_gaps;
-mod config;
+mod db;
 #[cfg(test)]
 mod db_testing;
 mod env;

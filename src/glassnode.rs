@@ -1,9 +1,14 @@
 use chrono::{DateTime, Utc};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::config;
+use crate::env;
 
 const GLASSNODE_API: &str = "https://api.glassnode.com";
+
+lazy_static! {
+    static ref GLASSNODE_API_KEY: String = env::get_env_var_unsafe("GLASSNODE_API_KEY");
+}
 
 #[derive(Debug, Deserialize)]
 struct GlassnodeDataPointF {
@@ -42,7 +47,7 @@ struct CirculatingSupplyDataParams<'a> {
 fn make_circulating_supply_data_url() -> String {
     let params = CirculatingSupplyDataParams {
         a: "ETH",
-        api_key: &config::get_glassnode_api_key(),
+        api_key: &*GLASSNODE_API_KEY,
         c: "NATIVE",
         f: "JSON",
         i: "24h",
@@ -80,7 +85,7 @@ struct EthInSmartContractsDataParams<'a> {
 fn make_eth_in_smart_contracts_data_url() -> String {
     let params = EthInSmartContractsDataParams {
         a: "ETH",
-        api_key: &config::get_glassnode_api_key(),
+        api_key: &*GLASSNODE_API_KEY,
         f: "JSON",
         i: "24h",
         s: ("2015-08-07T00:00:00Z")

@@ -65,11 +65,7 @@ fn make_blocks_url(block_id: &BlockId) -> String {
         BlockId::Slot(slot) => slot.to_string(),
     };
 
-    format!(
-        "{}/eth/v2/beacon/blocks/{}",
-        config::get_beacon_url(),
-        block_id_text
-    )
+    format!("{}/eth/v2/beacon/blocks/{}", *BEACON_URL, block_id_text)
 }
 
 pub type StateRoot = String;
@@ -87,7 +83,7 @@ struct StateRootFirstEnvelope {
 fn make_state_root_url(slot: &u32) -> String {
     format!(
         "{}/eth/v1/beacon/states/{}/root",
-        config::get_beacon_url(),
+        *BEACON_URL,
         slot.to_string()
     )
 }
@@ -105,8 +101,7 @@ struct ValidatorBalancesEnvelope {
 fn make_validator_balances_by_state_url(state_root: &str) -> String {
     format!(
         "{}/eth/v1/beacon/states/{}/validator_balances",
-        config::get_beacon_url(),
-        state_root
+        *BEACON_URL, state_root
     )
 }
 
@@ -144,18 +139,13 @@ fn make_header_by_block_id_url(block_id: &BlockId) -> String {
         BlockId::Slot(slot) => slot.to_string(),
     };
 
-    format!(
-        "{}/eth/v1/beacon/headers/{}",
-        config::get_beacon_url(),
-        block_id_text
-    )
+    format!("{}/eth/v1/beacon/headers/{}", *BEACON_URL, block_id_text)
 }
 
 fn make_validators_by_state_url(state_root: &str) -> String {
     format!(
         "{}/eth/v1/beacon/states/{}/validators",
-        config::get_beacon_url(),
-        state_root
+        *BEACON_URL, state_root
     )
 }
 
@@ -177,7 +167,7 @@ struct ValidatorsEnvelope {
 fn make_finality_checkpoint_url() -> String {
     format!(
         "{}/eth/v1/beacon/states/head/finality_checkpoints",
-        config::get_beacon_url(),
+        *BEACON_URL,
     )
 }
 

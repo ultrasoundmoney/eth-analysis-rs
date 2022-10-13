@@ -1,8 +1,13 @@
-use crate::caching::CacheKey;
-use crate::eth_units::{GweiNewtype, GWEI_PER_ETH};
-use crate::{beacon_chain, caching, etherscan, key_value_store, log};
 use serde::Serialize;
-use sqlx::{PgConnection, PgExecutor};
+use sqlx::{Connection, PgConnection, PgExecutor};
+
+use crate::{
+    beacon_chain,
+    caching::{self, CacheKey},
+    db,
+    eth_units::{GweiNewtype, GWEI_PER_ETH},
+    etherscan, key_value_store, log,
+};
 
 #[derive(Debug, Serialize)]
 struct IssuanceBreakdown {
@@ -30,9 +35,10 @@ pub async fn update_issuance_breakdown() {
 
     tracing::info!("updating issuance breakdown");
 
-    let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-        .await
-        .unwrap();
+    let mut connection: PgConnection =
+        PgConnection::connect(&db::get_db_url_with_name("update-issuance-breakdown"))
+            .await
+            .unwrap();
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
 

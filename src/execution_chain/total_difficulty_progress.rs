@@ -71,7 +71,11 @@ pub async fn update_total_difficulty_progress() {
 
     tracing::info!("updating total difficulty progress");
 
-    let mut connection = PgConnection::connect(&config::get_db_url()).await.unwrap();
+    let mut connection = PgConnection::connect(&db::get_db_url_with_name(
+        "update-total-difficulty-progress",
+    ))
+    .await
+    .unwrap();
 
     let mut block_store = block_store::BlockStore::new(&mut connection);
     let block_number = block_store.get_last_block_number().await.expect("one block should stored before updating total difficulty progress");

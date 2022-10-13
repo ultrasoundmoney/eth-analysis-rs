@@ -6,10 +6,7 @@ use serde::Serialize;
 use sqlx::{types::Json, Connection, PgConnection};
 use std::env;
 
-use crate::{
-    beacon_chain,
-    config,
-};
+use crate::{beacon_chain, db};
 
 #[derive(Serialize)]
 struct EthInDefiOld {
@@ -156,8 +153,7 @@ pub async fn run_cli() -> Result<()> {
         .default(0)
         .interact()?;
 
-    let mut connection =
-        PgConnection::connect(&config::get_db_url_with_name("update-by-hand")).await?;
+    let mut connection = PgConnection::connect(&db::get_db_url_with_name("update-by-hand")).await?;
 
     match target {
         0 => set_eth_in_defi().await?,

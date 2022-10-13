@@ -1,18 +1,17 @@
 use core::panic;
 use std::{collections::HashSet, error::Error};
 
-use crate::config;
 use futures::{StreamExt, TryStreamExt};
 use sqlx::{postgres::PgRow, PgConnection, Row};
+
+use crate::db::DB_URL;
 
 pub async fn check_beacon_state_gaps() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
     tracing::info!("checking for gaps in beacon states");
 
-    let mut connection: PgConnection = sqlx::Connection::connect(&config::get_db_url())
-        .await
-        .unwrap();
+    let mut connection: PgConnection = sqlx::Connection::connect(&*DB_URL).await.unwrap();
 
     {
         let mut rows = sqlx::query(

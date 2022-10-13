@@ -21,10 +21,18 @@ use futures::stream::SplitSink;
 use futures::stream::SplitStream;
 pub use heads::Head;
 use heads::NewHeadMessage;
+use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json::json;
 use serde_json::Value;
 use tokio::net::TcpStream;
+
+use crate::env;
+
+lazy_static! {
+    // TODO: set to normal GETH_URL (not supply delta fork)
+    static ref EXECUTION_URL: String = env::get_env_var_unsafe("GETH_URL");
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -98,7 +106,7 @@ pub fn stream_new_heads() -> impl Stream<Item = Head> {
     let (mut new_heads_tx, new_heads_rx) = mpsc::unbounded();
 
     tokio::spawn(async move {
-        let url = format!("{}", &crate::config::get_execution_url());
+        let url = format!("{}", *EXECUTION_URL);
         let mut ws = connect_async(&url).await.unwrap().0;
 
         let new_heads_subscribe_message = make_new_heads_subscribe_message();
@@ -193,7 +201,7 @@ impl ExecutionNode {
 
         let message_handlers_am = Arc::new(Mutex::new(HashMap::with_capacity(u16::MAX.into())));
 
-        let url = format!("{}", &crate::config::get_execution_url());
+        let url = format!("{}", &*EXECUTION_URL);
         let (ws_tx, ws_rx) = connect_async(&url).await.unwrap().0.split();
 
         // We'd like to read websocket messages concurrently so we read in a thread.

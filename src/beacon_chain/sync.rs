@@ -12,15 +12,19 @@ use futures::{SinkExt, Stream, StreamExt};
 use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
-
-use crate::beacon_chain::beacon_time;
-use crate::beacon_chain::blocks::get_last_block_slot;
-use crate::config;
-use crate::eth_supply;
-use crate::eth_units::GweiNewtype;
-use crate::json_codecs::from_u32_string;
-use crate::log;
-use crate::performance::TimedExt;
+use crate::{
+    beacon_chain::{
+        balances,
+        beacon_time::{self, FirstOfDaySlot},
+        blocks::get_last_block_slot,
+        deposits, issuance,
+    },
+    db, eth_supply,
+    eth_units::GweiNewtype,
+    json_codecs::from_u32_string,
+    log,
+    performance::TimedExt,
+};
 
 use super::beacon_time::FirstOfDaySlot;
 use super::blocks::get_is_hash_known;
@@ -294,7 +298,7 @@ impl From<BeaconHeaderSignedEnvelope> for HeadEvent {
 }
 
 async fn stream_heads() -> impl Stream<Item = HeadEvent> {
-    let url_string = format!("{}/eth/v1/events/?topics=head", config::get_beacon_url());
+    let url_string = format!("{}/eth/v1/events/?topics=head", *BEACON_URL);
     let url = reqwest::Url::parse(&url_string).unwrap();
 
     let client = eventsource::reqwest::Client::new(url);
@@ -602,7 +606,7 @@ pub async fn sync_beacon_states() -> Result<()> {
 
     let db_pool = PgPoolOptions::new()
         .max_connections(3)
-        .connect(&config::get_db_url_with_name("sync-beacon-states"))
+        .connect(&db::get_db_url_with_name("sync-beacon-states"))
         .await
         .unwrap();
 

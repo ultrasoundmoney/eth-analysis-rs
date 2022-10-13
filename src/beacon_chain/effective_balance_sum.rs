@@ -6,7 +6,7 @@ use sqlx::{
 use crate::{
     beacon_chain::states::get_last_state,
     caching::{self, CacheKey},
-    config,
+    db,
     eth_units::GweiNewtype,
     log,
 };
@@ -106,9 +106,7 @@ pub async fn update_effective_balance_sum() {
 
     let db_pool = PgPoolOptions::new()
         .max_connections(1)
-        .connect(&config::get_db_url_with_name(
-            "update-effective-balance-sum",
-        ))
+        .connect(&db::get_db_url_with_name("update-effective-balance-sum"))
         .await
         .unwrap();
 
