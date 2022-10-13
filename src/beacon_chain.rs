@@ -10,6 +10,7 @@ mod rewards;
 mod states;
 mod sync;
 
+use crate::env;
 pub use balances::{get_validator_balances_by_start_of_day, BeaconBalancesSum};
 pub use blocks::store_block;
 pub use blocks::GENESIS_PARENT_ROOT;
@@ -29,3 +30,7 @@ pub use rewards::update_validator_rewards;
 pub use states::store_state;
 pub use states::Slot;
 pub use sync::sync_beacon_states;
+
+lazy_static! {
+    static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");
+}

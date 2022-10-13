@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::json;
 use tokio::time::sleep;
 
-use crate::config;
+use crate::{env, log};
 
 #[derive(Deserialize)]
 struct OpsGenieError {

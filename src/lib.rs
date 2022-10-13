@@ -4,6 +4,7 @@ mod check_beacon_state_gaps;
 mod config;
 #[cfg(test)]
 mod db_testing;
+mod env;
 mod eth_prices;
 mod eth_supply;
 mod eth_units;

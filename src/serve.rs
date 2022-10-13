@@ -17,9 +17,7 @@ use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tracing::{error, event, span, trace, Instrument, Level};
 
-use crate::caching::CacheKey;
-use crate::config;
-use crate::key_value_store;
+use crate::{caching::CacheKey, db, env, key_value_store, log};
 
 type StateExtension = Extension<Arc<State>>;
 
@@ -380,7 +378,7 @@ pub async fn start_server() {
                     .layer(Extension(shared_state)),
             );
 
-    let port = config::get_env_var("PORT").unwrap_or("3002".to_string());
+    let port = env::get_env_var("PORT").unwrap_or("3002".to_string());
 
     event!(Level::INFO, port, "server listening");
     axum::Server::bind(&format!("0.0.0.0:{port}").parse().unwrap())
