@@ -148,7 +148,7 @@ async fn handle_messages(
     mut ws_rx: NodeMessageRx,
     message_handlers: MessageHandlersShared,
     id_pool: IdPoolShared,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     while let Some(message_result) = ws_rx.next().await {
         let message = message_result?;
 
