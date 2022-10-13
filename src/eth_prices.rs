@@ -275,6 +275,8 @@ pub async fn heal_eth_prices() {
             }
         }
     }
+
+    info!("done healing eth prices");
 }
 
 const RESYNC_ETH_PRICES_KEY: &str = "resync-eth-prices";
