@@ -41,7 +41,7 @@ async fn get_base_fee_over_time(
             sqlx::query(
                 "
                     SELECT
-                        AVG(base_fee_per_gas) AS base_fee_per_gas,
+                        AVG(base_fee_per_gas)::FLOAT8 AS base_fee_per_gas,
                         DATE_TRUNC('day', timestamp) AS timestamp,
                         MAX(number) AS number
                     FROM
@@ -96,7 +96,7 @@ async fn get_base_fee_over_time(
             sqlx::query(
                 "
                     SELECT
-                        AVG(base_fee_per_gas) AS base_fee_per_gas,
+                        AVG(base_fee_per_gas)::FLOAT8 AS base_fee_per_gas,
                         DATE_TRUNC('minute', timestamp) AS timestamp,
                         MAX(number) AS number
                     FROM
@@ -126,7 +126,7 @@ async fn get_base_fee_over_time(
             sqlx::query(
                 "
                     SELECT
-                        AVG(base_fee_per_gas) AS base_fee_per_gas,
+                        AVG(base_fee_per_gas)::FLOAT8 AS base_fee_per_gas,
                         DATE_TRUNC('hour', timestamp) AS timestamp,
                         MAX(number) AS number
                     FROM
