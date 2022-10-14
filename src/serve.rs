@@ -126,7 +126,12 @@ async fn etag_middleware<B: std::fmt::Debug>(
     }
 }
 
-async fn get_cached(cached_value: &CachedValue) -> impl IntoResponse {
+async fn get_cached_with_cache_duration(
+    cached_value: &CachedValue,
+    max_age: Option<u32>,
+    s_max_age: Option<u32>,
+    stale_while_revalidate: Option<u32>,
+) -> impl IntoResponse {
     let cached_value_inner = cached_value.read().unwrap();
     match &*cached_value_inner {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
@@ -135,13 +140,22 @@ async fn get_cached(cached_value: &CachedValue) -> impl IntoResponse {
 
             headers.insert(
                 header::CACHE_CONTROL,
-                HeaderValue::from_str("public, max-age=4, s-maxage=4, stale-while-revalidate=60")
-                    .unwrap(),
+                HeaderValue::from_str(&format!(
+                    "public, max-age={}, s-maxage={}, stale-while-revalidate={}",
+                    max_age.unwrap_or(4),
+                    s_max_age.unwrap_or(4),
+                    stale_while_revalidate.unwrap_or(60)
+                ))
+                .unwrap(),
             );
 
             (headers, Json(merge_estimate).into_response()).into_response()
         }
     }
+}
+
+async fn get_cached(cached_value: &CachedValue) -> impl IntoResponse {
+    get_cached_with_cache_duration(cached_value, None, None, None).await
 }
 
 async fn update_cache_from_key(
