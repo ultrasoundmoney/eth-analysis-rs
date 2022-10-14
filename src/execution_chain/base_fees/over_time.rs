@@ -12,13 +12,11 @@ use crate::{
     time_frames::{LimitedTimeFrame, TimeFrame},
 };
 
-type WeiU64 = u64;
-
 #[derive(Debug, PartialEq, Serialize)]
 struct BaseFeeAtTime {
     block_number: BlockNumber,
     timestamp: DateTime<Utc>,
-    wei: WeiU64,
+    wei: WeiF64,
 }
 
 #[derive(Serialize)]
@@ -55,7 +53,7 @@ async fn get_base_fee_over_time(
             .map(|row: PgRow| {
                 let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
+                let wei = row.get::<f64, _>("base_fee_per_gas");
                 BaseFeeAtTime {
                     wei,
                     block_number,
@@ -70,7 +68,7 @@ async fn get_base_fee_over_time(
             sqlx::query(
                 "
                     SELECT
-                        base_fee_per_gas,
+                        base_fee_per_gas::FLOAT8,
                         number,
                         timestamp
                     FROM
@@ -84,7 +82,7 @@ async fn get_base_fee_over_time(
             .map(|row: PgRow| {
                 let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
+                let wei = row.get::<f64, _>("base_fee_per_gas");
                 BaseFeeAtTime {
                     wei,
                     block_number,
@@ -113,7 +111,7 @@ async fn get_base_fee_over_time(
             .map(|row: PgRow| {
                 let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
+                let wei = row.get::<f64, _>("base_fee_per_gas");
                 BaseFeeAtTime {
                     wei,
                     block_number,
@@ -143,7 +141,7 @@ async fn get_base_fee_over_time(
             .map(|row: PgRow| {
                 let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let wei = row.get::<i64, _>("base_fee_per_gas") as u64;
+                let wei = row.get::<f64, _>("base_fee_per_gas");
                 BaseFeeAtTime {
                     wei,
                     block_number,
@@ -265,7 +263,7 @@ mod tests {
             vec![BaseFeeAtTime {
                 block_number: included_block.number,
                 timestamp: included_block.timestamp,
-                wei: 1,
+                wei: 1.0,
             }]
         );
     }
@@ -299,12 +297,12 @@ mod tests {
             base_fees_h1,
             vec![
                 BaseFeeAtTime {
-                    wei: 1,
+                    wei: 1.0,
                     block_number: 0,
                     timestamp: test_block_1.timestamp
                 },
                 BaseFeeAtTime {
-                    wei: 1,
+                    wei: 1.0,
                     block_number: 1,
                     timestamp: test_block_2.timestamp
                 }
