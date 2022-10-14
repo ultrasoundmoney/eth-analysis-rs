@@ -246,6 +246,7 @@ mod tests {
         let included_block = ExecutionNodeBlock {
             hash: "0xtest2".to_string(),
             parent_hash: excluded_block.hash.clone(),
+            number: excluded_block.number + 1,
             ..make_test_block()
         };
 
@@ -262,7 +263,7 @@ mod tests {
         assert_eq!(
             base_fees_d1,
             vec![BaseFeeAtTime {
-                block_number: 0,
+                block_number: included_block.number,
                 timestamp: included_block.timestamp,
                 wei: 1,
             }]
