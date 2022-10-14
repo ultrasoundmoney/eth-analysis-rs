@@ -23,10 +23,10 @@ mod time;
 mod time_frames;
 mod update_by_hand;
 
-pub use beacon_chain::{
-    sync_beacon_states, update_effective_balance_sum, update_merge_stats_by_hand,
-    update_validator_rewards,
-};
+pub use beacon_chain::sync_beacon_states;
+pub use beacon_chain::update_effective_balance_sum;
+pub use beacon_chain::update_merge_stats_by_hand;
+pub use beacon_chain::update_validator_rewards;
 pub use check_beacon_state_gaps::check_beacon_state_gaps;
 pub use eth_prices::heal_eth_prices;
 pub use eth_prices::record_eth_price;
