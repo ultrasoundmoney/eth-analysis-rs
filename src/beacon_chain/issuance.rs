@@ -111,7 +111,6 @@ pub async fn get_day7_ago_issuance(
 ) -> GweiNewtype {
     sqlx::query(
         "
-
             SELECT
                 gwei
             FROM
