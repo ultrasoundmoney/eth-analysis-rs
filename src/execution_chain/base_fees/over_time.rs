@@ -121,8 +121,36 @@ async fn get_base_fee_over_time(
             .fetch_all(executor)
             .await
         }
-        TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Day7)
-        | TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Day30) => {
+        TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Day7) => {
+            sqlx::query(
+                "
+                    SELECT
+                        AVG(base_fee_per_gas)::FLOAT8 AS base_fee_per_gas,
+                        DATE_BIN('5 minutes', timestamp, '2022-01-01') AS timestamp,
+                        MAX(number) AS number
+                    FROM
+                        blocks_next
+                    WHERE
+                        timestamp >= NOW() - $1
+                    GROUP BY 2
+                    ORDER BY 2 ASC
+                ",
+            )
+            .bind(ltf.get_postgres_interval())
+            .map(|row: PgRow| {
+                let block_number: BlockNumber = row.get::<i32, _>("number").try_into().unwrap();
+                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
+                let wei = row.get::<f64, _>("base_fee_per_gas");
+                BaseFeeAtTime {
+                    wei,
+                    block_number,
+                    timestamp,
+                }
+            })
+            .fetch_all(executor)
+            .await
+        }
+        TimeFrame::LimitedTimeFrame(ltf @ LimitedTimeFrame::Day30) => {
             sqlx::query(
                 "
                     SELECT
