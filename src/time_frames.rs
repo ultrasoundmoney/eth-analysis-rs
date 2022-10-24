@@ -18,14 +18,16 @@ pub enum LimitedTimeFrame {
     Minute5,
 }
 
+use LimitedTimeFrame::*;
+
 impl From<LimitedTimeFrame> for Duration {
     fn from(limited_time_frame: LimitedTimeFrame) -> Self {
         match limited_time_frame {
-            LimitedTimeFrame::Day1 => Duration::days(1),
-            LimitedTimeFrame::Day30 => Duration::days(30),
-            LimitedTimeFrame::Day7 => Duration::days(7),
-            LimitedTimeFrame::Hour1 => Duration::hours(1),
-            LimitedTimeFrame::Minute5 => Duration::minutes(5),
+            Day1 => Duration::days(1),
+            Day30 => Duration::days(30),
+            Day7 => Duration::days(7),
+            Hour1 => Duration::hours(1),
+            Minute5 => Duration::minutes(5),
         }
     }
 }
@@ -46,11 +48,11 @@ impl FromStr for LimitedTimeFrame {
     type Err = ParseTimeFrameError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "m5" => Ok(LimitedTimeFrame::Minute5),
-            "h1" => Ok(LimitedTimeFrame::Hour1),
-            "d1" => Ok(LimitedTimeFrame::Day1),
-            "d7" => Ok(LimitedTimeFrame::Day7),
-            "d30" => Ok(LimitedTimeFrame::Day30),
+            "m5" => Ok(Minute5),
+            "h1" => Ok(Hour1),
+            "d1" => Ok(Day1),
+            "d7" => Ok(Day7),
+            "d30" => Ok(Day30),
             unknown_time_frame => Err(ParseTimeFrameError::UnknownTimeFrame(
                 unknown_time_frame.to_string(),
             )),
@@ -74,27 +76,27 @@ impl Display for LimitedTimeFrame {
 impl LimitedTimeFrame {
     pub fn get_postgres_interval(&self) -> PgInterval {
         match self {
-            LimitedTimeFrame::Day1 => PgInterval {
+            Day1 => PgInterval {
                 months: 0,
                 days: 1,
                 microseconds: 0,
             },
-            LimitedTimeFrame::Day30 => PgInterval {
+            Day30 => PgInterval {
                 months: 0,
                 days: 30,
                 microseconds: 0,
             },
-            LimitedTimeFrame::Day7 => PgInterval {
+            Day7 => PgInterval {
                 months: 0,
                 days: 7,
                 microseconds: 0,
             },
-            LimitedTimeFrame::Hour1 => PgInterval {
+            Hour1 => PgInterval {
                 months: 0,
                 days: 0,
                 microseconds: Duration::hours(1).num_microseconds().unwrap(),
             },
-            LimitedTimeFrame::Minute5 => PgInterval {
+            Minute5 => PgInterval {
                 months: 0,
                 days: 0,
                 microseconds: Duration::minutes(5).num_microseconds().unwrap(),
@@ -103,8 +105,6 @@ impl LimitedTimeFrame {
     }
 
     pub fn to_db_key(&self) -> &'_ str {
-        use LimitedTimeFrame::*;
-
         match self {
             Day1 => "d1",
             Day30 => "d1",
@@ -119,12 +119,12 @@ impl LimitedTimeFrame {
 pub enum TimeFrame {
     #[allow(dead_code)]
     All,
-    LimitedTimeFrame(LimitedTimeFrame),
+    Limited(LimitedTimeFrame),
 }
 
 impl From<LimitedTimeFrame> for TimeFrame {
     fn from(limited_time_frame: LimitedTimeFrame) -> Self {
-        TimeFrame::LimitedTimeFrame(limited_time_frame)
+        TimeFrame::Limited(limited_time_frame)
     }
 }
 
@@ -135,7 +135,7 @@ impl FromStr for TimeFrame {
         match s {
             "all" => Ok(TimeFrame::All),
             unknown_time_frame => match unknown_time_frame.parse::<LimitedTimeFrame>() {
-                Ok(limited_time_frame) => Ok(TimeFrame::LimitedTimeFrame(limited_time_frame)),
+                Ok(limited_time_frame) => Ok(TimeFrame::Limited(limited_time_frame)),
                 Err(err) => Err(err),
             },
         }
@@ -146,12 +146,12 @@ impl TimeFrame {
     pub fn get_epoch_count(self) -> f64 {
         match self {
             TimeFrame::All => unimplemented!(),
-            TimeFrame::LimitedTimeFrame(limited_time_frame) => match limited_time_frame {
-                LimitedTimeFrame::Day1 => 225.0,
-                LimitedTimeFrame::Day30 => 6750.0,
-                LimitedTimeFrame::Day7 => 1575.0,
-                LimitedTimeFrame::Hour1 => 9.375,
-                LimitedTimeFrame::Minute5 => 0.78125,
+            TimeFrame::Limited(limited_time_frame) => match limited_time_frame {
+                Day1 => 225.0,
+                Day30 => 6750.0,
+                Day7 => 1575.0,
+                Hour1 => 9.375,
+                Minute5 => 0.78125,
             },
         }
     }
@@ -160,17 +160,17 @@ impl TimeFrame {
         use TimeFrame::*;
         match self {
             All => "all",
-            LimitedTimeFrame(limited_time_frame) => limited_time_frame.to_db_key(),
+            Limited(limited_time_frame) => limited_time_frame.to_db_key(),
         }
     }
 }
 
 static TIME_FRAMES: [TimeFrame; 6] = [
-    TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Minute5),
-    TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-    TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day1),
-    TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day7),
-    TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day30),
+    TimeFrame::Limited(Minute5),
+    TimeFrame::Limited(Hour1),
+    TimeFrame::Limited(Day1),
+    TimeFrame::Limited(Day7),
+    TimeFrame::Limited(Day30),
     TimeFrame::All,
 ];
 
@@ -208,11 +208,11 @@ mod tests {
     fn time_frame_iter_test() {
         let time_frames = TimeFrame::iterator().collect::<Vec<&TimeFrame>>();
         let expected = vec![
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Minute5),
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day1),
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day7),
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day30),
+            &TimeFrame::Limited(Minute5),
+            &TimeFrame::Limited(Hour1),
+            &TimeFrame::Limited(Day1),
+            &TimeFrame::Limited(Day7),
+            &TimeFrame::Limited(Day30),
             &TimeFrame::All,
         ];
 
@@ -225,10 +225,7 @@ mod tests {
         assert_eq!(time_frame, TimeFrame::All);
 
         let limited_time_frame = "d30".parse::<TimeFrame>().unwrap();
-        assert_eq!(
-            limited_time_frame,
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day30)
-        )
+        assert_eq!(limited_time_frame, TimeFrame::Limited(Day30))
     }
 
     #[test]
@@ -236,8 +233,7 @@ mod tests {
         let time_frame_key = TimeFrame::All.to_db_key();
         assert_eq!(time_frame_key, "all");
 
-        let limited_time_frame_key =
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day1).to_db_key();
+        let limited_time_frame_key = TimeFrame::Limited(Day1).to_db_key();
         assert_eq!(limited_time_frame_key, "d1");
     }
 }

@@ -31,7 +31,7 @@ async fn get_base_fee_per_gas_average(
             .fetch_one(executor)
             .await
         },
-        TimeFrame::LimitedTimeFrame(limited_time_frame) => {
+        TimeFrame::Limited(limited_time_frame) => {
             sqlx::query(
                 "
                     SELECT
@@ -82,7 +82,7 @@ async fn get_base_fee_per_gas_min_max(
             .fetch_one(executor)
             .await
         }
-        TimeFrame::LimitedTimeFrame(limited_time_frame) => {
+        TimeFrame::Limited(limited_time_frame) => {
             sqlx::query(
                 "
                     SELECT
@@ -155,23 +155,23 @@ pub async fn update_base_fee_stats(
     let (m5, h1, d1, d7, d30) = try_join!(
         get_base_fee_per_gas_stats_time_frame(
             executor,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Minute5),
+            &TimeFrame::Limited(LimitedTimeFrame::Minute5),
         ),
         get_base_fee_per_gas_stats_time_frame(
             executor,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+            &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         ),
         get_base_fee_per_gas_stats_time_frame(
             executor,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day1),
+            &TimeFrame::Limited(LimitedTimeFrame::Day1),
         ),
         get_base_fee_per_gas_stats_time_frame(
             executor,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day7),
+            &TimeFrame::Limited(LimitedTimeFrame::Day7),
         ),
         get_base_fee_per_gas_stats_time_frame(
             executor,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Day30),
+            &TimeFrame::Limited(LimitedTimeFrame::Day30),
         ),
     )?;
 
@@ -249,7 +249,7 @@ mod tests {
 
         let average_base_fee_per_gas = get_base_fee_per_gas_average(
             &mut transaction,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+            &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
         .await
         .unwrap();
@@ -286,7 +286,7 @@ mod tests {
 
         let average_base_fee_per_gas = get_base_fee_per_gas_average(
             &mut transaction,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Minute5),
+            &TimeFrame::Limited(LimitedTimeFrame::Minute5),
         )
         .await
         .unwrap();
@@ -320,7 +320,7 @@ mod tests {
 
         let base_fee_per_gas_min_max = get_base_fee_per_gas_min_max(
             &mut transaction,
-            &TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+            &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
         .await
         .unwrap();

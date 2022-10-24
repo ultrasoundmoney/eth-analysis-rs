@@ -92,16 +92,15 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use crate::time_frames::LimitedTimeFrame;
-
     use super::*;
+    use crate::time_frames::LimitedTimeFrame::*;
 
     const SLOT_4658998_EFFECTIVE_BALANCE_SUM: u64 = 13607320000000000;
 
     #[test]
     fn get_issuance_test() {
         let issuance = get_issuance_time_frame(
-            TimeFrame::LimitedTimeFrame(LimitedTimeFrame::Hour1),
+            TimeFrame::Limited(Hour1),
             GweiNewtype(SLOT_4658998_EFFECTIVE_BALANCE_SUM),
         );
         assert_eq!(issuance, 69990251296.875);
