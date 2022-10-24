@@ -155,19 +155,19 @@ async fn get_base_fee_over_time(
             sqlx::query(
                 "
                     SELECT
-                        DATE_TRUNC('hour', timestamp) AS timestamp,
+                        DATE_TRUNC('hour', timestamp) AS hour_timestamp,
                         SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
                     FROM
                         blocks_next
                     WHERE
                         timestamp >= NOW() - $1
-                    GROUP BY 2
-                    ORDER BY 2 ASC
+                    GROUP BY hour_timestamp
+                    ORDER BY hour_timestamp ASC
                 ",
             )
             .bind(ltf.get_postgres_interval())
             .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
+                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("hour_timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");
                 BaseFeeAtTime {
                     block_number: None,
