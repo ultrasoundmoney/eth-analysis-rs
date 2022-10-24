@@ -113,16 +113,17 @@ async fn get_supply_since_merge_by_hour(
 ) -> sqlx::Result<Vec<SupplyAtTime>> {
     sqlx::query(
         "
+            -- We select only one row per hour, using ORDER BY to make sure it's the first.
+            -- The column we output is rounded to whole hours for convenience.
             SELECT
-                DISTINCT ON (DATE_TRUNC('hour', timestamp))
-                DATE_TRUNC('hour', timestamp) AS hour_timestamp,
+                DISTINCT ON	(DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS hour_timestamp,
                 supply::FLOAT8 / 1e18 AS supply
             FROM
-                eth_supply 
+                eth_supply
             WHERE
                 timestamp >= '2022-09-15T05:00:00'::TIMESTAMPTZ
             ORDER BY
-                DATE_TRUNC('hour', timestamp), timestamp
+                DATE_TRUNC('hour', timestamp), timestamp ASC
         ",
     )
     .map(|row: PgRow| {
