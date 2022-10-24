@@ -15,7 +15,7 @@ use std::{
     iter::Iterator,
     sync::{Arc, Mutex},
 };
-use tracing::{debug, event, Level};
+use tracing::{debug, event, info, warn, Level};
 
 use super::{
     eth_prices,
@@ -48,6 +48,8 @@ async fn sync_by_hash(
     let block = execution_node
         .get_block_by_hash(hash)
         .await
+        // Between the time we received the head event and requested a header for the given
+        // block_root the block may have disappeared. Right now we panic, we could do better.
         .expect("block not to disappear between deciding to add it and adding it");
 
     let mut connection = db_pool.acquire().await.unwrap();
@@ -55,16 +57,14 @@ async fn sync_by_hash(
         .await
         .expect("eth price close to block to be available");
 
-    // Between the time we received the head event and requested a header for the given
-    // block_root the block may have disappeared. Right now we panic, we could do better.
     block_store.store_block(&block, eth_price).await;
 
-    let is_synced = execution_node.get_latest_block().await.hash == hash;
     // Some computations can be skipped, others should be ran, and rolled back for every change in
     // the chain of blocks we've assembled. These are the ones that are skippable, and so skipped
     // until we're in-sync with the chain again.
+    let is_synced = execution_node.get_latest_block().await.hash == hash;
     if is_synced {
-        tracing::debug!("we're synced, running on_new_head for skippables");
+        debug!("we're synced, running on_new_head for skippables");
         merge_estimate::on_new_block(db_pool, &block).await;
         base_fees::on_new_block(db_pool, &block).await.unwrap();
     }
@@ -112,11 +112,11 @@ async fn sync_head(
             .into(),
     };
 
-    tracing::debug!("sync head from number: {}", head_event.number);
+    debug!("sync head from number: {}", head_event.number);
 
     match get_next_step(store, &head_event).await {
         NextStep::HandleGap => {
-            tracing::warn!("parent of block at block_number {} is missing, dropping min(our last block.block_number, new block.block_number) and queueing all blocks gte the received block, block: {}", head_event.number, head_event.hash);
+            warn!("parent of block at block_number {} is missing, dropping min(our last block.block_number, new block.block_number) and queueing all blocks gte the received block, block: {}", head_event.number, head_event.hash);
 
             let last_block_number = store
                 .get_last_block_number()
@@ -129,7 +129,7 @@ async fn sync_head(
             rollback_numbers(&mut db_pool.acquire().await.unwrap(), store, &lowest_number).await?;
 
             for number in (lowest_number..=head_event.number).rev() {
-                tracing::debug!("queueing {number} for sync after dropping");
+                debug!("queueing {number} for sync after dropping");
                 heads_queue
                     .lock()
                     .unwrap()
@@ -137,10 +137,9 @@ async fn sync_head(
             }
         }
         NextStep::HandleHeadFork => {
-            tracing::info!(
+            info!(
                 "block at number {} creates a fork, rolling back our last block - {}",
-                head_event.number,
-                head_event.hash
+                head_event.number, head_event.hash
             );
 
             rollback_numbers(
@@ -157,7 +156,7 @@ async fn sync_head(
         }
         NextStep::AddToExisting => {
             sync_by_hash(store, execution_node, db_pool, &head_event.hash)
-                .timed("sync numbers")
+                .timed("sync block by hash")
                 .await;
         }
     };
@@ -287,7 +286,7 @@ type HeadsQueue = Arc<Mutex<VecDeque<HeadToSync>>>;
 pub async fn sync_blocks() -> Result<()> {
     log::init_with_env();
 
-    tracing::info!("syncing execution blocks");
+    info!("syncing execution blocks");
 
     let db_pool = PgPool::connect(&db::get_db_url_with_name("sync-execution-blocks"))
         .await
