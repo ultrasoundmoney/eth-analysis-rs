@@ -155,8 +155,8 @@ async fn get_base_fee_over_time(
             sqlx::query(
                 "
                     SELECT
-                        AVG(base_fee_per_gas)::FLOAT8 AS base_fee_per_gas,
-                        DATE_TRUNC('hour', timestamp) AS timestamp
+                        DATE_TRUNC('hour', timestamp) AS timestamp,
+                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
                     FROM
                         blocks_next
                     WHERE
