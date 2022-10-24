@@ -182,6 +182,90 @@ async fn get_base_fee_over_time(
     }
 }
 
+async fn drop_before(
+    executor: impl PgExecutor<'_>,
+    limited_time_frame: &LimitedTimeFrame,
+    less_than: &BlockNumber,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "
+            DELETE FROM
+                base_fee_over_time
+            JOIN
+                blocks_next
+            ON
+                base_fee_over_time.block_number = blocks_next.number
+            WHERE
+                timestamp < NOW() - $1
+                time_frame = $2
+        ",
+    )
+    .bind(limited_time_frame.get_postgres_interval())
+    .bind(*less_than as i32)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}
+
+async fn add_new(
+    executor: impl PgExecutor<'_>,
+    time_frame: &TimeFrame,
+    last_added: &Option<BlockNumber>,
+    block_number: &BlockRange,
+) -> sqlx::Result<()> {
+    unimplemented!()
+}
+
+async fn update_base_fee_over_time_time_frame(
+    mut executor: PgConnection,
+    time_frame: &TimeFrame,
+    block_number: &BlockNumber,
+) -> Result<()> {
+    use TimeFrame::*;
+
+    let mut tx = executor.begin().await?;
+
+    // Get the state of block analysis for this time frame.
+    let analysis_state =
+        analysis_state::get_analysis_state(&mut tx, &AnalysisKey::BaseFeeOverTime, time_frame)
+            .await?;
+
+        let earliest_block_number_for_time_frame = match time_frame {
+            All => LONDON_HARDFORK_BLOCK_NUMBER, 
+            LimitedTimeFrame(limited_time_frame) => time_frames::get_earliest_block_number(
+                &mut tx,
+                limited_time_frame,
+            )
+            .await?
+            .expect(
+&format!("tried to expire base fees for limited time frame but no blocks within time frame {limited_time_frame}"),
+            )
+        };
+
+    // If we're dealing with a limited time frame, ensure all previously analyzed base fees over
+    // time within the time frame that are now outside the time frame are dropped.
+    if let TimeFrame::LimitedTimeFrame(limited_time_frame) = time_frame {
+        drop_before(&mut tx, limited_time_frame, &earliest_block_number_for_time_frame).await?;
+        analysis_state::set_analysis_state_first(
+            &mut tx,
+            time_frame,
+            &earliest_block_number_for_time_frame,
+        )
+        .await?;
+    }
+
+    // Add base fees over time bassed on blocks we haven't added yet within the time frame.
+    let earliest_not_included = analysis_state.last.unwrap_or(earliest_block_number_for_time_frame).max(earliest_block_number_for_time_frame);
+    let blocks_to_add = BlockRange::new(earliest_not_included, *block_number);
+    add_new(&mut tx, &time_frame, &analysis_state.last, &blocks_to_add).await?;
+    analysis_state::set_analysis_state_last(&mut tx, time_frame, block_number).await?;
+
+    tx.commit().await?;
+
+    Ok(())
+}
+
 pub async fn update_base_fee_over_time(
     executor: &PgPool,
     barrier: f64,
