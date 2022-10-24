@@ -83,7 +83,7 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> Resul
         update_last_base_fee(db_pool, block).instrument(debug_span!("update_last_base_fee")),
         stats::update_base_fee_stats(db_pool, barrier, block)
             .instrument(debug_span!("update_base_fee_stats")),
-        over_time::update_base_fee_over_time(db_pool, barrier, block.number)
+        over_time::update_base_fee_over_time(db_pool, barrier, &block.number)
             .instrument(debug_span!("update_base_fee_over_time"))
     )?;
 
