@@ -102,7 +102,7 @@ async fn get_base_fee_over_time(
                 "
                     SELECT
                         DATE_TRUNC('minute', timestamp) AS minute_timestamp,
-                        SUM(base_fee_per_gas * gas_used) / SUM(gas_used) AS base_fee_per_gas
+                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
                     FROM
                         blocks_next
                     WHERE
