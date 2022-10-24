@@ -103,7 +103,8 @@ async fn write_blocks_from(gte_block_number: u32, to_path: &str) -> Result<()> {
         (EARLIEST_STORED_DB_BLOCK_NUMBER - gte_block_number).into(),
     );
 
-    let mut csv_writer = csv::Writer::from_path(&to_path)?;
+    let file = fs::OpenOptions::new().append(true).open(&to_path).unwrap();
+    let mut csv_writer = csv::Writer::from_writer(file);
 
     let mut closest_price_index = 0;
     let mut closest_price = eth_prices
