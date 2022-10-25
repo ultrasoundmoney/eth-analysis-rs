@@ -62,7 +62,6 @@ async fn get_base_fee_per_gas_min_max(
 ) -> sqlx::Result<BaseFeePerGasMinMax> {
     match time_frame {
         TimeFrame::All => {
-            warn!("getting the min and max base fee per gas for all blocks is low, and may be incorrect depending on blocks_next backfill status");
             sqlx::query(
                 "
                     SELECT
