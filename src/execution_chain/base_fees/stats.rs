@@ -151,7 +151,7 @@ pub async fn update_base_fee_stats(
 
     debug!("barrier: {barrier}");
 
-    let (m5, h1, d1, d7, d30) = try_join!(
+    let (m5, h1, d1, d7, d30, all) = try_join!(
         get_base_fee_per_gas_stats_time_frame(
             executor,
             &TimeFrame::Limited(LimitedTimeFrame::Minute5),
@@ -172,10 +172,11 @@ pub async fn update_base_fee_stats(
             executor,
             &TimeFrame::Limited(LimitedTimeFrame::Day30),
         ),
+        get_base_fee_per_gas_stats_time_frame(executor, &TimeFrame::All)
     )?;
 
     let base_fee_per_gas_stats = BaseFeePerGasStats {
-        all: None,
+        all: Some(all),
         average: h1.average,
         barrier,
         block_number: block.number,
