@@ -87,8 +87,8 @@ async fn get_base_fee_per_gas_min_max(
                         MAX(base_fee_per_gas)
                     FROM
                         blocks_next
-                        WHERE
-                            timestamp >= NOW() - $1
+                    WHERE
+                        timestamp >= NOW() - $1
                 ",
             )
             .bind(limited_time_frame.get_postgres_interval())
