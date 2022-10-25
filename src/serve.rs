@@ -129,7 +129,7 @@ async fn etag_middleware<B: std::fmt::Debug>(
 async fn get_cached_with_cache_duration(
     cached_value: &CachedValue,
     max_age: Option<u32>,
-    s_max_age: Option<u32>,
+    // s_max_age: Option<u32>,
     stale_while_revalidate: Option<u32>,
 ) -> impl IntoResponse {
     let cached_value_inner = cached_value.read().unwrap();
@@ -141,10 +141,11 @@ async fn get_cached_with_cache_duration(
             headers.insert(
                 header::CACHE_CONTROL,
                 HeaderValue::from_str(&format!(
-                    "public, max-age={}, s-maxage={}, stale-while-revalidate={}",
-                    max_age.unwrap_or(4),
-                    s_max_age.unwrap_or(4),
-                    stale_while_revalidate.unwrap_or(60)
+                    // "public, max-age={}, s-maxage={}, stale-while-revalidate={}",
+                    "public, max-age={}, stale-while-revalidate={}",
+                    max_age.unwrap_or(6),
+                    // s_max_age.unwrap_or(4),
+                    stale_while_revalidate.unwrap_or(120)
                 ))
                 .unwrap(),
             );
@@ -155,7 +156,7 @@ async fn get_cached_with_cache_duration(
 }
 
 async fn get_cached(cached_value: &CachedValue) -> impl IntoResponse {
-    get_cached_with_cache_duration(cached_value, None, None, None).await
+    get_cached_with_cache_duration(cached_value, None, None).await
 }
 
 async fn update_cache_from_key(
