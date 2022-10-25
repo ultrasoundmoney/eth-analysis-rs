@@ -24,7 +24,7 @@ async fn get_base_fee_per_gas_average(
                     SELECT
                         SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
                     FROM
-                        blocks_next
+                        blocks
                 ",
             )
             .map(|row: PgRow| row.get::<f64, _>("average"))
@@ -68,7 +68,7 @@ async fn get_base_fee_per_gas_min_max(
                         MIN(base_fee_per_gas),
                         MAX(base_fee_per_gas)
                     FROM
-                        blocks_next
+                        blocks
                     WHERE
                     
                 ",
