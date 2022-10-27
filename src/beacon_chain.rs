@@ -4,7 +4,6 @@ mod blocks;
 mod deposits;
 mod effective_balance_sum;
 mod issuance;
-mod merge_status;
 mod node;
 mod rewards;
 mod states;
@@ -19,7 +18,6 @@ pub use effective_balance_sum::{
 };
 pub use issuance::{get_current_issuance, get_issuance_by_start_of_day, get_last_week_issuance};
 use lazy_static::lazy_static;
-pub use merge_status::{update_merge_stats_auto, update_merge_stats_by_hand};
 pub use node::{BeaconHeader, BeaconHeaderEnvelope, BeaconHeaderSignedEnvelope, BeaconNode};
 pub use rewards::update_validator_rewards;
 pub use states::{store_state, Slot};

@@ -1,12 +1,11 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use console::Term;
 use dialoguer::{Input, MultiSelect, Select};
 use serde::Serialize;
 use sqlx::{types::Json, Connection, PgConnection};
 use std::env;
 
-use crate::{beacon_chain, db};
+use crate::db;
 
 #[derive(Serialize)]
 struct EthInDefiOld {
@@ -103,44 +102,6 @@ async fn set_eth_in_defi() -> Result<()> {
     Ok(())
 }
 
-pub async fn set_merge_stats(term: &Term, executor: &mut PgConnection) -> Result<()> {
-    let merge_timestamp_raw = Input::<String>::new()
-        .with_prompt("when did the merge happen? (RFC3339 datetime)")
-        .interact_text()?;
-
-    let timestamp = merge_timestamp_raw.parse::<DateTime<Utc>>()?;
-
-    let supply = Input::<f64>::new()
-        .with_prompt("ether supply at merge, in ETH, at least two decimal precision?")
-        .interact_text()?;
-
-    let block_number = Input::<u32>::new()
-        .with_prompt("merge execution block number?")
-        .interact_text()?;
-
-    term.write_line("")?;
-    term.write_line(&format!("timestamp: {timestamp}"))?;
-    term.write_line(&format!("supply: {supply}"))?;
-    term.write_line(&format!("block number: {block_number}"))?;
-
-    let confirm = Input::<String>::new()
-        .with_prompt("store? [y/n]")
-        .interact_text()?;
-
-    match confirm.as_str() {
-        "y" => {
-            println!("confirmed, storing and propagating!");
-            beacon_chain::update_merge_stats_by_hand(executor, timestamp, supply, block_number)
-                .await?;
-        }
-        _ => {
-            println!("input not 'y', exiting");
-        }
-    }
-
-    Ok(())
-}
-
 pub async fn run_cli() -> Result<()> {
     let term = Term::stdout();
     term.clear_screen().unwrap();
@@ -154,11 +115,10 @@ pub async fn run_cli() -> Result<()> {
         .default(0)
         .interact()?;
 
-    let mut connection = PgConnection::connect(&db::get_db_url_with_name("update-by-hand")).await?;
+    let connection = PgConnection::connect(&db::get_db_url_with_name("update-by-hand")).await?;
 
     match target {
         0 => set_eth_in_defi().await?,
-        1 => set_merge_stats(&term, &mut connection).await?,
         _ => (),
     };
 

@@ -32,7 +32,6 @@ struct Cache {
     eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
     merge_estimate: CachedValue,
-    merge_status: CachedValue,
     supply_since_merge: CachedValue,
     total_difficulty_progress: CachedValue,
 }
@@ -224,9 +223,6 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
                 key @ CacheKey::MergeEstimate => {
                     update_cache_from_key(&mut connection, &state.cache.merge_estimate, &key).await
                 }
-                key @ CacheKey::MergeStatus => {
-                    update_cache_from_key(&mut connection, &state.cache.merge_status, &key).await
-                }
                 key @ CacheKey::SupplySinceMerge => {
                     update_cache_from_key(&mut connection, &state.cache.supply_since_merge, &key)
                         .await
@@ -269,7 +265,6 @@ pub async fn start_server() {
     let eth_price_stats = get_value_hash_lock(&db_pool, &CacheKey::EthPrice).await;
     let eth_supply_parts = get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts).await;
     let merge_estimate = get_value_hash_lock(&db_pool, &CacheKey::MergeEstimate).await;
-    let merge_status = get_value_hash_lock(&db_pool, &CacheKey::MergeStatus).await;
     let supply_since_merge = get_value_hash_lock(&db_pool, &CacheKey::SupplySinceMerge).await;
     let total_difficulty_progress =
         get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress).await;
@@ -282,7 +277,6 @@ pub async fn start_server() {
         eth_price_stats,
         eth_supply_parts,
         merge_estimate,
-        merge_status,
         supply_since_merge,
         total_difficulty_progress,
     });
@@ -369,14 +363,6 @@ pub async fn start_server() {
                 get(|state: StateExtension| async move {
                     let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
                     StatusCode::OK
-                }),
-            )
-            .route(
-                "/api/v2/fees/merge-status",
-                get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.merge_status)
-                        .await
-                        .into_response()
                 }),
             )
             .route(
