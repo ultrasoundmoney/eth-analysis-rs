@@ -194,46 +194,17 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
             let payload = notification.payload();
             let payload_cache_key = CacheKey::from(payload);
             match payload_cache_key {
-                key @ CacheKey::BaseFeeOverTime => {
+                key @ CacheKey::BaseFeeOverTime
+                | key @ CacheKey::BaseFeePerGas
+                | key @ CacheKey::BaseFeePerGasStats
+                | key @ CacheKey::BlockLag
+                | key @ CacheKey::EthPrice
+                | key @ CacheKey::EthSupplyParts
+                | key @ CacheKey::MergeEstimate
+                | key @ CacheKey::SupplySinceMerge
+                | key @ CacheKey::TotalDifficultyProgress => {
                     update_cache_from_key(&mut connection, &state.cache.base_fee_over_time, &key)
                         .await
-                }
-                key @ CacheKey::BaseFeePerGas => {
-                    update_cache_from_key(&mut connection, &state.cache.base_fee_per_gas, &key)
-                        .await
-                }
-                key @ CacheKey::BaseFeePerGasStats => {
-                    update_cache_from_key(
-                        &mut connection,
-                        &state.cache.base_fee_per_gas_stats,
-                        &key,
-                    )
-                    .await
-                }
-                key @ CacheKey::BlockLag => {
-                    update_cache_from_key(&mut connection, &state.cache.block_lag, &key).await
-                }
-                key @ CacheKey::EthPrice => {
-                    update_cache_from_key(&mut connection, &state.cache.eth_price_stats, &key).await
-                }
-                key @ CacheKey::EthSupplyParts => {
-                    update_cache_from_key(&mut connection, &state.cache.eth_supply_parts, &key)
-                        .await
-                }
-                key @ CacheKey::MergeEstimate => {
-                    update_cache_from_key(&mut connection, &state.cache.merge_estimate, &key).await
-                }
-                key @ CacheKey::SupplySinceMerge => {
-                    update_cache_from_key(&mut connection, &state.cache.supply_since_merge, &key)
-                        .await
-                }
-                key @ CacheKey::TotalDifficultyProgress => {
-                    update_cache_from_key(
-                        &mut connection,
-                        &state.cache.total_difficulty_progress,
-                        &key,
-                    )
-                    .await
                 }
                 key => {
                     event!(
