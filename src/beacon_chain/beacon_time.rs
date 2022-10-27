@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use chrono::{DateTime, Datelike, Duration, TimeZone, Utc, Timelike};
+use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
 use lazy_static::lazy_static;
 
 use super::Slot;
@@ -75,10 +75,8 @@ impl FirstOfMinuteSlot {
 mod tests {
     use super::*;
 
-
     #[test]
     fn first_of_day_genesis_test() {
-
         assert!(FirstOfDaySlot::new(&0).is_some());
     }
 
@@ -131,7 +129,6 @@ mod tests {
 
     #[test]
     fn not_first_of_minute_test() {
-
         assert!(FirstOfMinuteSlot::new(&3).is_none());
         assert!(FirstOfMinuteSlot::new(&5).is_none());
     }
