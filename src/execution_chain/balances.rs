@@ -40,7 +40,7 @@ pub async fn get_balances_sum<'a>(executor: impl PgExecutor<'a>) -> ExecutionBal
 }
 
 pub async fn get_closest_balances_sum(
-    executor: &mut PgConnection,
+    executor: impl PgExecutor<'_>,
     point_in_time: DateTime<Utc>,
 ) -> sqlx::Result<ExecutionBalancesSum> {
     sqlx::query(

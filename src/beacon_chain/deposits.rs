@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
-use sqlx::{PgExecutor, Row, PgConnection};
+use sqlx::{PgConnection, PgExecutor, Row};
 
 use crate::eth_units::{to_gwei_string, GweiNewtype};
 
@@ -39,7 +39,7 @@ pub struct BeaconDepositsSum {
     pub slot: Slot,
 }
 
-pub async fn get_deposits_sum(executor: &mut PgConnection) -> BeaconDepositsSum {
+pub async fn get_deposits_sum(executor: impl PgExecutor<'_>) -> BeaconDepositsSum {
     sqlx::query(
         "
             SELECT slot, deposit_sum_aggregated FROM beacon_states

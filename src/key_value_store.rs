@@ -32,7 +32,7 @@ pub async fn get_raw_caching_value(
 }
 
 pub async fn get_caching_value<T>(
-    executor: &mut PgConnection,
+    executor: impl PgExecutor<'_>,
     cache_key: &CacheKey<'_>,
 ) -> Result<Option<T>>
 where
@@ -65,7 +65,7 @@ pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Val
 }
 
 pub async fn set_caching_value<'a>(
-    executor: &mut PgConnection,
+    executor: impl PgExecutor<'_>,
     cache_key: &CacheKey<'_>,
     value: impl Serialize,
 ) -> Result<()> {

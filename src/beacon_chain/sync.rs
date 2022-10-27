@@ -92,14 +92,14 @@ impl Iterator for SlotRangeIntoIterator {
 }
 
 async fn store_state_with_block(
-    pool: &mut PgConnection,
+    db_pool: &PgPool,
     state_root: &str,
     slot: &u32,
     header: &BeaconHeaderSignedEnvelope,
     deposit_sum: &GweiNewtype,
     deposit_sum_aggregated: &GweiNewtype,
 ) {
-    let mut transaction = pool.begin().await.unwrap();
+    let mut transaction = db_pool.begin().await.unwrap();
 
     let is_parent_known =
         blocks::get_is_hash_known(&mut *transaction, &header.header.message.parent_root).await;
@@ -126,11 +126,7 @@ async fn store_state_with_block(
     transaction.commit().await.unwrap();
 }
 
-async fn sync_slot(
-    connection: &mut PgConnection,
-    beacon_node: &BeaconNode,
-    slot: &u32,
-) -> Result<()> {
+async fn sync_slot(db_pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) -> Result<()> {
     let state_root = beacon_node.get_state_root_by_slot(slot).await.unwrap();
 
     let header = beacon_node.get_header_by_slot(slot).await.unwrap();
@@ -146,7 +142,7 @@ async fn sync_slot(
     let deposit_sum_aggregated = match block {
         None => None,
         Some(ref block) => Some(
-            deposits::get_deposit_sum_aggregated(connection.acquire().await.unwrap(), block)
+            deposits::get_deposit_sum_aggregated(db_pool, block)
                 .await
                 .unwrap(),
         ),
@@ -160,7 +156,7 @@ async fn sync_slot(
                 state_root
             );
             store_state_with_block(
-                connection,
+                db_pool,
                 &state_root,
                 slot,
                 &header,
@@ -176,7 +172,7 @@ async fn sync_slot(
                 slot,
                 state_root
             );
-            states::store_state(connection.acquire().await.unwrap(), &state_root, slot)
+            states::store_state(db_pool, &state_root, slot)
                 .timed("store state without block")
                 .await
                 .unwrap();
@@ -206,7 +202,7 @@ async fn sync_slot(
             .unwrap();
         let validator_balances_sum = balances::sum_validator_balances(validator_balances);
         eth_supply::update(
-            connection,
+            db_pool,
             BeaconBalancesSum {
                 balances_sum: validator_balances_sum,
                 slot: slot.clone(),
@@ -223,7 +219,7 @@ async fn sync_slot(
             .unwrap();
         let validator_balances_sum = balances::sum_validator_balances(validator_balances);
         balances::store_validator_sum_for_day(
-            connection.acquire().await.unwrap(),
+            db_pool,
             &state_root,
             &start_of_day_date_time,
             &validator_balances_sum,
@@ -232,7 +228,7 @@ async fn sync_slot(
 
         if let Some(deposit_sum_aggregated) = deposit_sum_aggregated {
             issuance::store_issuance_for_day(
-                connection,
+                db_pool,
                 &state_root,
                 &start_of_day_date_time,
                 &issuance::calc_issuance(&validator_balances_sum, &deposit_sum_aggregated),
@@ -245,7 +241,7 @@ async fn sync_slot(
 }
 
 async fn sync_slots(
-    connection: &mut PgConnection,
+    db_pool: &PgPool,
     beacon_node: &BeaconNode,
     slot_range: &SlotRange,
 ) -> Result<()> {
@@ -257,7 +253,7 @@ async fn sync_slots(
     );
 
     for slot in slot_range.greater_than_or_equal..=slot_range.less_than_or_equal {
-        sync_slot(connection, beacon_node, &slot)
+        sync_slot(db_pool, beacon_node, &slot)
             .timed("sync slot")
             .await?;
     }
@@ -564,7 +560,7 @@ async fn sync_head(
                 .map_or(0, |slot| slot + 1);
 
             sync_slots(
-                &mut db_pool.acquire().await.unwrap(),
+                &db_pool,
                 beacon_node,
                 &SlotRange {
                     greater_than_or_equal: next_slot_to_sync,
