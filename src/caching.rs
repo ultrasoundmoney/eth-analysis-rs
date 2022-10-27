@@ -23,23 +23,7 @@ pub enum CacheKey<'a> {
 
 impl Display for CacheKey<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::BaseFeeOverTime => write!(f, "base-fee-over-time"),
-            Self::BaseFeePerGas => write!(f, "current-base-fee"),
-            Self::BaseFeePerGasStats => write!(f, "base-fee-per-gas-stats"),
-            Self::BlockLag => write!(f, "block-lag"),
-            Self::Custom(key) => write!(f, "{key}"),
-            Self::EffectiveBalanceSum => write!(f, "effective-balance-sum"),
-            Self::EthPrice => write!(f, "eth-price"),
-            Self::EthSupplyParts => write!(f, "eth-supply-parts"),
-            Self::IssuanceBreakdown => write!(f, "issuance-breakdown"),
-            Self::MergeEstimate => write!(f, "merge-estimate"),
-            Self::MergeStatus => write!(f, "merge-status"),
-            Self::SupplyProjectionInputs => write!(f, "supply-projection-inputs"),
-            Self::SupplySinceMerge => write!(f, "supply-since-merge"),
-            Self::TotalDifficultyProgress => write!(f, "total-difficulty-progress"),
-            Self::ValidatorRewards => write!(f, "validator-rewards"),
-        }
+        write!(f, "{}", self.to_db_key())
     }
 }
 
