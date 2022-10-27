@@ -31,7 +31,6 @@ struct Cache {
     block_lag: CachedValue,
     eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
-    merge_estimate: CachedValue,
     supply_since_merge: CachedValue,
     total_difficulty_progress: CachedValue,
 }
@@ -134,7 +133,7 @@ async fn get_cached_with_cache_duration(
     let cached_value_inner = cached_value.read().unwrap();
     match &*cached_value_inner {
         None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        Some(merge_estimate) => {
+        Some(cached_value) => {
             let mut headers = HeaderMap::new();
 
             headers.insert(
@@ -149,7 +148,7 @@ async fn get_cached_with_cache_duration(
                 .unwrap(),
             );
 
-            (headers, Json(merge_estimate).into_response()).into_response()
+            (headers, Json(cached_value).into_response()).into_response()
         }
     }
 }
@@ -200,7 +199,6 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
                 | key @ CacheKey::BlockLag
                 | key @ CacheKey::EthPrice
                 | key @ CacheKey::EthSupplyParts
-                | key @ CacheKey::MergeEstimate
                 | key @ CacheKey::SupplySinceMerge
                 | key @ CacheKey::TotalDifficultyProgress => {
                     update_cache_from_key(&mut connection, &state.cache.base_fee_over_time, &key)
@@ -235,7 +233,6 @@ pub async fn start_server() {
     let block_lag = get_value_hash_lock(&db_pool, &CacheKey::BlockLag).await;
     let eth_price_stats = get_value_hash_lock(&db_pool, &CacheKey::EthPrice).await;
     let eth_supply_parts = get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts).await;
-    let merge_estimate = get_value_hash_lock(&db_pool, &CacheKey::MergeEstimate).await;
     let supply_since_merge = get_value_hash_lock(&db_pool, &CacheKey::SupplySinceMerge).await;
     let total_difficulty_progress =
         get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress).await;
@@ -247,7 +244,6 @@ pub async fn start_server() {
         block_lag,
         eth_price_stats,
         eth_supply_parts,
-        merge_estimate,
         supply_since_merge,
         total_difficulty_progress,
     });
@@ -286,14 +282,6 @@ pub async fn start_server() {
                 "/api/v2/fees/eth-supply-parts",
                 get(|state: StateExtension| async move {
                     get_cached(&state.clone().cache.eth_supply_parts)
-                        .await
-                        .into_response()
-                }),
-            )
-            .route(
-                "/api/v2/fees/merge-estimate",
-                get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.merge_estimate)
                         .await
                         .into_response()
                 }),

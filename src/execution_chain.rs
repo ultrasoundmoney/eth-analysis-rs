@@ -4,7 +4,6 @@ mod block_store;
 mod eth_prices;
 mod export_blocks;
 mod logs;
-mod merge_estimate;
 mod node;
 mod supply_deltas;
 mod sync;

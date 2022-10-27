@@ -23,7 +23,7 @@ use super::{
 };
 use crate::{
     db, eth_supply,
-    execution_chain::{self, base_fees, block_store::BlockStore, merge_estimate, ExecutionNode},
+    execution_chain::{self, base_fees, block_store::BlockStore, ExecutionNode},
     log,
     performance::TimedExt,
 };
@@ -65,7 +65,6 @@ async fn sync_by_hash(
     let is_synced = execution_node.get_latest_block().await.hash == hash;
     if is_synced {
         debug!("we're synced, running on_new_head for skippables");
-        merge_estimate::on_new_block(db_pool, &block).await;
         base_fees::on_new_block(db_pool, &block).await.unwrap();
     }
 }
