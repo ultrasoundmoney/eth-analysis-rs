@@ -13,7 +13,7 @@ use crate::{
     caching::{self, CacheKey},
     eth_units::GweiNewtype,
     key_value_store,
-    time_frames::TimeFrame,
+    time_frames::LimitedTimeFrame,
 };
 
 use super::node::ExecutionNodeBlock;
@@ -58,14 +58,14 @@ const BASE_REWARD_FACTOR: u8 = 64;
 
 #[allow(dead_code)]
 fn get_issuance_time_frame(
-    time_frame: TimeFrame,
+    limited_time_frame: LimitedTimeFrame,
     GweiNewtype(effective_balance_sum): GweiNewtype,
 ) -> f64 {
     let effective_balance_sum = effective_balance_sum as f64;
     let max_issuance_per_epoch = (((BASE_REWARD_FACTOR as f64) * effective_balance_sum)
         / (effective_balance_sum.sqrt().floor()))
     .trunc();
-    let issuance = max_issuance_per_epoch * time_frame.get_epoch_count();
+    let issuance = max_issuance_per_epoch * limited_time_frame.get_epoch_count();
     return issuance;
 }
 
@@ -99,10 +99,8 @@ mod tests {
 
     #[test]
     fn get_issuance_test() {
-        let issuance = get_issuance_time_frame(
-            TimeFrame::Limited(Hour1),
-            GweiNewtype(SLOT_4658998_EFFECTIVE_BALANCE_SUM),
-        );
+        let issuance =
+            get_issuance_time_frame(Hour1, GweiNewtype(SLOT_4658998_EFFECTIVE_BALANCE_SUM));
         assert_eq!(issuance, 69990251296.875);
     }
 
