@@ -286,9 +286,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn aggregates_group_test() {}
-
+    #[ignore]
     #[tokio::test]
     async fn selects_within_time_frame_test() {}
 
