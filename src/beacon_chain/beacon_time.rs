@@ -10,10 +10,19 @@ use super::Slot;
 
 lazy_static! {
     pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp(1606824023, 0);
+    pub static ref SLOT_DURATION: Duration = Duration::seconds(12);
 }
 
 pub fn get_date_time_from_slot(slot: &Slot) -> DateTime<Utc> {
     *GENESIS_TIMESTAMP + Duration::seconds((slot * 12).into())
+}
+
+#[cfg(test)]
+pub fn get_slot_from_date_time(date_time: &DateTime<Utc>) -> Slot {
+    let diff_seconds = *date_time - *GENESIS_TIMESTAMP;
+    (diff_seconds.num_seconds() / SLOT_DURATION.num_seconds())
+        .try_into()
+        .unwrap()
 }
 
 pub fn get_is_first_of_day(slot: &Slot) -> bool {
