@@ -17,6 +17,7 @@ async fn get_base_fee_per_gas_average(
     time_frame: &TimeFrame,
 ) -> sqlx::Result<WeiF64> {
     match time_frame {
+        TimeFrame::SinceMerge => unimplemented!(),
         TimeFrame::SinceBurn => {
             warn!("getting average fee for time frame 'all' is slow, and may be incorrect depending on blocks_next backfill status");
             sqlx::query(
@@ -61,6 +62,7 @@ async fn get_base_fee_per_gas_min_max(
     time_frame: &TimeFrame,
 ) -> sqlx::Result<BaseFeePerGasMinMax> {
     match time_frame {
+        TimeFrame::SinceMerge => unimplemented!(),
         TimeFrame::SinceBurn => {
             sqlx::query(
                 "
