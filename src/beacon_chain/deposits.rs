@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
-use sqlx::{PgConnection, PgExecutor, Row};
+use sqlx::{PgExecutor, Row};
 
 use crate::eth_units::{to_gwei_string, GweiNewtype};
 
