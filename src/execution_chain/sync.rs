@@ -347,11 +347,11 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn rollback_last_first_test() {
+    async fn rollback_last_first_test() -> Result<()> {
         // This test should use transiactions somehow.
-        let mut db = db::get_test_db().await;
-        let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut tx);
+        let db = PgPool::connect(&db::get_db_url_with_name("execution-sync-test")).await?;
+        let mut connection = db.acquire().await.unwrap();
+        let mut block_store = BlockStore::new(&mut connection);
 
         block_store
             .store_block(
@@ -385,13 +385,13 @@ mod tests {
             )
             .await;
 
-        rollback_numbers(&mut db, &mut block_store, &0)
-            .await
-            .unwrap();
+        rollback_numbers(&mut db.acquire().await.unwrap(), &mut block_store, &0).await?;
 
         // This should blow up if the order is backwards but its not obvious how. Consider using
         // mockall to create a mock instance of block_store so we can observe whether
         // rollback_numbers is calling it correctly.
+
+        Ok(())
     }
 
     #[test]
