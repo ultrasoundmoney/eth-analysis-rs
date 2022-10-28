@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{postgres::PgRow, PgConnection, PgExecutor, Row};
+use sqlx::{postgres::PgRow, PgExecutor, Row};
 use tracing::debug;
 
 use crate::caching::CacheKey;
@@ -31,6 +31,7 @@ pub async fn get_raw_caching_value(
     get_value(executor, cache_key.to_db_key()).await
 }
 
+#[allow(dead_code)]
 pub async fn get_caching_value<T>(
     executor: impl PgExecutor<'_>,
     cache_key: &CacheKey<'_>,
@@ -191,14 +192,15 @@ mod tests {
 
         set_caching_value(
             &mut transaction,
-            &CacheKey::MergeStatus,
+            &CacheKey::BaseFeePerGasStats,
             &serde_json::to_value(&test_json).unwrap(),
         )
         .await?;
 
-        let raw_value: Value = get_raw_caching_value(&mut transaction, &CacheKey::MergeStatus)
-            .await
-            .unwrap();
+        let raw_value: Value =
+            get_raw_caching_value(&mut transaction, &CacheKey::BaseFeePerGasStats)
+                .await
+                .unwrap();
 
         assert_eq!(raw_value, serde_json::to_value(test_json).unwrap());
 
@@ -215,11 +217,17 @@ mod tests {
             name: "alex".to_string(),
         };
 
-        set_caching_value(&mut transaction, &CacheKey::MergeStatus, test_json.clone()).await?;
+        set_caching_value(
+            &mut transaction,
+            &CacheKey::BaseFeePerGasStats,
+            test_json.clone(),
+        )
+        .await?;
 
-        let caching_value = get_caching_value::<TestJson>(&mut transaction, &CacheKey::MergeStatus)
-            .await?
-            .unwrap();
+        let caching_value =
+            get_caching_value::<TestJson>(&mut transaction, &CacheKey::BaseFeePerGasStats)
+                .await?
+                .unwrap();
 
         assert_eq!(caching_value, test_json);
 
