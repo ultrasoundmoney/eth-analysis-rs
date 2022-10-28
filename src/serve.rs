@@ -31,6 +31,7 @@ struct Cache {
     block_lag: CachedValue,
     eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
+    supply_over_time: CachedValue,
     supply_since_merge: CachedValue,
     total_difficulty_progress: CachedValue,
 }
@@ -199,6 +200,7 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
                 | key @ CacheKey::BlockLag
                 | key @ CacheKey::EthPrice
                 | key @ CacheKey::EthSupplyParts
+                | key @ CacheKey::SupplyOverTime
                 | key @ CacheKey::SupplySinceMerge
                 | key @ CacheKey::TotalDifficultyProgress => {
                     update_cache_from_key(&mut connection, &state.cache.base_fee_over_time, &key)
@@ -233,6 +235,7 @@ pub async fn start_server() {
     let block_lag = get_value_hash_lock(&db_pool, &CacheKey::BlockLag).await;
     let eth_price_stats = get_value_hash_lock(&db_pool, &CacheKey::EthPrice).await;
     let eth_supply_parts = get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts).await;
+    let supply_over_time = get_value_hash_lock(&db_pool, &CacheKey::SupplyOverTime).await;
     let supply_since_merge = get_value_hash_lock(&db_pool, &CacheKey::SupplySinceMerge).await;
     let total_difficulty_progress =
         get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress).await;
@@ -244,6 +247,7 @@ pub async fn start_server() {
         block_lag,
         eth_price_stats,
         eth_supply_parts,
+        supply_over_time,
         supply_since_merge,
         total_difficulty_progress,
     });
@@ -322,6 +326,12 @@ pub async fn start_server() {
                 get(|state: StateExtension| async move {
                     let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
                     StatusCode::OK
+                }),
+            )
+            .route(
+                "/api/v2/fees/supply-over-time",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.supply_over_time).await
                 }),
             )
             .route(
