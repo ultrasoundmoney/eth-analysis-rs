@@ -14,6 +14,7 @@ use crate::eth_units::{EthF64, Wei};
 use crate::execution_chain::ExecutionBalancesSum;
 use crate::execution_chain::{self, BlockNumber};
 use crate::key_value_store;
+use crate::performance::TimedExt;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -256,7 +257,9 @@ pub async fn update(executor: &PgPool, beacon_balances_sum: BeaconBalancesSum) -
 
     store(executor, &eth_supply_parts).await?;
 
-    update_supply_since_merge(executor).await?;
+    update_supply_since_merge(executor)
+        .timed("update-supply-since-merge")
+        .await?;
 
     update_supply_over_time(
         executor,
@@ -264,6 +267,7 @@ pub async fn update(executor: &PgPool, beacon_balances_sum: BeaconBalancesSum) -
         eth_supply_parts.execution_balances_sum.block_number,
         beacon_time::get_date_time_from_slot(&eth_supply_parts.beacon_balances_sum.slot),
     )
+    .timed("update-supply-over-time")
     .await?;
 
     Ok(())
