@@ -74,6 +74,16 @@ impl Display for LimitedTimeFrame {
 }
 
 impl LimitedTimeFrame {
+    pub fn get_epoch_count(self) -> f64 {
+        match self {
+            Day1 => 225.0,
+            Day30 => 6750.0,
+            Day7 => 1575.0,
+            Hour1 => 9.375,
+            Minute5 => 0.78125,
+        }
+    }
+
     pub fn get_postgres_interval(&self) -> PgInterval {
         match self {
             Day1 => PgInterval {
@@ -118,7 +128,8 @@ impl LimitedTimeFrame {
 #[derive(Debug, PartialEq)]
 pub enum TimeFrame {
     #[allow(dead_code)]
-    All,
+    SinceBurn,
+    SinceMerge,
     Limited(LimitedTimeFrame),
 }
 
@@ -133,7 +144,7 @@ impl FromStr for TimeFrame {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "all" => Ok(TimeFrame::All),
+            "all" => Ok(TimeFrame::SinceBurn),
             unknown_time_frame => match unknown_time_frame.parse::<LimitedTimeFrame>() {
                 Ok(limited_time_frame) => Ok(TimeFrame::Limited(limited_time_frame)),
                 Err(err) => Err(err),
@@ -143,23 +154,11 @@ impl FromStr for TimeFrame {
 }
 
 impl TimeFrame {
-    pub fn get_epoch_count(self) -> f64 {
-        match self {
-            TimeFrame::All => unimplemented!(),
-            TimeFrame::Limited(limited_time_frame) => match limited_time_frame {
-                Day1 => 225.0,
-                Day30 => 6750.0,
-                Day7 => 1575.0,
-                Hour1 => 9.375,
-                Minute5 => 0.78125,
-            },
-        }
-    }
-
     pub fn to_db_key(&self) -> &'_ str {
         use TimeFrame::*;
         match self {
-            All => "all",
+            SinceBurn => "all",
+            SinceMerge => "since-merge",
             Limited(limited_time_frame) => limited_time_frame.to_db_key(),
         }
     }
@@ -171,7 +170,7 @@ static TIME_FRAMES: [TimeFrame; 6] = [
     TimeFrame::Limited(Day1),
     TimeFrame::Limited(Day7),
     TimeFrame::Limited(Day30),
-    TimeFrame::All,
+    TimeFrame::SinceBurn,
 ];
 
 impl TimeFrame {
@@ -213,7 +212,7 @@ mod tests {
             &TimeFrame::Limited(Day1),
             &TimeFrame::Limited(Day7),
             &TimeFrame::Limited(Day30),
-            &TimeFrame::All,
+            &TimeFrame::SinceBurn,
         ];
 
         assert_eq!(expected, time_frames);
@@ -222,7 +221,7 @@ mod tests {
     #[test]
     fn parse_test() {
         let time_frame = "all".parse::<TimeFrame>().unwrap();
-        assert_eq!(time_frame, TimeFrame::All);
+        assert_eq!(time_frame, TimeFrame::SinceBurn);
 
         let limited_time_frame = "d30".parse::<TimeFrame>().unwrap();
         assert_eq!(limited_time_frame, TimeFrame::Limited(Day30))
@@ -230,7 +229,7 @@ mod tests {
 
     #[test]
     fn to_db_key_test() {
-        let time_frame_key = TimeFrame::All.to_db_key();
+        let time_frame_key = TimeFrame::SinceBurn.to_db_key();
         assert_eq!(time_frame_key, "all");
 
         let limited_time_frame_key = TimeFrame::Limited(Day1).to_db_key();

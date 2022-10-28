@@ -38,7 +38,7 @@ async fn get_base_fee_over_time(
     time_frame: &TimeFrame,
 ) -> sqlx::Result<Vec<BaseFeeAtTime>> {
     match time_frame {
-        TimeFrame::All => {
+        TimeFrame::SinceBurn => {
             debug!("getting base fee over time since burn is slow");
             // Getting base fees since burn is slow. ~5s as of Oct 24 2022 or 2.7M blocks.
             // To improve performance, switch to calculating aggregates once, and storing them in a
@@ -192,7 +192,7 @@ pub async fn update_base_fee_over_time(
         get_base_fee_over_time(executor, &TimeFrame::Limited(Day1),),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Day7),),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Day30)),
-        get_base_fee_over_time(executor, &TimeFrame::All)
+        get_base_fee_over_time(executor, &TimeFrame::SinceBurn)
     )?;
 
     let base_fee_over_time = BaseFeeOverTime {
