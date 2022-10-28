@@ -33,6 +33,8 @@ pub use total_difficulty_progress::update_total_difficulty_progress;
 
 lazy_static! {
     pub static ref LONDON_HARDFORK_TIMESTAMP: DateTime<Utc> = Utc.timestamp(1628166822, 0);
+    pub static ref PARIS_TIMESTAMP: DateTime<Utc> =
+        "2022-09-15T06:42:42Z".parse::<DateTime<Utc>>().unwrap();
 }
 
 pub const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;

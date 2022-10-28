@@ -5,6 +5,7 @@ use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 use tracing::debug;
 
+use crate::execution_chain::PARIS_TIMESTAMP;
 use crate::time_frames::LimitedTimeFrame::*;
 use crate::{
     caching::{self, CacheKey},
@@ -38,6 +39,34 @@ async fn get_base_fee_over_time(
     time_frame: &TimeFrame,
 ) -> sqlx::Result<Vec<BaseFeeAtTime>> {
     match time_frame {
+        TimeFrame::SinceMerge => {
+            debug!("getting base fee over time since merge is slow");
+            sqlx::query(
+                "
+                    SELECT
+                        DATE_TRUNC('day', mined_at) AS day_timestamp,
+                        SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS base_fee_per_gas
+                    FROM
+                        blocks
+                    WHERE
+                        mined_at >= $1
+                    GROUP BY day_timestamp
+                    ORDER BY day_timestamp ASC
+                ",
+            )
+            .bind(*PARIS_TIMESTAMP)
+            .map(|row: PgRow| {
+                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("day_timestamp");
+                let wei = row.get::<f64, _>("base_fee_per_gas");
+                BaseFeeAtTime {
+                    block_number: None,
+                    timestamp,
+                    wei,
+                }
+            })
+            .fetch_all(executor)
+            .await
+        },
         TimeFrame::SinceBurn => {
             debug!("getting base fee over time since burn is slow");
             // Getting base fees since burn is slow. ~5s as of Oct 24 2022 or 2.7M blocks.
