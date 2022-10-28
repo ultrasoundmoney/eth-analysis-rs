@@ -124,10 +124,7 @@ pub async fn update_total_difficulty_progress() {
 mod tests {
     use chrono::{Duration, SubsecRound};
 
-    use crate::{
-        db_testing,
-        execution_chain::{block_store::BlockStore, node::ExecutionNodeBlock},
-    };
+    use crate::execution_chain::{block_store::BlockStore, node::ExecutionNodeBlock};
 
     use super::*;
 
@@ -146,7 +143,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_difficulty_by_day_test() {
-        let mut db = db_testing::get_test_db().await;
+        let mut db = db::get_test_db().await;
         let mut transaction = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut transaction);
         let test_block = make_test_block();
@@ -165,7 +162,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_difficulty_by_day_asc_test() {
-        let mut db = db_testing::get_test_db().await;
+        let mut db = db::get_test_db().await;
         let mut transaction = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut transaction);
         let test_block_1 = make_test_block();
@@ -202,7 +199,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_current_total_difficulty_test() {
-        let mut db = db_testing::get_test_db().await;
+        let mut db = db::get_test_db().await;
         let mut transaction = db.begin().await.unwrap();
         let mut block_store = BlockStore::new(&mut transaction);
         let test_block = make_test_block();

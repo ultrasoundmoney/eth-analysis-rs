@@ -74,7 +74,7 @@ mod tests {
     use sqlx::Connection;
 
     use super::*;
-    use crate::db_testing;
+    use crate::db;
     use crate::execution_chain::supply_deltas::add_delta;
     use crate::execution_chain::{block_store, ExecutionNodeBlock, SupplyDelta};
 
@@ -94,7 +94,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_balances_sum_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
@@ -122,7 +122,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_closest_balances_sum_test() -> Result<()> {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_block_close = ExecutionNodeBlock {

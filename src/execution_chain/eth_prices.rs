@@ -66,8 +66,9 @@ pub async fn get_eth_price_by_block(
 mod tests {
     use sqlx::Acquire;
 
+    use crate::db;
+
     use super::*;
-    use crate::db_testing::get_test_db;
 
     fn make_test_block() -> ExecutionNodeBlock {
         ExecutionNodeBlock {
@@ -84,7 +85,7 @@ mod tests {
 
     #[tokio::test]
     async fn insert_get_eth_price_test() {
-        let mut db = get_test_db().await;
+        let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
@@ -96,7 +97,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_eth_price_too_old_test() {
-        let mut db = get_test_db().await;
+        let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
@@ -107,7 +108,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_eth_price_old_block_test() {
-        let mut db = get_test_db().await;
+        let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 

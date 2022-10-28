@@ -372,13 +372,11 @@ pub async fn sync_deltas() {
 
 #[cfg(test)]
 mod tests {
-    use crate::db_testing;
-
     use super::*;
 
     #[tokio::test]
     async fn test_get_is_hash_not_known() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let is_hash_known = get_is_hash_known(&mut transaction, "0xnot_there").await;
@@ -388,7 +386,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_is_hash_known() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
@@ -411,7 +409,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_is_block_number_not_known() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let is_block_number_known = get_is_block_number_known(&mut transaction, &0).await;
@@ -421,7 +419,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_is_block_number_known() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let supply_delta = SupplyDelta {
@@ -444,7 +442,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_balances_at_hash() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
@@ -467,7 +465,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_drop_supply_deltas() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
@@ -534,7 +532,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let deltas_queue: DeltasQueue = Arc::new(Mutex::new(VecDeque::new()));

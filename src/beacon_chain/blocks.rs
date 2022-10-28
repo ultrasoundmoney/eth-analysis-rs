@@ -127,12 +127,12 @@ mod tests {
             node::{BeaconHeader, BeaconHeaderEnvelope},
             states::store_state,
         },
-        db_testing,
+        db,
     };
 
     #[tokio::test]
     async fn get_is_genesis_known_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let is_hash_known = get_is_hash_known(&mut transaction, GENESIS_PARENT_ROOT).await;
@@ -142,7 +142,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_hash_not_known_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let is_hash_known = get_is_hash_known(&mut transaction, "0xnot_there").await;
@@ -152,7 +152,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_hash_known_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)
@@ -184,7 +184,7 @@ mod tests {
 
     #[tokio::test]
     async fn store_block_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)
@@ -216,7 +216,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_block_number_none_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let block_number = get_last_block_slot(&mut transaction).await;
@@ -225,7 +225,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_block_number_some_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)
@@ -256,7 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_block_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &0)

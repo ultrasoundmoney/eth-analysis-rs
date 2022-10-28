@@ -340,19 +340,18 @@ pub async fn sync_blocks() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
+    use sqlx::Acquire;
 
-    use crate::{db_testing, execution_chain::node::ExecutionNodeBlock};
+    use crate::execution_chain::node::ExecutionNodeBlock;
 
     use super::*;
 
     #[tokio::test]
     async fn rollback_last_first_test() {
         // This test should use transiactions somehow.
-        let db = PgPool::connect(&db_testing::get_test_db_url())
-            .await
-            .unwrap();
-        let connection = &mut db.acquire().await.unwrap();
-        let mut block_store = BlockStore::new(connection);
+        let mut db = db::get_test_db().await;
+        let mut tx = db.begin().await.unwrap();
+        let mut block_store = BlockStore::new(&mut tx);
 
         block_store
             .store_block(
@@ -386,7 +385,7 @@ mod tests {
             )
             .await;
 
-        rollback_numbers(&mut db.acquire().await.unwrap(), &mut block_store, &0)
+        rollback_numbers(&mut db, &mut block_store, &0)
             .await
             .unwrap();
 

@@ -139,7 +139,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
 
     use super::*;
-    use crate::{beacon_chain::states::store_state, db_testing};
+    use crate::{beacon_chain::states::store_state, db};
 
     #[test]
     fn calc_issuance_test() {
@@ -154,7 +154,7 @@ mod tests {
 
     #[tokio::test]
     async fn timestamp_is_start_of_day_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance", &3599)
@@ -184,7 +184,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_current_issuance_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance_1", &3599)
@@ -218,7 +218,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_issuance_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance", &3599)
@@ -250,7 +250,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_day7_ago_issuance_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance_1", &3599)
@@ -286,7 +286,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_week_issuance_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance_1", &3599)

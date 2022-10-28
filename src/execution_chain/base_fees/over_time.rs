@@ -224,7 +224,7 @@ mod tests {
     use sqlx::Acquire;
 
     use crate::{
-        db_testing,
+        db,
         execution_chain::{block_store::BlockStore, ExecutionNodeBlock},
         time_frames::LimitedTimeFrame,
     };
@@ -246,7 +246,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_base_fee_over_time_h1_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let mut block_store = BlockStore::new(&mut transaction);
@@ -283,7 +283,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_base_fee_over_time_asc_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let mut block_store = BlockStore::new(&mut transaction);

@@ -274,7 +274,7 @@ mod tests {
         beacon_chain::{
             BeaconHeader, BeaconHeaderEnvelope, BeaconHeaderSignedEnvelope, GENESIS_PARENT_ROOT,
         },
-        db_testing,
+        db,
         eth_units::{GweiNewtype, WEI_PER_GWEI},
         execution_chain::{add_delta, ExecutionNodeBlock, SupplyDelta},
     };
@@ -323,7 +323,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_supply_parts_test() -> Result<()> {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
         let mut block_store = execution_chain::BlockStore::new(&mut transaction);
 
@@ -389,7 +389,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_set_eth_supply_test() -> Result<()> {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
         let mut block_store = execution_chain::BlockStore::new(&mut transaction);
 

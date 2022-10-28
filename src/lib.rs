@@ -2,8 +2,6 @@ mod beacon_chain;
 mod caching;
 mod data_integrity;
 mod db;
-#[cfg(test)]
-mod db_testing;
 mod env;
 mod eth_prices;
 mod eth_supply;

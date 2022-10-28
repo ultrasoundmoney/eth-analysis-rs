@@ -205,7 +205,7 @@ mod tests {
     use chrono::{Duration, SubsecRound};
     use sqlx::Acquire;
 
-    use crate::{db_testing, execution_chain::BlockStore};
+    use crate::{db, execution_chain::BlockStore};
 
     use super::*;
 
@@ -224,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_average_fee_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let mut block_store = BlockStore::new(&mut transaction);
@@ -257,7 +257,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_average_fee_within_range_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let mut block_store = BlockStore::new(&mut transaction);
@@ -294,7 +294,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_base_fee_per_gas_min_max_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let mut block_store = BlockStore::new(&mut transaction);

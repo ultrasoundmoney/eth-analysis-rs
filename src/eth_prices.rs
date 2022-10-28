@@ -401,13 +401,11 @@ pub async fn resync_all() {
 mod tests {
     use chrono::SubsecRound;
 
-    use crate::db_testing;
-
     use super::*;
 
     #[tokio::test]
     async fn store_price_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
         let test_price = EthPrice {
             timestamp: Utc::now().trunc_subsecs(0),
@@ -421,7 +419,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_most_recent_price_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
         let test_price_1 = EthPrice {
             timestamp: Utc::now().trunc_subsecs(0) - Duration::seconds(10),
@@ -440,7 +438,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_eth_price_with_most_recent_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
         let test_price = EthPrice {
             timestamp: Utc::now().trunc_subsecs(0) - Duration::minutes(10),
@@ -460,7 +458,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_h24_average_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
         let test_price_1 = EthPrice {
             timestamp: Utc::now() - Duration::hours(23),
@@ -480,7 +478,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_price_h24_ago_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_price = EthPrice {
@@ -496,7 +494,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_price_h24_ago_limit_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_price = EthPrice {
@@ -512,7 +510,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_set_last_synced_minute_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         set_last_synced_minute(&mut transaction, 1559).await;

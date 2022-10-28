@@ -134,7 +134,6 @@ mod tests {
 
     use crate::beacon_chain::states;
     use crate::beacon_chain::BeaconNode;
-    use crate::db_testing;
 
     use super::*;
 
@@ -154,7 +153,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_store_effective_balance_sum_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         states::store_state(&mut transaction, "0xstate_root", &0)
@@ -176,7 +175,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_not_stored_effective_balance_sum_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         states::store_state(&mut transaction, "0xstate_root", &0)
@@ -191,7 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_stored_effective_balance_sum_test() {
-        let mut connection = db_testing::get_test_db().await;
+        let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         states::store_state(&mut transaction, "0xtest_root", &0)
