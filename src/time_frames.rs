@@ -149,6 +149,17 @@ impl FromStr for TimeFrame {
     }
 }
 
+impl TimeFrame {
+    #[allow(dead_code)]
+    pub fn to_db_key(&self) -> &'_ str {
+        match self {
+            TimeFrame::SinceBurn => "all",
+            TimeFrame::SinceMerge => "since-merge",
+            TimeFrame::Limited(limited_time_frame) => limited_time_frame.to_db_key(),
+        }
+    }
+}
+
 #[allow(dead_code)]
 static TIME_FRAMES: [TimeFrame; 7] = [
     TimeFrame::Limited(Minute5),
@@ -181,6 +192,7 @@ mod tests {
             &TimeFrame::Limited(Day7),
             &TimeFrame::Limited(Day30),
             &TimeFrame::SinceBurn,
+            &TimeFrame::SinceMerge,
         ];
 
         assert_eq!(expected, time_frames);
