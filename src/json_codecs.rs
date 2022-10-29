@@ -43,6 +43,7 @@ where
     })
 }
 
+#[allow(dead_code)]
 pub fn to_u128_string<S>(num_u128: &u128, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -64,6 +65,7 @@ where
     })
 }
 
+#[allow(dead_code)]
 pub fn to_u64_string<S>(num_u64: &u64, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,

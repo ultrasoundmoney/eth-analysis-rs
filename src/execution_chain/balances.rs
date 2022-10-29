@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::PgConnection;
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 use std::str::FromStr;
 

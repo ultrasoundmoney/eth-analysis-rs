@@ -2,10 +2,8 @@ use anyhow::Result;
 use console::Term;
 use dialoguer::{Input, MultiSelect, Select};
 use serde::Serialize;
-use sqlx::{types::Json, Connection, PgConnection};
+use sqlx::{types::Json, PgConnection};
 use std::env;
-
-use crate::db;
 
 #[derive(Serialize)]
 struct EthInDefiOld {
@@ -114,8 +112,6 @@ pub async fn run_cli() -> Result<()> {
         .items(&target_options)
         .default(0)
         .interact()?;
-
-    let connection = PgConnection::connect(&db::get_db_url_with_name("update-by-hand")).await?;
 
     match target {
         0 => set_eth_in_defi().await?,
