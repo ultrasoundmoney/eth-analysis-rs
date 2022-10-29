@@ -1,13 +1,8 @@
 use std::{fmt::Display, slice::Iter, str::FromStr};
 
 use chrono::Duration;
-use sqlx::{
-    postgres::{types::PgInterval, PgRow},
-    PgExecutor, Row,
-};
+use sqlx::postgres::types::PgInterval;
 use thiserror::Error;
-
-use crate::execution_chain::BlockNumber;
 
 #[derive(Debug, PartialEq)]
 pub enum LimitedTimeFrame {
@@ -145,6 +140,7 @@ impl FromStr for TimeFrame {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "all" => Ok(TimeFrame::SinceBurn),
+            "since-merge" => Ok(TimeFrame::SinceMerge),
             unknown_time_frame => match unknown_time_frame.parse::<LimitedTimeFrame>() {
                 Ok(limited_time_frame) => Ok(TimeFrame::Limited(limited_time_frame)),
                 Err(err) => Err(err),
@@ -155,48 +151,30 @@ impl FromStr for TimeFrame {
 
 impl TimeFrame {
     pub fn to_db_key(&self) -> &'_ str {
-        use TimeFrame::*;
         match self {
-            SinceBurn => "all",
-            SinceMerge => "since-merge",
-            Limited(limited_time_frame) => limited_time_frame.to_db_key(),
+            TimeFrame::SinceBurn => "all",
+            TimeFrame::SinceMerge => "since-merge",
+            TimeFrame::Limited(limited_time_frame) => limited_time_frame.to_db_key(),
         }
     }
 }
 
-static TIME_FRAMES: [TimeFrame; 6] = [
+#[allow(dead_code)]
+static TIME_FRAMES: [TimeFrame; 7] = [
     TimeFrame::Limited(Minute5),
     TimeFrame::Limited(Hour1),
     TimeFrame::Limited(Day1),
     TimeFrame::Limited(Day7),
     TimeFrame::Limited(Day30),
     TimeFrame::SinceBurn,
+    TimeFrame::SinceMerge,
 ];
 
 impl TimeFrame {
+    #[allow(dead_code)]
     pub fn iterator() -> Iter<'static, TimeFrame> {
         TIME_FRAMES.iter()
     }
-}
-
-pub async fn get_earliest_block_number(
-    executor: impl PgExecutor<'_>,
-    limited_time_frame: &LimitedTimeFrame,
-) -> sqlx::Result<Option<BlockNumber>> {
-    sqlx::query(
-        "
-            SELECT
-                block_number
-            FROM
-                blocks_next
-            AND
-                timestamp >= NOW() - $1
-        ",
-    )
-    .bind(limited_time_frame.get_postgres_interval())
-    .map(|row: PgRow| row.get::<i32, _>("block_number").try_into().unwrap())
-    .fetch_optional(executor)
-    .await
 }
 
 #[cfg(test)]
