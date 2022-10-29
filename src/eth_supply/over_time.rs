@@ -174,14 +174,15 @@ async fn get_supply_over_time_time_frame(
 
 #[derive(Serialize)]
 struct SupplyOverTime {
-    slot: Slot,
     block_number: BlockNumber,
-    since_merge: Vec<SupplyAtTime>,
     d1: Vec<SupplyAtTime>,
     d30: Vec<SupplyAtTime>,
     d7: Vec<SupplyAtTime>,
     h1: Vec<SupplyAtTime>,
     m5: Vec<SupplyAtTime>,
+    since_burn: Option<SupplyAtTime>,
+    since_merge: Vec<SupplyAtTime>,
+    slot: Slot,
     timestamp: DateTime<Utc>,
 }
 
@@ -207,6 +208,7 @@ pub async fn update_supply_over_time(
         d7,
         h1,
         m5,
+        since_burn: None,
         since_merge,
         slot,
         timestamp,

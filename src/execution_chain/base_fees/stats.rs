@@ -105,7 +105,7 @@ async fn get_base_fee_per_gas_min_max(
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct BaseFeePerGasStatsTimeFrame {
     average: WeiF64,
     max: WeiF64,
@@ -128,6 +128,8 @@ struct BaseFeePerGasStats {
     d7: BaseFeePerGasStatsTimeFrame,
     h1: BaseFeePerGasStatsTimeFrame,
     m5: BaseFeePerGasStatsTimeFrame,
+    since_burn: BaseFeePerGasStatsTimeFrame,
+    since_merge: Option<BaseFeePerGasStatsTimeFrame>,
     timestamp: DateTime<Utc>,
 }
 async fn get_base_fee_per_gas_stats_time_frame(
@@ -176,18 +178,20 @@ pub async fn update_base_fee_stats(
     )?;
 
     let base_fee_per_gas_stats = BaseFeePerGasStats {
-        all: Some(all),
+        all: Some(all.clone()),
         average: h1.average,
         barrier,
         block_number: block.number,
         d1,
         d30,
         d7,
-        m5,
         max: h1.max,
         min: h1.min,
         h1,
+        m5,
         timestamp: block.timestamp,
+        since_burn: all,
+        since_merge: None,
     };
 
     key_value_store::set_value(
