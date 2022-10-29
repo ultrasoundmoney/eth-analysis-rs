@@ -26,7 +26,7 @@ pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<V
 
 pub async fn get_raw_caching_value(
     executor: impl PgExecutor<'_>,
-    cache_key: &CacheKey<'_>,
+    cache_key: &CacheKey,
 ) -> Option<Value> {
     get_value(executor, cache_key.to_db_key()).await
 }
@@ -34,7 +34,7 @@ pub async fn get_raw_caching_value(
 #[allow(dead_code)]
 pub async fn get_caching_value<T>(
     executor: impl PgExecutor<'_>,
-    cache_key: &CacheKey<'_>,
+    cache_key: &CacheKey,
 ) -> Result<Option<T>>
 where
     T: for<'de> Deserialize<'de>,
@@ -67,7 +67,7 @@ pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Val
 
 pub async fn set_caching_value<'a>(
     executor: impl PgExecutor<'_>,
-    cache_key: &CacheKey<'_>,
+    cache_key: &CacheKey,
     value: impl Serialize,
 ) -> Result<()> {
     set_value(

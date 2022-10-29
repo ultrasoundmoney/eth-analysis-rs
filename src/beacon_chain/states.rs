@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{PgConnection, PgExecutor};
+use sqlx::PgExecutor;
 
 use super::beacon_time;
 
@@ -40,7 +40,7 @@ impl From<BeaconStateRow> for BeaconState {
     }
 }
 
-pub async fn get_last_state(executor: &mut PgConnection) -> Option<BeaconState> {
+pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState> {
     sqlx::query_as!(
         BeaconStateRow,
         r#"

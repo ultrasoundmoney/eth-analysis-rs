@@ -1,15 +1,15 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 use sqlx::PgExecutor;
+use thiserror::Error;
 use tracing::debug;
 
-#[derive(Debug)]
-pub enum CacheKey<'a> {
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub enum CacheKey {
     BaseFeeOverTime,
     BaseFeePerGas,
     BaseFeePerGasStats,
     BlockLag,
-    Custom(&'a str),
     EffectiveBalanceSum,
     EthPrice,
     EthSupplyParts,
@@ -21,20 +21,19 @@ pub enum CacheKey<'a> {
     ValidatorRewards,
 }
 
-impl Display for CacheKey<'_> {
+impl Display for CacheKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_db_key())
     }
 }
 
-impl<'a> CacheKey<'a> {
-    pub fn to_db_key(&self) -> &'a str {
+impl CacheKey {
+    pub fn to_db_key(&self) -> &'_ str {
         match self {
             &Self::BaseFeeOverTime => "base-fee-over-time",
             &Self::BaseFeePerGas => "current-base-fee",
             &Self::BaseFeePerGasStats => "base-fee-per-gas-stats",
             &Self::BlockLag => "block-lag",
-            &Self::Custom(key) => key,
             &Self::EffectiveBalanceSum => "effective-balance-sum",
             &Self::EthPrice => "eth-price",
             &Self::EthSupplyParts => "eth-supply-parts",
@@ -48,28 +47,36 @@ impl<'a> CacheKey<'a> {
     }
 }
 
-impl<'a> From<&'a str> for CacheKey<'a> {
-    fn from(key: &'a str) -> Self {
-        match key {
-            "base-fee-over-time" => Self::BaseFeeOverTime,
-            "current-base-fee" => Self::BaseFeePerGas,
-            "base-fee-per-gas-stats" => Self::BaseFeePerGasStats,
-            "block-lag" => Self::BlockLag,
-            "effective-balance-sum" => Self::EffectiveBalanceSum,
-            "eth-price" => Self::EthPrice,
-            "eth-supply-parts" => Self::EthSupplyParts,
-            "issuance-breakdown" => Self::IssuanceBreakdown,
-            "supply-over-time" => Self::SupplyOverTime,
-            "supply-projection-inputs" => Self::SupplyProjectionInputs,
-            "supply-since-merge" => Self::SupplySinceMerge,
-            "total-difficulty-progress" => Self::TotalDifficultyProgress,
-            "validator-rewards" => Self::ValidatorRewards,
-            key => Self::Custom(key),
+#[derive(Debug, Error)]
+pub enum ParseCacheKeyError {
+    #[error("failed to parse cache key {0}")]
+    UnknownCacheKey(String),
+}
+
+impl<'a> FromStr for CacheKey {
+    type Err = ParseCacheKeyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "base-fee-over-time" => Ok(Self::BaseFeeOverTime),
+            "current-base-fee" => Ok(Self::BaseFeePerGas),
+            "base-fee-per-gas-stats" => Ok(Self::BaseFeePerGasStats),
+            "block-lag" => Ok(Self::BlockLag),
+            "effective-balance-sum" => Ok(Self::EffectiveBalanceSum),
+            "eth-price" => Ok(Self::EthPrice),
+            "eth-supply-parts" => Ok(Self::EthSupplyParts),
+            "issuance-breakdown" => Ok(Self::IssuanceBreakdown),
+            "supply-over-time" => Ok(Self::SupplyOverTime),
+            "supply-projection-inputs" => Ok(Self::SupplyProjectionInputs),
+            "supply-since-merge" => Ok(Self::SupplySinceMerge),
+            "total-difficulty-progress" => Ok(Self::TotalDifficultyProgress),
+            "validator-rewards" => Ok(Self::ValidatorRewards),
+            unknown_key => Err(ParseCacheKeyError::UnknownCacheKey(unknown_key.to_string())),
         }
     }
 }
 
-pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey<'_>) {
+pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey) {
     debug!(?key, "publishing cache update");
 
     sqlx::query!(
@@ -102,11 +109,13 @@ mod tests {
 
         let mut connection = db::get_test_db().await;
 
-        let test_key = "test-key";
-        publish_cache_update(&mut connection, CacheKey::Custom("test-key")).await;
+        publish_cache_update(&mut connection, CacheKey::EffectiveBalanceSum).await;
 
         let notification = notification_future.await.unwrap();
 
-        assert_eq!(notification.payload(), test_key)
+        assert_eq!(
+            notification.payload(),
+            CacheKey::EffectiveBalanceSum.to_db_key()
+        )
     }
 }

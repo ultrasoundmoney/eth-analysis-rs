@@ -8,16 +8,20 @@ use axum::{
 };
 use bytes::BufMut;
 use etag::EntityTag;
-use futures::TryStreamExt;
+use futures::{join, try_join, TryFutureExt, TryStreamExt};
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::{Connection, PgExecutor, PgPool};
 use std::sync::{Arc, RwLock};
+use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
-use tracing::{error, event, span, trace, Instrument, Level};
+use tracing::{debug, error, info, trace};
 
-use crate::{caching::CacheKey, db, env, key_value_store, log};
+use crate::{
+    caching::{CacheKey, ParseCacheKeyError},
+    db, env, key_value_store, log,
+};
 
 type StateExtension = Extension<Arc<State>>;
 
@@ -29,11 +33,15 @@ struct Cache {
     base_fee_per_gas: CachedValue,
     base_fee_per_gas_stats: CachedValue,
     block_lag: CachedValue,
+    effective_balance_sum: CachedValue,
     eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
+    issuance_breakdown: CachedValue,
     supply_over_time: CachedValue,
+    supply_projection_inputs: CachedValue,
     supply_since_merge: CachedValue,
     total_difficulty_progress: CachedValue,
+    validator_rewards: CachedValue,
 }
 
 pub struct State {
@@ -41,7 +49,7 @@ pub struct State {
     db_pool: PgPool,
 }
 
-async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey<'_>) -> CachedValue {
+async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey) -> CachedValue {
     let value = key_value_store::get_raw_caching_value(connection, key).await;
     RwLock::new(value)
 }
@@ -158,64 +166,65 @@ async fn get_cached(cached_value: &CachedValue) -> impl IntoResponse {
     get_cached_with_cache_duration(cached_value, None, None).await
 }
 
+fn get_cache_value_by_key<'a>(cache: &'a Arc<Cache>, key: &'a CacheKey) -> &'a CachedValue {
+    match key {
+        CacheKey::BaseFeeOverTime => &cache.base_fee_over_time,
+        CacheKey::BaseFeePerGas => &cache.base_fee_per_gas,
+        CacheKey::BaseFeePerGasStats => &cache.base_fee_per_gas_stats,
+        CacheKey::BlockLag => &cache.block_lag,
+        CacheKey::EffectiveBalanceSum => &cache.effective_balance_sum,
+        CacheKey::EthPrice => &cache.eth_price_stats,
+        CacheKey::EthSupplyParts => &cache.eth_supply_parts,
+        CacheKey::IssuanceBreakdown => &cache.issuance_breakdown,
+        CacheKey::SupplyOverTime => &cache.supply_over_time,
+        CacheKey::SupplyProjectionInputs => &cache.supply_projection_inputs,
+        CacheKey::SupplySinceMerge => &cache.supply_since_merge,
+        CacheKey::TotalDifficultyProgress => &cache.total_difficulty_progress,
+        CacheKey::ValidatorRewards => &cache.validator_rewards,
+    }
+}
+
 async fn update_cache_from_key(
     connection: impl PgExecutor<'_>,
     cached_value: &CachedValue,
-    cache_key: &CacheKey<'_>,
+    cache_key: &CacheKey,
 ) {
-    event!(
-        Level::DEBUG,
-        cache_key = cache_key.to_string(),
-        "cache update",
-    );
+    debug!(%cache_key, "cache update",);
     let value = key_value_store::get_raw_caching_value(connection, cache_key).await;
     let mut cache_wlock = cached_value.write().unwrap();
     *cache_wlock = value;
 }
 
-async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) {
+async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) -> JoinHandle<()> {
     let mut listener =
         sqlx::postgres::PgListener::connect(&db::get_db_url_with_name("serve-rs-cache-update"))
             .await
             .unwrap();
     listener.listen("cache-update").await.unwrap();
-    event!(Level::DEBUG, "listening for cache updates");
+    debug!("listening for cache updates");
 
     let mut notification_stream = listener.into_stream();
     let mut connection = db_pool.acquire().await.unwrap();
 
     tokio::spawn(async move {
-        while let Some(notification) = notification_stream
-            .try_next()
-            .instrument(span!(Level::INFO, "cache update"))
-            .await
-            .unwrap()
-        {
+        while let Some(notification) = notification_stream.try_next().await.unwrap() {
             let payload = notification.payload();
-            let payload_cache_key = CacheKey::from(payload);
-            match payload_cache_key {
-                key @ CacheKey::BaseFeeOverTime
-                | key @ CacheKey::BaseFeePerGas
-                | key @ CacheKey::BaseFeePerGasStats
-                | key @ CacheKey::BlockLag
-                | key @ CacheKey::EthPrice
-                | key @ CacheKey::EthSupplyParts
-                | key @ CacheKey::SupplyOverTime
-                | key @ CacheKey::SupplySinceMerge
-                | key @ CacheKey::TotalDifficultyProgress => {
-                    update_cache_from_key(&mut connection, &state.cache.base_fee_over_time, &key)
-                        .await
-                }
-                key => {
-                    event!(
-                        Level::DEBUG,
-                        "cache_key" = key.to_string(),
+            let cache_key = payload.parse::<CacheKey>();
+
+            match cache_key {
+                Err(ParseCacheKeyError::UnknownCacheKey(cache_key)) => {
+                    debug!(
+                        %cache_key,
                         "unspported cache update, skipping"
                     );
                 }
+                Ok(cache_key) => {
+                    let cache_value = get_cache_value_by_key(&state.cache, &cache_key);
+                    update_cache_from_key(&mut connection, cache_value, &cache_key).await;
+                }
             }
         }
-    });
+    })
 }
 
 pub async fn start_server() {
@@ -227,39 +236,71 @@ pub async fn start_server() {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    event!(Level::DEBUG, "warming cache");
+    debug!("warming cache");
 
-    let base_fee_per_gas = get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGas).await;
-    let base_fee_over_time = get_value_hash_lock(&db_pool, &CacheKey::BaseFeeOverTime).await;
-    let base_fee_per_gas_stats = get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGasStats).await;
-    let block_lag = get_value_hash_lock(&db_pool, &CacheKey::BlockLag).await;
-    let eth_price_stats = get_value_hash_lock(&db_pool, &CacheKey::EthPrice).await;
-    let eth_supply_parts = get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts).await;
-    let supply_over_time = get_value_hash_lock(&db_pool, &CacheKey::SupplyOverTime).await;
-    let supply_since_merge = get_value_hash_lock(&db_pool, &CacheKey::SupplySinceMerge).await;
-    let total_difficulty_progress =
-        get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress).await;
+    let (
+        base_fee_over_time,
+        base_fee_per_gas,
+        base_fee_per_gas_stats,
+        block_lag,
+        effective_balance_sum,
+        eth_price_stats,
+        eth_supply_parts,
+        issuance_breakdown,
+        supply_over_time,
+        supply_projection_inputs,
+        supply_since_merge,
+        total_difficulty_progress,
+        validator_rewards,
+    ) = join!(
+        get_value_hash_lock(&db_pool, &CacheKey::BaseFeeOverTime),
+        get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGas),
+        get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGasStats),
+        get_value_hash_lock(&db_pool, &CacheKey::BlockLag),
+        get_value_hash_lock(&db_pool, &CacheKey::EffectiveBalanceSum),
+        get_value_hash_lock(&db_pool, &CacheKey::EthPrice),
+        get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts),
+        get_value_hash_lock(&db_pool, &CacheKey::IssuanceBreakdown),
+        get_value_hash_lock(&db_pool, &CacheKey::SupplyOverTime),
+        get_value_hash_lock(&db_pool, &CacheKey::SupplyProjectionInputs),
+        get_value_hash_lock(&db_pool, &CacheKey::SupplySinceMerge),
+        get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress),
+        get_value_hash_lock(&db_pool, &CacheKey::ValidatorRewards),
+    );
 
     let cache = Arc::new(Cache {
         base_fee_per_gas,
         base_fee_over_time,
         base_fee_per_gas_stats,
         block_lag,
+        effective_balance_sum,
         eth_price_stats,
         eth_supply_parts,
+        issuance_breakdown,
         supply_over_time,
+        supply_projection_inputs,
         supply_since_merge,
         total_difficulty_progress,
+        validator_rewards,
     });
 
-    event!(Level::INFO, "cache ready");
+    info!("cache ready");
 
     let shared_state = Arc::new(State { cache, db_pool });
 
-    update_cache_from_notifications(shared_state.clone(), &shared_state.db_pool).await;
+    let update_cache_thread =
+        update_cache_from_notifications(shared_state.clone(), &shared_state.db_pool).await;
 
     let app =
         Router::new()
+            .route(
+                "/api/v2/fees/base-fee-over-time",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.base_fee_over_time)
+                        .await
+                        .into_response()
+                }),
+            )
             .route(
                 "/api/v2/fees/base-fee-per-gas",
                 get(|state: StateExtension| async move {
@@ -269,9 +310,32 @@ pub async fn start_server() {
                 }),
             )
             .route(
+                "/api/v2/fees/base-fee-per-gas-stats",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.base_fee_per_gas_stats)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
                 "/api/v2/fees/block-lag",
                 get(|state: StateExtension| async move {
                     get_cached(&state.clone().cache.block_lag).await
+                }),
+            )
+            .route(
+                "/api/v2/fees/healthz",
+                get(|state: StateExtension| async move {
+                    let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
+                    StatusCode::OK
+                }),
+            )
+            .route(
+                "/api/v2/fees/effective-balance-sum",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.effective_balance_sum)
+                        .await
+                        .into_response()
                 }),
             )
             .route(
@@ -291,6 +355,26 @@ pub async fn start_server() {
                 }),
             )
             .route(
+                "/api/v2/fees/supply-over-time",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.supply_over_time).await
+                }),
+            )
+            .route(
+                "/api/v2/fees/supply-projection-inputs",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.supply_projection_inputs).await
+                }),
+            )
+            .route(
+                "/api/v2/fees/supply-since-merge",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.supply_since_merge)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
                 "/api/v2/fees/total-difficulty-progress",
                 get(|state: StateExtension| async move {
                     get_cached(&state.clone().cache.total_difficulty_progress)
@@ -299,17 +383,9 @@ pub async fn start_server() {
                 }),
             )
             .route(
-                "/api/v2/fees/base-fee-over-time",
+                "/api/v2/fees/validator-rewards",
                 get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.base_fee_over_time)
-                        .await
-                        .into_response()
-                }),
-            )
-            .route(
-                "/api/v2/fees/base-fee-per-gas-stats",
-                get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.base_fee_per_gas_stats)
+                    get_cached(&state.clone().cache.validator_rewards)
                         .await
                         .into_response()
                 }),
@@ -321,27 +397,6 @@ pub async fn start_server() {
                     StatusCode::OK
                 }),
             )
-            .route(
-                "/api/v2/fees/healthz",
-                get(|state: StateExtension| async move {
-                    let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
-                    StatusCode::OK
-                }),
-            )
-            .route(
-                "/api/v2/fees/supply-over-time",
-                get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.supply_over_time).await
-                }),
-            )
-            .route(
-                "/api/v2/fees/supply-since-merge",
-                get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.supply_since_merge)
-                        .await
-                        .into_response()
-                }),
-            )
             .layer(
                 ServiceBuilder::new()
                     .layer(middleware::from_fn(etag_middleware))
@@ -351,9 +406,13 @@ pub async fn start_server() {
 
     let port = env::get_env_var("PORT").unwrap_or("3002".to_string());
 
-    event!(Level::INFO, port, "server listening");
-    axum::Server::bind(&format!("0.0.0.0:{port}").parse().unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    info!(port, "server listening");
+    let socket_addr = format!("0.0.0.0:{port}").parse().unwrap();
+    let server_thread = axum::Server::bind(&socket_addr).serve(app.into_make_service());
+
+    try_join!(
+        update_cache_thread.map_err(|err| error!("{}", err)),
+        server_thread.map_err(|err| error!("{}", err))
+    )
+    .unwrap();
 }

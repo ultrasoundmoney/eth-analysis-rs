@@ -446,7 +446,7 @@ async fn get_next_step(
 async fn ensure_last_synced_slot_has_block(executor: &mut PgConnection) -> Result<()> {
     debug!("ensuring we start syncing on a slot with a block");
 
-    let last_state = states::get_last_state(executor).await;
+    let last_state = states::get_last_state(executor.acquire().await?).await;
 
     match last_state {
         // Never synced a slot, done!

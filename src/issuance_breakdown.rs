@@ -1,5 +1,5 @@
 use serde::Serialize;
-use sqlx::{Connection, PgConnection, PgExecutor};
+use sqlx::{Connection, PgConnection};
 
 use crate::{
     beacon_chain,
@@ -16,18 +16,6 @@ struct IssuanceBreakdown {
     ethereum_foundation: GweiNewtype,
     proof_of_stake: GweiNewtype,
     proof_of_work: GweiNewtype,
-}
-
-async fn store_issuance_breakdown<'a>(
-    pg_executor: impl PgExecutor<'a>,
-    issuance_breakdown: &IssuanceBreakdown,
-) {
-    key_value_store::set_value(
-        pg_executor,
-        &CacheKey::IssuanceBreakdown.to_db_key(),
-        &serde_json::to_value(issuance_breakdown).unwrap(),
-    )
-    .await
 }
 
 pub async fn update_issuance_breakdown() {
@@ -91,7 +79,12 @@ pub async fn update_issuance_breakdown() {
         proof_of_work,
     };
 
-    store_issuance_breakdown(&mut connection, &issuance_breakdown).await;
+    key_value_store::set_value(
+        &mut connection,
+        &CacheKey::IssuanceBreakdown.to_db_key(),
+        &serde_json::to_value(issuance_breakdown).unwrap(),
+    )
+    .await;
 
     caching::publish_cache_update(&mut connection, CacheKey::IssuanceBreakdown).await;
 
