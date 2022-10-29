@@ -15,7 +15,7 @@ use crate::{
     time_frames::TimeFrame,
 };
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 struct BaseFeeAtTime {
     block_number: Option<BlockNumber>,
     timestamp: DateTime<Utc>,
@@ -24,14 +24,18 @@ struct BaseFeeAtTime {
 
 #[derive(Serialize)]
 struct BaseFeeOverTime {
+    // Needs frontend to switch over first.
+    #[deprecated = "use since_burn instead"]
+    all: Option<Vec<BaseFeeAtTime>>,
     barrier: WeiF64,
     block_number: BlockNumber,
-    all: Option<Vec<BaseFeeAtTime>>,
     d1: Vec<BaseFeeAtTime>,
     d30: Vec<BaseFeeAtTime>,
     d7: Vec<BaseFeeAtTime>,
     h1: Vec<BaseFeeAtTime>,
     m5: Vec<BaseFeeAtTime>,
+    since_burn: Vec<BaseFeeAtTime>,
+    since_merge: Option<BaseFeeAtTime>,
 }
 
 async fn get_base_fee_over_time(
@@ -225,14 +229,16 @@ pub async fn update_base_fee_over_time(
     )?;
 
     let base_fee_over_time = BaseFeeOverTime {
+        all: Some(all.clone()),
         barrier,
         block_number: *block_number,
-        m5,
-        h1,
         d1,
-        d7,
         d30,
-        all: Some(all),
+        d7,
+        h1,
+        m5,
+        since_burn: all,
+        since_merge: None,
     };
 
     key_value_store::set_value(
