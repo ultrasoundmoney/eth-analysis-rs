@@ -30,7 +30,7 @@ use crate::{
 use super::{blocks, states, BeaconHeaderSignedEnvelope, BeaconNode, Slot, BEACON_URL};
 
 lazy_static! {
-    static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(30);
+    static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(5);
 }
 
 #[derive(Clone)]
