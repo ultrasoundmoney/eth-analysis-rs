@@ -190,6 +190,9 @@ async fn sync_slot(db_pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) -> Re
         last_on_chain_slot_date_time - slot_date_time
     };
 
+    // Whenever we fall behind, getting validator balances for older slots from lighthouse takes a
+    // long time. This means if we fall behind too far we never catch up, as syncing one slot now
+    // takes longer than it takes for a new slot to appear (12 seconds).
     if block_lag_duration > *BLOCK_LAG_LIMIT {
         warn!(
             %block_lag_duration,
