@@ -33,7 +33,6 @@ pub use eth_supply::update as update_total_supply;
 pub use execution_chain::summary_from_deltas_csv;
 pub use execution_chain::sync_execution_blocks;
 pub use execution_chain::sync_execution_supply_deltas;
-pub use execution_chain::update_total_difficulty_progress;
 pub use execution_chain::write_blocks_from_august;
 pub use execution_chain::write_blocks_from_london;
 pub use execution_chain::write_execution_heads_log;
