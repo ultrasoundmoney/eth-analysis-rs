@@ -7,7 +7,6 @@ mod logs;
 mod node;
 mod supply_deltas;
 mod sync;
-mod total_difficulty_progress;
 
 pub use balances::{get_balances_sum, get_closest_balances_sum, ExecutionBalancesSum};
 pub use block_store::BlockStore;
@@ -29,7 +28,6 @@ pub use supply_deltas::write_deltas as write_execution_supply_deltas;
 pub use supply_deltas::write_deltas_log as write_execution_supply_deltas_log;
 pub use supply_deltas::SupplyDelta;
 pub use sync::sync_blocks as sync_execution_blocks;
-pub use total_difficulty_progress::update_total_difficulty_progress;
 
 lazy_static! {
     pub static ref LONDON_HARDFORK_TIMESTAMP: DateTime<Utc> = Utc.timestamp(1628166822, 0);
