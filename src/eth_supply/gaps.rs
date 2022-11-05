@@ -51,6 +51,7 @@ pub async fn sync_gaps() -> Result<()> {
             eth_supply::get_supply_exists_by_slot(&mut db_connection, &slot).await?;
         if stored_eth_supply {
             progress.inc_work_done();
+            debug!(slot, "slot looks fine");
             continue;
         }
 
