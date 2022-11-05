@@ -1,11 +1,12 @@
+//! Functions that know how to communicate with  a BeaconChain node to get various pieces of data.
+//! Currently, many calls taking a state_root as input do not acknowledge that a state_root may
+//! disappear at any time. They should be updated to do so.
+use anyhow::{anyhow, Result};
 use chrono::Utc;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use crate::{
-    eth_units::GweiNewtype, execution_chain::BlockNumber, json_codecs::from_u32_string,
-    performance::TimedExt,
-};
+use crate::{eth_units::GweiNewtype, json_codecs::from_u32_string, performance::TimedExt};
 
 use super::{beacon_time, Slot, BEACON_URL};
 
@@ -113,7 +114,7 @@ fn make_validator_balances_by_state_url(state_root: &str) -> String {
     )
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct BeaconHeader {
     #[serde(deserialize_with = "from_u32_string")]
     pub slot: Slot,
@@ -121,12 +122,12 @@ pub struct BeaconHeader {
     pub state_root: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct BeaconHeaderEnvelope {
     pub message: BeaconHeader,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct BeaconHeaderSignedEnvelope {
     /// block_root
     pub root: String,
@@ -242,17 +243,27 @@ impl BeaconNode {
         self.get_block(&BlockId::Head).await
     }
 
-    pub async fn get_state_root_by_slot(&self, slot: &u32) -> reqwest::Result<String> {
+    pub async fn get_state_root_by_slot(&self, slot: &u32) -> Result<Option<String>> {
         let url = make_state_root_url(slot);
 
-        self.client
-            .get(&url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<StateRootFirstEnvelope>()
-            .await
-            .map(|envelope| envelope.data.root)
+        let res = self.client.get(&url).send().await?;
+
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => {
+                let state_root = res
+                    .json::<StateRootFirstEnvelope>()
+                    .await
+                    .map(|envelope| envelope.data.root)?;
+                Ok(Some(state_root))
+            }
+            status => Err(anyhow!(
+                "failed to fetch state_root by slot. slot = {} status = {} url = {}",
+                slot,
+                status,
+                res.url()
+            )),
+        }
     }
 
     pub async fn get_validator_balances(
@@ -272,31 +283,29 @@ impl BeaconNode {
             .map(|envelope| envelope.data)
     }
 
-    async fn get_header(
-        &self,
-        block_id: &BlockId,
-    ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
+    async fn get_header(&self, block_id: &BlockId) -> Result<Option<BeaconHeaderSignedEnvelope>> {
         let url = make_header_by_block_id_url(block_id);
 
-        let res = self.client.get(&url).send().await?.error_for_status();
+        let res = self.client.get(&url).send().await?;
 
-        match res {
-            Ok(res) => res
-                .json::<HeaderEnvelope>()
-                .await
-                .map(|envelope| Some(envelope.data)),
-            Err(res) => match res.status() {
-                None => Err(res),
-                Some(status) if status == StatusCode::NOT_FOUND => Ok(None),
-                Some(_) => Err(res),
-            },
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => {
+                let envelope = res.json::<HeaderEnvelope>().await?;
+                Ok(Some(envelope.data))
+            }
+            status => Err(anyhow!(
+                "failed to fetch header by block id. status = {} url = {}",
+                status,
+                res.url()
+            )),
         }
     }
 
     pub async fn get_header_by_slot(
         &self,
         slot: &u32,
-    ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
+    ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
         let slot_timestamp = beacon_time::get_date_time_from_slot(slot);
         if slot_timestamp > Utc::now() {
             // If we would return this case at None, the caller would be unable to distinguish
@@ -313,12 +322,12 @@ impl BeaconNode {
     pub async fn get_header_by_hash(
         &self,
         block_root: &str,
-    ) -> reqwest::Result<Option<BeaconHeaderSignedEnvelope>> {
+    ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
         self.get_header(&BlockId::BlockRoot(block_root.to_string()))
             .await
     }
 
-    pub async fn get_last_header(&self) -> reqwest::Result<BeaconHeaderSignedEnvelope> {
+    pub async fn get_last_header(&self) -> Result<BeaconHeaderSignedEnvelope> {
         self.get_header(&BlockId::Head)
             .await
             .map(|envelope| envelope.expect("a head to always exist on-chain"))
@@ -424,6 +433,13 @@ mod tests {
     async fn header_by_slot_test() {
         let beacon_node = BeaconNode::new();
         beacon_node.get_header_by_slot(&SLOT_1229).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_none_header_test() {
+        let beacon_node = BeaconNode::new();
+        let header = beacon_node.get_header_by_hash("0xnot_there").await.unwrap();
+        assert_eq!(header, None);
     }
 
     #[tokio::test]

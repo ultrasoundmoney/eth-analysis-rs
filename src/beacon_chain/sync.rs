@@ -126,8 +126,16 @@ async fn store_state_with_block(
     transaction.commit().await.unwrap();
 }
 
+// TODO: rewrite to receive all needed data to sync a given slot first, then process. This avoids
+// having to deal with a reorg happening mid-processing which means everything needs to be in
+// some atomic transaction or we need to handle partial rollbacks of our data.
 async fn sync_slot(db_pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) -> Result<()> {
-    let state_root = beacon_node.get_state_root_by_slot(slot).await.unwrap();
+    let state_root = beacon_node
+        .get_state_root_by_slot(slot)
+        .await?
+        // Rewrite to have all beacon state related data, and then process or abort whilst
+        // collecting data.
+        .expect("can't handle reorg of chain whilst syncing slot");
 
     let header = beacon_node.get_header_by_slot(slot).await.unwrap();
     let block = match header {
@@ -150,11 +158,7 @@ async fn sync_slot(db_pool: &PgPool, beacon_node: &BeaconNode, slot: &u32) -> Re
 
     match (header, block, deposit_sum_aggregated) {
         (Some(header), Some(block), Some(deposit_sum_aggregated)) => {
-            tracing::debug!(
-                "storing slot with block, slot: {:?}, state_root: {}",
-                slot,
-                state_root
-            );
+            debug!(slot, state_root, "storing slot with block");
             store_state_with_block(
                 db_pool,
                 &state_root,
