@@ -35,4 +35,5 @@ lazy_static! {
         "2022-09-15T06:42:42Z".parse::<DateTime<Utc>>().unwrap();
 }
 
+#[allow(dead_code)]
 pub const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
