@@ -68,6 +68,9 @@ pub async fn sync_gaps() -> Result<()> {
         super::store(&mut db_connection, &eth_supply_parts).await?;
 
         progress.inc_work_done();
+        if slot % 10 == 0 {
+            info!("{}", progress.get_progress_string());
+        }
         debug!(slot, "filled gap at slot")
     }
 
