@@ -1,3 +1,4 @@
+mod gaps;
 mod over_time;
 
 use anyhow::{Ok, Result};
@@ -16,9 +17,11 @@ use crate::execution_chain::{self, BlockNumber};
 use crate::key_value_store;
 use crate::performance::TimedExt;
 
+pub use gaps::sync_gaps;
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EthSupplyParts {
+pub struct EthSupplyParts {
     beacon_balances_sum: BeaconBalancesSum,
     beacon_deposits_sum: BeaconDepositsSum,
     execution_balances_sum: ExecutionBalancesSum,
@@ -65,7 +68,7 @@ pub async fn rollback_supply_by_slot(
     .await
 }
 
-async fn store(
+pub async fn store(
     executor: impl PgExecutor<'_>,
     eth_supply_parts: &EthSupplyParts,
 ) -> sqlx::Result<PgQueryResult> {
@@ -224,7 +227,7 @@ async fn update_supply_parts(executor: &PgPool, eth_supply_parts: &EthSupplyPart
     Ok(())
 }
 
-async fn get_supply_parts(
+pub async fn get_supply_parts(
     executor: &mut PgConnection,
     beacon_balances_sum: BeaconBalancesSum,
 ) -> Result<EthSupplyParts> {
@@ -271,6 +274,26 @@ pub async fn update(executor: &PgPool, beacon_balances_sum: BeaconBalancesSum) -
     .await?;
 
     Ok(())
+}
+
+pub async fn get_supply_exists_by_slot(
+    executor: impl PgExecutor<'_>,
+    slot: &Slot,
+) -> sqlx::Result<bool> {
+    sqlx::query(
+        "
+            SELECT
+                1
+            FROM
+                eth_supply
+            WHERE
+                balances_slot = $1
+        ",
+    )
+    .bind(*slot as i32)
+    .fetch_optional(executor)
+    .await
+    .map(|row| row.is_some())
 }
 
 #[cfg(test)]
@@ -436,6 +459,58 @@ mod tests {
         let eth_supply = get_current_supply(&mut transaction).await?;
 
         assert_eq!(eth_supply, test_eth_supply);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_eth_supply_not_exists_test() -> Result<()> {
+        let mut connection = db::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &0).await?;
+
+        assert!(!eth_supply_exists);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_eth_supply_exists_test() -> Result<()> {
+        let mut connection = db::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+        let mut block_store = execution_chain::BlockStore::new(&mut transaction);
+
+        let test_block = make_test_block();
+
+        block_store.store_block(&test_block, 0.0).await;
+
+        beacon_chain::store_state(&mut transaction, "0xstate_root", &0).await?;
+
+        let execution_balances_sum = ExecutionBalancesSum {
+            block_number: 0,
+            balances_sum: GweiNewtype(10).into_wei(),
+        };
+        let beacon_balances_sum = BeaconBalancesSum {
+            balances_sum: GweiNewtype(20),
+            slot: 0,
+        };
+        let beacon_deposits_sum = BeaconDepositsSum {
+            slot: 0,
+            deposits_sum: GweiNewtype(5),
+        };
+
+        let eth_supply_parts = EthSupplyParts {
+            beacon_balances_sum,
+            beacon_deposits_sum,
+            execution_balances_sum,
+        };
+
+        store(&mut transaction, &eth_supply_parts).await?;
+
+        let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &0).await?;
+
+        assert!(eth_supply_exists);
 
         Ok(())
     }

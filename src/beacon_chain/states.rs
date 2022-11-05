@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::PgExecutor;
+use sqlx::{postgres::PgRow, PgExecutor, Row};
 
 use super::beacon_time;
 
@@ -49,7 +49,7 @@ pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState
                 beacon_states.slot,
                 beacon_blocks.block_root AS "block_root?"
             FROM beacon_states
-            LEFT JOIN beacon_blocks ON beacon_blocks.state_root = beacon_states.state_root
+            LEFT JOIN beacon_blocks ON beacon_states.state_root = beacon_blocks.state_root
             ORDER BY slot DESC
             LIMIT 1
         "#,
@@ -76,6 +76,26 @@ pub async fn store_state<'a>(
     .await?;
 
     Ok(())
+}
+
+pub async fn get_state_root_by_slot(
+    executor: impl PgExecutor<'_>,
+    slot: &Slot,
+) -> sqlx::Result<String> {
+    sqlx::query(
+        r#"
+            SELECT
+                beacon_states.state_root
+            FROM
+                beacon_states
+            WHERE
+                slot = $1
+        "#,
+    )
+    .bind(*slot as i32)
+    .map(|row: PgRow| row.get::<String, _>("state_root"))
+    .fetch_one(executor)
+    .await
 }
 
 pub async fn delete_states<'a>(executor: impl PgExecutor<'a>, greater_than_or_equal: &Slot) {

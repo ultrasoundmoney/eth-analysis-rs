@@ -2,7 +2,10 @@ use chrono::Utc;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use crate::{eth_units::GweiNewtype, json_codecs::from_u32_string, performance::TimedExt};
+use crate::{
+    eth_units::GweiNewtype, execution_chain::BlockNumber, json_codecs::from_u32_string,
+    performance::TimedExt,
+};
 
 use super::{beacon_time, Slot, BEACON_URL};
 
@@ -28,8 +31,15 @@ pub struct DepositEnvelope {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ExecutionPayload {
+    block_number: BlockNumber,
+    block_hash: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Body {
     pub deposits: Vec<DepositEnvelope>,
+    pub execution_payload: Option<ExecutionPayload>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,7 +115,7 @@ fn make_validator_balances_by_state_url(state_root: &str) -> String {
 #[derive(Debug, Deserialize)]
 pub struct BeaconHeader {
     #[serde(deserialize_with = "from_u32_string")]
-    pub slot: u32,
+    pub slot: Slot,
     pub parent_root: String,
     pub state_root: String,
 }
