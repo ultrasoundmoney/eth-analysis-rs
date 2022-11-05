@@ -42,36 +42,38 @@ pub async fn sync_gaps() -> Result<()> {
         "sync-eth-supply-gas",
         (last_slot - FIRST_STORED_ETH_SUPPLY_SLOT).into(),
     );
+
     for slot in FIRST_STORED_ETH_SUPPLY_SLOT..=last_slot {
+        let stored_eth_supply =
+            eth_supply::get_supply_exists_by_slot(&mut db_connection, &slot).await?;
+        if !stored_eth_supply {
+            info!(slot, "missing eth_supply, filling gap");
+
+            let state_root =
+                beacon_chain::get_state_root_by_slot(&mut db_connection, &slot).await?;
+            let validator_balances = beacon_node
+                .get_validator_balances(&state_root)
+                .await
+                .unwrap();
+            let validator_balances_sum = beacon_chain::sum_validator_balances(validator_balances);
+            let beacon_balances_sum = BeaconBalancesSum {
+                balances_sum: validator_balances_sum,
+                slot: slot.clone(),
+            };
+            let eth_supply_parts =
+                get_supply_parts(&mut db_connection, beacon_balances_sum).await?;
+
+            eth_supply::store(&mut db_connection, &eth_supply_parts).await?;
+
+            info!("{}", progress.get_progress_string());
+        } else {
+            debug!(slot, "slot looks fine");
+        }
+
+        progress.inc_work_done();
         if slot % 100 == 0 {
             info!("{}", progress.get_progress_string());
         }
-
-        let stored_eth_supply =
-            eth_supply::get_supply_exists_by_slot(&mut db_connection, &slot).await?;
-        if stored_eth_supply {
-            progress.inc_work_done();
-            debug!(slot, "slot looks fine");
-            continue;
-        }
-
-        let state_root = beacon_chain::get_state_root_by_slot(&mut db_connection, &slot).await?;
-        let validator_balances = beacon_node
-            .get_validator_balances(&state_root)
-            .await
-            .unwrap();
-        let validator_balances_sum = beacon_chain::sum_validator_balances(validator_balances);
-        let beacon_balances_sum = BeaconBalancesSum {
-            balances_sum: validator_balances_sum,
-            slot: slot.clone(),
-        };
-        let eth_supply_parts = get_supply_parts(&mut db_connection, beacon_balances_sum).await?;
-
-        eth_supply::store(&mut db_connection, &eth_supply_parts).await?;
-
-        progress.inc_work_done();
-        info!(slot, "filled gap at slot");
-        info!("{}", progress.get_progress_string());
     }
 
     info!("done syncing gaps in eth supply");
