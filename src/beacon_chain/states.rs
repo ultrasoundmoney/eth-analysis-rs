@@ -181,4 +181,16 @@ mod tests {
         let state_after = get_last_state(&mut transaction).await;
         assert!(state_after.is_none());
     }
+
+    #[tokio::test]
+    async fn get_state_root_by_slot_test() {
+        let mut connection = db::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        store_state(&mut transaction, "0xtest", &0).await.unwrap();
+
+        let state_root = get_state_root_by_slot(&mut transaction, &0).await.unwrap();
+
+        assert_eq!(state_root, "0xtest");
+    }
 }
