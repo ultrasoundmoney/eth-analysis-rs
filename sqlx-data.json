@@ -58,24 +58,6 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
-  "28cb24726a2123cb298b5480b7376b305d40f262338f44aa24c7a8a3795398a0": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT gwei FROM beacon_issuance\n            ORDER BY timestamp DESC\n            LIMIT 1\n        "
-  },
   "36b6169564ef841d5cfe8e64835534b1156ac30c63afa408684aa6af967711ee": {
     "describe": {
       "columns": [
@@ -249,39 +231,6 @@
     },
     "query": "\n                DELETE FROM blocks_next\n                WHERE number >= $1\n            "
   },
-  "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
-    "describe": {
-      "columns": [
-        {
-          "name": "value",
-          "ordinal": 0,
-          "type_info": "Jsonb"
-        }
-      ],
-      "nullable": [
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT value FROM key_value_store\n            WHERE key = $1\n        "
-  },
-  "88b950efda6150dc3a044420e67b11138cd14fbfca10c53a5b9f640bd5a45610": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Jsonb"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
-  },
   "95f051861a5ca96b593acc398f7f29d5c8ca859e7a76cc8888b00868a23563be": {
     "describe": {
       "columns": [
@@ -319,6 +268,36 @@
       }
     },
     "query": "\n            SELECT SUM(tips) / 1e9 AS \"tips_since_london!\" FROM blocks\n        "
+  },
+  "a4bf0e17e9910b415ae41bc7abfa00053fa3ed6c7170b7c67dcc40adfbb8f985": {
+    "describe": {
+      "columns": [
+        {
+          "name": "state_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "slot",
+          "ordinal": 1,
+          "type_info": "Int4"
+        },
+        {
+          "name": "block_root?",
+          "ordinal": 2,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot,\n                beacon_blocks.block_root AS \"block_root?\"\n            FROM beacon_states\n            LEFT JOIN beacon_blocks ON beacon_states.state_root = beacon_blocks.state_root\n            ORDER BY slot DESC\n            LIMIT 1\n        "
   },
   "a5a62478fc58eb6b9271428b2936a35e21d4e080f758baf199906ae79d97af50": {
     "describe": {
@@ -500,36 +479,6 @@
       }
     },
     "query": "\n            INSERT INTO beacon_blocks (\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated\n            )\n            VALUES (\n                $1, $2, $3, $4, $5\n            )\n        "
-  },
-  "f51ac89ed5030a134d406f4f1595abd2af118630ae4e44dbe58c9f3e5acbc148": {
-    "describe": {
-      "columns": [
-        {
-          "name": "state_root",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "slot",
-          "ordinal": 1,
-          "type_info": "Int4"
-        },
-        {
-          "name": "block_root?",
-          "ordinal": 2,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot,\n                beacon_blocks.block_root AS \"block_root?\"\n            FROM beacon_states\n            LEFT JOIN beacon_blocks ON beacon_blocks.state_root = beacon_states.state_root\n            ORDER BY slot DESC\n            LIMIT 1\n        "
   },
   "f7f858aad6e5a4865c08699ad1cd63acd9bb607df52bbcdd2453cf99ec5f069f": {
     "describe": {
