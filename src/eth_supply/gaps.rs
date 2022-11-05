@@ -43,13 +43,14 @@ pub async fn sync_gaps() -> Result<()> {
         (last_slot - FIRST_STORED_ETH_SUPPLY_SLOT).into(),
     );
     for slot in FIRST_STORED_ETH_SUPPLY_SLOT..=last_slot {
+        if slot % 100 == 0 {
+            info!("{}", progress.get_progress_string());
+        }
+
         let stored_eth_supply =
             eth_supply::get_supply_exists_by_slot(&mut db_connection, &slot).await?;
         if stored_eth_supply {
             progress.inc_work_done();
-            if slot % 10 == 0 {
-                info!("{}", progress.get_progress_string());
-            }
             continue;
         }
 
@@ -65,13 +66,11 @@ pub async fn sync_gaps() -> Result<()> {
         };
         let eth_supply_parts = get_supply_parts(&mut db_connection, beacon_balances_sum).await?;
 
-        super::store(&mut db_connection, &eth_supply_parts).await?;
+        eth_supply::store(&mut db_connection, &eth_supply_parts).await?;
 
         progress.inc_work_done();
-        if slot % 10 == 0 {
-            info!("{}", progress.get_progress_string());
-        }
-        debug!(slot, "filled gap at slot")
+        info!(slot, "filled gap at slot");
+        info!("{}", progress.get_progress_string());
     }
 
     info!("done syncing gaps in eth supply");
