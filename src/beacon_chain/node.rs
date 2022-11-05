@@ -30,16 +30,17 @@ pub struct DepositEnvelope {
     pub data: Deposit,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ExecutionPayload {
-    block_number: BlockNumber,
-    block_hash: String,
-}
+// #[derive(Debug, Deserialize)]
+// pub struct ExecutionPayload {
+//     #[serde(deserialize_with = "from_u32_string")]
+//     block_number: BlockNumber,
+//     block_hash: String,
+// }
 
 #[derive(Debug, Deserialize)]
 pub struct Body {
     pub deposits: Vec<DepositEnvelope>,
-    pub execution_payload: Option<ExecutionPayload>,
+    // pub execution_payload: Option<ExecutionPayload>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,7 +48,7 @@ pub struct BeaconBlock {
     pub body: Body,
     pub parent_root: String,
     #[serde(deserialize_with = "from_u32_string")]
-    pub slot: u32,
+    pub slot: Slot,
     pub state_root: String,
 }
 
