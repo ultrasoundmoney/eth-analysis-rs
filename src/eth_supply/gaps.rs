@@ -35,7 +35,7 @@ pub async fn sync_gaps() -> Result<()> {
 
     debug!(
         FIRST_STORED_ETH_SUPPLY_SLOT,
-        last_slot, "checking first stored to last for gaps"
+        last_slot, "checking first stored slot to last slot for gaps"
     );
 
     let mut progress = Progress::new(
