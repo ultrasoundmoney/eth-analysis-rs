@@ -22,7 +22,11 @@ pub use issuance::{get_current_issuance, get_issuance_by_start_of_day, get_last_
 use lazy_static::lazy_static;
 pub use node::{BeaconHeader, BeaconHeaderEnvelope, BeaconHeaderSignedEnvelope, BeaconNode};
 pub use rewards::update_validator_rewards;
-pub use states::{get_last_state, get_state_root_by_slot, store_state, Slot};
+pub use states::get_last_state;
+pub use states::get_state_root_by_slot;
+pub use states::heal_state_roots;
+pub use states::store_state;
+pub use states::Slot;
 pub use sync::sync_beacon_states;
 
 lazy_static! {

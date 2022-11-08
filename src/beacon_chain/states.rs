@@ -1,7 +1,11 @@
+mod heal;
+
 use chrono::{DateTime, Utc};
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 
 use super::beacon_time;
+
+pub use heal::heal_state_roots;
 
 // Beacon chain slots are defined as 12 second periods starting from genesis. With u32 our program
 // would overflow when the slot number passes 4_294_967_295. u32::MAX * 12 seconds = ~1633 years.
