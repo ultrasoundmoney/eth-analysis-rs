@@ -1,6 +1,7 @@
 //! Functions that know how to communicate with  a BeaconChain node to get various pieces of data.
 //! Currently, many calls taking a state_root as input do not acknowledge that a state_root may
 //! disappear at any time. They should be updated to do so.
+
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use reqwest::StatusCode;
@@ -269,18 +270,29 @@ impl BeaconNode {
     pub async fn get_validator_balances(
         &self,
         state_root: &str,
-    ) -> reqwest::Result<Vec<ValidatorBalance>> {
+    ) -> Result<Option<Vec<ValidatorBalance>>> {
         let url = make_validator_balances_by_state_url(state_root);
 
-        self.client
+        let res = self
+            .client
             .get(&url)
             .send()
             .timed("get validator balances")
-            .await?
-            .error_for_status()?
-            .json::<ValidatorBalancesEnvelope>()
-            .await
-            .map(|envelope| envelope.data)
+            .await?;
+
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => {
+                let envelope = res.json::<ValidatorBalancesEnvelope>().await?;
+                Ok(Some(envelope.data))
+            }
+            status => Err(anyhow!(
+                "failed to fetch validator balances by state_root. state_root = {} status = {} url = {}",
+                state_root,
+                status,
+                res.url()
+            )),
+        }
     }
 
     async fn get_header(&self, block_id: &BlockId) -> Result<Option<BeaconHeaderSignedEnvelope>> {
@@ -308,12 +320,11 @@ impl BeaconNode {
     ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
         let slot_timestamp = beacon_time::get_date_time_from_slot(slot);
         if slot_timestamp > Utc::now() {
-            // If we would return this case at None, the caller would be unable to distinguish
-            // between slots without blocks, and slots that are in the future.
-            panic!(
-                "tried to get header by slot for slot: {}, but slot is in the future!",
-                &slot
-            )
+            return Err(anyhow!(
+                "tried to fetch slot: {}, with expected timestamp: {}, but can't fetch slots from the future",
+                &slot,
+                slot_timestamp
+            ));
         }
 
         self.get_header(&BlockId::Slot(*slot)).await
@@ -330,7 +341,7 @@ impl BeaconNode {
     pub async fn get_last_header(&self) -> Result<BeaconHeaderSignedEnvelope> {
         self.get_header(&BlockId::Head)
             .await
-            .map(|envelope| envelope.expect("a head to always exist on-chain"))
+            .map(|header| header.expect("expect beacon chain head to always point to a block"))
     }
 
     #[allow(dead_code)]
