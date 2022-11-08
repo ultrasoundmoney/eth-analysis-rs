@@ -340,7 +340,6 @@ pub async fn sync_blocks() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
-    use sqlx::Acquire;
 
     use crate::execution_chain::node::ExecutionNodeBlock;
 
