@@ -9,7 +9,7 @@ use super::beacon_time::FirstOfDaySlot;
 use super::node::ValidatorBalance;
 use super::{beacon_time, states, BeaconNode, Slot};
 
-pub fn sum_validator_balances(validator_balances: Vec<ValidatorBalance>) -> GweiNewtype {
+pub fn sum_validator_balances(validator_balances: &Vec<ValidatorBalance>) -> GweiNewtype {
     validator_balances
         .iter()
         .fold(GweiNewtype(0), |sum, validator_balance| {
