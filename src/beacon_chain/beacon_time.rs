@@ -71,7 +71,6 @@ pub struct FirstOfMinuteSlot(pub Slot);
 impl FirstOfMinuteSlot {
     #[allow(dead_code)]
     pub fn new(slot: &u32) -> Option<Self> {
-        dbg!(get_date_time_from_slot(slot));
         if get_is_first_of_minute(slot) {
             Some(FirstOfMinuteSlot(*slot))
         } else {
