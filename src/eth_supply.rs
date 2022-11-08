@@ -4,8 +4,8 @@ mod over_time;
 use anyhow::{Ok, Result};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::postgres::{PgQueryResult, PgRow};
-use sqlx::{Acquire, PgConnection, PgExecutor, PgPool, Row};
+use sqlx::postgres::PgQueryResult;
+use sqlx::{PgConnection, PgExecutor, PgPool};
 use tracing::debug;
 
 use crate::beacon_chain::{self, beacon_time, BeaconBalancesSum, BeaconDepositsSum, Slot};
@@ -114,33 +114,6 @@ struct SupplySinceMerge {
     timestamp: DateTime<Utc>,
 }
 
-async fn get_supply_since_merge_by_hour(
-    executor: impl PgExecutor<'_>,
-) -> sqlx::Result<Vec<SupplyAtTime>> {
-    sqlx::query(
-        "
-            -- We select only one row per hour, using ORDER BY to make sure it's the first.
-            -- The column we output is rounded to whole hours for convenience.
-            SELECT
-                DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS hour_timestamp,
-                supply::FLOAT8 / 1e18 AS supply
-            FROM
-                eth_supply
-            WHERE
-                timestamp >= '2022-09-15T05:00:00'::TIMESTAMPTZ
-            ORDER BY
-                DATE_TRUNC('hour', timestamp), timestamp ASC
-        ",
-    )
-    .map(|row: PgRow| {
-        let timestamp = row.get::<DateTime<Utc>, _>("hour_timestamp");
-        let supply = (row.get::<f64, _>("supply") * 100.0).round() / 100.0;
-        SupplyAtTime { timestamp, supply, slot: None}
-    })
-    .fetch_all(executor)
-    .await
-}
-
 #[derive(Debug, PartialEq)]
 pub struct EthSupply {
     balances_slot: Slot,
@@ -150,7 +123,10 @@ pub struct EthSupply {
     timestamp: DateTime<Utc>,
 }
 
+#[cfg(test)]
 pub async fn get_current_supply(executor: impl PgExecutor<'_>) -> sqlx::Result<EthSupply> {
+    use sqlx::{postgres::PgRow, Row};
+
     sqlx::query(
         "
             SELECT
@@ -181,40 +157,6 @@ pub async fn get_current_supply(executor: impl PgExecutor<'_>) -> sqlx::Result<E
     })
     .fetch_one(executor)
     .await
-}
-
-#[deprecated]
-async fn update_supply_since_merge(executor: &mut PgConnection) -> Result<()> {
-    debug!("updating supply since merge");
-
-    let mut supply_by_hour = get_supply_since_merge_by_hour(&mut *executor).await?;
-
-    let most_recent_supply = get_current_supply(&mut *executor).await?;
-
-    supply_by_hour.push(SupplyAtTime {
-        slot: None,
-        supply: most_recent_supply.supply,
-        timestamp: most_recent_supply.timestamp,
-    });
-
-    let supply_since_merge = SupplySinceMerge {
-        balances_slot: most_recent_supply.balances_slot,
-        block_number: most_recent_supply.block_number,
-        deposits_slot: most_recent_supply.deposits_slot,
-        supply_by_hour: supply_by_hour.clone(),
-        timestamp: most_recent_supply.timestamp,
-    };
-
-    key_value_store::set_caching_value(
-        &mut *executor,
-        &CacheKey::SupplySinceMerge,
-        supply_since_merge,
-    )
-    .await?;
-
-    caching::publish_cache_update(executor, CacheKey::SupplySinceMerge).await;
-
-    Ok(())
 }
 
 async fn update_supply_parts(
@@ -262,10 +204,6 @@ pub async fn get_supply_parts(
 
 pub async fn update_caches(executor: &PgPool, eth_supply_parts: &EthSupplyParts) -> Result<()> {
     update_supply_parts(&mut *executor.acquire().await?, eth_supply_parts).await?;
-
-    update_supply_since_merge(&mut *executor.acquire().await?)
-        .timed("update-supply-since-merge")
-        .await?;
 
     update_supply_over_time(
         executor,
@@ -315,6 +253,7 @@ pub async fn get_supply_exists_by_slot(
 #[cfg(test)]
 mod tests {
     use chrono::SubsecRound;
+    use sqlx::Acquire;
 
     use crate::{
         beacon_chain::{
