@@ -64,7 +64,10 @@ pub async fn get_validator_balances_by_start_of_day<'a>(
     sqlx::query_as!(
         GweiInTimeRow,
         "
-            SELECT timestamp, gwei FROM beacon_validators_balance
+            SELECT
+                timestamp, gwei
+            FROM
+                beacon_validators_balance
         "
     )
     .fetch_all(pool)

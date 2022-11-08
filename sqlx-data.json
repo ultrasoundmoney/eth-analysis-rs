@@ -195,6 +195,30 @@
     },
     "query": "\n            INSERT INTO beacon_states (state_root, slot) VALUES ($1, $2)\n        "
   },
+  "5e13b1105693a51c067b003c1e09de513748e0b8ea9718fee93868a26c76b047": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "gwei",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                timestamp, gwei\n            FROM\n                beacon_validators_balance\n        "
+  },
   "72bc404ce89d4af8053f7797b1c96ca9a783af4f5741a8c676d41fb524e2cc78": {
     "describe": {
       "columns": [
@@ -479,29 +503,5 @@
       }
     },
     "query": "\n            INSERT INTO beacon_blocks (\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated\n            )\n            VALUES (\n                $1, $2, $3, $4, $5\n            )\n        "
-  },
-  "f7f858aad6e5a4865c08699ad1cd63acd9bb607df52bbcdd2453cf99ec5f069f": {
-    "describe": {
-      "columns": [
-        {
-          "name": "timestamp",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "gwei",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT timestamp, gwei FROM beacon_validators_balance\n        "
   }
 }
