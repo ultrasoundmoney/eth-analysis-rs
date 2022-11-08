@@ -449,7 +449,12 @@ mod tests {
     #[tokio::test]
     async fn get_none_header_test() {
         let beacon_node = BeaconNode::new();
-        let header = beacon_node.get_header_by_hash("0xnot_there").await.unwrap();
+        let header = beacon_node
+            .get_header_by_hash(
+                "0x602d010f6e616e56026e514d6099730499ad9f635dc6f4581bd6d3ac744fbd8d",
+            )
+            .await
+            .unwrap();
         assert_eq!(header, None);
     }
 
