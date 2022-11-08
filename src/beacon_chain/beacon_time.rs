@@ -80,6 +80,25 @@ impl FirstOfMinuteSlot {
     }
 }
 
+#[derive(Debug)]
+pub struct FirstOfDaySlotWithBlock(pub Slot);
+
+impl FirstOfDaySlotWithBlock {
+    // pub async fn new(beacon_node: BeaconNode, slot: &Slot) -> Result<Option<Self>> {
+    // We use a tiny algo here to figure out if we're the first of all slots in the day with a
+    // block.
+    // If we don't have a block, we know we're not.
+    // If we do have a block and we're also the first slot of the day, we are.
+    // If we do have a block and we're not the first slot of the day, we still may be the first
+    // in the day with a slot. Search backwards for a slot that is the first of the day without
+    // a block.
+    // If we hit a slot with the block, we can stop, we're not.
+    // If we hit a slot without a block and its the first of the day, we are!
+    // If we hit a slot without a block, we keep searching.
+    // unimplemented!()
+    // }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
