@@ -4,6 +4,7 @@ use futures::try_join;
 use serde::Serialize;
 use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, PgPool, Row};
+use tracing::debug;
 
 use crate::time_frames::LimitedTimeFrame::*;
 use crate::{
@@ -192,6 +193,8 @@ pub async fn update_supply_over_time(
     block_number: BlockNumber,
     timestamp: DateTime<Utc>,
 ) -> Result<()> {
+    debug!("updating supply over time");
+
     let (d1, d30, d7, h1, m5, since_merge) = try_join!(
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day1)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day30)),
