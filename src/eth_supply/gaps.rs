@@ -53,15 +53,15 @@ pub async fn sync_gaps() -> Result<()> {
                 beacon_chain::get_state_root_by_slot(&mut db_connection, &slot).await?;
             let validator_balances = beacon_node
                 .get_validator_balances(&state_root)
-                .await
-                .unwrap();
-            let validator_balances_sum = beacon_chain::sum_validator_balances(validator_balances);
+                .await?
+                .expect("expect validator balances to exist for historic state_root");
+            let validator_balances_sum = beacon_chain::sum_validator_balances(&validator_balances);
             let beacon_balances_sum = BeaconBalancesSum {
                 balances_sum: validator_balances_sum,
                 slot: slot.clone(),
             };
             let eth_supply_parts =
-                get_supply_parts(&mut db_connection, beacon_balances_sum).await?;
+                get_supply_parts(&mut db_connection, &beacon_balances_sum).await?;
 
             eth_supply::store(&mut db_connection, &eth_supply_parts).await?;
 
