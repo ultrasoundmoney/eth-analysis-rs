@@ -183,10 +183,13 @@ pub async fn get_current_supply(executor: impl PgExecutor<'_>) -> sqlx::Result<E
     .await
 }
 
-async fn update_supply_since_merge(executor: &PgPool) -> Result<()> {
-    let mut supply_by_hour = get_supply_since_merge_by_hour(executor).await?;
+#[deprecated]
+async fn update_supply_since_merge(executor: &mut PgConnection) -> Result<()> {
+    debug!("updating supply since merge");
 
-    let most_recent_supply = get_current_supply(executor).await?;
+    let mut supply_by_hour = get_supply_since_merge_by_hour(&mut *executor).await?;
+
+    let most_recent_supply = get_current_supply(&mut *executor).await?;
 
     supply_by_hour.push(SupplyAtTime {
         slot: None,
@@ -202,19 +205,26 @@ async fn update_supply_since_merge(executor: &PgPool) -> Result<()> {
         timestamp: most_recent_supply.timestamp,
     };
 
-    key_value_store::set_caching_value(executor, &CacheKey::SupplySinceMerge, supply_since_merge)
-        .await?;
+    key_value_store::set_caching_value(
+        &mut *executor,
+        &CacheKey::SupplySinceMerge,
+        supply_since_merge,
+    )
+    .await?;
 
     caching::publish_cache_update(executor, CacheKey::SupplySinceMerge).await;
 
     Ok(())
 }
 
-async fn update_supply_parts(executor: &PgPool, eth_supply_parts: &EthSupplyParts) -> Result<()> {
+async fn update_supply_parts(
+    executor: &mut PgConnection,
+    eth_supply_parts: &EthSupplyParts,
+) -> Result<()> {
     debug!("updating supply parts");
 
     key_value_store::set_value_str(
-        executor,
+        &mut *executor,
         &CacheKey::EthSupplyParts.to_db_key(),
         // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
         // as string however.
@@ -229,38 +239,31 @@ async fn update_supply_parts(executor: &PgPool, eth_supply_parts: &EthSupplyPart
 
 pub async fn get_supply_parts(
     executor: &mut PgConnection,
-    beacon_balances_sum: BeaconBalancesSum,
+    beacon_balances_sum: &BeaconBalancesSum,
 ) -> Result<EthSupplyParts> {
     // We have two options here, we take the most recent, the balances slot.
     let point_in_time = beacon_time::get_date_time_from_slot(&beacon_balances_sum.slot);
 
     let execution_balances_sum =
-        execution_chain::get_closest_balances_sum(executor.acquire().await?, point_in_time).await?;
+        execution_chain::get_closest_balances_sum(&mut *executor, point_in_time).await?;
 
     // We get the most recent deposit sum, not every slot has to have a block for which we can
     // determine the deposit sum.
-    let beacon_deposits_sum = beacon_chain::get_deposits_sum(executor.acquire().await?).await;
+    let beacon_deposits_sum = beacon_chain::get_deposits_sum(&mut *executor).await;
 
     let eth_supply_parts = EthSupplyParts {
         execution_balances_sum,
-        beacon_balances_sum,
+        beacon_balances_sum: beacon_balances_sum.clone(),
         beacon_deposits_sum,
     };
 
     Ok(eth_supply_parts)
 }
 
-pub async fn update(executor: &PgPool, beacon_balances_sum: BeaconBalancesSum) -> Result<()> {
-    debug!(slot = beacon_balances_sum.slot, "updating eth supply");
+pub async fn update_caches(executor: &PgPool, eth_supply_parts: &EthSupplyParts) -> Result<()> {
+    update_supply_parts(&mut *executor.acquire().await?, eth_supply_parts).await?;
 
-    let eth_supply_parts =
-        get_supply_parts(&mut executor.acquire().await?.detach(), beacon_balances_sum).await?;
-
-    update_supply_parts(executor, &eth_supply_parts).await?;
-
-    store(executor, &eth_supply_parts).await?;
-
-    update_supply_since_merge(executor)
+    update_supply_since_merge(&mut *executor.acquire().await?)
         .timed("update-supply-since-merge")
         .await?;
 
@@ -272,6 +275,19 @@ pub async fn update(executor: &PgPool, beacon_balances_sum: BeaconBalancesSum) -
     )
     .timed("update-supply-over-time")
     .await?;
+
+    Ok(())
+}
+
+pub async fn update(executor: &mut PgConnection, eth_supply_parts: &EthSupplyParts) -> Result<()> {
+    debug!(
+        balances_slot = eth_supply_parts.beacon_balances_sum.slot,
+        deposits_slot = eth_supply_parts.beacon_deposits_sum.slot,
+        block_number = eth_supply_parts.execution_balances_sum.block_number,
+        "updating eth supply"
+    );
+
+    store(executor, &eth_supply_parts).await?;
 
     Ok(())
 }
@@ -408,7 +424,7 @@ mod tests {
             execution_balances_sum,
         };
 
-        let eth_supply_parts = get_supply_parts(&mut transaction, beacon_balances_sum).await?;
+        let eth_supply_parts = get_supply_parts(&mut transaction, &beacon_balances_sum).await?;
 
         assert_eq!(eth_supply_parts, eth_supply_parts_test);
 
