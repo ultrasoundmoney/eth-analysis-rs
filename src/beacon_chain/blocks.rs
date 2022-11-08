@@ -26,7 +26,7 @@ pub async fn get_deposit_sum_from_block_root<'a>(
     Ok(deposit_sum_aggregated)
 }
 
-pub async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_root: &str) -> bool {
+pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) -> bool {
     if block_root == GENESIS_PARENT_ROOT {
         return true;
     }
