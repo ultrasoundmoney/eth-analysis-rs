@@ -26,21 +26,21 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::SinceMerge => {
             sqlx::query(
                 "
-                    -- We select only one row per hour, using ORDER BY to make sure it's the first.
-                    -- The column we output is rounded to whole hours for convenience.
+                    -- We select only one row per day, using ORDER BY to make sure it's the first.
+                    -- The column we output is rounded to whole days for convenience.
                     SELECT
-                        DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS hour_timestamp,
+                        DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
                         supply::FLOAT8 / 1e18 AS supply
                     FROM
                         eth_supply
                     WHERE
-                        timestamp >= '2022-09-15T05:00:00'::TIMESTAMPTZ
+                        timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
                     ORDER BY
-                        DATE_TRUNC('hour', timestamp), timestamp ASC
+                        DATE_TRUNC('day', timestamp), timestamp ASC
                 ",
             )
             .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("hour_timestamp");
+                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("day_timestamp");
                 let supply = row.get::<f64, _>("supply");
                 SupplyAtTime {
                     slot: None,
