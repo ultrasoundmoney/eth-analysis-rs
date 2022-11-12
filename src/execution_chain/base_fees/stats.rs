@@ -114,12 +114,6 @@ struct BaseFeePerGasStatsTimeFrame {
 
 #[derive(Serialize)]
 struct BaseFeePerGasStats {
-    #[deprecated = "use h1 instead"]
-    average: WeiF64,
-    #[deprecated = "use h1 instead"]
-    max: WeiF64,
-    #[deprecated = "use h1 instead"]
-    min: WeiF64,
     all: Option<BaseFeePerGasStatsTimeFrame>,
     barrier: WeiF64,
     block_number: u32,
@@ -179,14 +173,11 @@ pub async fn update_base_fee_stats(
 
     let base_fee_per_gas_stats = BaseFeePerGasStats {
         all: Some(all.clone()),
-        average: h1.average,
         barrier,
         block_number: block.number,
         d1,
         d30,
         d7,
-        max: h1.max,
-        min: h1.min,
         h1,
         m5,
         timestamp: block.timestamp,
