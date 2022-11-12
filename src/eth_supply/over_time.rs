@@ -22,12 +22,35 @@ async fn get_supply_over_time_time_frame(
     time_frame: &TimeFrame,
 ) -> sqlx::Result<Vec<SupplyAtTime>> {
     match time_frame {
-        TimeFrame::SinceBurn => unimplemented!(),
-        TimeFrame::SinceMerge => {
+        TimeFrame::SinceBurn => {
             sqlx::query(
                 "
                     -- We select only one row per day, using ORDER BY to make sure it's the first.
                     -- The column we output is rounded to whole days for convenience.
+                    SELECT
+                        DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
+                        supply::FLOAT8 / 1e18 AS supply
+                    FROM
+                        eth_supply
+                    ORDER BY
+                        DATE_TRUNC('day', timestamp), timestamp ASC
+                ",
+            )
+            .map(|row: PgRow| {
+                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("day_timestamp");
+                let supply = row.get::<f64, _>("supply");
+                SupplyAtTime {
+                    slot: None,
+                    timestamp,
+                    supply,
+                }
+            })
+            .fetch_all(executor)
+            .await
+        },
+        TimeFrame::SinceMerge => {
+            sqlx::query(
+                "
                     SELECT
                         DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
                         supply::FLOAT8 / 1e18 AS supply
@@ -86,8 +109,6 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::Limited(ltf @ Day1) => {
             sqlx::query(
                 "
-                    -- We select only one row per hour, using ORDER BY to make sure it's the first.
-                    -- The column we output is rounded to whole hours for convenience.
                     SELECT
                         DISTINCT ON (DATE_TRUNC('minute', timestamp)) DATE_TRUNC('minute', timestamp) AS minute_timestamp,
                         supply::FLOAT8 / 1e18 AS supply
@@ -115,8 +136,6 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::Limited(ltf @ Day7) => {
             sqlx::query(
                 "
-                    -- We select only one row per hour, using ORDER BY to make sure it's the first.
-                    -- The column we output is rounded to whole hours for convenience.
                     SELECT
                         DISTINCT ON (DATE_BIN('5 minutes', timestamp, '2022-01-01')) DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
                         supply::FLOAT8 / 1e18 AS supply
@@ -144,8 +163,6 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::Limited(ltf @ Day30) => {
             sqlx::query(
                 "
-                    -- We select only one row per hour, using ORDER BY to make sure it's the first.
-                    -- The column we output is rounded to whole hours for convenience.
                     SELECT
                         DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS hour_timestamp,
                         supply::FLOAT8 / 1e18 AS supply
@@ -181,7 +198,7 @@ struct SupplyOverTime {
     d7: Vec<SupplyAtTime>,
     h1: Vec<SupplyAtTime>,
     m5: Vec<SupplyAtTime>,
-    since_burn: Option<SupplyAtTime>,
+    since_burn: Option<Vec<SupplyAtTime>>,
     since_merge: Vec<SupplyAtTime>,
     slot: Slot,
     timestamp: DateTime<Utc>,
@@ -195,13 +212,14 @@ pub async fn update_supply_over_time(
 ) -> Result<()> {
     debug!("updating supply over time");
 
-    let (d1, d30, d7, h1, m5, since_merge) = try_join!(
+    let (d1, d30, d7, h1, m5, since_merge, since_burn) = try_join!(
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day1)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day30)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day7)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Hour1)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Minute5)),
-        get_supply_over_time_time_frame(executor, &TimeFrame::SinceMerge)
+        get_supply_over_time_time_frame(executor, &TimeFrame::SinceMerge),
+        get_supply_over_time_time_frame(executor, &TimeFrame::SinceBurn)
     )?;
 
     let supply_over_time = SupplyOverTime {
@@ -211,7 +229,7 @@ pub async fn update_supply_over_time(
         d7,
         h1,
         m5,
-        since_burn: None,
+        since_burn: Some(since_burn),
         since_merge,
         slot,
         timestamp,
