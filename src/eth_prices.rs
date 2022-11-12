@@ -2,6 +2,7 @@ mod ftx;
 
 use std::collections::HashSet;
 
+use anyhow::Result;
 use chrono::{DateTime, Duration, DurationRound, TimeZone, Utc};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -11,7 +12,7 @@ use tracing::{debug, info};
 
 use crate::{
     caching::{self, CacheKey},
-    db,
+    db, etherscan,
     execution_chain::LONDON_HARDFORK_TIMESTAMP,
     key_value_store, log,
 };
@@ -23,9 +24,9 @@ struct EthPriceTimestamp {
 
 #[derive(Clone, Debug, FromRow, PartialEq)]
 pub struct EthPrice {
-    timestamp: DateTime<Utc>,
+    pub timestamp: DateTime<Utc>,
     #[sqlx(rename = "ethusd")]
-    usd: f64,
+    pub usd: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -125,68 +126,63 @@ fn calc_h24_change(current_price: &EthPrice, price_h24_ago: &EthPrice) -> f64 {
 async fn update_eth_price_with_most_recent(
     connection: &mut PgConnection,
     last_price: &mut EthPrice,
-) {
-    let most_recent_price = ftx::get_most_recent_price().await;
-    match most_recent_price {
-        None => {
-            debug!("no recent eth price found");
-        }
-        Some(most_recent_price) => {
-            if last_price == &most_recent_price {
-                debug!(
-                    price = last_price.usd,
-                    minute = last_price.timestamp.to_string(),
-                    "most recent eth price is equal to last stored price, skipping",
-                );
-            }
-
-            if last_price.timestamp == most_recent_price.timestamp {
-                debug!(
-                    minute = last_price.timestamp.to_string(),
-                    last_price = last_price.usd,
-                    most_recent_price = most_recent_price.usd,
-                    "found more recent price for existing minute",
-                );
-            } else {
-                debug!(
-                    timestamp = most_recent_price.timestamp.to_string(),
-                    price = most_recent_price.usd,
-                    "new most recent price",
-                );
-            }
-
-            store_price(
-                connection,
-                most_recent_price.timestamp,
-                most_recent_price.usd,
-            )
-            .await;
-
-            *last_price = most_recent_price;
-
-            let price_h24_ago = get_price_h24_ago(connection, Duration::minutes(10))
-                .await
-                .expect("24h old price should be available within 10min of now - 24h");
-
-            let eth_price_stats = EthPriceStats {
-                timestamp: last_price.timestamp,
-                usd: last_price.usd,
-                h24_change: calc_h24_change(&last_price, &price_h24_ago),
-            };
-
-            key_value_store::set_value(
-                sqlx::Acquire::acquire(&mut *connection).await.unwrap(),
-                CacheKey::EthPrice.to_db_key(),
-                &serde_json::to_value(&eth_price_stats).unwrap(),
-            )
-            .await;
-
-            caching::publish_cache_update(connection, CacheKey::EthPrice).await;
-        }
+) -> Result<()> {
+    let most_recent_price = etherscan::get_eth_price().await?;
+    if last_price == &most_recent_price {
+        debug!(
+            price = last_price.usd,
+            minute = last_price.timestamp.to_string(),
+            "most recent eth price is equal to last stored price, skipping",
+        );
     }
+
+    if last_price.timestamp == most_recent_price.timestamp {
+        debug!(
+            minute = last_price.timestamp.to_string(),
+            last_price = last_price.usd,
+            most_recent_price = most_recent_price.usd,
+            "found more recent price for existing minute",
+        );
+    } else {
+        debug!(
+            timestamp = most_recent_price.timestamp.to_string(),
+            price = most_recent_price.usd,
+            "new most recent price",
+        );
+    }
+
+    store_price(
+        connection,
+        most_recent_price.timestamp,
+        most_recent_price.usd,
+    )
+    .await;
+
+    *last_price = most_recent_price;
+
+    let price_h24_ago = get_price_h24_ago(connection, Duration::minutes(10))
+        .await
+        .expect("24h old price should be available within 10min of now - 24h");
+
+    let eth_price_stats = EthPriceStats {
+        timestamp: last_price.timestamp,
+        usd: last_price.usd,
+        h24_change: calc_h24_change(&last_price, &price_h24_ago),
+    };
+
+    key_value_store::set_value(
+        sqlx::Acquire::acquire(&mut *connection).await.unwrap(),
+        CacheKey::EthPrice.to_db_key(),
+        &serde_json::to_value(&eth_price_stats).unwrap(),
+    )
+    .await;
+
+    caching::publish_cache_update(connection, CacheKey::EthPrice).await;
+
+    Ok(())
 }
 
-pub async fn record_eth_price() {
+pub async fn record_eth_price() -> Result<()> {
     log::init_with_env();
 
     info!("recording eth prices");
@@ -198,7 +194,7 @@ pub async fn record_eth_price() {
     let mut last_price = get_most_recent_price(&mut connection).await;
 
     loop {
-        update_eth_price_with_most_recent(&mut connection, &mut last_price).await;
+        update_eth_price_with_most_recent(&mut connection, &mut last_price).await?;
         sleep(std::time::Duration::from_secs(10)).await;
     }
 }
@@ -449,7 +445,9 @@ mod tests {
 
         let mut last_price = test_price.clone();
 
-        update_eth_price_with_most_recent(&mut transaction, &mut last_price).await;
+        update_eth_price_with_most_recent(&mut transaction, &mut last_price)
+            .await
+            .unwrap();
 
         let eth_price = get_most_recent_price(&mut transaction).await;
 
