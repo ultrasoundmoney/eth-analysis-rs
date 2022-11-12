@@ -101,7 +101,7 @@ mod tests {
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
-        insert_eth_price(&mut *tx, Utc::now() - Duration::minutes(6), 5.2).await;
+        insert_eth_price(&mut *tx, Utc::now() - Duration::minutes(21), 5.2).await;
         let ethusd = get_eth_price_by_block(&mut *tx, &test_block).await;
         assert_eq!(ethusd, Err(GetEthPriceError::PriceTooOld));
     }
