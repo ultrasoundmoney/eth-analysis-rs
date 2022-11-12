@@ -55,7 +55,7 @@ pub async fn get_eth_price_by_block(
     .await
     .unwrap();
 
-    if block.timestamp - timestamp <= Duration::minutes(5) {
+    if block.timestamp - timestamp <= Duration::minutes(20) {
         Ok(ethusd)
     } else {
         Err(GetEthPriceError::PriceTooOld)
