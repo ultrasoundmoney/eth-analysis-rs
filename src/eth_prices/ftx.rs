@@ -172,6 +172,7 @@ mod tests {
             .with_timezone(&Utc)
     }
 
+    #[ignore = "ftx is down"]
     #[tokio::test]
     async fn get_missing_price_by_minute_test() {
         let missing_minute = utc_from_str_unsafe("2021-10-22T07:40:00Z");
@@ -179,6 +180,7 @@ mod tests {
         assert_eq!(usd, None);
     }
 
+    #[ignore = "ftx is down"]
     #[tokio::test]
     async fn get_price_by_minute_test() {
         let existing_minute = utc_from_str_unsafe("2021-10-22T07:35:00Z");
@@ -186,6 +188,7 @@ mod tests {
         assert_eq!(usd, Some(4135.924229398));
     }
 
+    #[ignore = "ftx is down"]
     #[tokio::test]
     async fn get_missing_closest_price_by_minute_test() {
         let missing_plus_one = utc_from_str_unsafe("2021-10-22T07:37:00Z");
@@ -193,6 +196,7 @@ mod tests {
         assert_eq!(usd, None);
     }
 
+    #[ignore = "ftx is down"]
     #[tokio::test]
     async fn get_closest_price_by_minute_test() {
         let existing_plus_two = utc_from_str_unsafe("2021-10-22T07:37:00Z");
@@ -251,6 +255,7 @@ mod tests {
         assert_eq!(*closest, prices[0]);
     }
 
+    #[ignore = "ftx is down"]
     #[tokio::test]
     async fn get_most_recent_price_test() {
         get_most_recent_price().await;
