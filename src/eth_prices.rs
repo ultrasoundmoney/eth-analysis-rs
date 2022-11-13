@@ -134,50 +134,50 @@ async fn update_eth_price_with_most_recent(
             minute = last_price.timestamp.to_string(),
             "most recent eth price is equal to last stored price, skipping",
         );
-    }
-
-    if last_price.timestamp == most_recent_price.timestamp {
-        debug!(
-            minute = last_price.timestamp.to_string(),
-            last_price = last_price.usd,
-            most_recent_price = most_recent_price.usd,
-            "found more recent price for existing minute",
-        );
     } else {
-        debug!(
-            timestamp = most_recent_price.timestamp.to_string(),
-            price = most_recent_price.usd,
-            "new most recent price",
-        );
+        if last_price.timestamp == most_recent_price.timestamp {
+            debug!(
+                minute = last_price.timestamp.to_string(),
+                last_price = last_price.usd,
+                most_recent_price = most_recent_price.usd,
+                "found more recent price for existing minute",
+            );
+        } else {
+            debug!(
+                timestamp = most_recent_price.timestamp.to_string(),
+                price = most_recent_price.usd,
+                "new most recent price",
+            );
+        }
+
+        store_price(
+            connection,
+            most_recent_price.timestamp,
+            most_recent_price.usd,
+        )
+        .await;
+
+        *last_price = most_recent_price;
+
+        let price_h24_ago = get_price_h24_ago(connection, Duration::minutes(10))
+            .await
+            .expect("24h old price should be available within 10min of now - 24h");
+
+        let eth_price_stats = EthPriceStats {
+            timestamp: last_price.timestamp,
+            usd: last_price.usd,
+            h24_change: calc_h24_change(&last_price, &price_h24_ago),
+        };
+
+        key_value_store::set_value(
+            sqlx::Acquire::acquire(&mut *connection).await.unwrap(),
+            CacheKey::EthPrice.to_db_key(),
+            &serde_json::to_value(&eth_price_stats).unwrap(),
+        )
+        .await;
+
+        caching::publish_cache_update(connection, CacheKey::EthPrice).await;
     }
-
-    store_price(
-        connection,
-        most_recent_price.timestamp,
-        most_recent_price.usd,
-    )
-    .await;
-
-    *last_price = most_recent_price;
-
-    let price_h24_ago = get_price_h24_ago(connection, Duration::minutes(10))
-        .await
-        .expect("24h old price should be available within 10min of now - 24h");
-
-    let eth_price_stats = EthPriceStats {
-        timestamp: last_price.timestamp,
-        usd: last_price.usd,
-        h24_change: calc_h24_change(&last_price, &price_h24_ago),
-    };
-
-    key_value_store::set_value(
-        sqlx::Acquire::acquire(&mut *connection).await.unwrap(),
-        CacheKey::EthPrice.to_db_key(),
-        &serde_json::to_value(&eth_price_stats).unwrap(),
-    )
-    .await;
-
-    caching::publish_cache_update(connection, CacheKey::EthPrice).await;
 
     Ok(())
 }
