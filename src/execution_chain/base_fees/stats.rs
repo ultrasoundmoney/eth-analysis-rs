@@ -25,7 +25,7 @@ async fn get_base_fee_per_gas_average(
                     FROM
                         blocks
                     WHERE
-                        timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
+                        mined_at >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
                 ",
             )
             .map(|row: PgRow| row.get::<f64, _>("average"))
