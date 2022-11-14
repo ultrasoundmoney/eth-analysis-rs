@@ -85,7 +85,7 @@ async fn get_base_fee_per_gas_min_max(
                     FROM
                         blocks
                     WHERE
-                        timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
+                        mined_at >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
                 ",
             )
             .map(|row: PgRow| {
