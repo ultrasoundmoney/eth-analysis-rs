@@ -176,7 +176,7 @@ async fn update_eth_price_with_most_recent(
             CacheKey::EthPrice.to_db_key(),
             &serde_json::to_value(&eth_price_stats).unwrap(),
         )
-        .await;
+        .await?;
 
         caching::publish_cache_update(connection, CacheKey::EthPrice).await;
     }

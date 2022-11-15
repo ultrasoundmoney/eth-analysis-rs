@@ -11,7 +11,6 @@ use crate::{
     beacon_chain::Slot,
     caching::{self, CacheKey},
     execution_chain::BlockNumber,
-    key_value_store,
     time_frames::TimeFrame,
 };
 
@@ -235,8 +234,7 @@ pub async fn update_supply_over_time(
         timestamp,
     };
 
-    key_value_store::set_caching_value(executor, &CacheKey::SupplyOverTime, supply_over_time)
-        .await?;
+    caching::set_value(executor, &CacheKey::SupplyOverTime, supply_over_time).await?;
 
     caching::publish_cache_update(executor, CacheKey::SupplyOverTime).await;
 

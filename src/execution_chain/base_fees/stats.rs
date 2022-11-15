@@ -224,7 +224,7 @@ pub async fn update_base_fee_stats(
         CacheKey::BaseFeePerGasStats.to_db_key(),
         &serde_json::to_value(base_fee_per_gas_stats).unwrap(),
     )
-    .await;
+    .await?;
 
     caching::publish_cache_update(executor, CacheKey::BaseFeePerGasStats).await;
 

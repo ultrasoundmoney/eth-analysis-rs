@@ -1,8 +1,13 @@
 use std::{fmt::Display, str::FromStr};
 
+use anyhow::Result;
+use serde::Serialize;
+use serde_json::Value;
 use sqlx::PgExecutor;
 use thiserror::Error;
 use tracing::debug;
+
+use crate::key_value_store;
 
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub enum CacheKey {
@@ -90,11 +95,41 @@ pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheK
     .unwrap();
 }
 
+pub async fn get_serialized_caching_value(
+    executor: impl PgExecutor<'_>,
+    cache_key: &CacheKey,
+) -> sqlx::Result<Option<Value>> {
+    key_value_store::get_value(executor, cache_key.to_db_key()).await
+}
+
+pub async fn set_value<'a>(
+    executor: impl PgExecutor<'_>,
+    cache_key: &CacheKey,
+    value: impl Serialize,
+) -> Result<()> {
+    key_value_store::set_value(
+        executor,
+        cache_key.to_db_key(),
+        &serde_json::to_value(value)?,
+    )
+    .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use serde::{Deserialize, Serialize};
+    use sqlx::Acquire;
+
     use crate::db;
 
     use super::*;
+
+    #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+    struct TestJson {
+        name: String,
+        age: i32,
+    }
 
     // This test fails sometimes because when run against the actual dev DB many
     // notifications fire on the "cache-update" channel. Needs a test DB to work reliably.
@@ -117,5 +152,61 @@ mod tests {
             notification.payload(),
             CacheKey::EffectiveBalanceSum.to_db_key()
         )
+    }
+
+    #[tokio::test]
+    async fn get_raw_caching_value_test() -> Result<()> {
+        let mut connection = db::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let test_json = TestJson {
+            name: "alex".to_string(),
+            age: 29,
+        };
+
+        set_value(
+            &mut transaction,
+            &CacheKey::BaseFeePerGasStats,
+            &serde_json::to_value(&test_json).unwrap(),
+        )
+        .await?;
+
+        let raw_value: Value =
+            get_serialized_caching_value(&mut transaction, &CacheKey::BaseFeePerGasStats)
+                .await?
+                .unwrap();
+
+        assert_eq!(raw_value, serde_json::to_value(test_json).unwrap());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_set_caching_value_test() -> Result<()> {
+        let mut connection = db::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let test_json = TestJson {
+            age: 29,
+            name: "alex".to_string(),
+        };
+
+        set_value(
+            &mut transaction,
+            &CacheKey::BaseFeePerGasStats,
+            test_json.clone(),
+        )
+        .await?;
+
+        let caching_value = key_value_store::get_deserializable_value::<TestJson>(
+            &mut transaction,
+            &CacheKey::BaseFeePerGasStats.to_db_key(),
+        )
+        .await?
+        .unwrap();
+
+        assert_eq!(caching_value, test_json);
+
+        Ok(())
     }
 }

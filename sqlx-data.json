@@ -140,6 +140,19 @@
     },
     "query": "\n            SELECT\n                effective_balance_sum\n            FROM\n                beacon_states\n            WHERE\n                state_root = $1\n        "
   },
+  "3c67ace6a2b28b5e75e850ea2a32d292a3ea555214eb595b91f9dc4cd8d953b6": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2::jsonb)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
+  },
   "3d161e6a7b26b1759ada2a5102c9fa5e4fdf75b0fe094850e4502cf6e38c9760": {
     "describe": {
       "columns": [],
@@ -219,6 +232,26 @@
     },
     "query": "\n            SELECT\n                timestamp, gwei\n            FROM\n                beacon_validators_balance\n        "
   },
+  "622a4e700745a450c178d411239781e6319ad98f430c62e6b99685af6962f4d4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "deposit_sum_aggregated",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                deposit_sum_aggregated\n            FROM\n                beacon_blocks\n            WHERE\n                block_root = $1\n        "
+  },
   "72bc404ce89d4af8053f7797b1c96ca9a783af4f5741a8c676d41fb524e2cc78": {
     "describe": {
       "columns": [
@@ -254,6 +287,39 @@
       }
     },
     "query": "\n                DELETE FROM blocks_next\n                WHERE number >= $1\n            "
+  },
+  "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
+    "describe": {
+      "columns": [
+        {
+          "name": "value",
+          "ordinal": 0,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT value FROM key_value_store\n            WHERE key = $1\n        "
+  },
+  "88b950efda6150dc3a044420e67b11138cd14fbfca10c53a5b9f640bd5a45610": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
   },
   "95f051861a5ca96b593acc398f7f29d5c8ca859e7a76cc8888b00868a23563be": {
     "describe": {
@@ -361,26 +427,6 @@
       }
     },
     "query": "\n            INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
-  },
-  "bbd198031055f25c66b00a3870944b27497c2c1ebdc2075051640162599df7b2": {
-    "describe": {
-      "columns": [
-        {
-          "name": "deposit_sum_aggregated",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT deposit_sum_aggregated FROM beacon_blocks\n            WHERE block_root = $1\n        "
   },
   "c3e675178c9b93119e5298a613b1c84cd0847ad39755d3e530cac5a52586a747": {
     "describe": {
@@ -503,5 +549,25 @@
       }
     },
     "query": "\n            INSERT INTO beacon_blocks (\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated\n            )\n            VALUES (\n                $1, $2, $3, $4, $5\n            )\n        "
+  },
+  "ed3c08d34f9200f9cd6cff081487f5f8121483af69f894af0c63ed9b7ab501b4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                block_root\n            FROM\n                beacon_blocks\n            JOIN\n                beacon_states\n            ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot = $1\n        "
   }
 }

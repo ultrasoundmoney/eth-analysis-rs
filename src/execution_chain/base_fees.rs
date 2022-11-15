@@ -38,7 +38,7 @@ async fn update_last_base_fee(executor: &PgPool, block: &ExecutionNodeBlock) -> 
         &CacheKey::BaseFeePerGas.to_db_key(),
         &serde_json::to_value(base_fee_per_gas).unwrap(),
     )
-    .await;
+    .await?;
 
     caching::publish_cache_update(executor, CacheKey::BaseFeePerGas).await;
 

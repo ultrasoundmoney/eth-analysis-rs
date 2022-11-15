@@ -1,3 +1,4 @@
+use anyhow::Result;
 use axum::{
     body::HttpBody,
     http::{header, HeaderMap, HeaderValue, Request},
@@ -8,7 +9,7 @@ use axum::{
 };
 use bytes::BufMut;
 use etag::EntityTag;
-use futures::{join, try_join, TryFutureExt, TryStreamExt};
+use futures::{try_join, TryFutureExt, TryStreamExt};
 use reqwest::StatusCode;
 use serde_json::Value;
 use sqlx::{Connection, PgExecutor, PgPool};
@@ -19,8 +20,8 @@ use tower_http::compression::CompressionLayer;
 use tracing::{debug, error, info, trace};
 
 use crate::{
-    caching::{CacheKey, ParseCacheKeyError},
-    db, env, key_value_store, log,
+    caching::{self, CacheKey, ParseCacheKeyError},
+    db, env, log,
 };
 
 type StateExtension = Extension<Arc<State>>;
@@ -49,9 +50,12 @@ pub struct State {
     db_pool: PgPool,
 }
 
-async fn get_value_hash_lock(connection: impl PgExecutor<'_>, key: &CacheKey) -> CachedValue {
-    let value = key_value_store::get_raw_caching_value(connection, key).await;
-    RwLock::new(value)
+async fn get_value_hash_lock(
+    connection: impl PgExecutor<'_>,
+    key: &CacheKey,
+) -> Result<CachedValue> {
+    let value = caching::get_serialized_caching_value(connection, key).await?;
+    Ok(RwLock::new(value))
 }
 
 async fn etag_middleware<B: std::fmt::Debug>(
@@ -188,11 +192,12 @@ async fn update_cache_from_key(
     connection: impl PgExecutor<'_>,
     cached_value: &CachedValue,
     cache_key: &CacheKey,
-) {
+) -> Result<()> {
     debug!(%cache_key, "cache update",);
-    let value = key_value_store::get_raw_caching_value(connection, cache_key).await;
+    let value = caching::get_serialized_caching_value(connection, cache_key).await?;
     let mut cache_wlock = cached_value.write().unwrap();
     *cache_wlock = value;
+    Ok(())
 }
 
 async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) -> JoinHandle<()> {
@@ -220,21 +225,21 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) ->
                 }
                 Ok(cache_key) => {
                     let cache_value = get_cache_value_by_key(&state.cache, &cache_key);
-                    update_cache_from_key(&mut connection, cache_value, &cache_key).await;
+                    update_cache_from_key(&mut connection, cache_value, &cache_key)
+                        .await
+                        .unwrap();
                 }
             }
         }
     })
 }
 
-pub async fn start_server() {
+pub async fn start_server() -> Result<()> {
     log::init_with_env();
 
-    let db_pool = PgPool::connect(&db::get_db_url_with_name("eth-analysis-serve"))
-        .await
-        .unwrap();
+    let db_pool = PgPool::connect(&db::get_db_url_with_name("eth-analysis-serve")).await?;
 
-    sqlx::migrate!().run(&db_pool).await.unwrap();
+    sqlx::migrate!().run(&db_pool).await?;
 
     debug!("warming cache");
 
@@ -252,7 +257,7 @@ pub async fn start_server() {
         supply_since_merge,
         total_difficulty_progress,
         validator_rewards,
-    ) = join!(
+    ) = try_join!(
         get_value_hash_lock(&db_pool, &CacheKey::BaseFeeOverTime),
         get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGas),
         get_value_hash_lock(&db_pool, &CacheKey::BaseFeePerGasStats),
@@ -266,7 +271,7 @@ pub async fn start_server() {
         get_value_hash_lock(&db_pool, &CacheKey::SupplySinceMerge),
         get_value_hash_lock(&db_pool, &CacheKey::TotalDifficultyProgress),
         get_value_hash_lock(&db_pool, &CacheKey::ValidatorRewards),
-    );
+    )?;
 
     let cache = Arc::new(Cache {
         base_fee_per_gas,
@@ -407,7 +412,7 @@ pub async fn start_server() {
     let port = env::get_env_var("PORT").unwrap_or("3002".to_string());
 
     info!(port, "server listening");
-    let socket_addr = format!("0.0.0.0:{port}").parse().unwrap();
+    let socket_addr = format!("0.0.0.0:{port}").parse()?;
     let server_thread = axum::Server::bind(&socket_addr).serve(app.into_make_service());
 
     try_join!(
@@ -415,4 +420,6 @@ pub async fn start_server() {
         server_thread.map_err(|err| error!("{}", err))
     )
     .unwrap();
+
+    Ok(())
 }

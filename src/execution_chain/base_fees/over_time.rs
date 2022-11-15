@@ -246,7 +246,7 @@ pub async fn update_base_fee_over_time(
         CacheKey::BaseFeeOverTime.to_db_key(),
         &serde_json::to_value(base_fee_over_time).unwrap(),
     )
-    .await;
+    .await?;
 
     caching::publish_cache_update(executor, CacheKey::BaseFeeOverTime).await;
 

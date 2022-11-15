@@ -1,45 +1,35 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{postgres::PgRow, PgExecutor, Row};
+use sqlx::PgExecutor;
 use tracing::debug;
 
-use crate::caching::CacheKey;
-
-// Do we need a distinction between key/value pair isn't there and value is null?
-pub async fn get_value<'a>(executor: impl PgExecutor<'a>, key: &str) -> Option<Value> {
+pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> sqlx::Result<Option<Value>> {
     debug!(key = key, "getting key value pair");
 
-    sqlx::query(
+    let row = sqlx::query!(
         "
             SELECT value FROM key_value_store
             WHERE key = $1
         ",
+        key,
     )
-    .bind(key)
-    .map(|row: PgRow| row.get::<Option<Value>, _>("value"))
     .fetch_optional(executor)
-    .await
-    .unwrap()
-    .flatten()
+    .await?;
+    // .map(|row: PgRow| row.get::<Option<Value>, _>("value"))
+
+    Ok(row.map(|row| row.value).flatten())
 }
 
-pub async fn get_raw_caching_value(
+pub async fn get_deserializable_value<T>(
     executor: impl PgExecutor<'_>,
-    cache_key: &CacheKey,
-) -> Option<Value> {
-    get_value(executor, cache_key.to_db_key()).await
-}
-
-#[allow(dead_code)]
-pub async fn get_caching_value<T>(
-    executor: impl PgExecutor<'_>,
-    cache_key: &CacheKey,
+    key: &str,
 ) -> Result<Option<T>>
 where
     T: for<'de> Deserialize<'de>,
 {
-    match get_value(executor, cache_key.to_db_key()).await {
+    let value = get_value(executor, key).await?;
+    match value {
         None => Ok(None),
         Some(value) => {
             let decoded_value: T = serde_json::from_value::<T>(value)?;
@@ -48,49 +38,46 @@ where
     }
 }
 
-pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Value) {
+pub async fn set_serializable_value(
+    executor: impl PgExecutor<'_>,
+    key: &str,
+    value: impl Serialize,
+) -> Result<()> {
+    let serialized = serde_json::to_value(value)?;
+    set_value(executor, key, &serialized).await?;
+    Ok(())
+}
+
+pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Value) -> Result<()> {
     debug!("storing key: {}", &key,);
 
-    sqlx::query(
+    sqlx::query!(
         "
             INSERT INTO key_value_store (key, value) VALUES ($1, $2)
             ON CONFLICT (key) DO UPDATE SET
                 value = excluded.value
         ",
+        key,
+        value
     )
-    .bind(key)
-    .bind(value)
     .execute(executor)
-    .await
-    .unwrap();
-}
+    .await?;
 
-pub async fn set_caching_value<'a>(
-    executor: impl PgExecutor<'_>,
-    cache_key: &CacheKey,
-    value: impl Serialize,
-) -> Result<()> {
-    set_value(
-        executor,
-        cache_key.to_db_key(),
-        &serde_json::to_value(value)?,
-    )
-    .await;
     Ok(())
 }
 
 pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key: &str, value_str: &str) {
     debug!(key = key, "storing key value pair");
 
-    sqlx::query(
+    sqlx::query!(
         "
             INSERT INTO key_value_store (key, value) VALUES ($1, $2::jsonb)
             ON CONFLICT (key) DO UPDATE SET
                 value = excluded.value
         ",
+        key,
+        value_str.to_string() as String
     )
-    .bind(key)
-    .bind(value_str)
     .execute(executor)
     .await
     .unwrap();
@@ -127,8 +114,12 @@ mod tests {
             "test-key",
             &serde_json::to_value(&test_json).unwrap(),
         )
-        .await;
-        let value = get_value(&mut transaction, "test-key").await.unwrap();
+        .await
+        .unwrap();
+        let value = get_value(&mut transaction, "test-key")
+            .await
+            .unwrap()
+            .unwrap();
         let test_json_from_db = serde_json::from_value::<TestJson>(value).unwrap();
 
         assert_eq!(test_json_from_db, test_json)
@@ -144,12 +135,14 @@ mod tests {
             "test-key",
             &serde_json::to_value(json!(None::<String>)).unwrap(),
         )
-        .await;
-
-        let test_json_from_db = serde_json::from_value::<Option<String>>(
-            get_value(&mut transaction, "test-key").await.unwrap(),
-        )
+        .await
         .unwrap();
+
+        let value = get_value(&mut transaction, "test-key")
+            .await
+            .unwrap()
+            .unwrap();
+        let test_json_from_db = serde_json::from_value::<Option<String>>(value).unwrap();
 
         assert_eq!(test_json_from_db, None)
     }
@@ -172,65 +165,35 @@ mod tests {
 
         set_value_str(&mut transaction, "test-key", &test_json_str).await;
 
-        let test_json_from_db = serde_json::from_value::<TestJson>(
-            get_value(&mut transaction, "test-key").await.unwrap(),
-        )
-        .unwrap();
+        let value = get_value(&mut transaction, "test-key")
+            .await
+            .unwrap()
+            .unwrap();
+        let test_json_from_db = serde_json::from_value::<TestJson>(value).unwrap();
 
         assert_eq!(test_json_from_db, test_json)
     }
 
     #[tokio::test]
-    async fn get_raw_caching_value_test() -> Result<()> {
+    async fn get_set_serializable_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_json = TestJson {
             name: "alex".to_string(),
-            age: 29,
+            age: 30,
         };
 
-        set_caching_value(
-            &mut transaction,
-            &CacheKey::BaseFeePerGasStats,
-            &serde_json::to_value(&test_json).unwrap(),
-        )
-        .await?;
+        set_serializable_value(&mut transaction, "test-key", test_json.clone())
+            .await
+            .unwrap();
 
-        let raw_value: Value =
-            get_raw_caching_value(&mut transaction, &CacheKey::BaseFeePerGasStats)
+        let retrieved_test_json =
+            get_deserializable_value::<TestJson>(&mut transaction, "test-key")
                 .await
+                .unwrap()
                 .unwrap();
 
-        assert_eq!(raw_value, serde_json::to_value(test_json).unwrap());
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn get_set_caching_value_test() -> Result<()> {
-        let mut connection = db::get_test_db().await;
-        let mut transaction = connection.begin().await.unwrap();
-
-        let test_json = TestJson {
-            age: 29,
-            name: "alex".to_string(),
-        };
-
-        set_caching_value(
-            &mut transaction,
-            &CacheKey::BaseFeePerGasStats,
-            test_json.clone(),
-        )
-        .await?;
-
-        let caching_value =
-            get_caching_value::<TestJson>(&mut transaction, &CacheKey::BaseFeePerGasStats)
-                .await?
-                .unwrap();
-
-        assert_eq!(caching_value, test_json);
-
-        Ok(())
+        assert_eq!(retrieved_test_json, test_json);
     }
 }
