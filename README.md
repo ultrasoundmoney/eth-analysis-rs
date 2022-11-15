@@ -1,3 +1,3 @@
-# ETH Analysis Services Ξ🔍
+# Ethereum analysis services Ξ🔍
 
-Services backing [ultrasound.money](https://ultrasound.money/). Written in Rust.
+Backend services to [ultrasound.money](https://ultrasound.money/) analysing Ethereum. Written in Rust.
