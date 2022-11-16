@@ -86,10 +86,7 @@ pub async fn get_validator_balances_by_start_of_day<'a>(
     .unwrap()
 }
 
-pub async fn delete_validator_sums<'a>(
-    executor: impl PgExecutor<'a>,
-    greater_than_or_equal: &Slot,
-) {
+pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
     sqlx::query!(
         "
             DELETE FROM beacon_validators_balance
@@ -100,6 +97,22 @@ pub async fn delete_validator_sums<'a>(
         ",
         *greater_than_or_equal as i32
     )
+    .execute(executor)
+    .await
+    .unwrap();
+}
+
+pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
+    sqlx::query(
+        "
+            DELETE FROM beacon_validators_balance
+            WHERE state_root IN (
+                SELECT state_root FROM beacon_states
+                WHERE slot = $1
+            )
+        ",
+    )
+    .bind(*slot as i32)
     .execute(executor)
     .await
     .unwrap();

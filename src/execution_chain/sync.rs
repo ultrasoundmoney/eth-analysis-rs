@@ -34,7 +34,7 @@ async fn rollback_numbers<'a>(
     greater_than_or_equal: &BlockNumber,
 ) -> Result<()> {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
-    eth_supply::rollback_supply_by_block(executor, greater_than_or_equal).await?;
+    eth_supply::rollback_supply_from_block(executor, greater_than_or_equal).await?;
     block_store.delete_blocks(&greater_than_or_equal).await;
     Ok(())
 }

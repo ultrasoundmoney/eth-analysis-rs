@@ -89,7 +89,7 @@ pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> BeaconIssuan
     .unwrap()
 }
 
-pub async fn delete_issuances<'a>(connection: impl PgExecutor<'a>, greater_than_or_equal: &Slot) {
+pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
     sqlx::query!(
         "
             DELETE FROM beacon_issuance
@@ -100,6 +100,22 @@ pub async fn delete_issuances<'a>(connection: impl PgExecutor<'a>, greater_than_
         ",
         *greater_than_or_equal as i32
     )
+    .execute(connection)
+    .await
+    .unwrap();
+}
+
+pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
+    sqlx::query(
+        "
+            DELETE FROM beacon_issuance
+            WHERE state_root IN (
+                SELECT state_root FROM beacon_states
+                WHERE slot = $1
+            )
+        ",
+    )
+    .bind(*slot as i32)
     .execute(connection)
     .await
     .unwrap();

@@ -33,7 +33,7 @@ fn get_supply(eth_supply_parts: &EthSupplyParts) -> Wei {
         - eth_supply_parts.beacon_deposits_sum.deposits_sum.into_wei()
 }
 
-pub async fn rollback_supply_by_block(
+pub async fn rollback_supply_from_block(
     executor: &mut PgConnection,
     greater_than_or_equal: &BlockNumber,
 ) -> sqlx::Result<PgQueryResult> {
@@ -50,7 +50,7 @@ pub async fn rollback_supply_by_block(
     .await
 }
 
-pub async fn rollback_supply_by_slot(
+pub async fn rollback_supply_from_slot(
     executor: &mut PgConnection,
     greater_than_or_equal: &Slot,
 ) -> sqlx::Result<PgQueryResult> {
@@ -61,6 +61,24 @@ pub async fn rollback_supply_by_slot(
             WHERE
                 deposits_slot >= $1
                 OR balances_slot >= $1
+        ",
+    )
+    .bind(*greater_than_or_equal as i32)
+    .execute(executor)
+    .await
+}
+
+pub async fn rollback_supply_slot(
+    executor: &mut PgConnection,
+    greater_than_or_equal: &Slot,
+) -> sqlx::Result<PgQueryResult> {
+    sqlx::query(
+        "
+            DELETE FROM
+                eth_supply
+            WHERE
+                deposits_slot = $1
+                OR balances_slot = $1
         ",
     )
     .bind(*greater_than_or_equal as i32)

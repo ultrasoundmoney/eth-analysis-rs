@@ -1,3 +1,4 @@
+//! Handles storage and retrieval of beacon blocks in our DB.
 use sqlx::{postgres::PgRow, PgConnection, PgExecutor, Row};
 
 use crate::eth_units::GweiNewtype;
@@ -13,8 +14,12 @@ pub async fn get_deposit_sum_from_block_root<'a>(
 ) -> sqlx::Result<GweiNewtype> {
     let deposit_sum_aggregated = sqlx::query!(
         "
-            SELECT deposit_sum_aggregated FROM beacon_blocks
-            WHERE block_root = $1
+            SELECT
+                deposit_sum_aggregated
+            FROM
+                beacon_blocks
+            WHERE
+                block_root = $1
         ",
         block_root
     )
@@ -77,6 +82,7 @@ pub async fn store_block<'a>(
     .unwrap();
 }
 
+#[allow(dead_code)]
 pub async fn get_last_block_slot(connection: &mut PgConnection) -> Option<u32> {
     sqlx::query(
         "
@@ -98,7 +104,7 @@ pub async fn get_last_block_slot(connection: &mut PgConnection) -> Option<u32> {
     .unwrap()
 }
 
-pub async fn delete_blocks<'a>(connection: impl PgExecutor<'a>, greater_than_or_equal: &Slot) {
+pub async fn delete_blocks(connection: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
     sqlx::query!(
         "
             DELETE FROM beacon_blocks
@@ -112,6 +118,25 @@ pub async fn delete_blocks<'a>(connection: impl PgExecutor<'a>, greater_than_or_
         ",
         *greater_than_or_equal as i32
     )
+    .execute(connection)
+    .await
+    .unwrap();
+}
+
+pub async fn delete_block(connection: impl PgExecutor<'_>, slot: &Slot) {
+    sqlx::query(
+        "
+            DELETE FROM beacon_blocks
+            WHERE state_root IN (
+                SELECT
+                    state_root
+                FROM
+                    beacon_states
+                WHERE slot = $1
+            )
+        ",
+    )
+    .bind(*slot as i32)
     .execute(connection)
     .await
     .unwrap();

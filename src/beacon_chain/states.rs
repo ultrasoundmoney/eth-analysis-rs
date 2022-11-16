@@ -102,13 +102,26 @@ pub async fn get_state_root_by_slot(
     .await
 }
 
-pub async fn delete_states<'a>(executor: impl PgExecutor<'a>, greater_than_or_equal: &Slot) {
+pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
     sqlx::query!(
         "
             DELETE FROM beacon_states
             WHERE slot >= $1
         ",
         *greater_than_or_equal as i32
+    )
+    .execute(executor)
+    .await
+    .unwrap();
+}
+
+pub async fn delete_state(executor: impl PgExecutor<'_>, slot: &Slot) {
+    sqlx::query!(
+        "
+            DELETE FROM beacon_states
+            WHERE slot = $1
+        ",
+        *slot as i32
     )
     .execute(executor)
     .await
