@@ -24,9 +24,6 @@ struct BaseFeeAtTime {
 
 #[derive(Serialize)]
 struct BaseFeeOverTime {
-    // Needs frontend to switch over first.
-    #[deprecated = "use since_burn instead"]
-    all: Option<Vec<BaseFeeAtTime>>,
     barrier: WeiF64,
     block_number: BlockNumber,
     d1: Vec<BaseFeeAtTime>,
@@ -219,7 +216,7 @@ pub async fn update_base_fee_over_time(
     barrier: f64,
     block_number: &BlockNumber,
 ) -> Result<()> {
-    let (m5, h1, d1, d7, d30, all) = try_join!(
+    let (m5, h1, d1, d7, d30, since_burn) = try_join!(
         get_base_fee_over_time(executor, &TimeFrame::Limited(Minute5)),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Hour1)),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Day1),),
@@ -229,7 +226,6 @@ pub async fn update_base_fee_over_time(
     )?;
 
     let base_fee_over_time = BaseFeeOverTime {
-        all: Some(all.clone()),
         barrier,
         block_number: *block_number,
         d1,
@@ -237,7 +233,7 @@ pub async fn update_base_fee_over_time(
         d7,
         h1,
         m5,
-        since_burn: all,
+        since_burn,
         since_merge: None,
     };
 
