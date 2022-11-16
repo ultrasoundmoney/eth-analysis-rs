@@ -58,6 +58,18 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
+  "1d1cbed2bd2dfa388a1b9851e9c772e23c8256c278762aadda6413f26a06341e": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM beacon_states\n            WHERE slot = $1\n        "
+  },
   "36b6169564ef841d5cfe8e64835534b1156ac30c63afa408684aa6af967711ee": {
     "describe": {
       "columns": [
@@ -549,25 +561,5 @@
       }
     },
     "query": "\n            INSERT INTO beacon_blocks (\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated\n            )\n            VALUES (\n                $1, $2, $3, $4, $5\n            )\n        "
-  },
-  "ed3c08d34f9200f9cd6cff081487f5f8121483af69f894af0c63ed9b7ab501b4": {
-    "describe": {
-      "columns": [
-        {
-          "name": "block_root",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                block_root\n            FROM\n                beacon_blocks\n            JOIN\n                beacon_states\n            ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot = $1\n        "
   }
 }
