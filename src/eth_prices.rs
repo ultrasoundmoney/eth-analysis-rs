@@ -1,4 +1,4 @@
-mod ftx;
+mod bybit;
 
 use std::collections::HashSet;
 
@@ -10,9 +10,11 @@ use sqlx::{postgres::PgRow, Connection, FromRow, PgConnection, Postgres, Row};
 use tokio::time::sleep;
 use tracing::{debug, info};
 
+pub use crate::eth_prices::bybit::get_eth_price;
+
 use crate::{
     caching::{self, CacheKey},
-    db, etherscan,
+    db,
     execution_chain::LONDON_HARDFORK_TIMESTAMP,
     key_value_store, log,
 };
@@ -127,7 +129,7 @@ async fn update_eth_price_with_most_recent(
     connection: &mut PgConnection,
     last_price: &mut EthPrice,
 ) -> Result<()> {
-    let most_recent_price = etherscan::get_eth_price().await?;
+    let most_recent_price = bybit::get_eth_price().await?;
     if last_price == &most_recent_price {
         debug!(
             price = last_price.usd,
@@ -252,7 +254,7 @@ pub async fn heal_eth_prices() {
         if !known_minutes.contains(&timestamp) {
             let timestamp_date_time = Utc.timestamp(timestamp, 0);
             debug!(minute = timestamp_date_time.to_string(), "missing minute");
-            let usd = ftx::get_closest_price_by_minute(
+            let usd = bybit::get_closest_price_by_minute(
                 timestamp_date_time,
                 Duration::minutes(max_distance_in_minutes),
             )
@@ -261,11 +263,11 @@ pub async fn heal_eth_prices() {
                 None => {
                     debug!(
                         timestamp = timestamp_date_time.to_string(),
-                        "no FTX price available",
+                        "no Bybit price available",
                     );
                 }
                 Some(usd) => {
-                    debug!("found a price on FTX, adding it to the DB");
+                    debug!("found a price on Bybit, adding it to the DB");
                     store_price(&mut connection, timestamp_date_time, usd).await;
                 }
             }
@@ -360,7 +362,7 @@ pub async fn resync_all() {
         let timestamp = london_minute_timestamp + minute_n * 60;
         let timestamp_date_time = Utc.timestamp(timestamp.into(), 0);
 
-        let usd = ftx::get_closest_price_by_minute(
+        let usd = bybit::get_closest_price_by_minute(
             timestamp_date_time,
             Duration::minutes(max_distance_in_minutes),
         )
@@ -370,7 +372,7 @@ pub async fn resync_all() {
             None => {
                 debug!(
                     timestamp = timestamp_date_time.to_string(),
-                    "no FTX price available",
+                    "no Bybit price available",
                 );
             }
             Some(usd) => {
