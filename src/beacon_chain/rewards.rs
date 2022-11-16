@@ -1,3 +1,4 @@
+use anyhow::Result;
 use chrono::Utc;
 
 use serde::Serialize;
@@ -142,7 +143,7 @@ async fn get_validator_rewards<'a>(
     }
 }
 
-pub async fn update_validator_rewards() {
+pub async fn update_validator_rewards() -> Result<()> {
     log::init_with_env();
 
     info!("updating validator rewards");
@@ -150,8 +151,7 @@ pub async fn update_validator_rewards() {
     let pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&db::get_db_url_with_name("update-validator-rewards"))
-        .await
-        .unwrap();
+        .await?;
 
     sqlx::migrate!().run(&pool).await.unwrap();
 
@@ -165,9 +165,11 @@ pub async fn update_validator_rewards() {
         &CacheKey::ValidatorRewards.to_db_key(),
         &serde_json::to_value(validator_rewards).unwrap(),
     )
-    .await;
+    .await?;
 
     caching::publish_cache_update(&pool, CacheKey::ValidatorRewards).await;
 
     info!("done updating validator rewards");
+
+    Ok(())
 }

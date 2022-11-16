@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::{postgres::PgPoolOptions, Decode};
@@ -75,7 +76,7 @@ struct SupplyProjectionInputs {
     in_beacon_validators_by_day: Vec<GlassnodeDataPoint>,
 }
 
-pub async fn update_supply_projection_inputs() {
+pub async fn update_supply_projection_inputs() -> Result<()> {
     log::init_with_env();
 
     info!("updating supply projection inputs");
@@ -144,7 +145,7 @@ pub async fn update_supply_projection_inputs() {
         &CacheKey::SupplyProjectionInputs.to_db_key(),
         &serde_json::to_value(supply_projetion_inputs).unwrap(),
     )
-    .await;
+    .await?;
 
     debug!("stored fresh projection inputs");
 
@@ -156,4 +157,6 @@ pub async fn update_supply_projection_inputs() {
     );
 
     info!("done updating supply projection inputs");
+
+    Ok(())
 }

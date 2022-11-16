@@ -1,3 +1,4 @@
+use anyhow::Result;
 use serde::Serialize;
 use sqlx::{Connection, PgConnection};
 use tracing::{debug, info};
@@ -19,7 +20,7 @@ struct IssuanceBreakdown {
     proof_of_work: GweiNewtype,
 }
 
-pub async fn update_issuance_breakdown() {
+pub async fn update_issuance_breakdown() -> Result<()> {
     log::init_with_env();
 
     info!("updating issuance breakdown");
@@ -85,9 +86,11 @@ pub async fn update_issuance_breakdown() {
         &CacheKey::IssuanceBreakdown.to_db_key(),
         &serde_json::to_value(issuance_breakdown).unwrap(),
     )
-    .await;
+    .await?;
 
     caching::publish_cache_update(&mut connection, CacheKey::IssuanceBreakdown).await;
 
     info!("done updating issuance breakdown");
+
+    Ok(())
 }

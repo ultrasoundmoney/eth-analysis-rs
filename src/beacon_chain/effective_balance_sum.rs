@@ -1,3 +1,4 @@
+use anyhow::Result;
 use sqlx::{postgres::PgRow, Connection, PgConnection, PgExecutor, Row};
 use tracing::info;
 
@@ -100,7 +101,7 @@ async fn store_effective_balance_sum<'a>(
     .unwrap();
 }
 
-pub async fn update_effective_balance_sum() {
+pub async fn update_effective_balance_sum() -> Result<()> {
     log::init_with_env();
 
     info!("updating effective balance sum");
@@ -136,9 +137,11 @@ pub async fn update_effective_balance_sum() {
         CacheKey::EffectiveBalanceSum.to_db_key(),
         &effective_balance_sum_f64.into(),
     )
-    .await;
+    .await?;
 
     caching::publish_cache_update(&mut connection, CacheKey::EffectiveBalanceSum).await;
+
+    Ok(())
 }
 
 #[cfg(test)]
