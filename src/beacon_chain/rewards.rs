@@ -3,6 +3,7 @@ use chrono::Utc;
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Decode, PgExecutor, PgPool};
+use tracing::{debug, info};
 
 use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
@@ -43,20 +44,20 @@ async fn get_tips_reward<'a>(
     effective_balance_sum: GweiNewtype,
 ) -> sqlx::Result<ValidatorReward> {
     let GweiNewtype(tips_since_london) = get_tips_since_london(executor).await?;
-    tracing::debug!("tips since london {}", tips_since_london);
+    debug!("tips since london {}", tips_since_london);
 
     let tips_per_year = tips_since_london as f64 / get_days_since_london() as f64 * 365.25;
     let single_validator_share = (32_f64 * GWEI_PER_ETH as f64) / effective_balance_sum.0 as f64;
-    tracing::debug!("single validator share {}", tips_since_london);
+    debug!("single validator share {}", tips_since_london);
 
     let tips_earned_per_year_per_validator = tips_per_year * single_validator_share;
-    tracing::debug!(
+    debug!(
         "tips earned per year per validator {}",
         tips_earned_per_year_per_validator
     );
 
     let apr = tips_earned_per_year_per_validator / (32 * GWEI_PER_ETH) as f64;
-    tracing::debug!("tips APR {}", apr);
+    debug!("tips APR {}", apr);
 
     Ok(ValidatorReward {
         annual_reward: GweiNewtype(tips_earned_per_year_per_validator.round() as u64),
@@ -88,20 +89,20 @@ pub fn get_issuance_reward(GweiNewtype(effective_balance_sum): GweiNewtype) -> V
     let annual_reward = max_issuance_per_year / active_validators;
     let apr = max_issuance_per_year / effective_balance_sum as f64;
 
-    tracing::debug!(
+    debug!(
         "total effective balance: {} ETH",
         effective_balance_sum as f64 / GWEI_PER_ETH_F64
     );
-    tracing::debug!("nr of active validators: {}", active_validators);
-    tracing::debug!(
+    debug!("nr of active validators: {}", active_validators);
+    debug!(
         "max issuance per epoch: {} ETH",
         max_issuance_per_epoch / GWEI_PER_ETH_F64
     );
-    tracing::debug!(
+    debug!(
         "max issuance per year: {} ETH",
         max_issuance_per_year / GWEI_PER_ETH_F64
     );
-    tracing::debug!("APR: {:.2}%", apr * 100f64);
+    debug!("APR: {:.2}%", apr * 100f64);
 
     ValidatorReward {
         annual_reward: GweiNewtype(annual_reward as u64),
@@ -144,7 +145,7 @@ async fn get_validator_rewards<'a>(
 pub async fn update_validator_rewards() {
     log::init_with_env();
 
-    tracing::info!("updating validator rewards");
+    info!("updating validator rewards");
 
     let pool = PgPoolOptions::new()
         .max_connections(1)
@@ -157,7 +158,7 @@ pub async fn update_validator_rewards() {
     let beacon_node = BeaconNode::new();
 
     let validator_rewards = get_validator_rewards(&pool, &beacon_node).await;
-    tracing::debug!("validator rewards: {:?}", validator_rewards);
+    debug!("validator rewards: {:?}", validator_rewards);
 
     key_value_store::set_value(
         &pool,
@@ -168,5 +169,5 @@ pub async fn update_validator_rewards() {
 
     caching::publish_cache_update(&pool, CacheKey::ValidatorRewards).await;
 
-    tracing::info!("done updating validator rewards");
+    info!("done updating validator rewards");
 }

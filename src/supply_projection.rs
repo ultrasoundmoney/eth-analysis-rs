@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::{postgres::PgPoolOptions, Decode};
+use tracing::{debug, info};
 
 use crate::{
     beacon_chain,
@@ -77,7 +78,7 @@ struct SupplyProjectionInputs {
 pub async fn update_supply_projection_inputs() {
     log::init_with_env();
 
-    tracing::info!("updating supply projection inputs");
+    info!("updating supply projection inputs");
 
     let pool = PgPoolOptions::new()
         .max_connections(1)
@@ -89,7 +90,7 @@ pub async fn update_supply_projection_inputs() {
 
     let in_contracts_by_day = glassnode::get_locked_eth_data().await.unwrap();
 
-    tracing::debug!(
+    debug!(
         "got gwei in contracts by day, {} data points",
         in_contracts_by_day.len()
     );
@@ -103,7 +104,7 @@ pub async fn update_supply_projection_inputs() {
         })
         .collect::<Vec<_>>();
 
-    tracing::debug!(
+    debug!(
         "got balances in beacon validators by day, {} data points",
         in_beacon_validators_by_day.len()
     );
@@ -118,18 +119,18 @@ pub async fn update_supply_projection_inputs() {
         })
         .collect::<Vec<GlassnodeDataPoint>>();
 
-    tracing::debug!(
+    debug!(
         "got beacon issuance by day, {} data points",
         beacon_issuance_by_day.len()
     );
 
     let supply_data = glassnode::get_circulating_supply_data().await.unwrap();
 
-    tracing::debug!("got supply data by day, {} data points", supply_data.len());
+    debug!("got supply data by day, {} data points", supply_data.len());
 
     let supply_by_day = add_beacon_issuance_to_supply(&beacon_issuance_by_day, &supply_data);
 
-    tracing::debug!("got supply by day, {} data points", supply_by_day.len());
+    debug!("got supply by day, {} data points", supply_by_day.len());
 
     // Deprecate supplyData, lockedData, stakedData after prod frontend has switched to new supply projection inputs.
     let supply_projetion_inputs = SupplyProjectionInputs {
@@ -145,14 +146,14 @@ pub async fn update_supply_projection_inputs() {
     )
     .await;
 
-    tracing::debug!("stored fresh projection inputs");
+    debug!("stored fresh projection inputs");
 
     caching::publish_cache_update(&pool, CacheKey::SupplyProjectionInputs).await;
 
-    tracing::debug!(
+    debug!(
         "published {} cache update",
         CacheKey::SupplyProjectionInputs
     );
 
-    tracing::info!("done updating supply projection inputs")
+    info!("done updating supply projection inputs");
 }

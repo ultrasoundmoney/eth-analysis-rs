@@ -1,5 +1,6 @@
 use serde::Serialize;
 use sqlx::{Connection, PgConnection};
+use tracing::{debug, info};
 
 use crate::{
     beacon_chain,
@@ -21,7 +22,7 @@ struct IssuanceBreakdown {
 pub async fn update_issuance_breakdown() {
     log::init_with_env();
 
-    tracing::info!("updating issuance breakdown");
+    info!("updating issuance breakdown");
 
     let mut connection: PgConnection =
         PgConnection::connect(&db::get_db_url_with_name("update-issuance-breakdown"))
@@ -31,18 +32,18 @@ pub async fn update_issuance_breakdown() {
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
     let crowd_sale = GweiNewtype::from_eth_f64(60_108_506.26);
-    tracing::debug!("crowd sale: {} ETH", crowd_sale.0 / GWEI_PER_ETH);
+    debug!("crowd sale: {} ETH", crowd_sale.0 / GWEI_PER_ETH);
 
     let early_contributors_without_vitalik = GweiNewtype::from_eth_f64(8_418_324.49);
     let vitalik = GweiNewtype::from_eth_f64(696_940.59);
     let early_contributors = early_contributors_without_vitalik + vitalik;
-    tracing::debug!(
+    debug!(
         "early contributors: {} ETH",
         early_contributors.0 / GWEI_PER_ETH
     );
 
     let ethereum_foundation = GweiNewtype::from_eth_f64(3_483_159.75);
-    tracing::debug!(
+    debug!(
         "ethereum foundation: {} ETH",
         ethereum_foundation.0 / GWEI_PER_ETH
     );
@@ -50,14 +51,14 @@ pub async fn update_issuance_breakdown() {
     let proof_of_stake = beacon_chain::get_current_issuance(&mut connection)
         .await
         .gwei;
-    tracing::debug!(
+    debug!(
         "proof of stake issuance: {} ETH",
         proof_of_stake.0 / GWEI_PER_ETH
     );
 
     let eth_supply_2 = etherscan::get_eth_supply_2().await.unwrap();
 
-    tracing::debug!(
+    debug!(
         "eth supply without beacon issuance, with burnt fees: {} ETH",
         GweiNewtype::from(eth_supply_2.eth_supply.clone()).0 / GWEI_PER_ETH
     );
@@ -66,7 +67,7 @@ pub async fn update_issuance_breakdown() {
         - crowd_sale
         - ethereum_foundation
         - early_contributors;
-    tracing::debug!(
+    debug!(
         "proof of work issuance: {} ETH",
         proof_of_work.0 / GWEI_PER_ETH
     );
@@ -88,5 +89,5 @@ pub async fn update_issuance_breakdown() {
 
     caching::publish_cache_update(&mut connection, CacheKey::IssuanceBreakdown).await;
 
-    tracing::info!("done updating issuance breakdown")
+    info!("done updating issuance breakdown");
 }
