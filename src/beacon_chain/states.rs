@@ -85,7 +85,7 @@ pub async fn store_state<'a>(
 pub async fn get_state_root_by_slot(
     executor: impl PgExecutor<'_>,
     slot: &Slot,
-) -> sqlx::Result<String> {
+) -> sqlx::Result<Option<String>> {
     sqlx::query(
         r#"
             SELECT
@@ -98,7 +98,7 @@ pub async fn get_state_root_by_slot(
     )
     .bind(*slot as i32)
     .map(|row: PgRow| row.get::<String, _>("state_root"))
-    .fetch_one(executor)
+    .fetch_optional(executor)
     .await
 }
 
@@ -206,7 +206,10 @@ mod tests {
 
         store_state(&mut transaction, "0xtest", &0).await.unwrap();
 
-        let state_root = get_state_root_by_slot(&mut transaction, &0).await.unwrap();
+        let state_root = get_state_root_by_slot(&mut transaction, &0)
+            .await
+            .unwrap()
+            .unwrap();
 
         assert_eq!(state_root, "0xtest");
     }

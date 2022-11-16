@@ -49,8 +49,9 @@ pub async fn sync_gaps() -> Result<()> {
         if !stored_eth_supply {
             info!(slot, "missing eth_supply, filling gap");
 
-            let state_root =
-                beacon_chain::get_state_root_by_slot(&mut db_connection, &slot).await?;
+            let state_root = beacon_chain::get_state_root_by_slot(&mut db_connection, &slot)
+                .await?
+                .expect("expect historic state_roots to exist");
             let validator_balances = beacon_node
                 .get_validator_balances(&state_root)
                 .await?
