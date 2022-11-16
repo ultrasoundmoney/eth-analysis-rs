@@ -24,7 +24,7 @@ pub use node::{BeaconHeader, BeaconHeaderEnvelope, BeaconHeaderSignedEnvelope, B
 pub use rewards::update_validator_rewards;
 pub use states::get_last_state;
 pub use states::get_state_root_by_slot;
-pub use states::heal_state_roots;
+pub use states::heal_beacon_states;
 pub use states::store_state;
 pub use states::Slot;
 pub use sync::sync_beacon_states;
