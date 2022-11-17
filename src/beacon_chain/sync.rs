@@ -147,7 +147,7 @@ pub async fn sync_state_root(
                 }
                 let block = beacon_node
                     .get_block_by_block_root(&header.root)
-                    .await
+                    .await?
                     // A reorg means it is possible to have fetched a header and then fail to fetch
                     // a block for the same state_root.
                     .expect("expect a block when header has been fetched");

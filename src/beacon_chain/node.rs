@@ -1,6 +1,7 @@
 //! Functions that know how to communicate with  a BeaconChain node to get various pieces of data.
 //! Currently, many calls taking a state_root as input do not acknowledge that a state_root may
 //! disappear at any time. They should be updated to do so.
+use std::fmt::Display;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -20,6 +21,18 @@ enum BlockId {
     Genesis,
     Head,
     Slot(u32),
+}
+
+impl Display for BlockId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BlockRoot(block_root) => write!(f, "BlockId(BlockRoot) {}", block_root),
+            Self::Finalized => write!(f, "BlockId(Finalized)"),
+            Self::Genesis => write!(f, "BlockId(Genesis)"),
+            Self::Head => write!(f, "BlockId(Head)"),
+            Self::Slot(slot) => write!(f, "BlockId(slot) {}", slot),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -211,37 +224,57 @@ impl BeaconNode {
         }
     }
 
-    async fn get_block(&self, block_id: &BlockId) -> reqwest::Result<BeaconBlock> {
+    async fn get_block(&self, block_id: &BlockId) -> Result<Option<BeaconBlock>> {
         let url = make_blocks_url(block_id);
 
-        self.client
-            .get(&url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<BeaconBlockVersionedEnvelope>()
-            .await
-            .map(|envelope| envelope.data.message.into())
+        let res = self.client.get(&url).send().await?;
+
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => {
+                let block = res
+                    .json::<BeaconBlockVersionedEnvelope>()
+                    .await
+                    .map(|envelope| envelope.data.message.into())?;
+                Ok(Some(block))
+            }
+            status => Err(anyhow!(
+                "failed to fetch block by block_id. block_id = {} status = {} url = {}",
+                block_id,
+                status,
+                res.url()
+            )),
+        }
     }
 
     #[allow(dead_code)]
-    pub async fn get_block_by_slot(&self, slot: &Slot) -> reqwest::Result<BeaconBlock> {
+    pub async fn get_block_by_slot(&self, slot: &Slot) -> Result<Option<BeaconBlock>> {
         self.get_block(&BlockId::Slot(*slot)).await
     }
 
-    pub async fn get_block_by_block_root(&self, block_root: &str) -> reqwest::Result<BeaconBlock> {
+    pub async fn get_block_by_block_root(&self, block_root: &str) -> Result<Option<BeaconBlock>> {
         self.get_block(&BlockId::BlockRoot(block_root.to_string()))
             .await
     }
 
     #[allow(dead_code)]
-    pub async fn get_last_finalized_block(&self) -> reqwest::Result<BeaconBlock> {
-        self.get_block(&BlockId::Finalized).await
+    pub async fn get_last_finalized_block(&self) -> Result<BeaconBlock> {
+        let block = self
+            .get_block(&BlockId::Finalized)
+            .await?
+            .expect("expect a finalized block to always be available");
+
+        Ok(block)
     }
 
     #[allow(dead_code)]
-    pub async fn get_last_block(&self) -> reqwest::Result<BeaconBlock> {
-        self.get_block(&BlockId::Head).await
+    pub async fn get_last_block(&self) -> Result<BeaconBlock> {
+        let block = self
+            .get_block(&BlockId::Head)
+            .await?
+            .expect("expect head block to always be available");
+
+        Ok(block)
     }
 
     pub async fn get_state_root_by_slot(&self, slot: &u32) -> Result<Option<String>> {
