@@ -385,6 +385,33 @@
     },
     "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
   },
+  "8ecdb845a8d20242d267393d5c79173f8de281f872a806ec2dd85f49d1c675fc": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "state_root",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    slot,\n                    state_root\n                FROM\n                    beacon_states\n                WHERE\n                    slot >= $1\n                AND\n                    slot <= $2\n                ORDER BY\n                    slot ASC\n            "
+  },
   "95f051861a5ca96b593acc398f7f29d5c8ca859e7a76cc8888b00868a23563be": {
     "describe": {
       "columns": [
@@ -639,32 +666,6 @@
       }
     },
     "query": "\n            SELECT\n                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                gwei\n            FROM\n                beacon_issuance\n            ORDER BY\n                DATE_TRUNC('day', timestamp), timestamp ASC\n        "
-  },
-  "e95a41a561ff124406f2b985b502bba6c842615f77e933940245cac7b03d38bc": {
-    "describe": {
-      "columns": [
-        {
-          "name": "slot",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "state_root",
-          "ordinal": 1,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                slot,\n                state_root\n            FROM\n                beacon_states\n            WHERE\n                slot >= $1\n        "
   },
   "febfe61a125d3cb2bc555027c602842386096975e8387d3de410ca0847d2e56b": {
     "describe": {
