@@ -25,6 +25,7 @@ pub fn get_slot_from_date_time(date_time: &DateTime<Utc>) -> Slot {
         .unwrap()
 }
 
+#[allow(dead_code)]
 pub fn get_is_first_of_day(slot: &Slot) -> bool {
     match slot.cmp(&0) {
         Ordering::Equal => true,
@@ -42,6 +43,7 @@ pub fn get_is_first_of_day(slot: &Slot) -> bool {
 pub struct FirstOfDaySlot(pub Slot);
 
 impl FirstOfDaySlot {
+    #[allow(dead_code)]
     pub fn new(slot: &u32) -> Option<Self> {
         if get_is_first_of_day(slot) {
             Some(FirstOfDaySlot(*slot))
