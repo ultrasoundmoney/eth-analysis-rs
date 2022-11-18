@@ -16,16 +16,16 @@ pub async fn check_beacon_state_gaps() -> Result<()> {
     let mut connection: PgConnection = sqlx::Connection::connect(&*DB_URL).await.unwrap();
 
     {
-        let mut rows = sqlx::query(
+        let mut rows = sqlx::query!(
             "
-            SELECT slot FROM beacon_states
-            ORDER BY slot ASC
-        ",
+                SELECT slot FROM beacon_states
+                ORDER BY slot ASC
+            ",
         )
         .fetch(&mut connection)
         .map(|row| {
             row.map(|row| {
-                let slot: i32 = row.get("slot");
+                let slot: i32 = row.slot;
                 slot as u32
             })
         });
