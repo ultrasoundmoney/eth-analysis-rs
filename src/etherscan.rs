@@ -62,6 +62,7 @@ struct EthPriceEnvelope {
     result: EtherscanEthPrice,
 }
 
+#[allow(dead_code)]
 pub async fn get_eth_price() -> reqwest::Result<EthPrice> {
     reqwest::get(format!(
         "https://api.etherscan.io/api?module=stats&action=ethprice&apikey={}",
