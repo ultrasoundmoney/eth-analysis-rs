@@ -3,7 +3,7 @@ mod heal;
 use chrono::{DateTime, Utc};
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 
-use super::{beacon_time, node::BlockRoot};
+use super::beacon_time;
 
 pub use heal::heal_beacon_states;
 
