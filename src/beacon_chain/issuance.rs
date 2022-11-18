@@ -134,11 +134,27 @@ pub async fn get_day7_ago_issuance(
 ) -> GweiNewtype {
     sqlx::query(
         "
-            SELECT
-                gwei
-            FROM
-                beacon_issuance
-            WHERE timestamp = $1 - '7 days'::INTERVAL
+            WITH
+              issuance_distances AS (
+                SELECT
+                  gwei,
+                  timestamp,
+                  ABS(
+                    EXTRACT(
+                      epoch
+                      FROM
+                        (timestamp - (NOW() - '7 days':: INTERVAL))
+                    )
+                  ) AS distance_seconds
+                FROM
+                  beacon_issuance
+                ORDER BY
+                  distance_seconds ASC
+              )
+            SELECT gwei
+            FROM issuance_distances 
+            WHERE distance_seconds <= 86400
+            LIMIT 1
         ",
     )
     .bind(last_timestamp)
