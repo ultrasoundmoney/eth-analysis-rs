@@ -275,7 +275,8 @@ mod tests {
 
     use crate::{
         beacon_chain::{
-            BeaconHeader, BeaconHeaderEnvelope, BeaconHeaderSignedEnvelope, GENESIS_PARENT_ROOT,
+            tests::{get_test_beacon_block, get_test_header},
+            GENESIS_PARENT_ROOT,
         },
         db,
         eth_units::{GweiNewtype, WEI_PER_GWEI},
@@ -330,29 +331,26 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
         let mut block_store = execution_chain::BlockStore::new(&mut transaction);
 
-        let test_block = make_test_block();
+        let test_id = "get_supply_parts";
+        let state_root = format!("0x{test_id}_state_root");
+        let slot = 0;
+        let test_header = get_test_header(&test_id, &slot, GENESIS_PARENT_ROOT);
+        let test_block = get_test_beacon_block(&state_root, &slot, GENESIS_PARENT_ROOT);
 
-        block_store.store_block(&test_block, 0.0).await;
+        let execution_test_block = make_test_block();
 
-        beacon_chain::store_state(&mut transaction, "0xstate_root", &0).await?;
+        block_store.store_block(&execution_test_block, 0.0).await;
+
+        beacon_chain::store_state(&mut transaction, &state_root, &0, "").await?;
 
         beacon_chain::store_block(
             &mut transaction,
-            "0xstate_root",
-            &BeaconHeaderSignedEnvelope {
-                root: "0xblock_root".to_string(),
-                header: BeaconHeaderEnvelope {
-                    message: BeaconHeader {
-                        slot: 0,
-                        parent_root: GENESIS_PARENT_ROOT.to_string(),
-                        state_root: "0xstate_root".to_string(),
-                    },
-                },
-            },
+            &test_block,
             &GweiNewtype(0),
             &GweiNewtype(5),
+            &test_header,
         )
-        .await;
+        .await?;
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -398,7 +396,7 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, "0xstate_root", &0).await?;
+        beacon_chain::store_state(&mut transaction, "0xstate_root", &0, "").await?;
 
         let execution_balances_sum = ExecutionBalancesSum {
             block_number: 0,
@@ -458,7 +456,7 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, "0xstate_root", &0).await?;
+        beacon_chain::store_state(&mut transaction, "0xstate_root", &0, "").await?;
 
         let execution_balances_sum = ExecutionBalancesSum {
             block_number: 0,

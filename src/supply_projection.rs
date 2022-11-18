@@ -97,7 +97,7 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
     );
 
     let in_beacon_validators_by_day = beacon_chain::get_validator_balances_by_start_of_day(&pool)
-        .await
+        .await?
         .iter()
         .map(|point| GlassnodeDataPoint {
             t: point.t,

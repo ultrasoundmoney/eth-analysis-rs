@@ -1,11 +1,11 @@
+use anyhow::Result;
 use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, PgExecutor};
 
 use crate::eth_units::{to_gwei_string, GweiNewtype};
-use crate::supply_projection::{GweiInTime, GweiInTimeRow};
+use crate::supply_projection::GweiInTime;
 
-use super::beacon_time::FirstOfDaySlot;
 use super::node::ValidatorBalance;
 use super::{beacon_time, states, BeaconNode, Slot};
 
@@ -17,12 +17,12 @@ pub fn sum_validator_balances(validator_balances: &Vec<ValidatorBalance>) -> Gwe
         })
 }
 
-pub async fn store_validator_sum_for_day<'a>(
-    pool: impl PgExecutor<'a>,
+pub async fn store_validators_balance(
+    pool: impl PgExecutor<'_>,
     state_root: &str,
-    FirstOfDaySlot(slot): &FirstOfDaySlot,
+    slot: &Slot,
     gwei: &GweiNewtype,
-) {
+) -> Result<()>{
     let gwei: i64 = gwei.to_owned().into();
 
     sqlx::query!(
@@ -34,8 +34,9 @@ pub async fn store_validator_sum_for_day<'a>(
         gwei,
     )
     .execute(pool)
-    .await
-    .unwrap();
+    .await?;
+
+    Ok(())
 }
 
 pub async fn get_last_effective_balance_sum<'a>(
@@ -58,32 +59,33 @@ pub async fn get_last_effective_balance_sum<'a>(
         .map_err(anyhow::Error::msg)
 }
 
-pub async fn get_validator_balances_by_start_of_day<'a>(
-    pool: impl PgExecutor<'a>,
-) -> Vec<GweiInTime> {
-    sqlx::query_as!(
-        GweiInTimeRow,
-        "
+pub async fn get_validator_balances_by_start_of_day(
+    executor: impl PgExecutor<'_>,
+) -> sqlx::Result<Vec<GweiInTime>> {
+    sqlx::query!(
+        r#"
             SELECT
-                timestamp, gwei
+                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS "day_timestamp!",
+                gwei
             FROM
                 beacon_validators_balance
-        "
+            ORDER BY
+                DATE_TRUNC('day', timestamp), timestamp ASC
+        "#
     )
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await
-    .map(|rows| {
+    .map(|rows|  {
         rows.iter()
-            .map(|row| {
-                (
-                    row.timestamp.duration_trunc(Duration::days(1)).unwrap(),
-                    row.gwei,
-                )
-            })
-            .map(|row| row.into())
-            .collect()
+        .map(|row| {
+            GweiInTime {
+                t: row.day_timestamp.duration_trunc(Duration::days(1) ).unwrap().timestamp() as u64,
+                v: row.gwei
+            }
+        })
+        .collect()
+         
     })
-    .unwrap()
 }
 
 pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
@@ -128,7 +130,7 @@ pub struct BeaconBalancesSum {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, TimeZone, Utc};
+    use chrono::{Duration, TimeZone, Utc, DurationRound};
     use sqlx::Connection;
 
     use crate::{beacon_chain::states::store_state, db};
@@ -140,20 +142,20 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_balances", &17999)
+        store_state(&mut transaction, "0xtest_balances", &17999, "")
             .await
             .unwrap();
 
-        store_validator_sum_for_day(
+        store_validators_balance(
             &mut transaction,
             "0xtest_balances",
-            &FirstOfDaySlot::new(&17999).unwrap(),
+            &17999,
             &GweiNewtype(100),
         )
-        .await;
+        .await.unwrap();
 
         let validator_balances_by_day =
-            get_validator_balances_by_start_of_day(&mut transaction).await;
+            get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
 
         let unix_timestamp = validator_balances_by_day.first().unwrap().t;
 
@@ -169,24 +171,24 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_balances", &17999)
+        store_state(&mut transaction, "0xtest_balances", &17999, "")
             .await
             .unwrap();
 
-        store_validator_sum_for_day(
+        store_validators_balance(
             &mut transaction,
             "0xtest_balances",
-            &FirstOfDaySlot::new(&17999).unwrap(),
+            &17999,
             &GweiNewtype(100),
         )
-        .await;
+        .await.unwrap();
 
-        let balances = get_validator_balances_by_start_of_day(&mut transaction).await;
+        let balances = get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
         assert_eq!(balances.len(), 1);
 
         delete_validator_sums(&mut transaction, &17999).await;
 
-        let balances = get_validator_balances_by_start_of_day(&mut transaction).await;
+        let balances = get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
         assert_eq!(balances.len(), 0);
     }
 }

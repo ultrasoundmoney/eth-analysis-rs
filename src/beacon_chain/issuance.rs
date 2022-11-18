@@ -1,22 +1,23 @@
+use anyhow::Result;
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use sqlx::{postgres::PgRow, Acquire, PgConnection, PgExecutor, Row};
 
 use crate::{
     eth_units::GweiNewtype,
-    supply_projection::{GweiInTime, GweiInTimeRow},
+    supply_projection::GweiInTime,
 };
 
 use super::{
-    beacon_time::{self, FirstOfDaySlot},
+    beacon_time,
     Slot,
 };
 
-pub async fn store_issuance_for_day<'a>(
-    executor: impl PgExecutor<'a>,
+pub async fn store_issuance(
+    executor: impl PgExecutor<'_>,
     state_root: &str,
-    FirstOfDaySlot(slot): &FirstOfDaySlot,
+    slot: &Slot,
     gwei: &GweiNewtype,
-) {
+) -> Result<()> {
     let gwei: i64 = gwei.to_owned().into();
 
     sqlx::query!(
@@ -28,8 +29,9 @@ pub async fn store_issuance_for_day<'a>(
         gwei,
     )
     .execute(executor)
-    .await
-    .unwrap();
+    .await?;
+
+    Ok(())
 }
 
 pub fn calc_issuance(
@@ -39,27 +41,32 @@ pub fn calc_issuance(
     *validator_balances_sum_gwei - *deposit_sum_aggregated
 }
 
-pub async fn get_issuance_by_start_of_day<'a>(
-    pool: impl PgExecutor<'a>,
+pub async fn get_issuance_by_start_of_day(
+    pool: impl PgExecutor<'_>,
 ) -> sqlx::Result<Vec<GweiInTime>> {
-    sqlx::query_as!(
-        GweiInTimeRow,
-        "
-            SELECT timestamp, gwei FROM beacon_issuance
-        "
+    sqlx::query!(
+        r#"
+            SELECT
+                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS "day_timestamp!",
+                gwei
+            FROM
+                beacon_issuance
+            ORDER BY
+                DATE_TRUNC('day', timestamp), timestamp ASC
+        "#
     )
     .fetch_all(pool)
     .await
-    .map(|rows| {
+    .map(|rows|  {
         rows.iter()
-            .map(|row| {
-                (
-                    row.timestamp.duration_trunc(Duration::days(1)).unwrap(),
-                    row.gwei,
-                )
-            })
-            .map(|row| row.into())
-            .collect()
+        .map(|row| {
+            GweiInTime {
+                t: row.day_timestamp.duration_trunc(Duration::days(1) ).unwrap().timestamp() as u64,
+                v: row.gwei
+            }
+        })
+        .collect()
+         
     })
 }
 
@@ -173,17 +180,19 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance", &3599)
+        let test_id = "timestamp_is_start_of_day";
+
+        store_state(&mut transaction, test_id, &3599, &test_id)
             .await
             .unwrap();
 
-        store_issuance_for_day(
+        store_issuance(
             &mut transaction,
-            "0xtest_issuance",
-            &FirstOfDaySlot::new(&3599).unwrap(),
+            test_id,
+            &3599,
             &GweiNewtype(100),
         )
-        .await;
+        .await.unwrap();
 
         let validator_balances_by_day = get_issuance_by_start_of_day(&mut transaction)
             .await
@@ -203,29 +212,29 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_1", &3599)
+        store_state(&mut transaction, "0xtest_issuance_1", &3599, "")
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_2", &10799)
+        store_state(&mut transaction, "0xtest_issuance_2", &10799, "")
             .await
             .unwrap();
 
-        store_issuance_for_day(
+        store_issuance(
             &mut transaction,
             "0xtest_issuance_1",
-            &FirstOfDaySlot::new(&3599).unwrap(),
+            &3599,
             &GweiNewtype(100),
         )
-        .await;
+        .await.unwrap();
 
-        store_issuance_for_day(
+        store_issuance(
             &mut transaction,
             "0xtest_issuance_2",
-            &FirstOfDaySlot::new(&10799).unwrap(),
+            &10799,
             &GweiNewtype(110),
         )
-        .await;
+        .await.unwrap();
 
         let current_issuance = get_current_issuance(&mut transaction).await.gwei;
 
@@ -237,17 +246,17 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance", &3599)
+        store_state(&mut transaction, "0xtest_issuance", &3599, "")
             .await
             .unwrap();
 
-        store_issuance_for_day(
+        store_issuance(
             &mut transaction,
             "0xtest_issuance",
-            &FirstOfDaySlot::new(&3599).unwrap(),
+            &3599,
             &GweiNewtype(100),
         )
-        .await;
+        .await.unwrap();
 
         let issuance_by_day = get_issuance_by_start_of_day(&mut transaction)
             .await
@@ -269,29 +278,29 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_1", &3599)
+        store_state(&mut transaction, "0xtest_issuance_1", &3599, "")
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_2", &10799)
+        store_state(&mut transaction, "0xtest_issuance_2", &10799, "")
             .await
             .unwrap();
 
-        store_issuance_for_day(
+        store_issuance(
             &mut transaction,
             "0xtest_issuance_1",
-            &FirstOfDaySlot::new(&3599).unwrap(),
+            &3599,
             &GweiNewtype(100),
         )
-        .await;
+        .await.unwrap();
 
-        store_issuance_for_day(
+        store_issuance(
             &mut transaction,
             "0xtest_issuance_2",
-            &FirstOfDaySlot::new(&53999).unwrap(),
+            &53999,
             &GweiNewtype(110),
         )
-        .await;
+        .await.unwrap();
 
         let current_issuance = get_current_issuance(&mut transaction).await;
         let day7_ago_issuance =
@@ -305,29 +314,29 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_1", &3599)
+        store_state(&mut transaction, "0xtest_issuance_1", &3599, "")
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_2", &10799)
+        store_state(&mut transaction, "0xtest_issuance_2", &10799, "")
             .await
             .unwrap();
 
-        store_issuance_for_day(
+        store_issuance(
             &mut transaction,
             "0xtest_issuance_1",
-            &FirstOfDaySlot::new(&3599).unwrap(),
+            &3599,
             &GweiNewtype(100),
         )
-        .await;
+        .await.unwrap();
 
-        store_issuance_for_day(
+        store_issuance(
             &mut transaction,
             "0xtest_issuance_2",
-            &FirstOfDaySlot::new(&53999).unwrap(),
+            &53999,
             &GweiNewtype(110),
         )
-        .await;
+        .await.unwrap();
 
         let issuance = get_last_week_issuance(&mut transaction).await;
 

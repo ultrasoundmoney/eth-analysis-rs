@@ -14,11 +14,7 @@ use std::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    beacon_chain::{
-        balances,
-        beacon_time::{self, FirstOfDaySlot},
-        deposits, issuance,
-    },
+    beacon_chain::{balances, beacon_time, deposits, issuance},
     db, eth_supply,
     eth_units::GweiNewtype,
     json_codecs::from_u32_string,
@@ -26,7 +22,7 @@ use crate::{
     performance::TimedExt,
 };
 
-use super::node::StateRoot;
+use super::node::{BeaconBlock, BlockRoot, StateRoot, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, BeaconNode, Slot, BEACON_URL};
 
 lazy_static! {
@@ -93,11 +89,11 @@ impl Iterator for SlotRangeIntoIterator {
 
 async fn store_state_with_block(
     executor: &mut PgConnection,
-    state_root: &str,
-    slot: &u32,
-    header: &BeaconHeaderSignedEnvelope,
+    associated_block_root: &BlockRoot,
+    block: &BeaconBlock,
     deposit_sum: &GweiNewtype,
     deposit_sum_aggregated: &GweiNewtype,
+    header: &BeaconHeaderSignedEnvelope,
 ) -> Result<()> {
     let is_parent_known =
         blocks::get_is_hash_known(&mut *executor, &header.header.message.parent_root).await;
@@ -109,91 +105,89 @@ async fn store_state_with_block(
         ));
     }
 
-    states::store_state(&mut *executor, state_root, slot).await?;
+    states::store_state(
+        &mut *executor,
+        &header.header.message.state_root,
+        &header.header.message.slot,
+        associated_block_root,
+    )
+    .await?;
 
     blocks::store_block(
         &mut *executor,
-        state_root,
-        header,
+        block,
         deposit_sum,
         deposit_sum_aggregated,
+        header,
     )
-    .await;
+    .await?;
 
     Ok(())
 }
 
-// TODO: start storing validator balances.
-// TODO: extract data fetching into own function.
-// TODO: rewrite to have simpler, have we stored this info for the first slot of the day with a
-// block? If no, store, if yes, skip.
-pub async fn sync_state_root(
+struct SyncData {
+    associated_block_root: BlockRoot,
+    header_block_tuple: Option<(BeaconHeaderSignedEnvelope, BeaconBlock)>,
+    validator_balances: Option<Vec<ValidatorBalance>>,
+}
+
+async fn gather_sync_data(
     db_pool: &PgPool,
     beacon_node: &BeaconNode,
     state_root: &StateRoot,
     slot: &Slot,
-) -> Result<()> {
-    let header_block_tuple = {
-        let header = beacon_node.get_header_by_slot(&slot).await?;
+    sync_lag: &Duration,
+) -> Result<SyncData> {
+    // The beacon node won't clearly tell us if a header is unavailable because the slot was missed
+    // or because the state_root we have got dropped. To determine which, we ask to identify the
+    // state_root after we got the header. If the state_root still matches, the slot was missed.
+    let header = beacon_node.get_header_by_slot(slot).await?;
+
+    let state_root_check = beacon_node
+        .get_state_root_by_slot(slot)
+        .await?
+        .expect("expect state_root to be available for currently syncing slot");
+
+    if *state_root != state_root_check {
+        return Err(anyhow!(
+            "slot reorged during gather_sync_data phase, can't continue sync of current state_root {}",
+            state_root
+        ));
+    }
+
+    // To be able to run certain calculations on any slot, we always associate a block_root
+    // with a slot. If a slot was missed, we associate the most recent available block root.
+    let associated_block_root = {
         match header {
-            None => None,
-            Some(header) => {
-                // There is no way to request a header by a state_root, instead we retrieve it
-                // using the slot and then check the state_root still matches to verify we didn't
-                // fork. This could be improved syncing specifically for a slot without a header,
-                // or with a header, providing the block root as an argument.
-                if header.header.message.state_root != *state_root {
-                    return Err(anyhow!("current header for slot {}, no longer matches the state_root {} we're syncing for it", slot, state_root));
-                }
-                let block = beacon_node
-                    .get_block_by_block_root(&header.root)
-                    .await?
-                    // A reorg means it is possible to have fetched a header and then fail to fetch
-                    // a block for the same state_root.
-                    .expect("expect a block when header has been fetched");
-                Some((header, block))
-            }
+            None => blocks::get_block_root_before_slot(db_pool, &(slot - 1)).await?,
+            Some(ref header) => header.root.clone(),
         }
     };
-    let last_header = beacon_node.get_last_header().await?;
 
-    // If we are falling too far behind the head of the chain, skip storing validator balances.
-    let sync_lag = {
-        let last_on_chain_slot = last_header.header.message.slot;
-        let last_on_chain_slot_date_time =
-            beacon_time::get_date_time_from_slot(&last_on_chain_slot);
-        let slot_date_time = beacon_time::get_date_time_from_slot(&slot);
-        last_on_chain_slot_date_time - slot_date_time
+    let header_block_tuple = match header {
+        None => None,
+        Some(header) => {
+            let block = beacon_node
+                .get_block_by_block_root(&header.root)
+                .await?
+                .expect(&format!(
+                    "expect a block to be ava)ilable for currently syncing block_root {}",
+                    header.root
+                ));
+            Some((header, block))
+        }
     };
-
-    debug!(%sync_lag, "beacon sync lag");
-
-    let start_of_day_date_time = FirstOfDaySlot::new(&slot);
 
     // Whenever we fall behind, getting validator balances for older slots from lighthouse takes a
     // long time. This means if we fall behind too far we never catch up, as syncing one slot now
     // takes longer than it takes for a new slot to appear (12 seconds).
     let validator_balances = {
-        // Always get validator balances for a start of day slot.
-        if start_of_day_date_time.is_some() {
-            let validator_balances = beacon_node
-                .get_validator_balances(&state_root)
-                .await?
-                // The only reason a state_root does not have balances is because it reorged.
-                // We can't handle reorgs here. In the future we should cleanly return an error
-                // so that the sync mechanism may cleanly recover instead of crashing, and then
-                // cleanly recovering.
-                .expect("expect validator balances to exist for given state_root");
-            Some(validator_balances)
-        // If this isn't a start of day slot and we're too far behind the head of the
-        // chain, skip the validator balances dependent logic.
-        } else if sync_lag > *BLOCK_LAG_LIMIT {
+        if sync_lag > &BLOCK_LAG_LIMIT {
             warn!(
                 %sync_lag,
-                "block lag over limit, skipping get validator balances"
+                "block lag over limit, skipping get_validator_balances"
             );
             None
-        // Otherwise, get the validator balances.
         } else {
             let validator_balances = beacon_node
                 .get_validator_balances(&state_root)
@@ -203,80 +197,93 @@ pub async fn sync_state_root(
         }
     };
 
-    // If the slot is the first of the day, we want to calculate things which require a block. It'd
-    // be nice to rewrite to a sync_slot and sync_first_of_day_slot where the later requires a slot
-    // with a block or otherwise uses data from the last slot instead of crashing here.
-    if let Some(_) = FirstOfDaySlot::new(slot) {
-        assert!(
-            validator_balances.is_some(),
-            "validator balances are required to sync a first of day slot"
-        );
+    let sync_data = SyncData {
+        associated_block_root,
+        header_block_tuple,
+        validator_balances,
+    };
 
-        assert!(
-            header_block_tuple.is_some(),
-            "block is required to sync a first of day slot"
-        );
-    }
+    Ok(sync_data)
+}
+
+async fn get_sync_lag(beacon_node: &BeaconNode, syncing_slot: &Slot) -> Result<Duration> {
+    let last_header = beacon_node.get_last_header().await?;
+    let last_on_chain_slot = last_header.header.message.slot;
+    let last_on_chain_slot_date_time = beacon_time::get_date_time_from_slot(&last_on_chain_slot);
+    let slot_date_time = beacon_time::get_date_time_from_slot(&syncing_slot);
+    let lag = last_on_chain_slot_date_time - slot_date_time;
+    Ok(lag)
+}
+
+pub async fn sync_state_root(
+    db_pool: &PgPool,
+    beacon_node: &BeaconNode,
+    state_root: &StateRoot,
+    slot: &Slot,
+) -> Result<()> {
+    // If we are falling too far behind the head of the chain, skip storing validator balances.
+    let sync_lag = get_sync_lag(beacon_node, slot).await?;
+    debug!(%sync_lag, "beacon sync lag");
+
+    let SyncData {
+        associated_block_root,
+        header_block_tuple,
+        validator_balances,
+    } = gather_sync_data(db_pool, beacon_node, state_root, slot, &sync_lag).await?;
 
     // Now that we have all the data, we start storing it.
-
     let mut transaction = db_pool.begin().await?;
 
-    match &header_block_tuple {
+    match header_block_tuple {
         None => {
             debug!(
                 "storing slot without block, slot: {:?}, state_root: {}",
                 slot, state_root
             );
-            states::store_state(&mut transaction, &state_root, slot)
+            states::store_state(&mut transaction, &state_root, slot, &associated_block_root)
                 .timed("store state without block")
                 .await?;
         }
-        Some((header, block)) => {
+        Some((ref header, ref block)) => {
             let deposit_sum_aggregated =
                 deposits::get_deposit_sum_aggregated(&mut transaction, &block).await?;
 
             debug!(slot, state_root, "storing slot with block");
             store_state_with_block(
                 &mut transaction,
-                &state_root,
-                slot,
-                &header,
+                &associated_block_root,
+                block,
                 &deposits::get_deposit_sum_from_block(&block),
                 &deposit_sum_aggregated,
+                header,
             )
             .timed("store state with block")
             .await?;
         }
     }
 
-    if let Some(start_of_day_date_time) = FirstOfDaySlot::new(slot) {
-        let validator_balances = validator_balances
-            .as_ref()
-            .expect("expect validator balances for first of day slot");
-        let (_, block) = header_block_tuple.expect("expect block for first of day slot");
-        let validator_balances_sum = balances::sum_validator_balances(validator_balances);
-        balances::store_validator_sum_for_day(
+    if let Some(ref validator_balances) = validator_balances {
+        let validator_balances_sum = balances::sum_validator_balances(&validator_balances);
+        balances::store_validators_balance(
             &mut transaction,
             &state_root,
-            &start_of_day_date_time,
+            &slot,
             &validator_balances_sum,
         )
-        .await;
+        .await?;
 
-        let deposit_sum_aggregated =
-            deposits::get_deposit_sum_aggregated(&mut transaction, &block).await?;
-        issuance::store_issuance_for_day(
-            &mut transaction,
-            &state_root,
-            &start_of_day_date_time,
-            &issuance::calc_issuance(&validator_balances_sum, &deposit_sum_aggregated),
-        )
-        .await;
-    }
+        if let Some((_, block)) = header_block_tuple {
+            let deposit_sum_aggregated =
+                deposits::get_deposit_sum_aggregated(&mut transaction, &block).await?;
+            issuance::store_issuance(
+                &mut transaction,
+                &state_root,
+                slot,
+                &issuance::calc_issuance(&validator_balances_sum, &deposit_sum_aggregated),
+            )
+            .await?;
+        }
 
-    if let Some(validator_balances) = &validator_balances {
-        let validator_balances_sum = balances::sum_validator_balances(validator_balances);
         let beacon_balances_sum = BeaconBalancesSum {
             balances_sum: validator_balances_sum,
             slot: slot.clone(),
@@ -286,31 +293,11 @@ pub async fn sync_state_root(
             eth_supply::get_supply_parts(&mut transaction, &beacon_balances_sum).await?;
 
         eth_supply::update(&mut transaction, &eth_supply_parts).await?;
+
+        eth_supply::update_caches(db_pool, &eth_supply_parts).await?;
     }
 
     transaction.commit().await?;
-
-    let last_header = beacon_node.get_last_header().await?;
-    let is_synced = last_header.header.message.state_root == *state_root;
-    // We can't skip data collection but we can skip data analysis whenever we fall behind the head
-    // of the chain.
-    if is_synced {
-        debug!("synced with the head of the chain, computing analysis");
-
-        if let Some(validator_balances) = &validator_balances {
-            let validator_balances_sum = balances::sum_validator_balances(validator_balances);
-            let beacon_balances_sum = BeaconBalancesSum {
-                balances_sum: validator_balances_sum,
-                slot: slot.clone(),
-            };
-            let eth_supply_parts =
-                eth_supply::get_supply_parts(&mut *db_pool.acquire().await?, &beacon_balances_sum)
-                    .await?;
-            eth_supply::update_caches(db_pool, &eth_supply_parts).await?;
-        }
-    } else {
-        debug!("not synced with the head of the chain, skipping analysis")
-    }
 
     Ok(())
 }
@@ -542,13 +529,14 @@ pub async fn sync_beacon_states() -> Result<()> {
         // Work through the slots queue until it's empty and we're ready to move the next head from
         // the stream to the queue.
         while let Some(slot) = slots_queue.lock().unwrap().pop_front() {
-            let on_chain_state_root = beacon_node
-                .get_header_by_slot(&slot)
-                .await?
-                .expect("expect header to exist for slot to sync from head event")
-                .header
-                .message
-                .state_root;
+            let on_chain_state_root =
+                beacon_node
+                    .get_state_root_by_slot(&slot)
+                    .await?
+                    .expect(&format!(
+                        "expect state_root to exist for slot {} to sync from queue",
+                        slot
+                    ));
             let current_slot_stored_state_root =
                 states::get_state_root_by_slot(&db_pool, &slot).await?;
 

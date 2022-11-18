@@ -3,7 +3,7 @@ mod heal;
 use chrono::{DateTime, Utc};
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 
-use super::beacon_time;
+use super::{beacon_time, node::BlockRoot};
 
 pub use heal::heal_beacon_states;
 
@@ -64,17 +64,22 @@ pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState
     .map(|row| row.into())
 }
 
-pub async fn store_state<'a>(
-    executor: impl PgExecutor<'a>,
+pub async fn store_state(
+    executor: impl PgExecutor<'_>,
     state_root: &str,
     slot: &Slot,
+    associated_block_root: &str,
 ) -> sqlx::Result<()> {
     sqlx::query!(
         "
-            INSERT INTO beacon_states (state_root, slot) VALUES ($1, $2)
+            INSERT INTO
+                beacon_states
+                (state_root, slot, associated_block_root)
+            VALUES ($1, $2, $3)
         ",
         state_root,
-        *slot as i32
+        *slot as i32,
+        associated_block_root
     )
     .execute(executor)
     .await?;
@@ -140,7 +145,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
+        store_state(&mut transaction, "0xstate_root", &0, "")
             .await
             .unwrap();
 
@@ -161,11 +166,11 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root_1", &0)
+        store_state(&mut transaction, "0xstate_root_1", &0, "")
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xstate_root_2", &1)
+        store_state(&mut transaction, "0xstate_root_2", &1, "")
             .await
             .unwrap();
 
@@ -186,7 +191,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
+        store_state(&mut transaction, "0xstate_root", &0, "")
             .await
             .unwrap();
 
@@ -204,7 +209,9 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest", &0).await.unwrap();
+        store_state(&mut transaction, "0xtest", &0, "")
+            .await
+            .unwrap();
 
         let state_root = get_state_root_by_slot(&mut transaction, &0)
             .await

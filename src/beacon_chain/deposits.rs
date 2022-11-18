@@ -64,8 +64,9 @@ mod tests {
 
     use crate::{
         beacon_chain::{
-            store_block, store_state, BeaconHeader, BeaconHeaderEnvelope,
-            BeaconHeaderSignedEnvelope, GENESIS_PARENT_ROOT,
+            store_block, store_state,
+            tests::{get_test_beacon_block, get_test_header},
+            GENESIS_PARENT_ROOT,
         },
         db,
     };
@@ -77,27 +78,25 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
+        let test_id = "get_deposits_sum";
+        let state_root = format!("0x{test_id}_state_root");
+        let slot = 0;
+        let test_header = get_test_header(test_id, &slot, GENESIS_PARENT_ROOT);
+        let test_block = get_test_beacon_block(&state_root, &slot, GENESIS_PARENT_ROOT);
+
+        store_state(&mut transaction, &state_root, &0, "")
             .await
             .unwrap();
 
         store_block(
             &mut transaction,
-            "0xstate_root",
-            &BeaconHeaderSignedEnvelope {
-                root: "0xblock_root".to_string(),
-                header: BeaconHeaderEnvelope {
-                    message: BeaconHeader {
-                        slot: 0,
-                        parent_root: GENESIS_PARENT_ROOT.to_string(),
-                        state_root: "0xstate_root".to_string(),
-                    },
-                },
-            },
+            &test_block,
             &GweiNewtype(0),
             &GweiNewtype(1),
+            &test_header,
         )
-        .await;
+        .await
+        .unwrap();
 
         let deposits_sum = get_deposits_sum(&mut transaction).await;
 

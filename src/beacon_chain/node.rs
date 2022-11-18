@@ -45,22 +45,20 @@ pub struct DepositEnvelope {
     pub data: Deposit,
 }
 
-// #[derive(Debug, Deserialize)]
-// pub struct ExecutionPayload {
-//     #[serde(deserialize_with = "from_u32_string")]
-//     block_number: BlockNumber,
-//     block_hash: String,
-// }
+#[derive(Debug, Deserialize)]
+pub struct ExecutionPayload {
+    pub block_hash: String,
+}
 
 #[derive(Debug, Deserialize)]
-pub struct Body {
+pub struct BeaconBlockBody {
     pub deposits: Vec<DepositEnvelope>,
-    // pub execution_payload: Option<ExecutionPayload>,
+    pub execution_payload: Option<ExecutionPayload>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct BeaconBlock {
-    pub body: Body,
+    pub body: BeaconBlockBody,
     pub parent_root: String,
     #[serde(deserialize_with = "from_u32_string")]
     pub slot: Slot,
@@ -141,10 +139,12 @@ pub struct BeaconHeaderEnvelope {
     pub message: BeaconHeader,
 }
 
+pub type BlockRoot = String;
+
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct BeaconHeaderSignedEnvelope {
-    /// block_root
-    pub root: String,
+    /// BlockRoot
+    pub root: BlockRoot,
     pub header: BeaconHeaderEnvelope,
 }
 
@@ -363,12 +363,34 @@ impl BeaconNode {
         self.get_header(&BlockId::Slot(*slot)).await
     }
 
-    pub async fn get_header_by_hash(
+    #[allow(dead_code)]
+    pub async fn get_header_by_block_root(
         &self,
         block_root: &str,
     ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
         self.get_header(&BlockId::BlockRoot(block_root.to_string()))
             .await
+    }
+
+    /// Convenience fn that really gets the header by slot, but checks for us the state_root is as expected.
+    #[allow(dead_code)]
+    pub async fn get_header_by_state_root(
+        &self,
+        state_root: &str,
+        slot: &Slot,
+    ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
+        let header = self.get_header(&BlockId::Slot(*slot)).await?;
+
+        match header {
+            None => Ok(None),
+            Some(header) => {
+                if header.header.message.state_root == state_root {
+                    Ok(Some(header))
+                } else {
+                    Ok(None)
+                }
+            }
+        }
     }
 
     pub async fn get_last_header(&self) -> Result<BeaconHeaderSignedEnvelope> {
@@ -483,7 +505,7 @@ mod tests {
     async fn get_none_header_test() {
         let beacon_node = BeaconNode::new();
         let header = beacon_node
-            .get_header_by_hash(
+            .get_header_by_block_root(
                 "0x602d010f6e616e56026e514d6099730499ad9f635dc6f4581bd6d3ac744fbd8d",
             )
             .await
@@ -534,7 +556,7 @@ mod tests {
     async fn get_header_by_hash_test() {
         let beacon_node = BeaconNode::new();
         beacon_node
-            .get_header_by_hash(
+            .get_header_by_block_root(
                 "0x09df4a49850ec0c878ba2443f60f5fa6b473abcb14d222915fc44b17885ed8a4",
             )
             .await
@@ -545,5 +567,17 @@ mod tests {
     async fn get_last_head_test() {
         let beacon_node = BeaconNode::new();
         beacon_node.get_last_header().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_header_by_state_root() {
+        let beacon_node = BeaconNode::new();
+        beacon_node
+            .get_header_by_state_root(
+                "0x2e3df8cebeb66206d2b26e6a36a63105f78c22c3ab4b7abaa11b4056b4519588",
+                &5000000,
+            )
+            .await
+            .unwrap();
     }
 }

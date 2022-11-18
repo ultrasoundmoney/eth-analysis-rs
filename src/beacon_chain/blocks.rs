@@ -1,9 +1,13 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
+use anyhow::Result;
 use sqlx::{postgres::PgRow, PgConnection, PgExecutor, Row};
 
 use crate::eth_units::GweiNewtype;
 
-use super::{node::BeaconHeaderSignedEnvelope, Slot};
+use super::{
+    node::{BeaconBlock, BeaconHeaderSignedEnvelope, BlockRoot},
+    Slot,
+};
 
 pub const GENESIS_PARENT_ROOT: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -51,35 +55,42 @@ pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) 
     .get("exists")
 }
 
-pub async fn store_block<'a>(
-    executor: &mut PgConnection,
-    state_root: &str,
-    header: &BeaconHeaderSignedEnvelope,
+pub async fn store_block(
+    executor: impl PgExecutor<'_>,
+    block: &BeaconBlock,
     deposit_sum: &GweiNewtype,
     deposit_sum_aggregated: &GweiNewtype,
-) {
+    header: &BeaconHeaderSignedEnvelope,
+) -> sqlx::Result<()> {
     sqlx::query!(
         "
             INSERT INTO beacon_blocks (
+                block_hash,
                 block_root,
-                state_root,
-                parent_root,
                 deposit_sum,
-                deposit_sum_aggregated
+                deposit_sum_aggregated,
+                parent_root,
+                state_root
             )
             VALUES (
-                $1, $2, $3, $4, $5
+                $1, $2, $3, $4, $5, $6
             )
         ",
+        block
+            .body
+            .execution_payload
+            .as_ref()
+            .map(|payload| payload.block_hash.clone()),
         header.root,
-        state_root,
-        header.header.message.parent_root,
         i64::from(deposit_sum.to_owned()),
         i64::from(deposit_sum_aggregated.to_owned()),
+        header.header.message.parent_root,
+        header.header.message.state_root,
     )
     .execute(executor)
-    .await
-    .unwrap();
+    .await?;
+
+    Ok(())
 }
 
 #[allow(dead_code)]
@@ -142,15 +153,44 @@ pub async fn delete_block(connection: impl PgExecutor<'_>, slot: &Slot) {
     .unwrap();
 }
 
+pub async fn get_block_root_before_slot(
+    executor: impl PgExecutor<'_>,
+    less_than_or_equal: &Slot,
+) -> Result<BlockRoot> {
+    let row = sqlx::query!(
+        "
+            SELECT
+                block_root
+            FROM
+                beacon_states 
+            JOIN
+                beacon_blocks 
+            ON
+                beacon_states.state_root = beacon_blocks.state_root 
+            WHERE slot <= $1
+            ORDER BY slot DESC 
+            LIMIT 1
+        ",
+        *less_than_or_equal as i32
+    )
+    .fetch_one(executor)
+    .await?;
+
+    Ok(row.block_root)
+}
+
 #[cfg(test)]
 mod tests {
-    use sqlx::Connection;
+    use sqlx::Acquire;
 
     use super::*;
     use crate::{
         beacon_chain::{
-            node::{BeaconHeader, BeaconHeaderEnvelope},
+            node::{BeaconBlockBody, BeaconHeader, BeaconHeaderEnvelope},
             states::store_state,
+            tests::{
+                get_test_beacon_block, get_test_header, store_custom_test_block, store_test_block,
+            },
         },
         db,
     };
@@ -180,29 +220,10 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
-            .await
-            .unwrap();
+        store_test_block(&mut transaction, "is_hash_known_test").await;
 
-        store_block(
-            &mut transaction,
-            "0xstate_root",
-            &BeaconHeaderSignedEnvelope {
-                root: "0xblock_root".to_string(),
-                header: BeaconHeaderEnvelope {
-                    message: BeaconHeader {
-                        slot: 0,
-                        parent_root: GENESIS_PARENT_ROOT.to_string(),
-                        state_root: "0xstate_root".to_string(),
-                    },
-                },
-            },
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-        )
-        .await;
-
-        let is_hash_known = get_is_hash_known(&mut transaction, "0xblock_root").await;
+        let is_hash_known =
+            get_is_hash_known(&mut transaction, "0xis_hash_known_test_block_root").await;
 
         assert_eq!(is_hash_known, true);
     }
@@ -212,27 +233,39 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
+        let state_root = format!("0xblock_test_state_root");
+        let slot = 0;
+
+        store_state(&mut transaction, &state_root, &slot, "")
             .await
             .unwrap();
 
         store_block(
             &mut transaction,
-            "0xstate_root",
+            &BeaconBlock {
+                body: BeaconBlockBody {
+                    deposits: vec![],
+                    execution_payload: None,
+                },
+                parent_root: GENESIS_PARENT_ROOT.to_string(),
+                slot,
+                state_root: state_root.clone(),
+            },
+            &GweiNewtype(0),
+            &GweiNewtype(0),
             &BeaconHeaderSignedEnvelope {
                 root: "0xblock_root".to_string(),
                 header: BeaconHeaderEnvelope {
                     message: BeaconHeader {
-                        slot: 0,
+                        slot,
                         parent_root: GENESIS_PARENT_ROOT.to_string(),
-                        state_root: "0xstate_root".to_string(),
+                        state_root,
                     },
                 },
             },
-            &GweiNewtype(0),
-            &GweiNewtype(0),
         )
-        .await;
+        .await
+        .unwrap();
 
         let is_hash_known = get_is_hash_known(&mut transaction, "0xblock_root").await;
 
@@ -253,30 +286,16 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
-            .await
-            .unwrap();
+        let test_id = "last_block_number_some_test";
+        let state_root = format!("0x{test_id}_state_root");
+        let slot = 5923;
+        let test_header = get_test_header(test_id, &slot, GENESIS_PARENT_ROOT);
+        let test_block = get_test_beacon_block(&state_root, &slot, GENESIS_PARENT_ROOT);
 
-        store_block(
-            &mut transaction,
-            "0xstate_root",
-            &BeaconHeaderSignedEnvelope {
-                root: "0xblock_root".to_string(),
-                header: BeaconHeaderEnvelope {
-                    message: BeaconHeader {
-                        slot: 0,
-                        parent_root: GENESIS_PARENT_ROOT.to_string(),
-                        state_root: "0xstate_root".to_string(),
-                    },
-                },
-            },
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-        )
-        .await;
+        store_custom_test_block(&mut transaction, &test_header, &test_block).await;
 
-        let block_slot = get_last_block_slot(&mut transaction).await;
-        assert_eq!(block_slot, Some(0));
+        let last_block_slot = get_last_block_slot(&mut transaction).await;
+        assert_eq!(last_block_slot, Some(slot));
     }
 
     #[tokio::test]
@@ -284,27 +303,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
-            .await
-            .unwrap();
-
-        store_block(
-            &mut transaction,
-            "0xstate_root",
-            &BeaconHeaderSignedEnvelope {
-                root: "0xblock_root".to_string(),
-                header: BeaconHeaderEnvelope {
-                    message: BeaconHeader {
-                        slot: 0,
-                        parent_root: GENESIS_PARENT_ROOT.to_string(),
-                        state_root: "0xstate_root".to_string(),
-                    },
-                },
-            },
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-        )
-        .await;
+        store_test_block(&mut transaction, "delete_block_test").await;
 
         let block_slot = get_last_block_slot(&mut transaction).await;
         assert_eq!(block_slot, Some(0));
@@ -313,5 +312,30 @@ mod tests {
 
         let block_slot = get_last_block_slot(&mut transaction).await;
         assert_eq!(block_slot, None);
+    }
+
+    #[tokio::test]
+    async fn get_block_root_before_slot_test() -> Result<()> {
+        let mut connection = db::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let test_header_before =
+            get_test_header("last_block_before_slot_before", &0, GENESIS_PARENT_ROOT);
+        let test_block_before =
+            get_test_beacon_block("last_block_before_slot_before", &0, GENESIS_PARENT_ROOT);
+        let test_header_after =
+            get_test_header("last_block_before_slot_after", &1, &test_header_before.root);
+        let test_block_after =
+            get_test_beacon_block("last_block_before_slot_after", &0, &test_header_before.root);
+
+        store_custom_test_block(&mut transaction, &test_header_before, &test_block_before).await;
+
+        store_custom_test_block(&mut transaction, &test_header_after, &test_block_after).await;
+
+        let last_block_before = get_block_root_before_slot(&mut transaction, &0).await?;
+
+        assert_eq!(test_header_before.root, last_block_before);
+
+        Ok(())
     }
 }

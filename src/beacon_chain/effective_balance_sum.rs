@@ -172,7 +172,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        states::store_state(&mut transaction, "0xstate_root", &0)
+        states::store_state(&mut transaction, "0xstate_root", &0, "")
             .await
             .unwrap();
 
@@ -194,7 +194,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        states::store_state(&mut transaction, "0xstate_root", &0)
+        states::store_state(&mut transaction, "0xstate_root", &0, "")
             .await
             .unwrap();
 
@@ -209,7 +209,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        states::store_state(&mut transaction, "0xtest_root", &0)
+        states::store_state(&mut transaction, "0xtest_root", &0, "")
             .await
             .unwrap();
         store_effective_balance_sum(

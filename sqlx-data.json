@@ -58,6 +58,26 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
+  "138299bc4184af247b92b1112b2910a30140b6c869424c19517eeaf5dae6ca44": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                block_root\n            FROM\n                beacon_states \n            JOIN\n                beacon_blocks \n            ON\n                beacon_states.state_root = beacon_blocks.state_root \n            WHERE slot <= $1\n            ORDER BY slot DESC \n            LIMIT 1\n        "
+  },
   "1d1cbed2bd2dfa388a1b9851e9c772e23c8256c278762aadda6413f26a06341e": {
     "describe": {
       "columns": [],
@@ -69,6 +89,23 @@
       }
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot = $1\n        "
+  },
+  "262e7c58ea23ae1e7b2694ff084a5594b35d80df367844abb6fc0ad7b56ac0a9": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Int8",
+          "Int8",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO beacon_blocks (\n                block_hash,\n                block_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                parent_root,\n                state_root\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6\n            )\n        "
   },
   "36b6169564ef841d5cfe8e64835534b1156ac30c63afa408684aa6af967711ee": {
     "describe": {
@@ -131,6 +168,30 @@
       }
     },
     "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM\n                    blocks_next\n                WHERE\n                    number = $1\n            "
+  },
+  "36ceca3d7486bb5eafb2a8146c181adf99b6f2162bb27d273d537c036d3ae65d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "day_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "gwei",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                gwei\n            FROM\n                beacon_validators_balance\n            ORDER BY\n                DATE_TRUNC('day', timestamp), timestamp ASC\n        "
   },
   "373699992ba24383ca449966a910ff1caae73a250224e03a01bb463cc9ec5966": {
     "describe": {
@@ -207,43 +268,6 @@
     },
     "query": "\n                SELECT COUNT(*) AS \"count!\" FROM blocks_next\n            "
   },
-  "599dc56e83c008c39c90aaf090a679811a07d26f76b0876dba42630bd1415f31": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO beacon_states (state_root, slot) VALUES ($1, $2)\n        "
-  },
-  "5e13b1105693a51c067b003c1e09de513748e0b8ea9718fee93868a26c76b047": {
-    "describe": {
-      "columns": [
-        {
-          "name": "timestamp",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "gwei",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT\n                timestamp, gwei\n            FROM\n                beacon_validators_balance\n        "
-  },
   "622a4e700745a450c178d411239781e6319ad98f430c62e6b99685af6962f4d4": {
     "describe": {
       "columns": [
@@ -264,29 +288,19 @@
     },
     "query": "\n            SELECT\n                deposit_sum_aggregated\n            FROM\n                beacon_blocks\n            WHERE\n                block_root = $1\n        "
   },
-  "72bc404ce89d4af8053f7797b1c96ca9a783af4f5741a8c676d41fb524e2cc78": {
+  "6c03cd0877ee34a84787bc829f95a37ecc89d465ce945cf9a6a04d1bd87907e0": {
     "describe": {
-      "columns": [
-        {
-          "name": "timestamp",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "gwei",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
+      "columns": [],
+      "nullable": [],
       "parameters": {
-        "Left": []
+        "Left": [
+          "Text",
+          "Int4",
+          "Text"
+        ]
       }
     },
-    "query": "\n            SELECT timestamp, gwei FROM beacon_issuance\n        "
+    "query": "\n            INSERT INTO\n                beacon_states\n                (state_root, slot, associated_block_root)\n            VALUES ($1, $2, $3)\n        "
   },
   "73a4e423df6615c6fac510739e7cc18a7626439f2ccdf2b7b6193577ab00d4c3": {
     "describe": {
@@ -546,20 +560,28 @@
     },
     "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM\n                    blocks_next\n                WHERE\n                    hash = $1\n            "
   },
-  "e3e2ba8332c056d960683e6f010adaf33805d3687a263fb0e10ec7460bc41ab0": {
+  "e7fe80e33064951d3e22fc7a1868b50257db8acd15636663218b3f2ebff08a73": {
     "describe": {
-      "columns": [],
-      "nullable": [],
+      "columns": [
+        {
+          "name": "day_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "gwei",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null,
+        false
+      ],
       "parameters": {
-        "Left": [
-          "Text",
-          "Text",
-          "Text",
-          "Int8",
-          "Int8"
-        ]
+        "Left": []
       }
     },
-    "query": "\n            INSERT INTO beacon_blocks (\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated\n            )\n            VALUES (\n                $1, $2, $3, $4, $5\n            )\n        "
+    "query": "\n            SELECT\n                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                gwei\n            FROM\n                beacon_issuance\n            ORDER BY\n                DATE_TRUNC('day', timestamp), timestamp ASC\n        "
   }
 }
