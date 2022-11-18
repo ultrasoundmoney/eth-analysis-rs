@@ -68,7 +68,7 @@ pub async fn heal_beacon_states() -> Result<()> {
             .expect("expect state_root to exist for historic slots");
 
         if stored_state_root != state_root {
-            warn!("state roon mismatch, rolling back stored and resyncing");
+            warn!("state root mismatch, rolling back stored and resyncing");
             sync::rollback_slot(&mut *db_pool.acquire().await?, &slot).await?;
             sync::sync_state_root(&db_pool, &beacon_node, &state_root, &slot).await?;
             info!(slot, "healed state at slot");
