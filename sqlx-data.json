@@ -518,6 +518,24 @@
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
   },
+  "db7b7fa09a36c2216aaa8ca90270fce68e90be39ce6c21fcd9fa70eee51fa65e": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            WITH\n              issuance_distances AS (\n                SELECT\n                  gwei,\n                  timestamp,\n                  ABS(\n                    EXTRACT(\n                      epoch\n                      FROM\n                        (timestamp - (NOW() - '7 days':: INTERVAL))\n                    )\n                  ) AS distance_seconds\n                FROM\n                  beacon_issuance\n                ORDER BY\n                  distance_seconds ASC\n              )\n            SELECT gwei\n            FROM issuance_distances \n            WHERE distance_seconds <= 86400\n            LIMIT 1\n        "
+  },
   "dee40e6dd15adfc421012d85806bf7e7ce55ac6e8c445b0c070bd9eadcebd253": {
     "describe": {
       "columns": [

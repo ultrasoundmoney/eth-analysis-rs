@@ -128,11 +128,8 @@ pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
     .unwrap();
 }
 
-pub async fn get_day7_ago_issuance(
-    executor: impl PgExecutor<'_>,
-    last_timestamp: DateTime<Utc>,
-) -> GweiNewtype {
-    sqlx::query(
+pub async fn get_day7_ago_issuance( executor: impl PgExecutor<'_>,) -> GweiNewtype {
+    let row = sqlx::query!(
         "
             WITH
               issuance_distances AS (
@@ -157,19 +154,16 @@ pub async fn get_day7_ago_issuance(
             LIMIT 1
         ",
     )
-    .bind(last_timestamp)
-    .map(|row: PgRow| {
-        let gwei_i64 = row.get::<i64, _>("gwei") as u64;
-        GweiNewtype(gwei_i64)
-    })
     .fetch_one(executor)
     .await
-    .unwrap()
+    .unwrap();
+
+    GweiNewtype(row.gwei as u64)
 }
 
 pub async fn get_last_week_issuance(executor: &mut PgConnection) -> GweiNewtype {
     let current_issuance = get_current_issuance(executor.acquire().await.unwrap()).await;
-    let day7_ago_issuance = get_day7_ago_issuance(executor, current_issuance.timestamp).await;
+    let day7_ago_issuance = get_day7_ago_issuance(executor).await;
     current_issuance.gwei - day7_ago_issuance
 }
 
@@ -294,18 +288,21 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_1", &3599, "")
+        let now_min_seven_days_slot = beacon_time::get_slot_from_date_time(&(Utc::now() - Duration::days(7)));
+        let now_slot = beacon_time::get_slot_from_date_time(&Utc::now());
+
+        store_state(&mut transaction, "0xtest_issuance_1", &now_min_seven_days_slot, "")
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_2", &10799, "")
+        store_state(&mut transaction, "0xtest_issuance_2", &now_slot, "")
             .await
             .unwrap();
 
         store_issuance(
             &mut transaction,
             "0xtest_issuance_1",
-            &3599,
+            &now_min_seven_days_slot,
             &GweiNewtype(100),
         )
         .await.unwrap();
@@ -313,14 +310,13 @@ mod tests {
         store_issuance(
             &mut transaction,
             "0xtest_issuance_2",
-            &53999,
+            &now_slot,
             &GweiNewtype(110),
         )
         .await.unwrap();
 
         let current_issuance = get_current_issuance(&mut transaction).await;
-        let day7_ago_issuance =
-            get_day7_ago_issuance(&mut transaction, current_issuance.timestamp).await;
+        let day7_ago_issuance = get_day7_ago_issuance(&mut transaction).await;
 
         assert_eq!(day7_ago_issuance, GweiNewtype(100));
     }
@@ -330,18 +326,21 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_1", &3599, "")
+        let now_min_seven_days_slot = beacon_time::get_slot_from_date_time(&(Utc::now() - Duration::days(7)));
+        let now_slot = beacon_time::get_slot_from_date_time(&Utc::now());
+
+        store_state(&mut transaction, "0xtest_issuance_1", &now_min_seven_days_slot, "")
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_2", &10799, "")
+        store_state(&mut transaction, "0xtest_issuance_2", &now_slot, "")
             .await
             .unwrap();
 
         store_issuance(
             &mut transaction,
             "0xtest_issuance_1",
-            &3599,
+            &now_min_seven_days_slot,
             &GweiNewtype(100),
         )
         .await.unwrap();
@@ -349,7 +348,7 @@ mod tests {
         store_issuance(
             &mut transaction,
             "0xtest_issuance_2",
-            &53999,
+            &now_slot,
             &GweiNewtype(110),
         )
         .await.unwrap();
