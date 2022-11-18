@@ -49,9 +49,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
         ethereum_foundation.0 / GWEI_PER_ETH
     );
 
-    let proof_of_stake = beacon_chain::get_current_issuance(&mut connection)
-        .await
-        .gwei;
+    let proof_of_stake = beacon_chain::get_current_issuance(&mut connection).await;
     debug!(
         "proof of stake issuance: {} ETH",
         proof_of_stake.0 / GWEI_PER_ETH

@@ -1,6 +1,6 @@
 use anyhow::Result;
-use chrono::{DateTime, Duration, DurationRound, Utc};
-use sqlx::{postgres::PgRow, Acquire, PgConnection, PgExecutor, Row};
+use chrono::{Duration, DurationRound};
+use sqlx::{Acquire, PgConnection, PgExecutor };
 
 use crate::{
     eth_units::GweiNewtype,
@@ -70,30 +70,23 @@ pub async fn get_issuance_by_start_of_day(
     })
 }
 
-pub struct BeaconIssuance {
-    pub gwei: GweiNewtype,
-    timestamp: DateTime<Utc>,
-}
-
-pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> BeaconIssuance {
-    sqlx::query(
+pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
+    let row = sqlx::query!(
         "
-            SELECT gwei, timestamp FROM beacon_issuance
-            ORDER BY timestamp DESC
+            SELECT
+                gwei
+            FROM
+                beacon_issuance
+            ORDER BY
+                timestamp DESC
             LIMIT 1
         ",
     )
-    .map(|row: PgRow| {
-        let timestamp = row.get::<DateTime<Utc>, _>("timestamp");
-        let gwei = row.get::<i64, _>("gwei") as u64;
-        BeaconIssuance {
-            timestamp,
-            gwei: GweiNewtype(gwei),
-        }
-    })
     .fetch_one(executor)
     .await
-    .unwrap()
+    .unwrap();
+
+    GweiNewtype(row.gwei as u64)
 }
 
 pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
@@ -164,7 +157,7 @@ pub async fn get_day7_ago_issuance( executor: impl PgExecutor<'_>,) -> GweiNewty
 pub async fn get_last_week_issuance(executor: &mut PgConnection) -> GweiNewtype {
     let current_issuance = get_current_issuance(executor.acquire().await.unwrap()).await;
     let day7_ago_issuance = get_day7_ago_issuance(executor).await;
-    current_issuance.gwei - day7_ago_issuance
+    current_issuance - day7_ago_issuance
 }
 
 #[cfg(test)]
@@ -246,7 +239,7 @@ mod tests {
         )
         .await.unwrap();
 
-        let current_issuance = get_current_issuance(&mut transaction).await.gwei;
+        let current_issuance = get_current_issuance(&mut transaction).await;
 
         assert_eq!(current_issuance, GweiNewtype(110));
     }
@@ -315,7 +308,6 @@ mod tests {
         )
         .await.unwrap();
 
-        let current_issuance = get_current_issuance(&mut transaction).await;
         let day7_ago_issuance = get_day7_ago_issuance(&mut transaction).await;
 
         assert_eq!(day7_ago_issuance, GweiNewtype(100));
