@@ -610,13 +610,10 @@ mod tests {
         assert_eq!(range, vec![1, 2, 3, 4]);
     }
 
-    // Disabled because dropping the stream results in send errors crashing the thread and failing
-    // our test.
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore]
-    async fn stream_heads_from_test() {
-        let heads_stream = stream_heads_from(4_300_000).await;
-        let heads = heads_stream.take(10).collect::<Vec<HeadEvent>>().await;
-        assert_eq!(heads.len(), 10);
+    async fn stream_slots_from_test() {
+        let slots_stream = stream_slots_from(&4_300_000).await;
+        let slots = slots_stream.take(10).collect::<Vec<Slot>>().await;
+        assert_eq!(slots.len(), 10);
     }
 }
