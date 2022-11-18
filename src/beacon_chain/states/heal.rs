@@ -15,7 +15,7 @@ use crate::{
 };
 
 // The first slot we have stored.
-const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = 4697813;
+const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = 0;
 
 const HEAL_BEACON_STATES_KEY: &str = "heal-beacon-states";
 
