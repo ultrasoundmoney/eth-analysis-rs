@@ -470,6 +470,10 @@ async fn find_last_matching_slot(
             (Some(stored_state_root), Some(on_chain_state_root))
                 if stored_state_root == on_chain_state_root =>
             {
+                debug!(
+                    stored_state_root,
+                    on_chain_state_root, "stored and on-chain state_root match"
+                );
                 break;
             }
             _ => {
@@ -484,6 +488,10 @@ async fn find_last_matching_slot(
         }
     }
 
+    debug!(
+        slot = candidate_slot,
+        "found a match state match between stored and on-chain"
+    );
     Ok(candidate_slot)
 }
 
@@ -504,6 +512,7 @@ pub async fn sync_beacon_states() -> Result<()> {
 
     let beacon_node = BeaconNode::new();
 
+    // TODO: simplify to return slots.
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
 
     // This queue allows us to queue slots to sync as we need between processing new head events.
@@ -528,54 +537,88 @@ pub async fn sync_beacon_states() -> Result<()> {
 
         // Work through the slots queue until it's empty and we're ready to move the next head from
         // the stream to the queue.
-        while let Some(slot) = slots_queue.lock().unwrap().pop_front() {
-            let on_chain_state_root =
-                beacon_node
-                    .get_state_root_by_slot(&slot)
-                    .await?
-                    .expect(&format!(
-                        "expect state_root to exist for slot {} to sync from queue",
-                        slot
-                    ));
-            let current_slot_stored_state_root =
-                states::get_state_root_by_slot(&db_pool, &slot).await?;
-
-            let last_matches = if slot == 0 {
-                true
-            } else {
-                let last_stored_state_root =
-                    states::get_state_root_by_slot(&db_pool, &(slot - 1)).await?;
-                match last_stored_state_root {
-                    None => false,
-                    Some(last_stored_state_root) => {
-                        let previous_on_chain_state_root = beacon_node
-                            .get_header_by_slot(&(slot - 1))
-                            .await?
-                            .expect("expect state slot before current head to exist")
-                            .header
-                            .message
-                            .state_root;
-                        last_stored_state_root == previous_on_chain_state_root
-                    }
+        loop {
+            let slot = slots_queue.lock().unwrap().pop_front();
+            match slot {
+                None => {
+                    break;
                 }
-            };
+                Some(slot) => {
+                    debug!(slot, "analyzing next slot on the queue");
 
-            // 1. current slot is empty and last state_root matches.
-            if current_slot_stored_state_root.is_none() && last_matches {
-                sync_state_root(&db_pool, &beacon_node, &on_chain_state_root, &slot).await?;
-                progress.inc_work_done();
+                    // TODO: change the stream to provide consequtive slots instead.
+                    // Although the stream of heads will skip over slots, we do not. Detect skips, and
+                    // process the empty slots.
+                    // Skip check for Genesis.
+                    if slot != 0 {
+                        let last_stored_slot = states::get_last_state(&db_pool)
+                            .await
+                            .expect("expect non empty last state for slot past genesis")
+                            .slot;
+                        if slot != last_stored_slot + 1 {
+                            info!("detected gap between stored slot and next head, requeueing current and previous slot");
+                            slots_queue.lock().unwrap().push_front(slot.clone());
+                            slots_queue.lock().unwrap().push_front(slot - 1);
+                            continue;
+                        }
+                    }
 
-            // 2. roll back to last matching state_root, queue all slots up to and including
-            //    current for sync.
-            } else {
-                let last_matching_slot =
-                    find_last_matching_slot(&db_pool, &beacon_node, &(slot - 1)).await?;
-                let first_invalid_slot = last_matching_slot + 1;
+                    let on_chain_state_root = beacon_node
+                        .get_state_root_by_slot(&slot)
+                        .await?
+                        .expect(&format!(
+                            "expect state_root to exist for slot {} to sync from queue",
+                            slot
+                        ));
+                    let current_slot_stored_state_root =
+                        states::get_state_root_by_slot(&db_pool, &slot).await?;
 
-                rollback_slots(&mut *db_pool.acquire().await?, &first_invalid_slot).await?;
+                    let last_matches = if slot == 0 {
+                        true
+                    } else {
+                        let last_stored_state_root =
+                            states::get_state_root_by_slot(&db_pool, &(slot - 1)).await?;
+                        match last_stored_state_root {
+                            None => false,
+                            Some(last_stored_state_root) => {
+                                let previous_on_chain_state_root = beacon_node
+                                    .get_state_root_by_slot(&(slot - 1))
+                                    .await?
+                                    .expect("expect state slot before current head to exist");
+                                last_stored_state_root == previous_on_chain_state_root
+                            }
+                        }
+                    };
 
-                for invalid_slot in (first_invalid_slot..=slot).rev() {
-                    slots_queue.lock().unwrap().push_front(invalid_slot);
+                    // 1. current slot is empty and last state_root matches.
+                    if current_slot_stored_state_root.is_none() && last_matches {
+                        debug!("no state stored for current slot and last slots state_root matches chain");
+                        sync_state_root(&db_pool, &beacon_node, &on_chain_state_root, &slot)
+                            .await?;
+                        progress.inc_work_done();
+
+                    // 2. roll back to last matching state_root, queue all slots up to and including
+                    //    current for sync.
+                    } else {
+                        debug!(
+                    ?current_slot_stored_state_root,
+                    last_matches,
+                    "current slot should be empty, last stored slot state_root should match previous on-chain state_root"
+                );
+                        let last_matching_slot =
+                            find_last_matching_slot(&db_pool, &beacon_node, &(slot - 1)).await?;
+                        let first_invalid_slot = last_matching_slot + 1;
+
+                        warn!(slot = last_matching_slot, "rolling back to slot");
+
+                        rollback_slots(&mut *db_pool.acquire().await?, &first_invalid_slot).await?;
+
+                        dbg!("rollback complete");
+
+                        for invalid_slot in (first_invalid_slot..=slot).rev() {
+                            slots_queue.lock().unwrap().push_front(invalid_slot);
+                        }
+                    }
                 }
             }
         }

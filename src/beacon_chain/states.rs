@@ -1,7 +1,7 @@
 mod heal;
 
 use chrono::{DateTime, Utc};
-use sqlx::{postgres::PgRow, PgExecutor, Row};
+use sqlx::PgExecutor;
 
 use super::beacon_time;
 
@@ -91,20 +91,22 @@ pub async fn get_state_root_by_slot(
     executor: impl PgExecutor<'_>,
     slot: &Slot,
 ) -> sqlx::Result<Option<String>> {
-    sqlx::query(
-        r#"
+    let state_root = sqlx::query!(
+        "
             SELECT
-                beacon_states.state_root
+                state_root
             FROM
                 beacon_states
             WHERE
                 slot = $1
-        "#,
+        ",
+        *slot as i32
     )
-    .bind(*slot as i32)
-    .map(|row: PgRow| row.get::<String, _>("state_root"))
     .fetch_optional(executor)
-    .await
+    .await?
+    .map(|row| row.state_root);
+
+    Ok(state_root)
 }
 
 pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {

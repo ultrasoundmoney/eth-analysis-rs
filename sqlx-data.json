@@ -250,6 +250,26 @@
     },
     "query": "\n            DELETE FROM beacon_issuance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
+  "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
+    "describe": {
+      "columns": [
+        {
+          "name": "state_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                state_root\n            FROM\n                beacon_states\n            WHERE\n                slot = $1\n        "
+  },
   "5152e0dba03bc8d7baa8e8b2c2f7f3bca0fcae139dccba9c87e238ce33cb75b4": {
     "describe": {
       "columns": [
