@@ -1,4 +1,4 @@
-# Ethereum analysis services Ξ🔍
+# Ethereum analysis services 🦇🔊🔍
 
 The backend services to [ultrasound.money](https://ultrasound.money/) which analyze Ethereum.
 
