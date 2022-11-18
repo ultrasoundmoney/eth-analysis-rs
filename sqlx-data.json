@@ -107,6 +107,24 @@
     },
     "query": "\n            INSERT INTO beacon_blocks (\n                block_hash,\n                block_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                parent_root,\n                state_root\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6\n            )\n        "
   },
+  "28409ca2bee68e0969632f7278e521cae6fb20ec9247d24680b29ac9b727aaa2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n                SELECT slot FROM beacon_states\n                ORDER BY slot ASC\n            "
+  },
   "36b6169564ef841d5cfe8e64835534b1156ac30c63afa408684aa6af967711ee": {
     "describe": {
       "columns": [
@@ -621,6 +639,32 @@
       }
     },
     "query": "\n            SELECT\n                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                gwei\n            FROM\n                beacon_issuance\n            ORDER BY\n                DATE_TRUNC('day', timestamp), timestamp ASC\n        "
+  },
+  "e95a41a561ff124406f2b985b502bba6c842615f77e933940245cac7b03d38bc": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "state_root",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                slot,\n                state_root\n            FROM\n                beacon_states\n            WHERE\n                slot >= $1\n        "
   },
   "febfe61a125d3cb2bc555027c602842386096975e8387d3de410ca0847d2e56b": {
     "describe": {
