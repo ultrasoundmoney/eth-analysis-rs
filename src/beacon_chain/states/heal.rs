@@ -104,6 +104,6 @@ pub async fn heal_beacon_states() -> Result<()> {
         info!("{}", progress.get_progress_string());
     }
 
-    info!("done syncing gaps in eth supply");
+    info!("done healing beacon states");
     Ok(())
 }
