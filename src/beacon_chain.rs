@@ -13,6 +13,7 @@ use crate::env;
 pub use balances::{
     get_validator_balances_by_start_of_day, sum_validator_balances, BeaconBalancesSum,
 };
+pub use blocks::heal_block_hashes;
 pub use blocks::{store_block, GENESIS_PARENT_ROOT};
 pub use deposits::{get_deposits_sum, BeaconDepositsSum};
 pub use effective_balance_sum::{
@@ -28,6 +29,8 @@ pub use states::heal_beacon_states;
 pub use states::store_state;
 pub use states::Slot;
 pub use sync::sync_beacon_states;
+
+pub const FIRST_POST_MERGE_SLOT: u32 = 4700013;
 
 lazy_static! {
     static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");

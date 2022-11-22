@@ -51,3 +51,6 @@ tracing-subscriber = { version = "0.3", features = [
   "json",
   "std",
 ] }
+
+[profile.dev.package.sqlx-macros]
+opt-level = 3

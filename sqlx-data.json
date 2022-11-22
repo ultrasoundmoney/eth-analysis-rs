@@ -256,6 +256,19 @@
     },
     "query": "\n            DELETE FROM beacon_validators_balance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
+  "440e3270c27b7133ca07349f03510777f0218e8acefd1f2ffad9d8528e7db2de": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            UPDATE\n                beacon_blocks\n            SET\n                block_hash = $1\n            WHERE\n                block_root = $2\n        "
+  },
   "44bc5d5d6512783fdf6ec5ba29175d768730e11dafa2b1a6c517c08f33c99d31": {
     "describe": {
       "columns": [],
@@ -306,6 +319,56 @@
     },
     "query": "\n                SELECT COUNT(*) AS \"count!\" FROM blocks_next\n            "
   },
+  "585180658f733f6d35d6043550a2c5b797bc3b7f91db575d370230d023e33ae4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "state_root",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "parent_root",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "deposit_sum",
+          "ordinal": 3,
+          "type_info": "Int8"
+        },
+        {
+          "name": "deposit_sum_aggregated",
+          "ordinal": 4,
+          "type_info": "Int8"
+        },
+        {
+          "name": "block_hash",
+          "ordinal": 5,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks\n            WHERE\n                block_root = $1\n        "
+  },
   "622a4e700745a450c178d411239781e6319ad98f430c62e6b99685af6962f4d4": {
     "describe": {
       "columns": [
@@ -351,6 +414,30 @@
       }
     },
     "query": "\n                DELETE FROM blocks_next\n                WHERE number >= $1\n            "
+  },
+  "7aa22511d743b8e6f9ef9e380f470ee58ea4f5c57a614dff0afc2583815dfc27": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "slot",
+          "ordinal": 1,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                block_root,\n                slot\n            FROM\n                beacon_blocks\n            JOIN\n                beacon_states\n            ON\n                beacon_blocks.state_root = beacon_states.state_root\n        "
   },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {

@@ -1,6 +1,7 @@
 use std::{
     fmt,
-    ops::{Add, Sub, Div},
+    num::TryFromIntError,
+    ops::{Add, Div, Sub},
     str::FromStr,
 };
 
@@ -65,9 +66,11 @@ impl From<GweiNewtype> for i64 {
     }
 }
 
-impl From<i64> for GweiNewtype {
-    fn from(gwei_i64: i64) -> Self {
-        GweiNewtype(u64::try_from(gwei_i64).expect("failed to convert i64 into GweiAmount {}"))
+impl TryFrom<i64> for GweiNewtype {
+    type Error = TryFromIntError;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        value.try_into().map(GweiNewtype)
     }
 }
 

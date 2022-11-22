@@ -50,7 +50,10 @@ pub async fn get_deposits_sum(executor: impl PgExecutor<'_>) -> BeaconDepositsSu
     )
     .map(|row: PgRow| {
         let slot = row.get::<i32, _>("slot") as u32;
-        let deposits_sum = row.get::<i64, _>("deposit_sum_aggregated").into();
+        let deposits_sum = row
+            .get::<i64, _>("deposit_sum_aggregated")
+            .try_into()
+            .unwrap();
         BeaconDepositsSum { deposits_sum, slot }
     })
     .fetch_one(executor)

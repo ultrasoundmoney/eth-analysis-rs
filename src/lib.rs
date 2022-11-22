@@ -22,6 +22,7 @@ mod time_frames;
 mod update_by_hand;
 
 pub use beacon_chain::heal_beacon_states;
+pub use beacon_chain::heal_block_hashes;
 pub use beacon_chain::sync_beacon_states;
 pub use beacon_chain::update_effective_balance_sum;
 pub use beacon_chain::update_validator_rewards;
