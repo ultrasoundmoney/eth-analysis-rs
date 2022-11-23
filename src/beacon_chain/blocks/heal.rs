@@ -2,13 +2,26 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use pit_wall::Progress;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{postgres::PgPoolOptions, PgExecutor};
 use tracing::{debug, info};
 
 use crate::{
     beacon_chain::{self, blocks, node::BlockRoot, BeaconNode, Slot, FIRST_POST_MERGE_SLOT},
-    db, log,
+    db, key_value_store, log,
 };
+
+const HEAL_BLOCK_HASHES_KEY: &str = "heal-beacon-states";
+
+async fn store_last_checked(executor: impl PgExecutor<'_>, slot: &Slot) -> Result<()> {
+    key_value_store::set_serializable_value(executor, HEAL_BLOCK_HASHES_KEY, slot).await?;
+    Ok(())
+}
+
+async fn get_last_checked(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
+    let slot =
+        key_value_store::get_deserializable_value::<Slot>(executor, HEAL_BLOCK_HASHES_KEY).await?;
+    Ok(slot)
+}
 
 pub async fn heal_block_hashes() -> Result<()> {
     log::init_with_env();
@@ -25,6 +38,9 @@ pub async fn heal_block_hashes() -> Result<()> {
         .await
         .expect("a beacon state should be stored before trying to heal any")
         .slot;
+    let first_slot = get_last_checked(&db_pool)
+        .await?
+        .unwrap_or(FIRST_POST_MERGE_SLOT);
 
     let slot_block_root_map = sqlx::query!(
         "
@@ -50,7 +66,7 @@ pub async fn heal_block_hashes() -> Result<()> {
         slot_block_root_map.len().try_into().unwrap(),
     );
 
-    for slot in FIRST_POST_MERGE_SLOT..=last_slot {
+    for slot in first_slot..=last_slot {
         let block_root = slot_block_root_map.get(&slot);
         match block_root {
             None => (),
@@ -76,6 +92,7 @@ pub async fn heal_block_hashes() -> Result<()> {
 
         if slot % 100 == 0 {
             info!("{}", progress.get_progress_string());
+            store_last_checked(&db_pool, &slot).await?;
         }
     }
 
