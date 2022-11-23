@@ -10,7 +10,7 @@ use crate::{
     db, key_value_store, log,
 };
 
-const HEAL_BLOCK_HASHES_KEY: &str = "heal-beacon-states";
+const HEAL_BLOCK_HASHES_KEY: &str = "heal-block-hashes";
 
 async fn store_last_checked(executor: impl PgExecutor<'_>, slot: &Slot) -> Result<()> {
     key_value_store::set_serializable_value(executor, HEAL_BLOCK_HASHES_KEY, slot).await?;
