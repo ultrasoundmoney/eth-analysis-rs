@@ -61,10 +61,7 @@ pub async fn heal_block_hashes() -> Result<()> {
     .map(|row| (row.slot as u32, row.block_root))
     .collect::<HashMap<Slot, BlockRoot>>();
 
-    let mut progress = Progress::new(
-        "heal-block-hash",
-        slot_block_root_map.len().try_into().unwrap(),
-    );
+    let mut progress = Progress::new("heal-block-hash", (last_slot - first_slot).into());
 
     for slot in first_slot..=last_slot {
         let block_root = slot_block_root_map.get(&slot);
