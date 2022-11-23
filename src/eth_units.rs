@@ -95,7 +95,10 @@ impl Add<GweiNewtype> for GweiNewtype {
 
     fn add(self, GweiNewtype(rhs): Self) -> Self::Output {
         let GweiNewtype(lhs) = self;
-        GweiNewtype(lhs + rhs)
+        let result = lhs
+            .checked_add(rhs)
+            .expect("caused overflow in gwei addition");
+        GweiNewtype(result)
     }
 }
 
@@ -104,7 +107,10 @@ impl Sub<GweiNewtype> for GweiNewtype {
 
     fn sub(self, GweiNewtype(rhs): GweiNewtype) -> Self::Output {
         let GweiNewtype(lhs) = self;
-        GweiNewtype(lhs - rhs)
+        let result = lhs
+            .checked_sub(rhs)
+            .expect("caused underflow in gwei subtraction");
+        GweiNewtype(result)
     }
 }
 
@@ -112,7 +118,6 @@ impl Div<GweiNewtype> for GweiNewtype {
     type Output = Self;
 
     fn div(self, GweiNewtype(rhs): GweiNewtype) -> Self::Output {
-
         let GweiNewtype(lhs) = self;
         GweiNewtype(lhs / rhs)
     }
