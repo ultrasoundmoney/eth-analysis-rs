@@ -218,7 +218,7 @@ async fn update_cache_from_notifications(state: Arc<State>, db_pool: &PgPool) ->
 
             match cache_key {
                 Err(ParseCacheKeyError::UnknownCacheKey(cache_key)) => {
-                    debug!(
+                    trace!(
                         %cache_key,
                         "unspported cache update, skipping"
                     );
