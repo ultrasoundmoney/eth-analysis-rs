@@ -176,8 +176,8 @@ pub async fn get_block_root_before_slot(
                 beacon_blocks 
             ON
                 beacon_states.state_root = beacon_blocks.state_root 
-            WHERE slot <= $1
-            ORDER BY slot DESC 
+            WHERE beacon_states.slot <= $1
+            ORDER BY beacon_states.slot DESC 
             LIMIT 1
         ",
         *less_than_or_equal as i32
