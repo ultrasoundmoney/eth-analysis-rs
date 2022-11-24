@@ -177,7 +177,7 @@ pub async fn get_current_supply(executor: impl PgExecutor<'_>) -> sqlx::Result<E
     .await
 }
 
-async fn update_supply_parts(
+pub async fn update_supply_parts(
     executor: &mut PgConnection,
     eth_supply_parts: &EthSupplyParts,
 ) -> Result<()> {
@@ -218,21 +218,6 @@ pub async fn get_supply_parts(
     };
 
     Ok(eth_supply_parts)
-}
-
-pub async fn update_caches(executor: &PgPool, eth_supply_parts: &EthSupplyParts) -> Result<()> {
-    update_supply_parts(&mut *executor.acquire().await?, eth_supply_parts).await?;
-
-    update_supply_over_time(
-        executor,
-        eth_supply_parts.beacon_balances_sum.slot,
-        eth_supply_parts.execution_balances_sum.block_number,
-        beacon_time::get_date_time_from_slot(&eth_supply_parts.beacon_balances_sum.slot),
-    )
-    .timed("update-supply-over-time")
-    .await?;
-
-    Ok(())
 }
 
 pub async fn update(executor: &mut PgConnection, eth_supply_parts: &EthSupplyParts) -> Result<()> {

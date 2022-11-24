@@ -292,9 +292,31 @@ pub async fn sync_state_root(
         let eth_supply_parts =
             eth_supply::get_supply_parts(&mut transaction, &beacon_balances_sum).await?;
 
-        eth_supply::update(&mut transaction, &eth_supply_parts).await?;
+        eth_supply::update_supply_parts(&mut transaction, &eth_supply_parts).await?;
 
-        eth_supply::update_caches(db_pool, &eth_supply_parts).await?;
+        let in_sync_with_chain = {
+            let last_state_root_on_chain = beacon_node
+                .get_last_header()
+                .await?
+                .header
+                .message
+                .state_root;
+            state_root == last_state_root_on_chain
+        };
+
+        if in_sync_with_chain {
+            debug!("sync caught up to head of chain, computing skippable analysis");
+            let eth_supply_parts = eth_supply::update_supply_over_time(
+                executor,
+                eth_supply_parts.beacon_balances_sum.slot,
+                eth_supply_parts.execution_balances_sum.block_number,
+                beacon_time::get_date_time_from_slot(&eth_supply_parts.beacon_balances_sum.slot),
+            )
+            .timed("update-supply-over-time")
+            .await?;
+        } else {
+            debug!("sync not yet caught up with head of chain, skipping some analysis");
+        }
     }
 
     transaction.commit().await?;
