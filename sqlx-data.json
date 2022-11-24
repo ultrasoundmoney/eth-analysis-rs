@@ -406,6 +406,36 @@
     },
     "query": "\n            INSERT INTO\n                beacon_states\n                (state_root, slot, associated_block_root)\n            VALUES ($1, $2, $3)\n        "
   },
+  "6e3427b92b80bc6d01fe740bf9a20a484dd1725de564cf13620e2a6bbf74b674": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                beacon_states.slot\n            FROM\n                beacon_blocks\n            JOIN\n                beacon_states\n            ON\n                beacon_states.state_root = beacon_blocks.state_root\n            ORDER BY slot DESC\n            LIMIT 1\n        "
+  },
+  "6e5840a62473818a418e10adb6ba3c8808a9f057e7194a4910096fdaf503d699": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM beacon_blocks\n            WHERE state_root IN (\n                SELECT\n                    state_root\n                FROM\n                    beacon_states\n                WHERE beacon_states.slot >= $1\n            )\n        "
+  },
   "73a4e423df6615c6fac510739e7cc18a7626439f2ccdf2b7b6193577ab00d4c3": {
     "describe": {
       "columns": [],
@@ -545,18 +575,6 @@
       }
     },
     "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot,\n                beacon_blocks.block_root AS \"block_root?\"\n            FROM beacon_states\n            LEFT JOIN beacon_blocks ON beacon_states.state_root = beacon_blocks.state_root\n            ORDER BY slot DESC\n            LIMIT 1\n        "
-  },
-  "a5a62478fc58eb6b9271428b2936a35e21d4e080f758baf199906ae79d97af50": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            DELETE FROM beacon_blocks\n            WHERE state_root IN (\n                SELECT\n                    state_root\n                FROM\n                    beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
   "afcdf2723131331fa33290904bd69c0b3c49033b1cb4756e10b2dddd1f483ee5": {
     "describe": {

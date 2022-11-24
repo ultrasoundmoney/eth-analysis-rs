@@ -103,11 +103,11 @@ pub async fn store_block(
 }
 
 #[allow(dead_code)]
-pub async fn get_last_block_slot(connection: &mut PgConnection) -> Option<u32> {
-    sqlx::query(
+pub async fn get_last_block_slot(connection: &mut PgConnection) -> Result<Option<u32>> {
+    let row = sqlx::query!(
         "
             SELECT
-                slot
+                beacon_states.slot
             FROM
                 beacon_blocks
             JOIN
@@ -118,10 +118,12 @@ pub async fn get_last_block_slot(connection: &mut PgConnection) -> Option<u32> {
             LIMIT 1
         ",
     )
-    .map(|row: PgRow| row.get::<i32, _>("slot") as u32)
     .fetch_optional(connection)
-    .await
-    .unwrap()
+    .await?;
+
+    let slot = row.map(|row| row.slot as u32);
+
+    Ok(slot)
 }
 
 pub async fn delete_blocks(connection: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
@@ -133,7 +135,7 @@ pub async fn delete_blocks(connection: impl PgExecutor<'_>, greater_than_or_equa
                     state_root
                 FROM
                     beacon_states
-                WHERE slot >= $1
+                WHERE beacon_states.slot >= $1
             )
         ",
         *greater_than_or_equal as i32
@@ -371,7 +373,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let block_number = get_last_block_slot(&mut transaction).await;
+        let block_number = get_last_block_slot(&mut transaction).await.unwrap();
         assert_eq!(block_number, None);
     }
 
@@ -388,7 +390,7 @@ mod tests {
 
         store_custom_test_block(&mut transaction, &test_header, &test_block).await;
 
-        let last_block_slot = get_last_block_slot(&mut transaction).await;
+        let last_block_slot = get_last_block_slot(&mut transaction).await.unwrap();
         assert_eq!(last_block_slot, Some(slot));
     }
 
@@ -399,12 +401,12 @@ mod tests {
 
         store_test_block(&mut transaction, "delete_block_test").await;
 
-        let block_slot = get_last_block_slot(&mut transaction).await;
+        let block_slot = get_last_block_slot(&mut transaction).await.unwrap();
         assert_eq!(block_slot, Some(0));
 
         delete_blocks(&mut transaction, &0).await;
 
-        let block_slot = get_last_block_slot(&mut transaction).await;
+        let block_slot = get_last_block_slot(&mut transaction).await.unwrap();
         assert_eq!(block_slot, None);
     }
 
