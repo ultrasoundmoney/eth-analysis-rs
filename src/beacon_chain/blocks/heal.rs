@@ -5,7 +5,7 @@ use sqlx::{postgres::PgPoolOptions, PgExecutor};
 use tracing::{debug, info};
 
 use crate::{
-    beacon_chain::{self, blocks, BeaconNode, Slot, FIRST_POST_MERGE_SLOT},
+    beacon_chain::{blocks, BeaconNode, Slot, FIRST_POST_MERGE_SLOT},
     db, key_value_store, log,
 };
 
