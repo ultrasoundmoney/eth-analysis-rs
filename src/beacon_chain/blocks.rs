@@ -77,10 +77,11 @@ pub async fn store_block(
                 deposit_sum,
                 deposit_sum_aggregated,
                 parent_root,
+                slot,
                 state_root
             )
             VALUES (
-                $1, $2, $3, $4, $5, $6
+                $1, $2, $3, $4, $5, $6, $7
             )
         ",
         block
@@ -92,6 +93,7 @@ pub async fn store_block(
         i64::from(deposit_sum.to_owned()),
         i64::from(deposit_sum_aggregated.to_owned()),
         header.header.message.parent_root,
+        header.header.message.slot,
         header.header.message.state_root,
     )
     .execute(executor)
