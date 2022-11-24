@@ -159,7 +159,12 @@ async fn gather_sync_data(
     // with a slot. If a slot was missed, we associate the most recent available block root.
     let associated_block_root = {
         match header {
-            None => blocks::get_block_root_before_slot(db_pool, &(slot - 1)).await?,
+            None => {
+                debug!("no block in current slot, using last block_root");
+                blocks::get_block_root_before_slot(db_pool, &(slot - 1))
+                    .timed("get_block_root_before_slot")
+                    .await?
+            }
             Some(ref header) => header.root.clone(),
         }
     };
@@ -248,7 +253,12 @@ pub async fn sync_state_root(
             let deposit_sum_aggregated =
                 deposits::get_deposit_sum_aggregated(&mut transaction, &block).await?;
 
-            debug!(slot, state_root, "storing slot with block");
+            debug!(
+                slot,
+                state_root,
+                block_root = header.root,
+                "storing slot with block"
+            );
             store_state_with_block(
                 &mut transaction,
                 &associated_block_root,
@@ -257,12 +267,13 @@ pub async fn sync_state_root(
                 &deposit_sum_aggregated,
                 header,
             )
-            .timed("store state with block")
+            .timed("store_state_with_block")
             .await?;
         }
     }
 
     if let Some(ref validator_balances) = validator_balances {
+        debug!("validator balances present");
         let validator_balances_sum = balances::sum_validator_balances(&validator_balances);
         balances::store_validators_balance(
             &mut transaction,
@@ -455,11 +466,11 @@ pub async fn rollback_slot(executor: &mut PgConnection, slot: &Slot) -> Result<(
 }
 
 async fn estimate_slots_remaining(executor: impl PgExecutor<'_>, beacon_node: &BeaconNode) -> u32 {
-    let last_on_chain = beacon_node.get_last_block().await.unwrap();
+    let last_on_chain = beacon_node.get_last_header().await.unwrap();
     let last_synced_slot = states::get_last_state(executor)
         .await
         .map_or(0, |state| state.slot);
-    last_on_chain.slot - last_synced_slot
+    last_on_chain.header.message.slot - last_synced_slot
 }
 
 /// Searches backwards from the starting candidate to find a slot where stored and on-chain
@@ -578,15 +589,13 @@ pub async fn sync_beacon_states() -> Result<()> {
                 }
             };
 
-            // 1. current slot is empty and last state_root matches.
             if current_slot_stored_state_root.is_none() && last_matches {
+                // 1. current slot is empty and last state_root matches.
                 debug!("no state stored for current slot and last slots state_root matches chain");
                 sync_state_root(&db_pool, &beacon_node, &on_chain_state_root, &slot).await?;
-                progress.inc_work_done();
-
-            // 2. roll back to last matching state_root, queue all slots up to and including
-            //    current for sync.
             } else {
+                // 2. roll back to last matching state_root, queue all slots up to and including
+                //    current for sync.
                 debug!(
                     ?current_slot_stored_state_root,
                     last_matches,
@@ -600,22 +609,27 @@ pub async fn sync_beacon_states() -> Result<()> {
 
                 rollback_slots(&mut *db_pool.acquire().await?, &first_invalid_slot).await?;
 
-                dbg!("rollback complete");
-
                 for invalid_slot in (first_invalid_slot..=slot).rev() {
                     slots_queue.lock().unwrap().push_front(invalid_slot);
                 }
             }
 
-            let (slots_in_stream, _) = slots_stream.size_hint();
-            if slots_in_stream == 0 && slots_queue.lock().unwrap().is_empty() {
-                dbg!(slots_in_stream);
+            let last_on_chain_state_root = beacon_node
+                .get_last_header()
+                .await?
+                .header
+                .message
+                .state_root;
+
+            if last_on_chain_state_root == on_chain_state_root {
                 debug!("sync caught up with head of chain, making own analysis");
                 update_analysis(&db_pool, &on_chain_state_root).await?;
             } else {
                 debug!("sync not yet caught up with head of chain, skipping some analysis");
             }
         }
+
+        progress.inc_work_done();
     }
 
     Ok(())

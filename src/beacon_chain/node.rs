@@ -254,6 +254,7 @@ impl BeaconNode {
 
     pub async fn get_block_by_block_root(&self, block_root: &str) -> Result<Option<BeaconBlock>> {
         self.get_block(&BlockId::BlockRoot(block_root.to_string()))
+            .timed("get_block_by_block_root")
             .await
     }
 
@@ -310,7 +311,7 @@ impl BeaconNode {
             .client
             .get(&url)
             .send()
-            .timed("get validator balances")
+            .timed("get_validator_balances")
             .await?;
 
         match res.status() {
