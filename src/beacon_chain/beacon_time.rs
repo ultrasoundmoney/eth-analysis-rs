@@ -9,7 +9,7 @@ use super::Slot;
 // pub const SLOTS_PER_EPOCH: u8 = 32;
 
 lazy_static! {
-    pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp(1606824023, 0);
+    pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp_opt(1606824023, 0).unwrap();
     pub static ref SLOT_DURATION: Duration = Duration::seconds(12);
 }
 

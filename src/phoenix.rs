@@ -115,15 +115,17 @@ async fn get_current_execution_delta_block_number() -> Result<u32> {
 }
 
 fn date_time_from_system_time(system_time: SystemTime) -> DateTime<Utc> {
-    chrono::Utc.timestamp(
-        system_time
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            .try_into()
-            .unwrap(),
-        0,
-    )
+    chrono::Utc
+        .timestamp_opt(
+            system_time
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .try_into()
+                .unwrap(),
+            0,
+        )
+        .unwrap()
 }
 
 const PHOENIX_MAX_LIFESPAN: Duration = Duration::from_secs(60 * 6);

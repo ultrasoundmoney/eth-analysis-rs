@@ -62,7 +62,9 @@ async fn get_eth_candles(
                 .list
                 .iter()
                 .map(|c| {
-                    let timestamp = Utc.timestamp_millis(c.timestamp.parse::<i64>().unwrap());
+                    let timestamp = Utc
+                        .timestamp_millis_opt(c.timestamp.parse::<i64>().unwrap())
+                        .unwrap();
                     let usd = c.usd.parse::<f64>().unwrap();
                     EthPrice { timestamp, usd }
                 })

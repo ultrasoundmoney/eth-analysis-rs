@@ -30,6 +30,6 @@ where
     D: Deserializer<'de>,
 {
     let timestamp_u32 = from_u32_hex_str(deserializer)?;
-    let date_time = Utc.timestamp(timestamp_u32.into(), 0);
+    let date_time = Utc.timestamp_opt(timestamp_u32.into(), 0).unwrap();
     Ok(date_time)
 }

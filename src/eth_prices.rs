@@ -252,7 +252,7 @@ pub async fn heal_eth_prices() {
     for minute_n in 0..minutes_since_london {
         let timestamp = london_minute_timestamp + minute_n * 60;
         if !known_minutes.contains(&timestamp) {
-            let timestamp_date_time = Utc.timestamp(timestamp, 0);
+            let timestamp_date_time = Utc.timestamp_opt(timestamp, 0).unwrap();
             debug!(minute = timestamp_date_time.to_string(), "missing minute");
             let usd = bybit::get_closest_price_by_minute(
                 timestamp_date_time,
@@ -350,7 +350,9 @@ pub async fn resync_all() {
 
     debug!(
         "starting at {}",
-        Utc.timestamp(london_minute_timestamp.into(), 0) + Duration::minutes((start_minute).into())
+        Utc.timestamp_opt(london_minute_timestamp.into(), 0)
+            .unwrap()
+            + Duration::minutes((start_minute).into())
     );
 
     let mut progress = pit_wall::Progress::new(
@@ -360,7 +362,7 @@ pub async fn resync_all() {
 
     for minute_n in start_minute..minutes_since_london {
         let timestamp = london_minute_timestamp + minute_n * 60;
-        let timestamp_date_time = Utc.timestamp(timestamp.into(), 0);
+        let timestamp_date_time = Utc.timestamp_opt(timestamp.into(), 0).unwrap();
 
         let usd = bybit::get_closest_price_by_minute(
             timestamp_date_time,

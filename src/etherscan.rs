@@ -73,7 +73,9 @@ pub async fn get_eth_price() -> reqwest::Result<EthPrice> {
     .json::<EthPriceEnvelope>()
     .await
     .map(|body| EthPrice {
-        timestamp: Utc.timestamp(body.result.ethusd_timestamp.parse::<i64>().unwrap(), 0),
+        timestamp: Utc
+            .timestamp_opt(body.result.ethusd_timestamp.parse::<i64>().unwrap(), 0)
+            .unwrap(),
         usd: body.result.ethusd.parse::<f64>().unwrap(),
     })
 }
