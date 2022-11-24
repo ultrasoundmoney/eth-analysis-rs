@@ -33,10 +33,6 @@ pub async fn heal_block_hashes() -> Result<()> {
         .await?;
 
     let beacon_node = BeaconNode::new();
-    let last_slot = beacon_chain::get_last_state(&db_pool)
-        .await
-        .expect("a beacon state should be stored before trying to heal any")
-        .slot;
     let first_slot = get_last_checked(&db_pool)
         .await?
         .unwrap_or(FIRST_POST_MERGE_SLOT);
