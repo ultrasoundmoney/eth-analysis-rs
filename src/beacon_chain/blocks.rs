@@ -1,4 +1,5 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
+mod backfill;
 mod heal;
 
 use std::num::TryFromIntError;
@@ -13,6 +14,7 @@ use super::{
     Slot,
 };
 
+pub use backfill::backfill_historic_slots;
 pub use heal::heal_block_hashes;
 
 pub const GENESIS_PARENT_ROOT: &str =

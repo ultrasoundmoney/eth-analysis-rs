@@ -1,5 +1,29 @@
 {
   "db": "PostgreSQL",
+  "008d6dd2f69018d769d86c16fa57ec43fe884aba85058c139eb7ae5a7bacb6df": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "state_root",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                block_root,\n                state_root\n            FROM\n                beacon_blocks\n            WHERE\n                slot IS NULL\n            LIMIT 1000\n        "
+  },
   "0095a39b2059c44bb70fc7e26c567227deae1dd658b8f5d73217b778627dc6dd": {
     "describe": {
       "columns": [
@@ -796,6 +820,32 @@
       }
     },
     "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM\n                    blocks_next\n                WHERE\n                    hash = $1\n            "
+  },
+  "df00531fc2bde26a6e244eba222af3b696a2f532e0c93b51295219523cb855e7": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "state_root",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                slot,\n                state_root\n            FROM\n                beacon_states\n            WHERE state_root = ANY($1)\n        "
   },
   "e7fe80e33064951d3e22fc7a1868b50257db8acd15636663218b3f2ebff08a73": {
     "describe": {

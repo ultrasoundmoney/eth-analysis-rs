@@ -21,6 +21,7 @@ mod time;
 mod time_frames;
 mod update_by_hand;
 
+pub use beacon_chain::backfill_historic_slots;
 pub use beacon_chain::heal_beacon_states;
 pub use beacon_chain::heal_block_hashes;
 pub use beacon_chain::sync_beacon_states;
