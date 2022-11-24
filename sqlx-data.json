@@ -608,6 +608,26 @@
     },
     "query": "\n            INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
   },
+  "b7e90e9146c2620499d69df0b11d3e37c6f21acc1185c25232dc68a016943e14": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                COUNT(*) AS \"count!\"\n            FROM\n                beacon_blocks\n            JOIN\n                beacon_states\n            ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot >= $1\n        "
+  },
   "c3e675178c9b93119e5298a613b1c84cd0847ad39755d3e530cac5a52586a747": {
     "describe": {
       "columns": [
