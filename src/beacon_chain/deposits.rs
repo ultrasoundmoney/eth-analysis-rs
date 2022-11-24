@@ -42,8 +42,12 @@ pub struct BeaconDepositsSum {
 pub async fn get_deposits_sum(executor: impl PgExecutor<'_>) -> BeaconDepositsSum {
     sqlx::query(
         "
-            SELECT beacon_states.slot, deposit_sum_aggregated FROM beacon_states
-            JOIN beacon_blocks ON beacon_blocks.state_root = beacon_states.state_root
+            SELECT
+                beacon_states.slot,
+                deposit_sum_aggregated
+            FROM beacon_states
+            JOIN beacon_blocks ON
+                beacon_blocks.state_root = beacon_states.state_root
             ORDER BY beacon_states.slot DESC
             LIMIT 1
         ",

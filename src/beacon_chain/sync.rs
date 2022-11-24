@@ -299,8 +299,9 @@ pub async fn sync_state_root(
             slot: *slot,
             balances_sum: validator_balances_sum,
         };
-        let eth_supply_parts =
-            eth_supply::get_supply_parts(&mut transaction, &beacon_balances_sum).await?;
+        let eth_supply_parts = eth_supply::get_supply_parts(&mut transaction, &beacon_balances_sum)
+            .timed("get_supply_parts")
+            .await?;
 
         eth_supply::update(&mut transaction, &eth_supply_parts).await?;
     }
