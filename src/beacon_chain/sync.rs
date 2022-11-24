@@ -285,41 +285,32 @@ pub async fn sync_state_root(
         }
 
         let beacon_balances_sum = BeaconBalancesSum {
+            slot: *slot,
             balances_sum: validator_balances_sum,
-            slot: slot.clone(),
         };
-
         let eth_supply_parts =
             eth_supply::get_supply_parts(&mut transaction, &beacon_balances_sum).await?;
 
-        eth_supply::update_supply_parts(&mut transaction, &eth_supply_parts).await?;
-
-        let in_sync_with_chain = {
-            let last_state_root_on_chain = beacon_node
-                .get_last_header()
-                .await?
-                .header
-                .message
-                .state_root;
-            state_root == last_state_root_on_chain
-        };
-
-        if in_sync_with_chain {
-            debug!("sync caught up to head of chain, computing skippable analysis");
-            let eth_supply_parts = eth_supply::update_supply_over_time(
-                executor,
-                eth_supply_parts.beacon_balances_sum.slot,
-                eth_supply_parts.execution_balances_sum.block_number,
-                beacon_time::get_date_time_from_slot(&eth_supply_parts.beacon_balances_sum.slot),
-            )
-            .timed("update-supply-over-time")
-            .await?;
-        } else {
-            debug!("sync not yet caught up with head of chain, skipping some analysis");
-        }
+        eth_supply::update(&mut transaction, &eth_supply_parts).await?;
     }
 
     transaction.commit().await?;
+
+    Ok(())
+}
+
+async fn update_analysis(db_pool: &PgPool, state_root: &str) -> Result<()> {
+    let beacon_balances_sum =
+        balances::get_validator_balances_by_state_root(db_pool, state_root).await?;
+
+    match beacon_balances_sum {
+        None => {
+            debug!("no beacon balances sum available, skipping eth_supply update");
+        }
+        Some(beacon_balances_sum) => {
+            eth_supply::update_caches(db_pool, &beacon_balances_sum).await?;
+        }
+    }
 
     Ok(())
 }
@@ -614,6 +605,15 @@ pub async fn sync_beacon_states() -> Result<()> {
                 for invalid_slot in (first_invalid_slot..=slot).rev() {
                     slots_queue.lock().unwrap().push_front(invalid_slot);
                 }
+            }
+
+            let (slots_in_stream, _) = slots_stream.size_hint();
+            if slots_in_stream == 0 && slots_queue.lock().unwrap().is_empty() {
+                dbg!(slots_in_stream);
+                debug!("sync caught up with head of chain, making own analysis");
+                update_analysis(&db_pool, &on_chain_state_root).await?;
+            } else {
+                debug!("sync not yet caught up with head of chain, skipping some analysis");
             }
         }
     }

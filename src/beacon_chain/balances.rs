@@ -120,6 +120,11 @@ pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
     .unwrap();
 }
 
+struct BeaconBalancesSumRow {
+    slot: i32,
+    gwei: i64
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BeaconBalancesSum {
@@ -128,12 +133,43 @@ pub struct BeaconBalancesSum {
     pub balances_sum: GweiNewtype,
 }
 
+impl From<BeaconBalancesSumRow> for BeaconBalancesSum {
+    fn from(row: BeaconBalancesSumRow) -> Self {
+            Self{
+                slot: row.slot as u32,
+                balances_sum: row.gwei.try_into().unwrap()
+            }
+    }
+}
+
+pub async fn get_validator_balances_by_state_root(executor: impl PgExecutor<'_>, state_root: &str) -> Result<Option<BeaconBalancesSum>> {
+    let row = sqlx::query_as!(
+        BeaconBalancesSumRow,
+        "
+            SELECT
+                beacon_states.slot,
+                gwei
+            FROM
+                beacon_validators_balance
+            JOIN beacon_states ON
+                beacon_validators_balance.state_root = beacon_states.state_root
+            WHERE
+                beacon_validators_balance.state_root = $1
+        ",
+        state_root
+    ).fetch_optional(executor).await?;
+
+    let beacon_balances_sum = row.map(|row| row.into());
+
+    Ok(beacon_balances_sum)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, TimeZone, Utc, DurationRound};
     use sqlx::Connection;
 
-    use crate::{beacon_chain::states::store_state, db};
+    use crate::{beacon_chain::{states::store_state, tests::store_test_block}, db};
 
     use super::*;
 
@@ -159,7 +195,7 @@ mod tests {
 
         let unix_timestamp = validator_balances_by_day.first().unwrap().t;
 
-        let datetime = Utc.timestamp(unix_timestamp.try_into().unwrap(), 0);
+        let datetime = Utc.timestamp_opt(unix_timestamp.try_into().unwrap(), 0).unwrap();
 
         let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
 
@@ -190,5 +226,31 @@ mod tests {
 
         let balances = get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
         assert_eq!(balances.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn get_validator_balances_by_state_root_test() {
+        let mut connection = db::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let test_id = "get_validator_balances_by_state_root";
+        let state_root = format!("0x{test_id}_state_root");
+
+        store_test_block(&mut transaction, test_id).await;
+
+        store_validators_balance(
+            &mut transaction,
+            &state_root,
+            &0,
+            &GweiNewtype(100),
+        )
+        .await.unwrap();
+
+        let beacon_balances_sum = get_validator_balances_by_state_root(&mut transaction, &state_root).await.unwrap().unwrap();
+
+        assert_eq!(BeaconBalancesSum{
+            slot: 0,
+            balances_sum: GweiNewtype(100)
+        }, beacon_balances_sum);
     }
 }

@@ -42,16 +42,19 @@ pub async fn get_closest_balances_sum(
     executor: impl PgExecutor<'_>,
     point_in_time: DateTime<Utc>,
 ) -> sqlx::Result<ExecutionBalancesSum> {
+    // If we could guarantee a execution_supply exists for every block this query could be a lot
+    // faster.
     sqlx::query(
         "
-        SELECT
-            block_number, balances_sum::TEXT
-        FROM
-            execution_supply
-        JOIN
-            blocks_next ON execution_supply.block_number = blocks_next.number
-        ORDER BY ABS(EXTRACT(epoch FROM (blocks_next.timestamp - $1)))
-    ",
+            SELECT
+                block_number, balances_sum::TEXT
+            FROM
+                blocks_next
+            JOIN
+                execution_supply ON blocks_next.number = execution_supply.block_number 
+            ORDER BY ABS(EXTRACT(epoch FROM (blocks_next.timestamp - $1)))
+            LIMIT 1
+        ",
     )
     .bind(point_in_time)
     .map(|row: PgRow| {

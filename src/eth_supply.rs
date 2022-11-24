@@ -10,13 +10,13 @@ use tracing::debug;
 
 use crate::beacon_chain::{self, beacon_time, BeaconBalancesSum, BeaconDepositsSum, Slot};
 use crate::caching::{self, CacheKey};
-use crate::eth_supply::over_time::update_supply_over_time;
 use crate::eth_units::{EthF64, Wei};
 use crate::execution_chain::ExecutionBalancesSum;
 use crate::execution_chain::{self, BlockNumber};
 use crate::key_value_store;
-use crate::performance::TimedExt;
 
+pub use crate::eth_supply::over_time::update_supply_over_time;
+use crate::performance::TimedExt;
 pub use gaps::sync_gaps;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -251,6 +251,27 @@ pub async fn get_supply_exists_by_slot(
     .fetch_optional(executor)
     .await
     .map(|row| row.is_some())
+}
+
+pub async fn update_caches(
+    db_pool: &PgPool,
+    beacon_balances_sum: &BeaconBalancesSum,
+) -> Result<()> {
+    let eth_supply_parts =
+        get_supply_parts(&mut *db_pool.acquire().await?, &beacon_balances_sum).await?;
+
+    update_supply_parts(&mut *db_pool.acquire().await?, &eth_supply_parts).await?;
+
+    update_supply_over_time(
+        db_pool,
+        eth_supply_parts.beacon_balances_sum.slot,
+        eth_supply_parts.execution_balances_sum.block_number,
+        beacon_time::get_date_time_from_slot(&eth_supply_parts.beacon_balances_sum.slot),
+    )
+    .timed("update-supply-over-time")
+    .await?;
+
+    Ok(())
 }
 
 #[cfg(test)]

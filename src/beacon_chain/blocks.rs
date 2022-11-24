@@ -4,7 +4,7 @@ mod heal;
 use std::num::TryFromIntError;
 
 use anyhow::Result;
-use sqlx::{postgres::PgRow, PgConnection, PgExecutor, Row};
+use sqlx::{PgConnection, PgExecutor, Row};
 
 use crate::eth_units::GweiNewtype;
 

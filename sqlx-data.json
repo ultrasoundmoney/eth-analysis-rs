@@ -665,6 +665,32 @@
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
   },
+  "c50329fd123da6b04aa95bb60486497d4be8ff84cc5175ab8658fde3eadcf467": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "gwei",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                beacon_states.slot,\n                gwei\n            FROM\n                beacon_validators_balance\n            JOIN beacon_states ON\n                beacon_validators_balance.state_root = beacon_states.state_root\n            WHERE\n                beacon_validators_balance.state_root = $1\n        "
+  },
   "db24538a9bb9300a9837788746af27d056d3d06b4a72bd971b097507554c60e8": {
     "describe": {
       "columns": [
