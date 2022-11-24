@@ -43,10 +43,6 @@ pub async fn heal_block_hashes() -> Result<()> {
                 COUNT(*) AS "count!"
             FROM
                 beacon_blocks
-            JOIN
-                beacon_states
-            ON
-                beacon_blocks.state_root = beacon_states.state_root
             WHERE
                 slot >= $1
         "#,
@@ -62,19 +58,15 @@ pub async fn heal_block_hashes() -> Result<()> {
 
     let mut rows = sqlx::query_as!(
         BlockSlotRow,
-        "
+        r#"
             SELECT
                 block_root,
-                slot
+                slot AS "slot!"
             FROM
                 beacon_blocks
-            JOIN
-                beacon_states
-            ON
-                beacon_blocks.state_root = beacon_states.state_root
             WHERE
                 slot >= $1
-        ",
+        "#,
         first_slot as i32
     )
     .fetch(&db_pool);

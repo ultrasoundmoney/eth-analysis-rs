@@ -58,26 +58,6 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
-  "138299bc4184af247b92b1112b2910a30140b6c869424c19517eeaf5dae6ca44": {
-    "describe": {
-      "columns": [
-        {
-          "name": "block_root",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                block_root\n            FROM\n                beacon_states \n            JOIN\n                beacon_blocks \n            ON\n                beacon_states.state_root = beacon_blocks.state_root \n            WHERE slot <= $1\n            ORDER BY slot DESC \n            LIMIT 1\n        "
-  },
   "1d1cbed2bd2dfa388a1b9851e9c772e23c8256c278762aadda6413f26a06341e": {
     "describe": {
       "columns": [],
@@ -89,23 +69,6 @@
       }
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot = $1\n        "
-  },
-  "262e7c58ea23ae1e7b2694ff084a5594b35d80df367844abb6fc0ad7b56ac0a9": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text",
-          "Int8",
-          "Int8",
-          "Text",
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO beacon_blocks (\n                block_hash,\n                block_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                parent_root,\n                state_root\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6\n            )\n        "
   },
   "28409ca2bee68e0969632f7278e521cae6fb20ec9247d24680b29ac9b727aaa2": {
     "describe": {
@@ -256,6 +219,26 @@
     },
     "query": "\n            DELETE FROM beacon_validators_balance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
+  "4152578f52c9f12405fd196bc8a4d3417eae95873e6c9b92a46253ea9bf2fcc1": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                COUNT(*) AS \"count!\"\n            FROM\n                beacon_blocks\n            WHERE\n                slot >= $1\n        "
+  },
   "440e3270c27b7133ca07349f03510777f0218e8acefd1f2ffad9d8528e7db2de": {
     "describe": {
       "columns": [],
@@ -369,6 +352,26 @@
     },
     "query": "\n            SELECT\n                block_root,\n                state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks\n            WHERE\n                block_root = $1\n        "
   },
+  "5a9991cfa269fecff4a565d678de83b2549066e5f98196e2286fb4a904860cfb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                block_root\n            FROM\n                beacon_states \n            JOIN\n                beacon_blocks \n            ON\n                beacon_states.state_root = beacon_blocks.state_root \n            WHERE beacon_states.slot <= $1\n            ORDER BY beacon_states.slot DESC \n            LIMIT 1\n        "
+  },
   "622a4e700745a450c178d411239781e6319ad98f430c62e6b99685af6962f4d4": {
     "describe": {
       "columns": [
@@ -447,32 +450,6 @@
       }
     },
     "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
-  },
-  "8bb7cacff2e1dc4d863207587efaf87418c7aba4d448015981daebcc9ce6f946": {
-    "describe": {
-      "columns": [
-        {
-          "name": "block_root",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "slot",
-          "ordinal": 1,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                block_root,\n                slot\n            FROM\n                beacon_blocks\n            JOIN\n                beacon_states\n            ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot >= $1\n        "
   },
   "8ecdb845a8d20242d267393d5c79173f8de281f872a806ec2dd85f49d1c675fc": {
     "describe": {
@@ -594,6 +571,24 @@
     },
     "query": "\n            UPDATE\n                beacon_states\n            SET\n                effective_balance_sum = $1\n            WHERE\n                state_root = $2\n        "
   },
+  "b79657a733d30eefccec9ce166c8a3fffce30292903ce2c9171619f4860ffcf5": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Int8",
+          "Int8",
+          "Text",
+          "Int4",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO beacon_blocks (\n                block_hash,\n                block_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                parent_root,\n                slot,\n                state_root\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6, $7\n            )\n        "
+  },
   "b7bb6881fa2d0a591071a9f538fddfb4d2ee6bb4ffee3154bf6cd9fd0c8ebbe9": {
     "describe": {
       "columns": [],
@@ -607,26 +602,6 @@
       }
     },
     "query": "\n            INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
-  },
-  "b7e90e9146c2620499d69df0b11d3e37c6f21acc1185c25232dc68a016943e14": {
-    "describe": {
-      "columns": [
-        {
-          "name": "count!",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                COUNT(*) AS \"count!\"\n            FROM\n                beacon_blocks\n            JOIN\n                beacon_states\n            ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot >= $1\n        "
   },
   "c3e675178c9b93119e5298a613b1c84cd0847ad39755d3e530cac5a52586a747": {
     "describe": {
@@ -671,6 +646,32 @@
       }
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
+  },
+  "db24538a9bb9300a9837788746af27d056d3d06b4a72bd971b097507554c60e8": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "slot!",
+          "ordinal": 1,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                block_root,\n                slot AS \"slot!\"\n            FROM\n                beacon_blocks\n            WHERE\n                slot >= $1\n        "
   },
   "db7b7fa09a36c2216aaa8ca90270fce68e90be39ce6c21fcd9fa70eee51fa65e": {
     "describe": {
