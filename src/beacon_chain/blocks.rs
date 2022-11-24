@@ -93,7 +93,7 @@ pub async fn store_block(
         i64::from(deposit_sum.to_owned()),
         i64::from(deposit_sum_aggregated.to_owned()),
         header.header.message.parent_root,
-        header.header.message.slot,
+        header.header.message.slot as i32,
         header.header.message.state_root,
     )
     .execute(executor)
