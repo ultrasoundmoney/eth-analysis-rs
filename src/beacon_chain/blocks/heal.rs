@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
+use futures::TryStreamExt;
 use pit_wall::Progress;
 use sqlx::{postgres::PgPoolOptions, PgExecutor};
 use tracing::{debug, info};
 
 use crate::{
-    beacon_chain::{self, blocks, node::BlockRoot, BeaconNode, Slot, FIRST_POST_MERGE_SLOT},
+    beacon_chain::{self, blocks, BeaconNode, Slot, FIRST_POST_MERGE_SLOT},
     db, key_value_store, log,
 };
 
@@ -42,7 +41,31 @@ pub async fn heal_block_hashes() -> Result<()> {
         .await?
         .unwrap_or(FIRST_POST_MERGE_SLOT);
 
-    let slot_block_root_map = sqlx::query!(
+    let work_todo = sqlx::query!(
+        r#"
+            SELECT
+                COUNT(*) AS "count!"
+            FROM
+                beacon_blocks
+            JOIN
+                beacon_states
+            ON
+                beacon_blocks.state_root = beacon_states.state_root
+            WHERE
+                slot >= $1
+        "#,
+        first_slot as i32
+    )
+    .fetch_one(&db_pool)
+    .await?;
+
+    struct BlockSlotRow {
+        block_root: String,
+        slot: i32,
+    }
+
+    let mut rows = sqlx::query_as!(
+        BlockSlotRow,
         "
             SELECT
                 block_root,
@@ -53,37 +76,33 @@ pub async fn heal_block_hashes() -> Result<()> {
                 beacon_states
             ON
                 beacon_blocks.state_root = beacon_states.state_root
-        "
+            WHERE
+                slot >= $1
+        ",
+        first_slot as i32
     )
-    .fetch_all(&db_pool)
-    .await?
-    .into_iter()
-    .map(|row| (row.slot as u32, row.block_root))
-    .collect::<HashMap<Slot, BlockRoot>>();
+    .fetch(&db_pool);
 
-    let mut progress = Progress::new("heal-block-hash", (last_slot - first_slot).into());
+    let mut progress = Progress::new("heal-block-hashes", work_todo.count.try_into().unwrap());
 
-    for slot in first_slot..=last_slot {
-        let block_root = slot_block_root_map.get(&slot);
-        match block_root {
-            None => (),
-            Some(block_root) => {
-                let block = beacon_node
-                    .get_block_by_block_root(&block_root)
-                    .await?
-                    .expect("expect block to exist for historic block_root");
+    while let Some(row) = rows.try_next().await? {
+        let block_root = row.block_root;
+        let slot = row.slot as u32;
 
-                let block_hash = block
-                    .body
-                    .execution_payload
-                    .expect("expect execution payload to exist for post-merge block")
-                    .block_hash;
+        let block = beacon_node
+            .get_block_by_block_root(&block_root)
+            .await?
+            .expect("expect block to exist for historic block_root");
 
-                debug!(block_root, block_hash, "setting block hash");
+        let block_hash = block
+            .body
+            .execution_payload
+            .expect("expect execution payload to exist for post-merge block")
+            .block_hash;
 
-                blocks::update_block_hash(&db_pool, block_root, &block_hash).await?;
-            }
-        }
+        debug!(block_root, block_hash, "setting block hash");
+
+        blocks::update_block_hash(&db_pool, &block_root, &block_hash).await?;
 
         progress.inc_work_done();
 
@@ -93,7 +112,7 @@ pub async fn heal_block_hashes() -> Result<()> {
         }
     }
 
-    info!("done healing execution block hashes");
+    info!("done healing beacon block hashes");
 
     Ok(())
 }
