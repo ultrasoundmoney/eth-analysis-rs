@@ -821,32 +821,6 @@
     },
     "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM\n                    blocks_next\n                WHERE\n                    hash = $1\n            "
   },
-  "df00531fc2bde26a6e244eba222af3b696a2f532e0c93b51295219523cb855e7": {
-    "describe": {
-      "columns": [
-        {
-          "name": "slot",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "state_root",
-          "ordinal": 1,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "TextArray"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                slot,\n                state_root\n            FROM\n                beacon_states\n            WHERE state_root = ANY($1)\n        "
-  },
   "e7fe80e33064951d3e22fc7a1868b50257db8acd15636663218b3f2ebff08a73": {
     "describe": {
       "columns": [
@@ -870,6 +844,32 @@
       }
     },
     "query": "\n            SELECT\n                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                gwei\n            FROM\n                beacon_issuance\n            ORDER BY\n                DATE_TRUNC('day', timestamp), timestamp ASC\n        "
+  },
+  "f131f3678266b0368c0c282306608c30964e012ecf23fe3cf4546de72ee69940": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "state_root",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "TextArray"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    slot,\n                    state_root\n                FROM\n                    beacon_states\n                WHERE state_root = ANY($1)\n            "
   },
   "febfe61a125d3cb2bc555027c602842386096975e8387d3de410ca0847d2e56b": {
     "describe": {
