@@ -9,7 +9,7 @@ use tracing::{debug, info};
 use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
 use crate::eth_units::{GweiNewtype, GWEI_PER_ETH, GWEI_PER_ETH_F64};
-use crate::execution_chain::LONDON_HARDFORK_TIMESTAMP;
+use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
 use crate::{caching, db, key_value_store, log};
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -20,7 +20,7 @@ pub struct ValidatorReward {
 }
 
 fn get_days_since_london() -> i64 {
-    (Utc::now() - *LONDON_HARDFORK_TIMESTAMP).num_days()
+    (Utc::now() - *LONDON_HARD_FORK_TIMESTAMP).num_days()
 }
 
 #[derive(Decode)]

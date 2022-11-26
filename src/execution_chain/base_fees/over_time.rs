@@ -5,7 +5,7 @@ use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 use tracing::debug;
 
-use crate::execution_chain::PARIS_TIMESTAMP;
+use crate::execution_chain::BELLATRIX_HARD_FORK_TIMESTAMP;
 use crate::time_frames::LimitedTimeFrame::*;
 use crate::{
     caching::{self, CacheKey},
@@ -55,7 +55,7 @@ async fn get_base_fee_over_time(
                     ORDER BY day_timestamp ASC
                 ",
             )
-            .bind(*PARIS_TIMESTAMP)
+            .bind(*BELLATRIX_HARD_FORK_TIMESTAMP)
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("day_timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");

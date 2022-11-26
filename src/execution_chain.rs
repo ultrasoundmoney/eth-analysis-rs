@@ -30,9 +30,9 @@ pub use supply_deltas::SupplyDelta;
 pub use sync::sync_blocks as sync_execution_blocks;
 
 lazy_static! {
-    pub static ref LONDON_HARDFORK_TIMESTAMP: DateTime<Utc> =
+    pub static ref LONDON_HARD_FORK_TIMESTAMP: DateTime<Utc> =
         Utc.timestamp_opt(1628166822, 0).unwrap();
-    pub static ref PARIS_TIMESTAMP: DateTime<Utc> =
+    pub static ref BELLATRIX_HARD_FORK_TIMESTAMP: DateTime<Utc> =
         "2022-09-15T06:42:42Z".parse::<DateTime<Utc>>().unwrap();
 }
 
