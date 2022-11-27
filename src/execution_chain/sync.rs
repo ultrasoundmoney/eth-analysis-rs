@@ -8,7 +8,7 @@
 
 use anyhow::Result;
 use futures::{SinkExt, Stream, StreamExt};
-use sqlx::{PgConnection, PgPool};
+use sqlx::PgPool;
 use std::{
     cmp::Ordering,
     collections::VecDeque,
@@ -22,19 +22,17 @@ use super::{
     node::{BlockNumber, Head},
 };
 use crate::{
-    db, eth_supply,
+    db,
     execution_chain::{self, base_fees, block_store::BlockStore, ExecutionNode},
     log,
     performance::TimedExt,
 };
 
 async fn rollback_numbers<'a>(
-    executor: &mut PgConnection,
     block_store: &mut BlockStore<'a>,
     greater_than_or_equal: &BlockNumber,
 ) -> Result<()> {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
-    eth_supply::rollback_supply_from_block(executor, greater_than_or_equal).await?;
     block_store.delete_blocks(&greater_than_or_equal).await;
     Ok(())
 }
@@ -125,7 +123,7 @@ async fn sync_head(
             // Head number may be lower than our last synced. Roll back gte lowest of the two.
             let lowest_number = last_block_number.min(head_event.number);
 
-            rollback_numbers(&mut db_pool.acquire().await.unwrap(), store, &lowest_number).await?;
+            rollback_numbers(store, &lowest_number).await?;
 
             for number in (lowest_number..=head_event.number).rev() {
                 debug!("queueing {number} for sync after dropping");
@@ -141,12 +139,7 @@ async fn sync_head(
                 head_event.number, head_event.hash
             );
 
-            rollback_numbers(
-                &mut db_pool.acquire().await.unwrap(),
-                store,
-                &head_event.number,
-            )
-            .await?;
+            rollback_numbers(store, &head_event.number).await?;
 
             heads_queue
                 .lock()
@@ -384,7 +377,7 @@ mod tests {
             )
             .await;
 
-        rollback_numbers(&mut db.acquire().await.unwrap(), &mut block_store, &0).await?;
+        rollback_numbers(&mut block_store, &0).await?;
 
         // This should blow up if the order is backwards but its not obvious how. Consider using
         // mockall to create a mock instance of block_store so we can observe whether
