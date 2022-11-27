@@ -205,7 +205,6 @@ pub async fn get_supply_parts(
                 &block_hash,
             )
             .await?;
-            dbg!(&execution_balances);
             let beacon_deposits_sum = beacon_chain::get_deposits_sum_by_state_root(
                 executor.acquire().await?,
                 &state_root,

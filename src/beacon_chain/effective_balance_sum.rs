@@ -130,8 +130,6 @@ pub async fn update_effective_balance_sum() -> Result<()> {
 
     let effective_balance_sum_f64: f64 = effective_balance_sum.into();
 
-    dbg!(&effective_balance_sum);
-
     key_value_store::set_value(
         &mut connection,
         CacheKey::EffectiveBalanceSum.to_db_key(),

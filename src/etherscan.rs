@@ -92,6 +92,5 @@ mod tests {
     #[tokio::test]
     async fn get_eth_price_test() {
         let res = get_eth_price().await.unwrap();
-        dbg!(res);
     }
 }
