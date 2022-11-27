@@ -5,11 +5,7 @@ use lazy_static::lazy_static;
 use serde::Deserialize;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use sqlx::{Acquire, PgConnection, PgExecutor};
-use std::{
-    cmp::Ordering,
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::{cmp::Ordering, collections::VecDeque};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -218,7 +214,7 @@ async fn get_sync_lag(beacon_node: &BeaconNode, syncing_slot: &Slot) -> Result<D
     Ok(lag)
 }
 
-pub async fn sync_state_root(
+pub async fn sync_slot_by_state_root(
     db_pool: &PgPool,
     beacon_node: &BeaconNode,
     state_root: &StateRoot,
@@ -498,8 +494,6 @@ async fn find_last_matching_slot(
     Ok(candidate_slot)
 }
 
-type SlotsQueue = Arc<Mutex<VecDeque<Slot>>>;
-
 pub async fn sync_beacon_states() -> Result<()> {
     log::init_with_env();
 
@@ -521,7 +515,7 @@ pub async fn sync_beacon_states() -> Result<()> {
     // The two expected scenarios are:
     // 1. A slot was missed, and the next head is more than one slot ahead.
     // 2. We've diverged, and need to roll back one or more slots.
-    let slots_queue: SlotsQueue = Arc::new(Mutex::new(VecDeque::new()));
+    let mut slots_queue = VecDeque::<Slot>::new();
 
     let mut progress = pit_wall::Progress::new(
         "sync beacon states",
@@ -535,11 +529,12 @@ pub async fn sync_beacon_states() -> Result<()> {
             debug!("{}", progress.get_progress_string());
         }
 
-        slots_queue.lock().unwrap().push_back(slot_from_stream);
+        slots_queue.push_back(slot_from_stream);
 
         // Work through the slots queue until it's empty and we're ready to move the next head from
         // the stream to the queue.
-        while let Some(slot) = slots_queue.lock().unwrap().pop_front() {
+        // To be able to push things onto the queue during the loop, the lock should not be held.
+        while let Some(slot) = slots_queue.pop_front() {
             debug!(slot, "analyzing next slot on the queue");
 
             let on_chain_state_root =
@@ -573,7 +568,9 @@ pub async fn sync_beacon_states() -> Result<()> {
             if current_slot_stored_state_root.is_none() && last_matches {
                 // 1. current slot is empty and last state_root matches.
                 debug!("no state stored for current slot and last slots state_root matches chain");
-                sync_state_root(&db_pool, &beacon_node, &on_chain_state_root, &slot).await?;
+                sync_slot_by_state_root(&db_pool, &beacon_node, &on_chain_state_root, &slot)
+                    .timed("sync_slot_by_state_root")
+                    .await?;
             } else {
                 // 2. roll back to last matching state_root, queue all slots up to and including
                 //    current for sync.
@@ -591,7 +588,7 @@ pub async fn sync_beacon_states() -> Result<()> {
                 rollback_slots(&mut *db_pool.acquire().await?, &first_invalid_slot).await?;
 
                 for invalid_slot in (first_invalid_slot..=slot).rev() {
-                    slots_queue.lock().unwrap().push_front(invalid_slot);
+                    slots_queue.push_front(invalid_slot);
                 }
             }
 
