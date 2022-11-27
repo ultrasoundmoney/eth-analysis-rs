@@ -299,6 +299,7 @@ mod tests {
         eth_supply::store(
             executor,
             slot,
+            &execution_balances_sum.block_number,
             &execution_balances_sum.balances_sum,
             &beacon_deposits_sum.deposits_sum,
             &beacon_balances_sum.balances_sum,

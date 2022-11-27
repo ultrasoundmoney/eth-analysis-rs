@@ -58,6 +58,7 @@ pub async fn sync_gaps() -> Result<()> {
                     eth_supply::store(
                         &mut db_connection,
                         &slot,
+                        &eth_supply_parts.execution_balances_sum.block_number,
                         &eth_supply_parts.execution_balances_sum.balances_sum,
                         &eth_supply_parts.beacon_deposits_sum.deposits_sum,
                         &eth_supply_parts.beacon_balances_sum.balances_sum,

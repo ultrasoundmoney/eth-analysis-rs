@@ -70,6 +70,7 @@ pub async fn rollback_supply_slot(
 pub async fn store(
     executor: impl PgExecutor<'_>,
     slot: &Slot,
+    block_number: &BlockNumber,
     execution_balances_sum: &Wei,
     beacon_balances_sum: &GweiNewtype,
     beacon_deposits_sum: &GweiNewtype,
@@ -91,7 +92,7 @@ pub async fn store(
         ",
     )
     .bind(timestamp)
-    .bind(0)
+    .bind(*block_number as i32)
     .bind(*slot as i32)
     .bind(*slot as i32)
     .bind(supply.to_string())
@@ -204,6 +205,7 @@ pub async fn get_supply_parts(
                 &block_hash,
             )
             .await?;
+            dbg!(&execution_balances);
             let beacon_deposits_sum = beacon_chain::get_deposits_sum_by_state_root(
                 executor.acquire().await?,
                 &state_root,
@@ -300,6 +302,7 @@ pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> 
             store(
                 executor.acquire().await?,
                 &slot,
+                &eth_supply_parts.execution_balances_sum.block_number,
                 &eth_supply_parts.execution_balances_sum.balances_sum,
                 &eth_supply_parts.beacon_balances_sum.balances_sum,
                 &eth_supply_parts.beacon_deposits_sum.deposits_sum,
@@ -519,6 +522,7 @@ mod tests {
         store(
             &mut transaction,
             &slot,
+            &0,
             &GweiNewtype(10).into_wei(),
             &GweiNewtype(20),
             &GweiNewtype(5),
@@ -581,6 +585,7 @@ mod tests {
         store(
             &mut transaction,
             &slot,
+            &0,
             &eth_supply_parts.execution_balances_sum.balances_sum,
             &eth_supply_parts.beacon_deposits_sum.deposits_sum,
             &eth_supply_parts.beacon_balances_sum.balances_sum,
@@ -634,6 +639,7 @@ mod tests {
         store(
             &mut transaction,
             &slot,
+            &0,
             &eth_supply_parts.execution_balances_sum.balances_sum,
             &eth_supply_parts.beacon_deposits_sum.deposits_sum,
             &eth_supply_parts.beacon_balances_sum.balances_sum,
