@@ -2,6 +2,12 @@ mod blocks;
 mod decoders;
 mod heads;
 
+pub use blocks::BlockHash;
+pub use blocks::BlockNumber;
+pub use blocks::Difficulty;
+pub use blocks::ExecutionNodeBlock;
+pub use blocks::TotalDifficulty;
+
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
@@ -13,7 +19,6 @@ use async_tungstenite::{
     tungstenite::Message,
     WebSocketStream,
 };
-pub use blocks::{BlockNumber, Difficulty, ExecutionNodeBlock, TotalDifficulty};
 use futures::{
     channel::{mpsc, oneshot},
     prelude::*,

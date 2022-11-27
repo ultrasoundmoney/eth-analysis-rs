@@ -6,6 +6,7 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, PgPool, Row};
 use tracing::debug;
 
+use crate::beacon_chain::beacon_time;
 use crate::time_frames::LimitedTimeFrame::*;
 use crate::{
     beacon_chain::Slot,
@@ -207,7 +208,6 @@ pub async fn update_supply_over_time(
     executor: &PgPool,
     slot: Slot,
     block_number: BlockNumber,
-    timestamp: DateTime<Utc>,
 ) -> Result<()> {
     debug!("updating supply over time");
 
@@ -231,7 +231,7 @@ pub async fn update_supply_over_time(
         since_burn: Some(since_burn),
         since_merge,
         slot,
-        timestamp,
+        timestamp: beacon_time::get_date_time_from_slot(&slot),
     };
 
     caching::set_value(executor, &CacheKey::SupplyOverTime, supply_over_time).await?;
@@ -248,8 +248,7 @@ mod tests {
 
     use crate::{
         beacon_chain::{self, beacon_time, BeaconBalancesSum, BeaconDepositsSum},
-        db,
-        eth_supply::{self, EthSupplyParts},
+        db, eth_supply,
         eth_units::{EthF64, GweiNewtype},
         execution_chain::{BlockStore, ExecutionBalancesSum, ExecutionNodeBlock},
     };
@@ -278,11 +277,11 @@ mod tests {
         let mut block_store = BlockStore::new(executor);
 
         let test_block = make_test_block();
+        let state_root = "0xstate_root";
 
         block_store.store_block(&test_block, 0.0).await;
 
-        beacon_chain::store_state(executor.acquire().await.unwrap(), "0xstate_root", slot, "")
-            .await?;
+        beacon_chain::store_state(executor.acquire().await.unwrap(), state_root, slot, "").await?;
 
         let execution_balances_sum = ExecutionBalancesSum {
             block_number: 0,
@@ -297,13 +296,14 @@ mod tests {
             deposits_sum: GweiNewtype(0),
         };
 
-        let eth_supply_parts = EthSupplyParts {
-            beacon_balances_sum,
-            beacon_deposits_sum,
-            execution_balances_sum,
-        };
-
-        eth_supply::store(executor, &eth_supply_parts).await?;
+        eth_supply::store(
+            executor,
+            slot,
+            &execution_balances_sum.balances_sum,
+            &beacon_deposits_sum.deposits_sum,
+            &beacon_balances_sum.balances_sum,
+        )
+        .await?;
 
         Ok(())
     }
@@ -312,9 +312,8 @@ mod tests {
     #[tokio::test]
     async fn selects_within_time_frame_test() {}
 
-    #[ignore = "broken for unclear reasons, broken eth price?"]
     #[tokio::test]
-    async fn m5_test() -> Result<()> {
+    async fn supply_over_time_m5_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
@@ -322,18 +321,20 @@ mod tests {
         let test_slot = beacon_time::get_slot_from_date_time(&test_timestamp);
 
         let test_supply_at_time = SupplyAtTime {
-            timestamp: test_timestamp.duration_trunc(Duration::hours(1))?,
+            // TODO: why is the rounding needed?
+            timestamp: test_timestamp.duration_round(Duration::days(1)).unwrap(),
             supply: 10.0,
             slot: None,
         };
 
-        store_test_eth_supply(&mut transaction, &test_slot, 10.0).await?;
+        store_test_eth_supply(&mut transaction, &test_slot, 10.0)
+            .await
+            .unwrap();
 
-        let since_merge =
-            get_supply_over_time_time_frame(&mut transaction, &TimeFrame::SinceMerge).await?;
+        let since_merge = get_supply_over_time_time_frame(&mut transaction, &TimeFrame::SinceMerge)
+            .await
+            .unwrap();
 
         assert_eq!(since_merge, vec![test_supply_at_time]);
-
-        Ok(())
     }
 }

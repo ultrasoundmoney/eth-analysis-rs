@@ -9,24 +9,38 @@ mod rewards;
 mod states;
 mod sync;
 
-pub use balances::{
-    get_validator_balances_by_start_of_day, sum_validator_balances, BeaconBalancesSum,
-};
+pub use balances::get_balances_by_state_root;
+pub use balances::get_validator_balances_by_start_of_day;
+pub use balances::sum_validator_balances;
+pub use balances::BeaconBalancesSum;
 
-pub use blocks::{backfill_historic_slots, heal_block_hashes, store_block, GENESIS_PARENT_ROOT};
+pub use blocks::backfill_historic_slots;
+pub use blocks::get_block_by_block_root;
+pub use blocks::heal_block_hashes;
+pub use blocks::store_block;
+pub use blocks::GENESIS_PARENT_ROOT;
 
-pub use deposits::{get_deposits_sum, BeaconDepositsSum};
+pub use deposits::get_deposits_sum_by_state_root;
+pub use deposits::BeaconDepositsSum;
 
 pub use effective_balance_sum::{
     get_last_stored_effective_balance_sum, update_effective_balance_sum,
 };
 pub use issuance::{get_current_issuance, get_issuance_by_start_of_day, get_last_week_issuance};
 
-pub use node::{BeaconHeader, BeaconHeaderEnvelope, BeaconHeaderSignedEnvelope, BeaconNode};
+#[cfg(test)]
+pub use node::tests::BeaconBlockBuilder;
+#[cfg(test)]
+pub use node::tests::BeaconHeaderSignedEnvelopeBuilder;
+pub use node::BeaconHeader;
+pub use node::BeaconHeaderEnvelope;
+pub use node::BeaconHeaderSignedEnvelope;
+pub use node::BeaconNode;
 
 pub use rewards::update_validator_rewards;
 
 pub use states::get_last_state;
+pub use states::get_state_by_slot;
 pub use states::get_state_root_by_slot;
 pub use states::heal_beacon_states;
 pub use states::store_state;
@@ -51,98 +65,33 @@ pub mod tests {
     use crate::eth_units::GweiNewtype;
 
     use super::{
-        node::{BeaconBlock, BeaconBlockBody},
+        node::{tests::BeaconBlockBuilder, BeaconBlock},
         *,
     };
 
-    pub fn get_test_header(
-        test_id: &str,
-        slot: &Slot,
-        parent_root: &str,
-    ) -> BeaconHeaderSignedEnvelope {
-        let state_root = format!("0x{test_id}_state_root");
-        let block_root = format!("0x{test_id}_block_root");
-
-        BeaconHeaderSignedEnvelope {
-            root: block_root,
-            header: BeaconHeaderEnvelope {
-                message: BeaconHeader {
-                    slot: *slot,
-                    parent_root: (*parent_root).to_string(),
-                    state_root,
-                },
-            },
-        }
-    }
-
-    pub fn get_test_beacon_block(state_root: &str, slot: &Slot, parent_root: &str) -> BeaconBlock {
-        BeaconBlock {
-            body: BeaconBlockBody {
-                deposits: vec![],
-                execution_payload: None,
-            },
-            parent_root: parent_root.to_string(),
-            slot: *slot,
-            state_root: state_root.to_owned(),
-        }
-    }
-
     pub async fn store_test_block(executor: &mut PgConnection, test_id: &str) {
-        let state_root = format!("0x{test_id}_state_root");
-        let block_root = format!("0x{test_id}_block_root");
-        let slot = 0;
+        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
+        let block = Into::<BeaconBlockBuilder>::into(&header).build();
 
-        store_state(
-            executor.acquire().await.unwrap(),
-            &state_root,
-            &slot,
-            &block_root,
-        )
-        .await
-        .unwrap();
-
-        store_block(
-            executor,
-            &get_test_beacon_block(&state_root, &slot, GENESIS_PARENT_ROOT),
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-            &BeaconHeaderSignedEnvelope {
-                root: block_root,
-                header: BeaconHeaderEnvelope {
-                    message: BeaconHeader {
-                        slot,
-                        parent_root: GENESIS_PARENT_ROOT.to_string(),
-                        state_root: state_root.clone(),
-                    },
-                },
-            },
-        )
-        .await
-        .unwrap();
+        store_custom_test_block(executor, &header, &block).await;
     }
 
     pub async fn store_custom_test_block(
         executor: &mut PgConnection,
-        test_header: &BeaconHeaderSignedEnvelope,
-        test_block: &BeaconBlock,
+        header: &BeaconHeaderSignedEnvelope,
+        block: &BeaconBlock,
     ) {
         store_state(
             executor.acquire().await.unwrap(),
-            &test_header.header.message.state_root,
-            &test_header.header.message.slot,
-            &test_header.root,
+            &header.header.message.state_root,
+            &header.header.message.slot,
+            &header.root,
         )
         .await
         .unwrap();
 
-        store_block(
-            executor,
-            test_block,
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-            test_header,
-        )
-        .await
-        .unwrap();
+        store_block(executor, block, &GweiNewtype(0), &GweiNewtype(0), header)
+            .await
+            .unwrap();
     }
 }

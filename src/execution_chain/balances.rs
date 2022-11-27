@@ -1,8 +1,13 @@
-use chrono::{DateTime, Utc};
+//! Module responsible for storing and retrieving the account balances on the execution chain.
+//! Mainly used to calculate the eth supply for any given slot.
+//! TODO: Database table is referred to as execution_supply, to be more consistent with the beacon
+//! chain it would be nice to term this execution_balances_sum.
+use anyhow::Result;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 use std::str::FromStr;
 
+use crate::beacon_chain::Slot;
 use crate::eth_units::Wei;
 use crate::json_codecs::to_i128_string;
 
@@ -16,93 +21,98 @@ pub struct ExecutionBalancesSum {
     pub balances_sum: Wei,
 }
 
-#[allow(dead_code)]
-pub async fn get_balances_sum<'a>(executor: impl PgExecutor<'a>) -> ExecutionBalancesSum {
-    sqlx::query(
-        "
-            SELECT block_number, balances_sum::TEXT FROM execution_supply
-            ORDER BY block_number DESC
-            LIMIT 1
-        ",
-    )
-    .map(|row: PgRow| {
-        let block_number = row.get::<i32, _>("block_number") as u32;
-        let balances_sum = i128::from_str(row.get("balances_sum")).unwrap();
-        ExecutionBalancesSum {
-            block_number,
-            balances_sum,
-        }
-    })
-    .fetch_one(executor)
-    .await
-    .unwrap()
-}
-
-pub async fn get_closest_balances_sum(
-    executor: impl PgExecutor<'_>,
-    point_in_time: DateTime<Utc>,
-) -> sqlx::Result<ExecutionBalancesSum> {
-    // If we could guarantee a execution_supply exists for every block this query could be a lot
-    // faster.
-    sqlx::query(
+pub async fn get_last_stored_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
+    let slot = sqlx::query(
         "
             SELECT
-                block_number, balances_sum::TEXT
+                beacon_states.slot
             FROM
-                blocks_next
-            JOIN
-                execution_supply ON blocks_next.number = execution_supply.block_number 
-            ORDER BY ABS(EXTRACT(epoch FROM (blocks_next.timestamp - $1)))
+                beacon_states
+            JOIN beacon_blocks ON
+                beacon_states.associated_block_root = beacon_blocks.block_root
+            JOIN execution_supply ON
+                beacon_blocks.block_hash = execution_supply.block_hash
+            WHERE
+                execution_supply.block_hash IS NOT NULL
+            ORDER BY beacon_states.slot DESC
             LIMIT 1
         ",
     )
-    .bind(point_in_time)
+    .map(|row: PgRow| row.get::<i32, _>("slot") as u32)
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(slot)
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ExecutionSupply {
+    pub block_number: BlockNumber,
+    pub balances_sum: Wei,
+}
+
+pub async fn get_execution_balances_by_hash(
+    executor: impl PgExecutor<'_>,
+    block_hash: &str,
+) -> Result<ExecutionSupply> {
+    let row = sqlx::query(
+        "
+            SELECT
+                balances_sum::TEXT,
+                block_number
+            FROM
+                execution_supply
+            WHERE
+                block_hash = $1
+        ",
+    )
+    .bind(block_hash)
     .map(|row: PgRow| {
-        let block_number = row.get::<i32, _>("block_number") as u32;
         let balances_sum = i128::from_str(row.get("balances_sum")).unwrap();
-        ExecutionBalancesSum {
-            block_number,
+        let block_number = row.get::<i32, _>("block_number") as u32;
+
+        ExecutionSupply {
             balances_sum,
+            block_number,
         }
     })
     .fetch_one(executor)
-    .await
+    .await?;
+
+    Ok(row)
 }
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Result;
-    use chrono::{Duration, SubsecRound};
     use sqlx::Connection;
 
     use super::*;
+    use crate::beacon_chain::tests::store_custom_test_block;
+    use crate::beacon_chain::{BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder};
     use crate::db;
     use crate::execution_chain::supply_deltas::add_delta;
-    use crate::execution_chain::{block_store, ExecutionNodeBlock, SupplyDelta};
-
-    // Replace with shared testing helper that helps easily build the right mock block.
-    fn make_test_block() -> ExecutionNodeBlock {
-        ExecutionNodeBlock {
-            base_fee_per_gas: 0,
-            difficulty: 0,
-            gas_used: 0,
-            hash: "0xtest".to_string(),
-            number: 0,
-            parent_hash: "0xparent".to_string(),
-            timestamp: Utc::now().trunc_subsecs(0),
-            total_difficulty: 10,
-        }
-    }
+    use crate::execution_chain::SupplyDelta;
 
     #[tokio::test]
-    async fn get_balances_sum_test() {
+    async fn get_last_stored_slot_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
+
+        let test_id = "get_last_stored_slot";
+        let block_hash = format!("0x{test_id}_block_hash");
+        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
+            .slot(&10)
+            .build();
+        let block = Into::<BeaconBlockBuilder>::into(&header)
+            .block_hash(&block_hash)
+            .build();
+
+        store_custom_test_block(&mut transaction, &header, &block).await;
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
             block_number: 0,
-            block_hash: "0xtest".to_string(),
+            block_hash,
             fee_burn: 0,
             fixed_reward: 0,
             parent_hash: "0xtestparent".to_string(),
@@ -111,42 +121,35 @@ mod tests {
         };
 
         add_delta(&mut transaction, &supply_delta_test).await;
-        let execution_balances_sum = get_balances_sum(&mut transaction).await;
 
-        assert_eq!(
-            execution_balances_sum,
-            ExecutionBalancesSum {
-                block_number: 0,
-                balances_sum: 1,
-            }
-        );
+        let last_synced_slot = get_last_stored_slot(&mut transaction)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(10, last_synced_slot);
     }
 
     #[tokio::test]
-    async fn get_closest_balances_sum_test() -> Result<()> {
+    async fn get_execution_supply_by_hash_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let test_block_close = ExecutionNodeBlock {
-            timestamp: Utc::now().trunc_subsecs(0) - Duration::hours(1),
-            ..make_test_block()
-        };
-        let test_block_far = ExecutionNodeBlock {
-            timestamp: Utc::now().trunc_subsecs(0),
-            hash: "0xtest2".to_string(),
-            number: 1,
-            parent_hash: "0xtest".to_string(),
-            ..make_test_block()
-        };
+        let test_id = "get_balances_by_hash";
+        let block_hash = format!("0x{test_id}_block_hash");
+        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
+            .slot(&10)
+            .build();
+        let block = Into::<BeaconBlockBuilder>::into(&header)
+            .block_hash(&block_hash)
+            .build();
 
-        let mut block_store = block_store::BlockStore::new(&mut transaction);
-        block_store.store_block(&test_block_close, 0.0).await;
-        block_store.store_block(&test_block_far, 0.0).await;
+        store_custom_test_block(&mut transaction, &header, &block).await;
 
-        let supply_delta_close = SupplyDelta {
+        let supply_delta_test = SupplyDelta {
             supply_delta: 1,
             block_number: 0,
-            block_hash: "0xtest".to_string(),
+            block_hash: block_hash.clone(),
             fee_burn: 0,
             fixed_reward: 0,
             parent_hash: "0xtestparent".to_string(),
@@ -154,31 +157,18 @@ mod tests {
             uncles_reward: 0,
         };
 
-        let supply_delta_far = SupplyDelta {
-            supply_delta: 2,
-            block_number: 1,
-            block_hash: "0xtest2".to_string(),
-            fee_burn: 0,
-            fixed_reward: 0,
-            parent_hash: "0xtest".to_string(),
-            self_destruct: 0,
-            uncles_reward: 0,
-        };
+        add_delta(&mut transaction, &supply_delta_test).await;
 
-        add_delta(&mut transaction, &supply_delta_close).await;
-        add_delta(&mut transaction, &supply_delta_far).await;
-
-        let execution_balances_sum =
-            get_closest_balances_sum(&mut transaction, test_block_close.timestamp).await?;
+        let balances = get_execution_balances_by_hash(&mut transaction, &block_hash)
+            .await
+            .unwrap();
 
         assert_eq!(
-            execution_balances_sum,
-            ExecutionBalancesSum {
+            ExecutionSupply {
                 block_number: 0,
-                balances_sum: 1,
-            }
+                balances_sum: 1
+            },
+            balances
         );
-
-        Ok(())
     }
 }

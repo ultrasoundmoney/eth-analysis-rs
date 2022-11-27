@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use balances::BeaconBalancesSum;
 use chrono::Duration;
 use futures::{stream, SinkExt, Stream, StreamExt};
 use lazy_static::lazy_static;
@@ -22,8 +21,8 @@ use crate::{
     performance::TimedExt,
 };
 
-use super::node::{BeaconBlock, BlockRoot, StateRoot, ValidatorBalance};
-use super::{blocks, states, BeaconHeaderSignedEnvelope, BeaconNode, Slot, BEACON_URL};
+use super::node::{BeaconBlock, BeaconNode, BlockRoot, StateRoot, ValidatorBalance};
+use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot, BEACON_URL};
 
 lazy_static! {
     static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(5);
@@ -95,8 +94,7 @@ async fn store_state_with_block(
     deposit_sum_aggregated: &GweiNewtype,
     header: &BeaconHeaderSignedEnvelope,
 ) -> Result<()> {
-    let is_parent_known =
-        blocks::get_is_hash_known(&mut *executor, &header.header.message.parent_root).await;
+    let is_parent_known = blocks::get_is_hash_known(&mut *executor, &header.parent_root()).await;
     if !is_parent_known {
         return Err(anyhow!(
             "trying to insert beacon block with missing parent, block_root: {}, parent_root: {:?}",
@@ -107,8 +105,8 @@ async fn store_state_with_block(
 
     states::store_state(
         &mut *executor,
-        &header.header.message.state_root,
-        &header.header.message.slot,
+        &header.state_root(),
+        &header.slot(),
         associated_block_root,
     )
     .await?;
@@ -161,7 +159,7 @@ async fn gather_sync_data(
         match header {
             None => {
                 debug!("no block in current slot, using last block_root");
-                blocks::get_block_root_before_slot(db_pool, &(slot - 1))
+                blocks::get_block_root_before_slot(db_pool, &slot)
                     .timed("get_block_root_before_slot")
                     .await?
             }
@@ -295,15 +293,7 @@ pub async fn sync_state_root(
             .await?;
         }
 
-        let beacon_balances_sum = BeaconBalancesSum {
-            slot: *slot,
-            balances_sum: validator_balances_sum,
-        };
-        let eth_supply_parts = eth_supply::get_supply_parts(&mut transaction, &beacon_balances_sum)
-            .timed("get_supply_parts")
-            .await?;
-
-        eth_supply::update(&mut transaction, &eth_supply_parts).await?;
+        eth_supply::sync_eth_supply(&mut transaction, slot).await?;
     }
 
     transaction.commit().await?;
@@ -311,18 +301,8 @@ pub async fn sync_state_root(
     Ok(())
 }
 
-async fn update_analysis(db_pool: &PgPool, state_root: &str) -> Result<()> {
-    let beacon_balances_sum =
-        balances::get_validator_balances_by_state_root(db_pool, state_root).await?;
-
-    match beacon_balances_sum {
-        None => {
-            debug!("no beacon balances sum available, skipping eth_supply update");
-        }
-        Some(beacon_balances_sum) => {
-            eth_supply::update_caches(db_pool, &beacon_balances_sum).await?;
-        }
-    }
+async fn update_deferrable_analysis(db_pool: &PgPool, slot: &Slot) -> Result<()> {
+    eth_supply::update_caches(db_pool, slot).await?;
 
     Ok(())
 }
@@ -623,10 +603,10 @@ pub async fn sync_beacon_states() -> Result<()> {
                 .state_root;
 
             if last_on_chain_state_root == on_chain_state_root {
-                debug!("sync caught up with head of chain, making own analysis");
-                update_analysis(&db_pool, &on_chain_state_root).await?;
+                debug!("sync caught up with head of chain, updating deferrable analysis");
+                update_deferrable_analysis(&db_pool, &slot).await?;
             } else {
-                debug!("sync not yet caught up with head of chain, skipping some analysis");
+                debug!("sync not yet caught up with head of chain, skipping deferrable analysis");
             }
         }
 

@@ -203,7 +203,7 @@ mod tests {
 
         let unix_timestamp = validator_balances_by_day.first().unwrap().t;
 
-        let datetime = Utc.timestamp(unix_timestamp.try_into().unwrap(), 0);
+        let datetime = Utc.timestamp_opt(unix_timestamp.try_into().unwrap(), 0).unwrap();
 
         let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
 

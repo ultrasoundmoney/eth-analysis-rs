@@ -4,13 +4,13 @@
 //! we can get every slot. Although at the time of writing not yet done, in the future we we should
 //! be able to request an execution block for every beacon slot.
 
-use crate::eth_supply::get_supply_parts;
-use crate::eth_supply::BeaconBalancesSum;
 use anyhow::Result;
 use pit_wall::Progress;
 use sqlx::{Connection, PgConnection};
+use tracing::warn;
 use tracing::{debug, info};
 
+use crate::eth_supply::get_supply_parts;
 use crate::{
     beacon_chain::{self, Slot},
     db, eth_supply, log,
@@ -27,7 +27,6 @@ pub async fn sync_gaps() -> Result<()> {
     let mut db_connection =
         PgConnection::connect(&db::get_db_url_with_name("sync-eth-supply-gaps")).await?;
 
-    let beacon_node = beacon_chain::BeaconNode::new();
     let last_slot = beacon_chain::get_last_state(&mut db_connection)
         .await
         .expect("a beacon state should be stored before trying to fill any gaps")
@@ -49,22 +48,23 @@ pub async fn sync_gaps() -> Result<()> {
         if !stored_eth_supply {
             info!(slot, "missing eth_supply, filling gap");
 
-            let state_root = beacon_chain::get_state_root_by_slot(&mut db_connection, &slot)
-                .await?
-                .expect("expect historic state_roots to exist");
-            let validator_balances = beacon_node
-                .get_validator_balances(&state_root)
-                .await?
-                .expect("expect validator balances to exist for historic state_root");
-            let validator_balances_sum = beacon_chain::sum_validator_balances(&validator_balances);
-            let beacon_balances_sum = BeaconBalancesSum {
-                balances_sum: validator_balances_sum,
-                slot: slot.clone(),
-            };
-            let eth_supply_parts =
-                get_supply_parts(&mut db_connection, &beacon_balances_sum).await?;
+            let eth_supply_parts = get_supply_parts(&mut db_connection, &slot).await?;
 
-            eth_supply::store(&mut db_connection, &eth_supply_parts).await?;
+            match eth_supply_parts {
+                None => {
+                    warn!(slot, "eth supply parts unavailable for slot");
+                }
+                Some(eth_supply_parts) => {
+                    eth_supply::store(
+                        &mut db_connection,
+                        &slot,
+                        &eth_supply_parts.execution_balances_sum.balances_sum,
+                        &eth_supply_parts.beacon_deposits_sum.deposits_sum,
+                        &eth_supply_parts.beacon_balances_sum.balances_sum,
+                    )
+                    .await?;
+                }
+            }
 
             info!("{}", progress.get_progress_string());
         } else {

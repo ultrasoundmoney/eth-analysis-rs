@@ -86,17 +86,13 @@ pub async fn store_block(
                 $1, $2, $3, $4, $5, $6, $7
             )
         ",
-        block
-            .body
-            .execution_payload
-            .as_ref()
-            .map(|payload| payload.block_hash.clone()),
+        block.block_hash(),
         header.root,
         i64::from(deposit_sum.to_owned()),
         i64::from(deposit_sum_aggregated.to_owned()),
-        header.header.message.parent_root,
-        header.header.message.slot as i32,
-        header.header.message.state_root,
+        header.parent_root(),
+        header.slot() as i32,
+        header.state_root(),
     )
     .execute(executor)
     .await?;
@@ -168,7 +164,7 @@ pub async fn delete_block(connection: impl PgExecutor<'_>, slot: &Slot) {
 
 pub async fn get_block_root_before_slot(
     executor: impl PgExecutor<'_>,
-    less_than_or_equal: &Slot,
+    less_than: &Slot,
 ) -> Result<BlockRoot> {
     let row = sqlx::query!(
         "
@@ -180,11 +176,11 @@ pub async fn get_block_root_before_slot(
                 beacon_blocks 
             ON
                 beacon_states.state_root = beacon_blocks.state_root 
-            WHERE beacon_states.slot <= $1
+            WHERE beacon_states.slot < $1
             ORDER BY beacon_states.slot DESC 
             LIMIT 1
         ",
-        *less_than_or_equal as i32
+        *less_than as i32
     )
     .fetch_one(executor)
     .await?;
@@ -203,12 +199,12 @@ struct BlockRow {
 
 #[derive(Debug, PartialEq)]
 pub struct Block {
-    block_hash: Option<String>,
+    pub block_hash: Option<String>,
     block_root: String,
     deposit_sum: GweiNewtype,
     deposit_sum_aggregated: GweiNewtype,
     parent_root: String,
-    state_root: String,
+    pub state_root: String,
 }
 
 impl TryFrom<BlockRow> for Block {
@@ -227,8 +223,10 @@ impl TryFrom<BlockRow> for Block {
     }
 }
 
-#[allow(dead_code)]
-pub async fn get_block(executor: impl PgExecutor<'_>, block_root: &str) -> Result<Block> {
+pub async fn get_block_by_block_root(
+    executor: impl PgExecutor<'_>,
+    block_root: &str,
+) -> Result<Block> {
     let row = sqlx::query_as!(
         BlockRow,
         "
@@ -286,9 +284,8 @@ mod tests {
         beacon_chain::{
             node::{BeaconBlockBody, BeaconHeader, BeaconHeaderEnvelope, ExecutionPayload},
             states::store_state,
-            tests::{
-                get_test_beacon_block, get_test_header, store_custom_test_block, store_test_block,
-            },
+            tests::{store_custom_test_block, store_test_block},
+            BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder,
         },
         db,
     };
@@ -385,10 +382,11 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "last_block_number_some_test";
-        let state_root = format!("0x{test_id}_state_root");
         let slot = 5923;
-        let test_header = get_test_header(test_id, &slot, GENESIS_PARENT_ROOT);
-        let test_block = get_test_beacon_block(&state_root, &slot, GENESIS_PARENT_ROOT);
+        let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
+            .slot(&slot)
+            .build();
+        let test_block = Into::<BeaconBlockBuilder>::into(&test_header).build();
 
         store_custom_test_block(&mut transaction, &test_header, &test_block).await;
 
@@ -417,20 +415,21 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let test_header_before =
-            get_test_header("last_block_before_slot_before", &0, GENESIS_PARENT_ROOT);
-        let test_block_before =
-            get_test_beacon_block("last_block_before_slot_before", &0, GENESIS_PARENT_ROOT);
-        let test_header_after =
-            get_test_header("last_block_before_slot_after", &1, &test_header_before.root);
-        let test_block_after =
-            get_test_beacon_block("last_block_before_slot_after", &0, &test_header_before.root);
+        let test_id_before = "last_block_before_slot_before";
+        let test_header_before = BeaconHeaderSignedEnvelopeBuilder::new(test_id_before).build();
+        let test_block_before = Into::<BeaconBlockBuilder>::into(&test_header_before).build();
+
+        let test_id_after = "last_block_before_slot_after";
+        let test_header_after = BeaconHeaderSignedEnvelopeBuilder::new(test_id_after)
+            .parent_header(&test_header_before)
+            .build();
+        let test_block_after = Into::<BeaconBlockBuilder>::into(&test_header_after).build();
 
         store_custom_test_block(&mut transaction, &test_header_before, &test_block_before).await;
 
         store_custom_test_block(&mut transaction, &test_header_after, &test_block_after).await;
 
-        let last_block_before = get_block_root_before_slot(&mut transaction, &0).await?;
+        let last_block_before = get_block_root_before_slot(&mut transaction, &1).await?;
 
         assert_eq!(test_header_before.root, last_block_before);
 
@@ -444,10 +443,10 @@ mod tests {
 
         let test_id = "get_block_test";
         let slot = 374;
-        let state_root = format!("0x{test_id}_state_root");
-        let block_root = format!("0x{test_id}_block_root");
         let block_hash = format!("0x{test_id}_block_hash");
-        let header = get_test_header(test_id, &slot, GENESIS_PARENT_ROOT);
+        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
+            .slot(&slot)
+            .build();
 
         store_custom_test_block(
             &mut transaction,
@@ -461,23 +460,23 @@ mod tests {
                 },
                 parent_root: GENESIS_PARENT_ROOT.to_string(),
                 slot,
-                state_root: state_root.clone(),
+                state_root: header.state_root().to_string(),
             },
         )
         .await;
 
-        let block = get_block(&mut transaction, &block_root).await?;
+        let block = get_block_by_block_root(&mut transaction, &header.root).await?;
 
         assert_eq!(
-            block,
             Block {
-                block_root,
-                state_root,
+                block_root: header.root.to_owned(),
+                state_root: header.state_root().to_owned(),
                 parent_root: GENESIS_PARENT_ROOT.to_string(),
                 deposit_sum: GweiNewtype(0),
                 deposit_sum_aggregated: GweiNewtype(0),
                 block_hash: Some(block_hash)
-            }
+            },
+            block
         );
 
         Ok(())
@@ -494,7 +493,7 @@ mod tests {
         let block_root = format!("0x{test_id}_block_root");
         let block_hash = format!("0x{test_id}_block_hash");
         let block_hash_after = format!("0x{test_id}_block_hash_after");
-        let header = get_test_header(test_id, &slot, GENESIS_PARENT_ROOT);
+        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
 
         store_custom_test_block(
             &mut transaction,
@@ -515,7 +514,7 @@ mod tests {
 
         update_block_hash(&mut transaction, &block_root, &block_hash_after).await?;
 
-        let block = get_block(&mut transaction, &block_root).await?;
+        let block = get_block_by_block_root(&mut transaction, &block_root).await?;
 
         assert_eq!(block_hash_after, block.block_hash.unwrap());
 

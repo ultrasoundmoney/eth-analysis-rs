@@ -1,3 +1,4 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, Row};
@@ -39,30 +40,30 @@ pub struct BeaconDepositsSum {
     pub slot: Slot,
 }
 
-pub async fn get_deposits_sum(executor: impl PgExecutor<'_>) -> BeaconDepositsSum {
-    sqlx::query(
+pub async fn get_deposits_sum_by_state_root(
+    executor: impl PgExecutor<'_>,
+    state_root: &str,
+) -> Result<GweiNewtype> {
+    let deposit_sum_aggregated = sqlx::query(
         "
             SELECT
-                beacon_states.slot,
                 deposit_sum_aggregated
-            FROM beacon_states
-            JOIN beacon_blocks ON
-                beacon_blocks.state_root = beacon_states.state_root
-            ORDER BY beacon_states.slot DESC
-            LIMIT 1
+            FROM
+                beacon_blocks
+            WHERE
+                state_root = $1
         ",
     )
+    .bind(state_root)
     .map(|row: PgRow| {
-        let slot = row.get::<i32, _>("slot") as u32;
-        let deposits_sum = row
-            .get::<i64, _>("deposit_sum_aggregated")
+        row.get::<i64, _>("deposit_sum_aggregated")
             .try_into()
-            .unwrap();
-        BeaconDepositsSum { deposits_sum, slot }
+            .unwrap()
     })
     .fetch_one(executor)
-    .await
-    .unwrap()
+    .await?;
+
+    Ok(deposit_sum_aggregated)
 }
 
 #[cfg(test)]
@@ -71,9 +72,8 @@ mod tests {
 
     use crate::{
         beacon_chain::{
+            node::tests::{BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder},
             store_block, store_state,
-            tests::{get_test_beacon_block, get_test_header},
-            GENESIS_PARENT_ROOT,
         },
         db,
     };
@@ -81,19 +81,22 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn get_deposits_sum_test() {
+    async fn get_deposits_sum_by_state_root_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let test_id = "get_deposits_sum";
-        let state_root = format!("0x{test_id}_state_root");
-        let slot = 0;
-        let test_header = get_test_header(test_id, &slot, GENESIS_PARENT_ROOT);
-        let test_block = get_test_beacon_block(&state_root, &slot, GENESIS_PARENT_ROOT);
+        let test_id = "get_deposits_sum_by_state_root";
+        let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
+        let test_block = Into::<BeaconBlockBuilder>::into(&test_header).build();
 
-        store_state(&mut transaction, &state_root, &0, "")
-            .await
-            .unwrap();
+        store_state(
+            &mut transaction,
+            &test_header.state_root(),
+            &test_header.slot(),
+            "",
+        )
+        .await
+        .unwrap();
 
         store_block(
             &mut transaction,
@@ -105,14 +108,11 @@ mod tests {
         .await
         .unwrap();
 
-        let deposits_sum = get_deposits_sum(&mut transaction).await;
+        let deposits_sum =
+            get_deposits_sum_by_state_root(&mut transaction, &test_header.state_root())
+                .await
+                .unwrap();
 
-        assert_eq!(
-            deposits_sum,
-            BeaconDepositsSum {
-                deposits_sum: GweiNewtype(1),
-                slot: 0
-            }
-        );
+        assert_eq!(GweiNewtype(1), deposits_sum);
     }
 }

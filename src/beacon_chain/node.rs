@@ -8,7 +8,10 @@ use chrono::Utc;
 use reqwest::StatusCode;
 use serde::Deserialize;
 
-use crate::{eth_units::GweiNewtype, json_codecs::from_u32_string, performance::TimedExt};
+use crate::{
+    eth_units::GweiNewtype, execution_chain::BlockHash, json_codecs::from_u32_string,
+    performance::TimedExt,
+};
 
 use super::{beacon_time, Slot, BEACON_URL};
 
@@ -47,7 +50,7 @@ pub struct DepositEnvelope {
 
 #[derive(Debug, Deserialize)]
 pub struct ExecutionPayload {
-    pub block_hash: String,
+    pub block_hash: BlockHash,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,6 +66,24 @@ pub struct BeaconBlock {
     #[serde(deserialize_with = "from_u32_string")]
     pub slot: Slot,
     pub state_root: String,
+}
+
+impl BeaconBlock {
+    #[allow(unused)]
+    pub fn deposits(&self) -> Vec<GweiNewtype> {
+        self.body
+            .deposits
+            .iter()
+            .map(|envelope| envelope.data.amount)
+            .collect()
+    }
+
+    pub fn block_hash(&self) -> Option<&BlockHash> {
+        self.body
+            .execution_payload
+            .as_ref()
+            .map(|payload| &payload.block_hash)
+    }
 }
 
 /// A signed envelope.
@@ -130,8 +151,8 @@ fn make_validator_balances_by_state_url(state_root: &str) -> String {
 pub struct BeaconHeader {
     #[serde(deserialize_with = "from_u32_string")]
     pub slot: Slot,
-    pub parent_root: String,
-    pub state_root: String,
+    pub parent_root: BlockRoot,
+    pub state_root: StateRoot,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -139,13 +160,28 @@ pub struct BeaconHeaderEnvelope {
     pub message: BeaconHeader,
 }
 
+/// Keccak hash of a beacon block.
 pub type BlockRoot = String;
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct BeaconHeaderSignedEnvelope {
-    /// BlockRoot
+    /// Root (hash) of the block this header is about.
     pub root: BlockRoot,
     pub header: BeaconHeaderEnvelope,
+}
+
+impl BeaconHeaderSignedEnvelope {
+    pub fn slot(&self) -> Slot {
+        self.header.message.slot
+    }
+
+    pub fn parent_root(&self) -> BlockRoot {
+        self.header.message.parent_root.clone()
+    }
+
+    pub fn state_root(&self) -> StateRoot {
+        self.header.message.state_root.clone()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -436,10 +472,134 @@ impl BeaconNode {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::{fs::File, io::BufReader};
 
+    use crate::beacon_chain::GENESIS_PARENT_ROOT;
+
     use super::*;
+
+    pub struct BeaconBlockBuilder {
+        deposits: Vec<GweiNewtype>,
+        parent_root: BlockRoot,
+        slot: Slot,
+        state_root: StateRoot,
+        block_hash: Option<BlockHash>,
+    }
+
+    impl BeaconBlockBuilder {
+        // pub fn new(state_root: &str) -> Self {
+        //     Self {
+        //         deposits: vec![],
+        //         parent_root: GENESIS_PARENT_ROOT.to_owned(),
+        //         slot: 0,
+        //         state_root: state_root.to_string(),
+        //         block_hash: None,
+        //     }
+        // }
+
+        pub fn block_hash(mut self, block_hash: &str) -> Self {
+            self.block_hash = Some(block_hash.to_string());
+            self
+        }
+
+        // pub fn parent_header(mut self, parent_header: &BeaconHeaderSignedEnvelope) -> Self {
+        //     self.parent_root = parent_header.root.to_owned();
+        //     self.slot = parent_header.slot();
+        //     self
+        // }
+
+        // pub fn parent_root(mut self, parent_root: &str) -> Self {
+        //     self.parent_root = parent_root.to_owned();
+        //     self
+        // }
+
+        // pub fn slot(mut self, slot: &Slot) -> Self {
+        //     self.slot = *slot;
+        //     self
+        // }
+
+        pub fn build(self) -> BeaconBlock {
+            let deposits = self
+                .deposits
+                .into_iter()
+                .map(|deposit| DepositEnvelope {
+                    data: Deposit { amount: deposit },
+                })
+                .collect();
+
+            let execution_payload = self
+                .block_hash
+                .map(|block_hash| ExecutionPayload { block_hash });
+
+            BeaconBlock {
+                body: BeaconBlockBody {
+                    deposits,
+                    execution_payload,
+                },
+                parent_root: self.parent_root,
+                slot: self.slot,
+                state_root: self.state_root,
+            }
+        }
+    }
+
+    impl From<&BeaconHeaderSignedEnvelope> for BeaconBlockBuilder {
+        fn from(header: &BeaconHeaderSignedEnvelope) -> Self {
+            Self {
+                block_hash: None,
+                deposits: vec![],
+                parent_root: header.parent_root().to_string(),
+                slot: header.slot(),
+                state_root: header.state_root().to_string(),
+            }
+        }
+    }
+
+    pub struct BeaconHeaderSignedEnvelopeBuilder {
+        block_root: BlockRoot,
+        parent_root: BlockRoot,
+        slot: Slot,
+        state_root: StateRoot,
+    }
+
+    impl BeaconHeaderSignedEnvelopeBuilder {
+        pub fn new(test_id: &str) -> Self {
+            let state_root = format!("0x{test_id}_state_root");
+            let block_root = format!("0x{test_id}_block_root");
+
+            Self {
+                block_root,
+                state_root,
+                slot: 0,
+                parent_root: GENESIS_PARENT_ROOT.to_owned(),
+            }
+        }
+
+        pub fn slot(mut self, slot: &Slot) -> Self {
+            self.slot = *slot;
+            self
+        }
+
+        pub fn parent_header(mut self, parent_header: &BeaconHeaderSignedEnvelope) -> Self {
+            self.slot = parent_header.slot() + 1;
+            self.parent_root = parent_header.root.to_owned();
+            self
+        }
+
+        pub fn build(self) -> BeaconHeaderSignedEnvelope {
+            BeaconHeaderSignedEnvelope {
+                root: self.block_root,
+                header: BeaconHeaderEnvelope {
+                    message: BeaconHeader {
+                        slot: self.slot,
+                        parent_root: self.parent_root,
+                        state_root: self.state_root,
+                    },
+                },
+            }
+        }
+    }
 
     #[test]
     fn decode_beacon_block_versioned_envelope() {
