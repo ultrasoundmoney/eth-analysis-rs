@@ -407,7 +407,7 @@ mod tests {
         let test_id = "get_supply_parts";
         let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
         let test_block = Into::<BeaconBlockBuilder>::into(&test_header)
-            .block_hash("0x{test_id}_block_hash")
+            .block_hash(&format!("0x{test_id}_block_hash"))
             .build();
 
         let execution_test_block = make_test_block();
@@ -429,6 +429,15 @@ mod tests {
             &GweiNewtype(0),
             &GweiNewtype(5),
             &test_header,
+        )
+        .await
+        .unwrap();
+
+        beacon_chain::store_validators_balance(
+            &mut transaction,
+            &test_header.state_root(),
+            &test_header.slot(),
+            &GweiNewtype(20),
         )
         .await
         .unwrap();

@@ -48,7 +48,7 @@ impl From<BeaconStateRow> for BeaconState {
 pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState> {
     sqlx::query_as!(
         BeaconStateRow,
-        r#"
+        "
             SELECT
                 beacon_states.state_root,
                 beacon_states.slot,
@@ -56,7 +56,7 @@ pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState
             FROM beacon_states
             ORDER BY slot DESC
             LIMIT 1
-        "#,
+        ",
     )
     .fetch_optional(executor)
     .await
@@ -184,12 +184,12 @@ mod tests {
         let state = get_last_state(&mut transaction).await.unwrap();
 
         assert_eq!(
-            state,
             BeaconState {
-                associated_block_root: None,
+                associated_block_root: Some("0xblock_root".to_string()),
                 slot: 0,
                 state_root: "0xstate_root".to_string(),
-            }
+            },
+            state,
         );
     }
 

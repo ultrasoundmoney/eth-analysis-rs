@@ -11,6 +11,7 @@ mod sync;
 
 pub use balances::get_balances_by_state_root;
 pub use balances::get_validator_balances_by_start_of_day;
+pub use balances::store_validators_balance;
 pub use balances::sum_validator_balances;
 pub use balances::BeaconBalancesSum;
 
