@@ -12,10 +12,13 @@ pub type BlockNumber = u32;
 pub type Difficulty = u64;
 pub type TotalDifficulty = u128;
 
+/// Hash for a block on the execution layer.
+pub type BlockHash = String;
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionNodeBlock {
-    pub hash: String,
+    pub hash: BlockHash,
     #[serde(deserialize_with = "from_u32_hex_str")]
     pub number: BlockNumber,
     pub parent_hash: String,
