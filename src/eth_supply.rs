@@ -78,7 +78,7 @@ pub async fn store(
     // What we base the timestamp on is not-well defined.
     let timestamp = beacon_time::get_date_time_from_slot(&slot);
 
-    debug!(%timestamp, slot, execution_balances_sum, %beacon_deposits_sum, %beacon_balances_sum, "storing eth supply");
+    debug!(%timestamp, slot, block_number, execution_balances_sum, %beacon_deposits_sum, %beacon_balances_sum, "storing eth supply");
 
     let supply =
         execution_balances_sum + beacon_balances_sum.into_wei() - beacon_deposits_sum.into_wei();
