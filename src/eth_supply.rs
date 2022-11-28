@@ -125,27 +125,6 @@ pub struct EthSupply {
     timestamp: DateTime<Utc>,
 }
 
-#[cfg(test)]
-pub async fn get_current_supply(executor: impl PgExecutor<'_>) -> sqlx::Result<EthSupply> {
-    sqlx::query_as!(
-        EthSupply,
-        r#"
-            SELECT
-                balances_slot,
-                deposits_slot,
-                block_number,
-                supply::FLOAT8 / 1e18 AS "supply!",
-                timestamp
-            FROM
-                eth_supply
-            ORDER BY timestamp DESC
-            LIMIT 1
-        "#,
-    )
-    .fetch_one(executor)
-    .await
-}
-
 pub async fn update_supply_parts(
     executor: &mut PgConnection,
     eth_supply_parts: &EthSupplyParts,
@@ -478,46 +457,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(eth_supply_parts, eth_supply_parts_test);
-    }
-
-    #[tokio::test]
-    async fn get_set_eth_supply_test() {
-        let mut connection = db::get_test_db().await;
-        let mut transaction = connection.begin().await.unwrap();
-        let mut block_store = execution_chain::BlockStore::new(&mut transaction);
-
-        let test_block = make_test_block();
-        let slot = 0;
-        let state_root = "0xstate_root";
-
-        block_store.store_block(&test_block, 0.0).await;
-
-        beacon_chain::store_state(&mut transaction, state_root, &slot)
-            .await
-            .unwrap();
-
-        let test_eth_supply = EthSupply {
-            balances_slot: 0,
-            block_number: 0,
-            deposits_slot: 0,
-            supply: (GweiNewtype(25).into_eth()),
-            timestamp: beacon_time::get_date_time_from_slot(&0),
-        };
-
-        store(
-            &mut transaction,
-            &slot,
-            &0,
-            &GweiNewtype(10).into_wei(),
-            &GweiNewtype(20),
-            &GweiNewtype(5),
-        )
-        .await
-        .unwrap();
-
-        let eth_supply = get_current_supply(&mut transaction).await.unwrap();
-
-        assert_eq!(test_eth_supply, eth_supply);
     }
 
     #[tokio::test]
