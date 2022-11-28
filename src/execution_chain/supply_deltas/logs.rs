@@ -1,5 +1,5 @@
 use crate::{
-    execution_chain::{supply_deltas, ExecutionNode},
+    execution_chain::{supply_deltas, BlockNumber, ExecutionNode},
     log,
 };
 use futures::StreamExt;
@@ -9,7 +9,7 @@ use tracing::{debug, info};
 
 #[derive(Serialize)]
 struct SupplyDeltaLog {
-    block_number: u32,
+    block_number: BlockNumber,
     block_hash: String,
     is_duplicate_number: bool,
     is_jumping_ahead: bool,
@@ -34,7 +34,7 @@ pub async fn write_deltas_log() {
 
     let mut csv_writer = csv::Writer::from_path(&file_path).unwrap();
 
-    let mut seen_block_heights = HashSet::<u32>::new();
+    let mut seen_block_heights = HashSet::<BlockNumber>::new();
     let mut seen_block_hashes = HashSet::<String>::new();
 
     while let Some(supply_delta) = supply_deltas_stream.next().await {

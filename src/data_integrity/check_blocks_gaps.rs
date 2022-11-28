@@ -54,15 +54,12 @@ pub async fn check_blocks_gaps() -> Result<()> {
     // Slow check on-chain by hash.
     info!("slow checking stored hashes against on-chain hashes");
 
-    let mut progress = Progress::new("check on-chain hashes", blocks.len() as u64);
+    let mut progress = Progress::new("check on-chain hashes", blocks.len().try_into().unwrap());
 
     let mut execution_node = ExecutionNode::connect().await;
 
     for (number, stored_hash) in blocks {
-        let on_chain = execution_node
-            .get_block_by_number(&(number as u32))
-            .await
-            .unwrap();
+        let on_chain = execution_node.get_block_by_number(&number).await.unwrap();
 
         if stored_hash != on_chain.hash {
             error!(stored_hash, on_chain.hash, "block mismatch",);

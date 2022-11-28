@@ -21,15 +21,15 @@ pub struct ExecutionBalancesSum {
     pub balances_sum: Wei,
 }
 
-pub async fn get_last_stored_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
-    let slot = sqlx::query(
+pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
+    let row = sqlx::query!(
         "
             SELECT
                 beacon_states.slot
             FROM
                 beacon_states
             JOIN beacon_blocks ON
-                beacon_states.associated_block_root = beacon_blocks.block_root
+                beacon_states.state_root = beacon_blocks.state_root
             JOIN execution_supply ON
                 beacon_blocks.block_hash = execution_supply.block_hash
             WHERE
@@ -38,11 +38,10 @@ pub async fn get_last_stored_slot(executor: impl PgExecutor<'_>) -> Result<Optio
             LIMIT 1
         ",
     )
-    .map(|row: PgRow| row.get::<i32, _>("slot") as u32)
     .fetch_optional(executor)
     .await?;
 
-    Ok(slot)
+    Ok(row.map(|row| row.slot))
 }
 
 #[derive(Debug, PartialEq)]
@@ -69,7 +68,7 @@ pub async fn get_execution_balances_by_hash(
     .bind(block_hash)
     .map(|row: PgRow| {
         let balances_sum = i128::from_str(row.get("balances_sum")).unwrap();
-        let block_number = row.get::<i32, _>("block_number") as u32;
+        let block_number = row.get::<i32, _>("block_number");
 
         ExecutionSupply {
             balances_sum,
@@ -92,43 +91,6 @@ mod tests {
     use crate::db;
     use crate::execution_chain::supply_deltas::add_delta;
     use crate::execution_chain::SupplyDelta;
-
-    #[tokio::test]
-    async fn get_last_stored_slot_test() {
-        let mut connection = db::get_test_db().await;
-        let mut transaction = connection.begin().await.unwrap();
-
-        let test_id = "get_last_stored_slot";
-        let block_hash = format!("0x{test_id}_block_hash");
-        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
-            .slot(&10)
-            .build();
-        let block = Into::<BeaconBlockBuilder>::into(&header)
-            .block_hash(&block_hash)
-            .build();
-
-        store_custom_test_block(&mut transaction, &header, &block).await;
-
-        let supply_delta_test = SupplyDelta {
-            supply_delta: 1,
-            block_number: 0,
-            block_hash,
-            fee_burn: 0,
-            fixed_reward: 0,
-            parent_hash: "0xtestparent".to_string(),
-            self_destruct: 0,
-            uncles_reward: 0,
-        };
-
-        add_delta(&mut transaction, &supply_delta_test).await;
-
-        let last_synced_slot = get_last_stored_slot(&mut transaction)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(10, last_synced_slot);
-    }
 
     #[tokio::test]
     async fn get_execution_supply_by_hash_test() {

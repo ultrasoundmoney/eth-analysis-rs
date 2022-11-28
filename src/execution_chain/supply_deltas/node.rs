@@ -9,7 +9,11 @@ use sqlx::PgConnection;
 use thiserror::Error;
 use tokio::time::timeout;
 
-use crate::{env, eth_units::Wei, execution_chain::SupplyDelta};
+use crate::{
+    env,
+    eth_units::Wei,
+    execution_chain::{BlockNumber, SupplyDelta},
+};
 
 use super::sync;
 
@@ -27,7 +31,7 @@ lazy_static! {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupplyDeltaFV1 {
-    block: u32,
+    block: BlockNumber,
     burn: Wei,
     destruct: Option<Wei>,
     hash: String,
@@ -66,7 +70,7 @@ impl From<SupplyDeltaMessageV1> for SupplyDelta {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupplyDeltaFV2 {
-    block: u32,
+    block: BlockNumber,
     burn: Wei,
     destruct: Option<Wei>,
     fixed_reward: Wei,
@@ -104,7 +108,7 @@ pub struct SupplyDeltaMessageV2 {
     params: SupplyDeltaParamsV2,
 }
 
-fn make_supply_delta_subscribe_message_v2(greater_than_or_equal_to: &u32) -> String {
+fn make_supply_delta_subscribe_message_v2(greater_than_or_equal_to: &BlockNumber) -> String {
     let msg = json!({
         "id": 0,
         "method": "eth_subscribe",
@@ -114,7 +118,7 @@ fn make_supply_delta_subscribe_message_v2(greater_than_or_equal_to: &u32) -> Str
     serde_json::to_string(&msg).unwrap()
 }
 
-fn make_supply_delta_subscribe_message_v1(greater_than_or_equal_to: &u32) -> String {
+fn make_supply_delta_subscribe_message_v1(greater_than_or_equal_to: &BlockNumber) -> String {
     let msg = json!({
         "id": 0,
         "method": "eth_subscribe",
@@ -125,7 +129,7 @@ fn make_supply_delta_subscribe_message_v1(greater_than_or_equal_to: &u32) -> Str
 }
 
 pub fn stream_supply_deltas_from(
-    greater_than_or_equal_to: u32,
+    greater_than_or_equal_to: BlockNumber,
     use_legacy_format: bool,
 ) -> impl Stream<Item = SupplyDelta> {
     tracing::debug!("streaming supply deltas gte {greater_than_or_equal_to}");
@@ -186,7 +190,7 @@ pub async fn stream_supply_deltas_from_last<'a>(
 }
 
 pub fn stream_supply_delta_chunks(
-    from: u32,
+    from: BlockNumber,
     chunk_size: usize,
     use_legacy_format: bool,
 ) -> UnboundedReceiver<Vec<SupplyDelta>> {
@@ -224,7 +228,7 @@ pub enum SupplyDeltaByBlockNumberError {
 }
 
 pub async fn get_supply_delta_by_block_number(
-    block_number: u32,
+    block_number: BlockNumber,
 ) -> Result<SupplyDelta, SupplyDeltaByBlockNumberError> {
     let url = format!("{}", *EXECUTION_URL);
     let mut ws = connect_async(&url).await.unwrap().0;

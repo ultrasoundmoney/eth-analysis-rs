@@ -163,7 +163,7 @@ pub struct BlockRange {
 }
 
 impl BlockRange {
-    pub fn new(greater_than_or_equal: u32, less_than_or_equal: u32) -> Self {
+    pub fn new(greater_than_or_equal: BlockNumber, less_than_or_equal: BlockNumber) -> Self {
         if greater_than_or_equal > less_than_or_equal {
             panic!("tried to create slot range with negative range")
         }
@@ -181,7 +181,7 @@ pub struct BlockRangeIntoIterator {
 }
 
 impl IntoIterator for BlockRange {
-    type Item = u32;
+    type Item = BlockNumber;
     type IntoIter = BlockRangeIntoIterator;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -196,16 +196,16 @@ impl Iterator for BlockRangeIntoIterator {
     type Item = BlockNumber;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match (self.block_range.greater_than_or_equal as usize + self.index)
-            .cmp(&(self.block_range.less_than_or_equal as usize))
+        match (self.block_range.greater_than_or_equal + self.index as BlockNumber)
+            .cmp(&(self.block_range.less_than_or_equal))
         {
             Ordering::Less => {
-                let current = self.block_range.greater_than_or_equal + self.index as u32;
+                let current = self.block_range.greater_than_or_equal + self.index as BlockNumber;
                 self.index = self.index + 1;
                 Some(current)
             }
             Ordering::Equal => {
-                let current = self.block_range.greater_than_or_equal + self.index as u32;
+                let current = self.block_range.greater_than_or_equal + self.index as BlockNumber;
                 self.index = self.index + 1;
                 Some(current)
             }
@@ -256,7 +256,7 @@ async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Head> {
     historic_heads_stream.chain(heads_stream)
 }
 
-pub const EXECUTION_BLOCK_NUMBER_AUG_1ST: u32 = 15253306;
+pub const EXECUTION_BLOCK_NUMBER_AUG_1ST: BlockNumber = 15253306;
 
 async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = Head> {
     let mut connection = db.acquire().await.unwrap();
@@ -388,7 +388,9 @@ mod tests {
 
     #[test]
     fn block_range_iterable_test() {
-        let range = (BlockRange::new(1, 4)).into_iter().collect::<Vec<u32>>();
+        let range = (BlockRange::new(1, 4))
+            .into_iter()
+            .collect::<Vec<BlockNumber>>();
         assert_eq!(range, vec![1, 2, 3, 4]);
     }
 }

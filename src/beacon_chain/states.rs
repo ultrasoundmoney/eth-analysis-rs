@@ -1,16 +1,15 @@
 mod heal;
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
-use sqlx::{postgres::PgRow, PgExecutor, Row};
+use sqlx::PgExecutor;
 
 use super::beacon_time;
 
 pub use heal::heal_beacon_states;
 
 // Beacon chain slots are defined as 12 second periods starting from genesis. With u32 our program
-// would overflow when the slot number passes 4_294_967_295. u32::MAX * 12 seconds = ~1633 years.
-pub type Slot = u32;
+// would overflow when the slot number passes 2_147_483_647. i32::MAX * 12 seconds = ~817 years.
+pub type Slot = i32;
 
 trait SlotExt {
     fn get_date_time(&self) -> DateTime<Utc>;
@@ -22,37 +21,19 @@ impl SlotExt for Slot {
     }
 }
 
-struct BeaconStateRow {
-    associated_block_root: Option<String>,
-    slot: i32,
-    state_root: String,
-}
-
 #[derive(Debug, PartialEq)]
 pub struct BeaconState {
     pub slot: Slot,
     pub state_root: String,
-    pub associated_block_root: Option<String>,
-}
-
-impl From<BeaconStateRow> for BeaconState {
-    fn from(row: BeaconStateRow) -> Self {
-        Self {
-            associated_block_root: row.associated_block_root,
-            slot: row.slot as u32,
-            state_root: row.state_root,
-        }
-    }
 }
 
 pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState> {
     sqlx::query_as!(
-        BeaconStateRow,
+        BeaconState,
         "
             SELECT
                 beacon_states.state_root,
-                beacon_states.slot,
-                associated_block_root
+                beacon_states.slot
             FROM beacon_states
             ORDER BY slot DESC
             LIMIT 1
@@ -68,18 +49,17 @@ pub async fn store_state(
     executor: impl PgExecutor<'_>,
     state_root: &str,
     slot: &Slot,
-    associated_block_root: &str,
 ) -> sqlx::Result<()> {
     sqlx::query!(
         "
             INSERT INTO
                 beacon_states
-                (state_root, slot, associated_block_root)
-            VALUES ($1, $2, $3)
+                (state_root, slot)
+            VALUES
+                ($1, $2)
         ",
         state_root,
-        *slot as i32,
-        associated_block_root
+        *slot,
     )
     .execute(executor)
     .await?;
@@ -100,7 +80,7 @@ pub async fn get_state_root_by_slot(
             WHERE
                 slot = $1
         ",
-        *slot as i32
+        *slot
     )
     .fetch_optional(executor)
     .await?
@@ -115,7 +95,7 @@ pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal:
             DELETE FROM beacon_states
             WHERE slot >= $1
         ",
-        *greater_than_or_equal as i32
+        *greater_than_or_equal
     )
     .execute(executor)
     .await
@@ -128,41 +108,11 @@ pub async fn delete_state(executor: impl PgExecutor<'_>, slot: &Slot) {
             DELETE FROM beacon_states
             WHERE slot = $1
         ",
-        *slot as i32
+        *slot
     )
     .execute(executor)
     .await
     .unwrap();
-}
-
-pub async fn get_state_by_slot(executor: impl PgExecutor<'_>, slot: &Slot) -> Result<BeaconState> {
-    let state = sqlx::query(
-        "
-            SELECT
-                state_root,
-                slot,
-                associated_block_root
-            FROM
-                beacon_states
-            WHERE
-                slot = $1
-        ",
-    )
-    .bind(*slot as i32)
-    .map(|row: PgRow| {
-        let state_root = row.get::<String, _>("state_root");
-        let slot = row.get::<i32, _>("slot") as u32;
-        let associated_block_root = row.get::<Option<String>, _>("associated_block_root");
-        BeaconState {
-            associated_block_root,
-            slot,
-            state_root,
-        }
-    })
-    .fetch_one(executor)
-    .await?;
-
-    Ok(state)
 }
 
 #[cfg(test)]
@@ -177,7 +127,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0, "0xblock_root")
+        store_state(&mut transaction, "0xstate_root", &0)
             .await
             .unwrap();
 
@@ -185,7 +135,6 @@ mod tests {
 
         assert_eq!(
             BeaconState {
-                associated_block_root: Some("0xblock_root".to_string()),
                 slot: 0,
                 state_root: "0xstate_root".to_string(),
             },
@@ -198,11 +147,11 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root_1", &0, "0xblock_root")
+        store_state(&mut transaction, "0xstate_root_1", &0)
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xstate_root_2", &1, "0xblock_root")
+        store_state(&mut transaction, "0xstate_root_2", &1)
             .await
             .unwrap();
 
@@ -211,7 +160,6 @@ mod tests {
         assert_eq!(
             state,
             BeaconState {
-                associated_block_root: Some("0xblock_root".to_string()),
                 slot: 1,
                 state_root: "0xstate_root_2".to_string(),
             }
@@ -223,7 +171,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0, "0xblock_root")
+        store_state(&mut transaction, "0xstate_root", &0)
             .await
             .unwrap();
 
@@ -241,9 +189,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest", &0, "0xblock_root")
-            .await
-            .unwrap();
+        store_state(&mut transaction, "0xtest", &0).await.unwrap();
 
         let state_root = get_state_root_by_slot(&mut transaction, &0)
             .await

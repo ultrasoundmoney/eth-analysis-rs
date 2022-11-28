@@ -19,9 +19,9 @@ impl From<ExecutionBlockRow> for ExecutionNodeBlock {
         Self {
             base_fee_per_gas: row.base_fee_per_gas as u64,
             difficulty: row.difficulty as u64,
-            gas_used: row.gas_used as u32,
+            gas_used: row.gas_used,
             hash: row.hash,
-            number: row.number as u32,
+            number: row.number,
             parent_hash: row.parent_hash,
             timestamp: row.timestamp,
             total_difficulty: row.total_difficulty.parse::<u128>().unwrap(),
@@ -42,7 +42,7 @@ impl BlockStore<'_> {
                 WHERE number = $1
             ",
         )
-        .bind(*block_number as i32)
+        .bind(*block_number)
         .execute(self.connection.acquire().await.unwrap())
         .await
         .unwrap();
@@ -54,7 +54,7 @@ impl BlockStore<'_> {
                 DELETE FROM blocks_next
                 WHERE number >= $1
             ",
-            *greater_than_or_equal as i32
+            *greater_than_or_equal
         )
         .execute(self.connection.acquire().await.unwrap())
         .await
@@ -110,7 +110,7 @@ impl BlockStore<'_> {
                 WHERE
                     number = $1
             "#,
-            *block_number as i32
+            *block_number
         )
         .fetch_optional(self.connection.acquire().await.unwrap())
         .await
@@ -158,7 +158,7 @@ impl BlockStore<'_> {
                       number = $1
                   ) AS "exists!"
             "#,
-            *block_number as i32
+            *block_number
         )
         .fetch_one(self.connection.acquire().await.unwrap())
         .await
@@ -180,7 +180,7 @@ impl BlockStore<'_> {
         .fetch_optional(self.connection.acquire().await.unwrap())
         .await
         .unwrap()
-        .map(|row| row.number as u32)
+        .map(|row| row.number)
     }
 
     #[allow(dead_code)]
@@ -240,9 +240,9 @@ impl BlockStore<'_> {
         .bind(block.base_fee_per_gas as i64)
         .bind(block.difficulty as i64)
         .bind(eth_price)
-        .bind(block.gas_used as i32)
+        .bind(block.gas_used)
         .bind(block.hash.clone())
-        .bind(block.number as i32)
+        .bind(block.number)
         .bind(block.parent_hash.clone())
         .bind(block.timestamp.trunc_subsecs(0))
         .bind(block.total_difficulty.to_string())

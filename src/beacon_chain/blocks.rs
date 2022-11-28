@@ -1,8 +1,5 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
-mod backfill;
 mod heal;
-
-use std::num::TryFromIntError;
 
 use anyhow::Result;
 use sqlx::{PgConnection, PgExecutor, Row};
@@ -10,11 +7,10 @@ use sqlx::{PgConnection, PgExecutor, Row};
 use crate::eth_units::GweiNewtype;
 
 use super::{
-    node::{BeaconBlock, BeaconHeaderSignedEnvelope, BlockRoot},
+    node::{BeaconBlock, BeaconHeaderSignedEnvelope},
     Slot,
 };
 
-pub use backfill::backfill_historic_slots;
 pub use heal::heal_block_hashes;
 
 pub const GENESIS_PARENT_ROOT: &str =
@@ -79,11 +75,10 @@ pub async fn store_block(
                 deposit_sum,
                 deposit_sum_aggregated,
                 parent_root,
-                slot,
                 state_root
             )
             VALUES (
-                $1, $2, $3, $4, $5, $6, $7
+                $1, $2, $3, $4, $5, $6
             )
         ",
         block.block_hash(),
@@ -91,7 +86,6 @@ pub async fn store_block(
         i64::from(deposit_sum.to_owned()),
         i64::from(deposit_sum_aggregated.to_owned()),
         header.parent_root(),
-        header.slot() as i32,
         header.state_root(),
     )
     .execute(executor)
@@ -101,7 +95,7 @@ pub async fn store_block(
 }
 
 #[allow(dead_code)]
-pub async fn get_last_block_slot(connection: &mut PgConnection) -> Result<Option<u32>> {
+pub async fn get_last_block_slot(connection: &mut PgConnection) -> Result<Option<i32>> {
     let row = sqlx::query!(
         "
             SELECT
@@ -119,7 +113,7 @@ pub async fn get_last_block_slot(connection: &mut PgConnection) -> Result<Option
     .fetch_optional(connection)
     .await?;
 
-    let slot = row.map(|row| row.slot as u32);
+    let slot = row.map(|row| row.slot);
 
     Ok(slot)
 }
@@ -136,7 +130,7 @@ pub async fn delete_blocks(connection: impl PgExecutor<'_>, greater_than_or_equa
                 WHERE beacon_states.slot >= $1
             )
         ",
-        *greater_than_or_equal as i32
+        *greater_than_or_equal
     )
     .execute(connection)
     .await
@@ -156,100 +150,50 @@ pub async fn delete_block(connection: impl PgExecutor<'_>, slot: &Slot) {
             )
         ",
     )
-    .bind(*slot as i32)
+    .bind(*slot)
     .execute(connection)
     .await
     .unwrap();
 }
 
-pub async fn get_block_root_before_slot(
+pub async fn get_block_before_slot(
     executor: impl PgExecutor<'_>,
     less_than: &Slot,
-) -> Result<BlockRoot> {
-    let row = sqlx::query!(
-        "
-            SELECT
-                block_root
-            FROM
-                beacon_states 
-            JOIN
-                beacon_blocks 
-            ON
-                beacon_states.state_root = beacon_blocks.state_root 
-            WHERE beacon_states.slot < $1
-            ORDER BY beacon_states.slot DESC 
-            LIMIT 1
-        ",
-        *less_than as i32
-    )
-    .fetch_one(executor)
-    .await?;
-
-    Ok(row.block_root)
-}
-
-struct BlockRow {
-    block_hash: Option<String>,
-    block_root: String,
-    deposit_sum: i64,
-    deposit_sum_aggregated: i64,
-    parent_root: String,
-    state_root: String,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Block {
-    pub block_hash: Option<String>,
-    block_root: String,
-    deposit_sum: GweiNewtype,
-    deposit_sum_aggregated: GweiNewtype,
-    parent_root: String,
-    pub state_root: String,
-}
-
-impl TryFrom<BlockRow> for Block {
-    type Error = TryFromIntError;
-    fn try_from(value: BlockRow) -> Result<Self, Self::Error> {
-        let block = Block {
-            block_hash: value.block_hash,
-            block_root: value.block_root,
-            state_root: value.state_root,
-            deposit_sum: value.deposit_sum.try_into()?,
-            deposit_sum_aggregated: value.deposit_sum_aggregated.try_into()?,
-            parent_root: value.parent_root,
-        };
-
-        Ok(block)
-    }
-}
-
-pub async fn get_block_by_block_root(
-    executor: impl PgExecutor<'_>,
-    block_root: &str,
-) -> Result<Block> {
+) -> Result<DbBlock> {
     let row = sqlx::query_as!(
-        BlockRow,
+        BlockDbRow,
         "
             SELECT
                 block_root,
-                state_root,
+                beacon_blocks.state_root,
                 parent_root,
                 deposit_sum,
                 deposit_sum_aggregated,
                 block_hash
             FROM
-                beacon_blocks
-            WHERE
-                block_root = $1
+                beacon_blocks 
+            JOIN beacon_states ON
+                beacon_blocks.state_root = beacon_states.state_root 
+            WHERE slot < $1
+            ORDER BY slot DESC 
+            LIMIT 1
         ",
-        block_root
+        *less_than
     )
     .fetch_one(executor)
     .await?;
 
-    let block = row.try_into()?;
+    Ok(row.into())
+}
 
-    Ok(block)
+#[derive(Debug, PartialEq)]
+pub struct DbBlock {
+    block_root: String,
+    deposit_sum: GweiNewtype,
+    deposit_sum_aggregated: GweiNewtype,
+    parent_root: String,
+    pub block_hash: Option<String>,
+    pub state_root: String,
 }
 
 pub async fn update_block_hash(
@@ -273,6 +217,57 @@ pub async fn update_block_hash(
     .await?;
 
     Ok(())
+}
+
+struct BlockDbRow {
+    block_root: String,
+    deposit_sum: i64,
+    deposit_sum_aggregated: i64,
+    parent_root: String,
+    pub block_hash: Option<String>,
+    pub state_root: String,
+}
+
+impl From<BlockDbRow> for DbBlock {
+    fn from(row: BlockDbRow) -> Self {
+        Self {
+            block_hash: row.block_hash,
+            block_root: row.block_root,
+            deposit_sum: row.deposit_sum.try_into().unwrap(),
+            deposit_sum_aggregated: row.deposit_sum_aggregated.try_into().unwrap(),
+            parent_root: row.parent_root,
+            state_root: row.state_root,
+        }
+    }
+}
+
+pub async fn get_block_by_slot(
+    executor: impl PgExecutor<'_>,
+    slot: &Slot,
+) -> sqlx::Result<Option<DbBlock>> {
+    let row = sqlx::query_as!(
+        BlockDbRow,
+        r#"
+            SELECT
+                block_root,
+                beacon_blocks.state_root,
+                parent_root,
+                deposit_sum,
+                deposit_sum_aggregated,
+                block_hash
+            FROM
+                beacon_blocks
+            JOIN beacon_states ON
+                beacon_blocks.state_root = beacon_states.state_root
+            WHERE
+                slot = $1
+        "#,
+        slot
+    )
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(row.map(|row| row.into()))
 }
 
 #[cfg(test)]
@@ -331,7 +326,7 @@ mod tests {
         let state_root = format!("0xblock_test_state_root");
         let slot = 0;
 
-        store_state(&mut transaction, &state_root, &slot, "")
+        store_state(&mut transaction, &state_root, &slot)
             .await
             .unwrap();
 
@@ -411,7 +406,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_block_root_before_slot_test() -> Result<()> {
+    async fn get_block_before_slot_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
@@ -429,61 +424,42 @@ mod tests {
 
         store_custom_test_block(&mut transaction, &test_header_after, &test_block_after).await;
 
-        let last_block_before = get_block_root_before_slot(&mut transaction, &1).await?;
+        let last_block_before = get_block_before_slot(&mut transaction, &1).await.unwrap();
 
-        assert_eq!(test_header_before.root, last_block_before);
-
-        Ok(())
+        assert_eq!(test_header_before.root, last_block_before.block_root);
     }
 
     #[tokio::test]
-    async fn get_block_test() -> Result<()> {
+    async fn get_block_before_missing_slot_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let test_id = "get_block_test";
-        let slot = 374;
-        let block_hash = format!("0x{test_id}_block_hash");
-        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
-            .slot(&slot)
+        let test_id_before = "last_block_before_slot_before";
+        let test_header_before = BeaconHeaderSignedEnvelopeBuilder::new(test_id_before).build();
+        let test_block_before = Into::<BeaconBlockBuilder>::into(&test_header_before).build();
+
+        let test_id_after = "last_block_before_slot_after";
+        let test_header_after = BeaconHeaderSignedEnvelopeBuilder::new(test_id_after)
+            .parent_header(&test_header_before)
             .build();
 
-        store_custom_test_block(
+        store_custom_test_block(&mut transaction, &test_header_before, &test_block_before).await;
+
+        store_state(
             &mut transaction,
-            &header,
-            &BeaconBlock {
-                body: BeaconBlockBody {
-                    deposits: vec![],
-                    execution_payload: Some(ExecutionPayload {
-                        block_hash: block_hash.clone(),
-                    }),
-                },
-                parent_root: GENESIS_PARENT_ROOT.to_string(),
-                slot,
-                state_root: header.state_root().to_string(),
-            },
+            &test_header_after.state_root(),
+            &test_header_after.slot(),
         )
-        .await;
+        .await
+        .unwrap();
 
-        let block = get_block_by_block_root(&mut transaction, &header.root).await?;
+        let last_block_before = get_block_before_slot(&mut transaction, &1).await.unwrap();
 
-        assert_eq!(
-            Block {
-                block_root: header.root.to_owned(),
-                state_root: header.state_root().to_owned(),
-                parent_root: GENESIS_PARENT_ROOT.to_string(),
-                deposit_sum: GweiNewtype(0),
-                deposit_sum_aggregated: GweiNewtype(0),
-                block_hash: Some(block_hash)
-            },
-            block
-        );
-
-        Ok(())
+        assert_eq!(test_header_before.root, last_block_before.block_root);
     }
 
     #[tokio::test]
-    async fn update_block_hash_test() -> Result<()> {
+    async fn update_block_hash_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
@@ -512,12 +488,38 @@ mod tests {
         )
         .await;
 
-        update_block_hash(&mut transaction, &block_root, &block_hash_after).await?;
+        update_block_hash(&mut transaction, &block_root, &block_hash_after)
+            .await
+            .unwrap();
 
-        let block = get_block_by_block_root(&mut transaction, &block_root).await?;
+        let block = get_block_by_slot(&mut transaction, &header.slot())
+            .await
+            .unwrap()
+            .unwrap();
 
         assert_eq!(block_hash_after, block.block_hash.unwrap());
+    }
 
-        Ok(())
+    #[tokio::test]
+    async fn get_block_by_slot_test() {
+        let mut connection = db::get_test_db().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let test_id = "get_block_by_slot";
+        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
+        let block = Into::<BeaconBlockBuilder>::into(&header).build();
+
+        let block_not_there = get_block_by_slot(&mut transaction, &0).await.unwrap();
+
+        assert_eq!(None, block_not_there);
+
+        store_custom_test_block(&mut transaction, &header, &block).await;
+
+        let block_there = get_block_by_slot(&mut transaction, &0)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(header.root, block_there.block_root);
     }
 }

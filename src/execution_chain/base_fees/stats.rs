@@ -7,7 +7,7 @@ use tracing::{debug, warn};
 use crate::{
     caching::{self, CacheKey},
     eth_units::WeiF64,
-    execution_chain::ExecutionNodeBlock,
+    execution_chain::{BlockNumber, ExecutionNodeBlock},
     key_value_store,
     time_frames::{LimitedTimeFrame, TimeFrame},
 };
@@ -149,7 +149,7 @@ struct BaseFeePerGasStatsTimeFrame {
 struct BaseFeePerGasStats {
     all: Option<BaseFeePerGasStatsTimeFrame>,
     barrier: WeiF64,
-    block_number: u32,
+    block_number: BlockNumber,
     d1: BaseFeePerGasStatsTimeFrame,
     d30: BaseFeePerGasStatsTimeFrame,
     d7: BaseFeePerGasStatsTimeFrame,

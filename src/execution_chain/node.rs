@@ -263,7 +263,10 @@ impl ExecutionNode {
             )
     }
 
-    pub async fn get_block_by_number(&mut self, number: &u32) -> Option<ExecutionNodeBlock> {
+    pub async fn get_block_by_number(
+        &mut self,
+        number: &BlockNumber,
+    ) -> Option<ExecutionNodeBlock> {
         let hex_number = format!("0x{:x}", number);
         self.call("eth_getBlockByNumber", &json!((hex_number, false)))
             .await

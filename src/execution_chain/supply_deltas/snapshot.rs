@@ -1,10 +1,12 @@
+use crate::execution_chain::BlockNumber;
+
 use super::Wei;
 
 pub struct SupplySnapshot {
     #[allow(dead_code)]
     pub accounts_count: u64,
     pub block_hash: &'static str,
-    pub block_number: u32,
+    pub block_number: BlockNumber,
     pub root: &'static str,
     pub balances_sum: Wei,
 }

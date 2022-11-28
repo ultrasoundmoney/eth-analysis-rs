@@ -1,3 +1,4 @@
+use crate::execution_chain::BlockNumber;
 use crate::log;
 use chrono::SubsecRound;
 use futures::StreamExt;
@@ -7,7 +8,7 @@ use std::iter::Iterator;
 
 #[derive(Serialize)]
 struct HeadLog {
-    block_number: u32,
+    block_number: BlockNumber,
     hash: String,
     is_duplicate_number: bool,
     is_jumping_ahead: bool,
@@ -29,7 +30,7 @@ pub async fn write_heads_log() {
 
     let mut csv_writer = csv::Writer::from_path(&file_path).unwrap();
 
-    let mut seen_block_heights = HashSet::<u32>::new();
+    let mut seen_block_heights = HashSet::<BlockNumber>::new();
     let mut seen_block_hashes = HashSet::<String>::new();
 
     while let Some(head) = heads_stream.next().await {

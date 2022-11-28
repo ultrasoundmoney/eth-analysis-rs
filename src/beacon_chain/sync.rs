@@ -12,12 +12,12 @@ use crate::{
     beacon_chain::{balances, beacon_time, deposits, issuance},
     db, eth_supply,
     eth_units::GweiNewtype,
-    json_codecs::from_u32_string,
+    json_codecs::from_i32_string,
     log,
     performance::TimedExt,
 };
 
-use super::node::{BeaconBlock, BeaconNode, BlockRoot, StateRoot, ValidatorBalance};
+use super::node::{BeaconBlock, BeaconNode, StateRoot, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot, BEACON_URL};
 
 lazy_static! {
@@ -31,7 +31,7 @@ pub struct SlotRange {
 }
 
 impl SlotRange {
-    pub fn new(greater_than_or_equal: u32, less_than_or_equal: u32) -> Self {
+    pub fn new(greater_than_or_equal: Slot, less_than_or_equal: Slot) -> Self {
         if greater_than_or_equal > less_than_or_equal {
             panic!("tried to create slot range with negative range")
         }
@@ -49,7 +49,7 @@ pub struct SlotRangeIntoIterator {
 }
 
 impl IntoIterator for SlotRange {
-    type Item = u32;
+    type Item = Slot;
     type IntoIter = SlotRangeIntoIterator;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -64,16 +64,16 @@ impl Iterator for SlotRangeIntoIterator {
     type Item = Slot;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match (self.slot_range.greater_than_or_equal as usize + self.index)
-            .cmp(&(self.slot_range.less_than_or_equal as usize))
+        match (self.slot_range.greater_than_or_equal + self.index as Slot)
+            .cmp(&(self.slot_range.less_than_or_equal))
         {
             Ordering::Less => {
-                let current = self.slot_range.greater_than_or_equal + self.index as u32;
+                let current = self.slot_range.greater_than_or_equal + self.index as Slot;
                 self.index = self.index + 1;
                 Some(current)
             }
             Ordering::Equal => {
-                let current = self.slot_range.greater_than_or_equal + self.index as u32;
+                let current = self.slot_range.greater_than_or_equal + self.index as Slot;
                 self.index = self.index + 1;
                 Some(current)
             }
@@ -84,7 +84,6 @@ impl Iterator for SlotRangeIntoIterator {
 
 async fn store_state_with_block(
     executor: &mut PgConnection,
-    associated_block_root: &BlockRoot,
     block: &BeaconBlock,
     deposit_sum: &GweiNewtype,
     deposit_sum_aggregated: &GweiNewtype,
@@ -99,13 +98,7 @@ async fn store_state_with_block(
         ));
     }
 
-    states::store_state(
-        &mut *executor,
-        &header.state_root(),
-        &header.slot(),
-        associated_block_root,
-    )
-    .await?;
+    states::store_state(&mut *executor, &header.state_root(), &header.slot()).await?;
 
     blocks::store_block(
         &mut *executor,
@@ -120,13 +113,11 @@ async fn store_state_with_block(
 }
 
 struct SyncData {
-    associated_block_root: BlockRoot,
     header_block_tuple: Option<(BeaconHeaderSignedEnvelope, BeaconBlock)>,
     validator_balances: Option<Vec<ValidatorBalance>>,
 }
 
 async fn gather_sync_data(
-    db_pool: &PgPool,
     beacon_node: &BeaconNode,
     state_root: &StateRoot,
     slot: &Slot,
@@ -148,20 +139,6 @@ async fn gather_sync_data(
             state_root
         ));
     }
-
-    // To be able to run certain calculations on any slot, we always associate a block_root
-    // with a slot. If a slot was missed, we associate the most recent available block root.
-    let associated_block_root = {
-        match header {
-            None => {
-                debug!("no block in current slot, using last block_root");
-                blocks::get_block_root_before_slot(db_pool, &slot)
-                    .timed("get_block_root_before_slot")
-                    .await?
-            }
-            Some(ref header) => header.root.clone(),
-        }
-    };
 
     let header_block_tuple = match header {
         None => None,
@@ -197,7 +174,6 @@ async fn gather_sync_data(
     };
 
     let sync_data = SyncData {
-        associated_block_root,
         header_block_tuple,
         validator_balances,
     };
@@ -225,10 +201,9 @@ pub async fn sync_slot_by_state_root(
     debug!(%sync_lag, "beacon sync lag");
 
     let SyncData {
-        associated_block_root,
         header_block_tuple,
         validator_balances,
-    } = gather_sync_data(db_pool, beacon_node, state_root, slot, &sync_lag).await?;
+    } = gather_sync_data(beacon_node, state_root, slot, &sync_lag).await?;
 
     // Now that we have all the data, we start storing it.
     let mut transaction = db_pool.begin().await?;
@@ -239,7 +214,7 @@ pub async fn sync_slot_by_state_root(
                 "storing slot without block, slot: {:?}, state_root: {}",
                 slot, state_root
             );
-            states::store_state(&mut transaction, &state_root, slot, &associated_block_root)
+            states::store_state(&mut transaction, &state_root, slot)
                 .timed("store state without block")
                 .await?;
         }
@@ -255,7 +230,6 @@ pub async fn sync_slot_by_state_root(
             );
             store_state_with_block(
                 &mut transaction,
-                &associated_block_root,
                 block,
                 &deposits::get_deposit_sum_from_block(&block),
                 &deposit_sum_aggregated,
@@ -308,13 +282,13 @@ async fn update_deferrable_analysis(db_pool: &PgPool, slot: &Slot) -> Result<()>
 struct FinalizedCheckpointEvent {
     block: String,
     state: String,
-    #[serde(deserialize_with = "from_u32_string")]
-    epoch: u32,
+    #[serde(deserialize_with = "from_i32_string")]
+    epoch: i32,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 struct HeadEvent {
-    #[serde(deserialize_with = "from_u32_string")]
+    #[serde(deserialize_with = "from_i32_string")]
     slot: Slot,
     /// block_root
     block: String,
@@ -442,12 +416,12 @@ pub async fn rollback_slot(executor: &mut PgConnection, slot: &Slot) -> Result<(
     Ok(())
 }
 
-async fn estimate_slots_remaining(executor: impl PgExecutor<'_>, beacon_node: &BeaconNode) -> u32 {
+async fn estimate_slots_remaining(executor: impl PgExecutor<'_>, beacon_node: &BeaconNode) -> i32 {
     let last_on_chain = beacon_node.get_last_header().await.unwrap();
     let last_synced_slot = states::get_last_state(executor)
         .await
         .map_or(0, |state| state.slot);
-    last_on_chain.header.message.slot - last_synced_slot
+    last_on_chain.slot() - last_synced_slot
 }
 
 /// Searches backwards from the starting candidate to find a slot where stored and on-chain
@@ -521,7 +495,8 @@ pub async fn sync_beacon_states() -> Result<()> {
         "sync beacon states",
         estimate_slots_remaining(&db_pool, &beacon_node)
             .await
-            .into(),
+            .try_into()
+            .unwrap(),
     );
 
     while let Some(slot_from_stream) = slots_stream.next().await {
@@ -620,7 +595,7 @@ mod tests {
 
     #[test]
     fn slot_range_iterable_test() {
-        let range = (SlotRange::new(1, 4)).into_iter().collect::<Vec<u32>>();
+        let range = (SlotRange::new(1, 4)).into_iter().collect::<Vec<Slot>>();
         assert_eq!(range, vec![1, 2, 3, 4]);
     }
 

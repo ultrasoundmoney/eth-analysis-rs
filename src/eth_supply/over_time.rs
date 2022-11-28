@@ -281,7 +281,7 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
 
-        beacon_chain::store_state(executor.acquire().await.unwrap(), state_root, slot, "").await?;
+        beacon_chain::store_state(executor.acquire().await.unwrap(), state_root, slot).await?;
 
         let execution_balances_sum = ExecutionBalancesSum {
             block_number: 0,

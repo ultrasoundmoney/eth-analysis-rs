@@ -15,8 +15,8 @@ pub use balances::store_validators_balance;
 pub use balances::sum_validator_balances;
 pub use balances::BeaconBalancesSum;
 
-pub use blocks::backfill_historic_slots;
-pub use blocks::get_block_by_block_root;
+pub use blocks::get_block_before_slot;
+pub use blocks::get_block_by_slot;
 pub use blocks::heal_block_hashes;
 pub use blocks::store_block;
 pub use blocks::GENESIS_PARENT_ROOT;
@@ -41,7 +41,6 @@ pub use node::BeaconNode;
 pub use rewards::update_validator_rewards;
 
 pub use states::get_last_state;
-pub use states::get_state_by_slot;
 pub use states::get_state_root_by_slot;
 pub use states::heal_beacon_states;
 pub use states::store_state;
@@ -53,7 +52,7 @@ use lazy_static::lazy_static;
 
 use crate::env;
 
-pub const FIRST_POST_MERGE_SLOT: u32 = 4700013;
+pub const FIRST_POST_MERGE_SLOT: Slot = 4700013;
 
 lazy_static! {
     static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");
@@ -86,7 +85,6 @@ pub mod tests {
             executor.acquire().await.unwrap(),
             &header.header.message.state_root,
             &header.header.message.slot,
-            &header.root,
         )
         .await
         .unwrap();

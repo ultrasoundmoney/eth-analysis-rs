@@ -9,6 +9,7 @@ use std::{
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, Stream, StreamExt};
+use pit_wall::Progress;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace, warn};
 
@@ -20,7 +21,7 @@ use super::{
     ExecutionNode,
 };
 
-const LONDON_HARDFORK_BLOCK_NUMBER: u32 = 12965000;
+const LONDON_HARD_FORK_BLOCK_NUMBER: BlockNumber = 12965000;
 
 fn get_historic_stream(block_range: &BlockRange) -> impl Stream<Item = ExecutionNodeBlock> {
     let (mut tx, rx) = futures::channel::mpsc::channel(10);
@@ -69,7 +70,7 @@ struct OutRow {
     difficulty: Difficulty,
     eth_price: f64,
     // Started at 8M, currently at 30M, seems to fit in 2^31 for the foreseeable future.
-    gas_used: u32,
+    gas_used: i32,
     hash: String,
     number: BlockNumber,
     parent_hash: String,
@@ -78,9 +79,9 @@ struct OutRow {
 }
 
 // We have the one after this in our DB already.
-const EARLIEST_STORED_DB_BLOCK_NUMBER: u32 = 15429946;
+const EARLIEST_STORED_DB_BLOCK_NUMBER: BlockNumber = 15429946;
 
-async fn write_blocks_from(gte_block_number: u32, to_path: &str) -> Result<()> {
+async fn write_blocks_from(gte_block_number: BlockNumber, to_path: &str) -> Result<()> {
     debug!("loading eth prices");
 
     let mut eth_prices_csv = csv::Reader::from_path("eth_prices.csv")
@@ -98,9 +99,11 @@ async fn write_blocks_from(gte_block_number: u32, to_path: &str) -> Result<()> {
         less_than_or_equal: EARLIEST_STORED_DB_BLOCK_NUMBER,
     });
 
-    let mut progress = pit_wall::Progress::new(
+    let mut progress = Progress::new(
         "write blocks",
-        (EARLIEST_STORED_DB_BLOCK_NUMBER - gte_block_number).into(),
+        (EARLIEST_STORED_DB_BLOCK_NUMBER - gte_block_number)
+            .try_into()
+            .unwrap(),
     );
 
     let file = fs::OpenOptions::new().append(true).open(&to_path).unwrap();
@@ -226,7 +229,7 @@ pub async fn write_blocks_from_london() -> Result<()> {
     match file {
         Err(_err) => {
             info!("first run, starting at london hardfork");
-            write_blocks_from(LONDON_HARDFORK_BLOCK_NUMBER, &file_path).await?;
+            write_blocks_from(LONDON_HARD_FORK_BLOCK_NUMBER, &file_path).await?;
         }
         Ok(file) => {
             // Because we interrupt the writing sometimes the last row may be malformed, if a file
@@ -243,7 +246,7 @@ pub async fn write_blocks_from_london() -> Result<()> {
                 .deserialize()
                 .last()
                 .map(|row: Result<OutRow, _>| row.unwrap().number)
-                .unwrap_or(LONDON_HARDFORK_BLOCK_NUMBER);
+                .unwrap_or(LONDON_HARD_FORK_BLOCK_NUMBER);
             info!(last_stored_block_number, "picking up from previous run");
             write_blocks_from(last_stored_block_number + 1, &file_path).await?;
         }

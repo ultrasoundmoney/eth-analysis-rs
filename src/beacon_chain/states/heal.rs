@@ -53,7 +53,10 @@ pub async fn heal_beacon_states() -> Result<()> {
         last_slot, "checking first stored slot to last slot for gaps"
     );
 
-    let mut progress = Progress::new("heal-beacon-states", (last_slot - starting_slot).into());
+    let mut progress = Progress::new(
+        "heal-beacon-states",
+        (last_slot - starting_slot).try_into().unwrap(),
+    );
 
     let slots = (starting_slot..=last_slot).collect::<Vec<Slot>>();
 
@@ -74,14 +77,14 @@ pub async fn heal_beacon_states() -> Result<()> {
                 ORDER BY
                     slot ASC
             ",
-            *first as i32,
-            *last as i32
+            *first,
+            *last
         )
         .fetch_all(&db_pool)
         .await?
         .into_iter()
-        .map(|row| (row.slot as u32, row.state_root))
-        .collect::<HashMap<u32, String>>();
+        .map(|row| (row.slot, row.state_root))
+        .collect::<HashMap<Slot, String>>();
 
         for slot in *first..=*last {
             let stored_state_root = stored_states.get(&slot).unwrap();

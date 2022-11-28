@@ -3,11 +3,11 @@ mod over_time;
 
 use std::cmp::Ordering;
 
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::postgres::{PgQueryResult, PgRow};
-use sqlx::{Acquire, PgConnection, PgExecutor, PgPool, Row};
+use sqlx::postgres::PgQueryResult;
+use sqlx::{Acquire, PgConnection, PgExecutor, PgPool};
 use tracing::{debug, error, warn};
 
 use crate::beacon_chain::{
@@ -44,7 +44,7 @@ pub async fn rollback_supply_from_slot(
                 OR balances_slot >= $1
         ",
     )
-    .bind(*greater_than_or_equal as i32)
+    .bind(*greater_than_or_equal)
     .execute(executor)
     .await
 }
@@ -62,7 +62,7 @@ pub async fn rollback_supply_slot(
                 OR balances_slot = $1
         ",
     )
-    .bind(*greater_than_or_equal as i32)
+    .bind(*greater_than_or_equal)
     .execute(executor)
     .await
 }
@@ -92,9 +92,9 @@ pub async fn store(
         ",
     )
     .bind(timestamp)
-    .bind(*block_number as i32)
-    .bind(*slot as i32)
-    .bind(*slot as i32)
+    .bind(*block_number)
+    .bind(*slot)
+    .bind(*slot)
     .bind(supply.to_string())
     .execute(executor)
     .await
@@ -127,34 +127,21 @@ pub struct EthSupply {
 
 #[cfg(test)]
 pub async fn get_current_supply(executor: impl PgExecutor<'_>) -> sqlx::Result<EthSupply> {
-    sqlx::query(
-        "
+    sqlx::query_as!(
+        EthSupply,
+        r#"
             SELECT
                 balances_slot,
                 deposits_slot,
                 block_number,
-                supply::FLOAT8 / 1e18 AS supply,
+                supply::FLOAT8 / 1e18 AS "supply!",
                 timestamp
             FROM
                 eth_supply
             ORDER BY timestamp DESC
             LIMIT 1
-        ",
+        "#,
     )
-    .map(|row: PgRow| {
-        let timestamp = row.get::<DateTime<Utc>, _>("timestamp");
-        let supply = row.get::<f64, _>("supply");
-        let balances_slot = row.get::<i32, _>("balances_slot") as Slot;
-        let block_number = row.get::<i32, _>("block_number") as BlockNumber;
-        let deposits_slot = row.get::<i32, _>("deposits_slot") as Slot;
-        EthSupply {
-            timestamp,
-            supply,
-            balances_slot,
-            block_number,
-            deposits_slot,
-        }
-    })
     .fetch_one(executor)
     .await
 }
@@ -183,16 +170,18 @@ pub async fn get_supply_parts(
     executor: &mut PgConnection,
     slot: &Slot,
 ) -> Result<Option<EthSupplyParts>> {
-    let associated_block_root = beacon_chain::get_state_by_slot(executor.acquire().await?, &slot)
+    let state_root = beacon_chain::get_state_root_by_slot(executor.acquire().await?, slot)
         .await?
-        .associated_block_root
-        .expect("expect associated_block_root to be available when updating eth supply");
+        .expect("expect state_root to exist when getting supply parts for slot");
 
-    let block =
-        beacon_chain::get_block_by_block_root(executor.acquire().await?, &associated_block_root)
-            .await?;
+    // Most slots have a block, we try to retrieve a block, if we fail, we use the most recent one
+    // instead.
+    let block = match beacon_chain::get_block_by_slot(executor.acquire().await?, slot).await? {
+        None => beacon_chain::get_block_before_slot(executor.acquire().await?, slot).await?,
+        Some(block) => block,
+    };
+
     let block_hash = block.block_hash.expect("expect block hash to be available when updating eth supply for newly available execution balance slots");
-    let state_root = block.state_root;
 
     let beacon_balances_sum =
         beacon_chain::get_balances_by_state_root(executor.acquire().await?, &state_root).await?;
@@ -245,7 +234,7 @@ pub async fn get_supply_exists_by_slot(
                 balances_slot = $1
         ",
     )
-    .bind(*slot as i32)
+    .bind(*slot)
     .fetch_optional(executor)
     .await
     .map(|row| row.is_some())
@@ -274,20 +263,18 @@ pub async fn update_caches(db_pool: &PgPool, slot: &Slot) -> Result<()> {
     Ok(())
 }
 
-async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
-    let max = sqlx::query(
-        "
+async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> sqlx::Result<Option<Slot>> {
+    sqlx::query!(
+        r#"
             SELECT
                 MAX(balances_slot)
             FROM
                 eth_supply
-        ",
+        "#,
     )
-    .map(|row: PgRow| row.get::<i32, _>("max") as u32)
-    .fetch_optional(executor)
-    .await?;
-
-    Ok(max)
+    .fetch_one(executor)
+    .await
+    .map(|row| row.max)
 }
 
 pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
@@ -420,7 +407,6 @@ mod tests {
             &mut transaction,
             &test_header.state_root(),
             &test_header.slot(),
-            &test_header.root,
         )
         .await
         .unwrap();
@@ -506,7 +492,7 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, state_root, &slot, "0xblock_root")
+        beacon_chain::store_state(&mut transaction, state_root, &slot)
             .await
             .unwrap();
 
@@ -558,7 +544,7 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, state_root, &slot, "")
+        beacon_chain::store_state(&mut transaction, state_root, &slot)
             .await
             .unwrap();
 
@@ -612,7 +598,7 @@ mod tests {
 
         block_store.store_block(&test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, &state_root, &slot, "")
+        beacon_chain::store_state(&mut transaction, &state_root, &slot)
             .await
             .unwrap();
 

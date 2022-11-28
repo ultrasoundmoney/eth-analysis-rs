@@ -44,7 +44,7 @@ pub struct FirstOfDaySlot(pub Slot);
 
 impl FirstOfDaySlot {
     #[allow(dead_code)]
-    pub fn new(slot: &u32) -> Option<Self> {
+    pub fn new(slot: &Slot) -> Option<Self> {
         if get_is_first_of_day(slot) {
             Some(FirstOfDaySlot(*slot))
         } else {
@@ -72,7 +72,7 @@ pub struct FirstOfMinuteSlot(pub Slot);
 
 impl FirstOfMinuteSlot {
     #[allow(dead_code)]
-    pub fn new(slot: &u32) -> Option<Self> {
+    pub fn new(slot: &Slot) -> Option<Self> {
         if get_is_first_of_minute(slot) {
             Some(FirstOfMinuteSlot(*slot))
         } else {

@@ -1,11 +1,11 @@
 use serde::{de, Deserialize, Deserializer, Serializer};
 
-pub fn from_u32_string<'de, D>(deserializer: D) -> Result<u32, D::Error>
+pub fn from_i32_string<'de, D>(deserializer: D) -> Result<i32, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s: String = Deserialize::deserialize(deserializer)?;
-    Ok(s.parse::<u32>().unwrap())
+    Ok(s.parse::<i32>().unwrap())
 }
 
 #[allow(dead_code)]

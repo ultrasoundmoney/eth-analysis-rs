@@ -1,6 +1,14 @@
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Deserializer};
 
+pub fn from_i32_hex_str<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    Ok(i32::from_str_radix(&s[2..], 16).unwrap())
+}
+
 pub fn from_u32_hex_str<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
     D: Deserializer<'de>,

@@ -43,10 +43,14 @@ pub async fn heal_block_hashes() -> Result<()> {
                 COUNT(*) AS "count!"
             FROM
                 beacon_blocks
+            JOIN beacon_states ON
+                beacon_blocks.state_root = beacon_states.state_root
             WHERE
                 slot >= $1
+            AND
+                block_hash IS NULL
         "#,
-        first_slot as i32
+        first_slot
     )
     .fetch_one(&db_pool)
     .await?;
@@ -64,10 +68,12 @@ pub async fn heal_block_hashes() -> Result<()> {
                 slot AS "slot!"
             FROM
                 beacon_blocks
+            JOIN beacon_states ON
+                beacon_blocks.state_root = beacon_states.state_root
             WHERE
                 slot >= $1
         "#,
-        first_slot as i32
+        first_slot
     )
     .fetch(&db_pool);
 
@@ -75,7 +81,7 @@ pub async fn heal_block_hashes() -> Result<()> {
 
     while let Some(row) = rows.try_next().await? {
         let block_root = row.block_root;
-        let slot = row.slot as u32;
+        let slot = row.slot;
 
         let block = beacon_node
             .get_block_by_block_root(&block_root)

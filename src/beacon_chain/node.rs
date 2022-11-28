@@ -9,7 +9,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
-    eth_units::GweiNewtype, execution_chain::BlockHash, json_codecs::from_u32_string,
+    eth_units::GweiNewtype, execution_chain::BlockHash, json_codecs::from_i32_string,
     performance::TimedExt,
 };
 
@@ -23,7 +23,7 @@ enum BlockId {
     #[allow(dead_code)]
     Genesis,
     Head,
-    Slot(u32),
+    Slot(Slot),
 }
 
 impl Display for BlockId {
@@ -63,7 +63,7 @@ pub struct BeaconBlockBody {
 pub struct BeaconBlock {
     pub body: BeaconBlockBody,
     pub parent_root: String,
-    #[serde(deserialize_with = "from_u32_string")]
+    #[serde(deserialize_with = "from_i32_string")]
     pub slot: Slot,
     pub state_root: String,
 }
@@ -122,7 +122,7 @@ struct StateRootFirstEnvelope {
     data: StateRootSecondEnvelope,
 }
 
-fn make_state_root_url(slot: &u32) -> String {
+fn make_state_root_url(slot: &Slot) -> String {
     format!(
         "{}/eth/v1/beacon/states/{}/root",
         *BEACON_URL,
@@ -149,7 +149,7 @@ fn make_validator_balances_by_state_url(state_root: &str) -> String {
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct BeaconHeader {
-    #[serde(deserialize_with = "from_u32_string")]
+    #[serde(deserialize_with = "from_i32_string")]
     pub slot: Slot,
     pub parent_root: BlockRoot,
     pub state_root: StateRoot,
@@ -233,8 +233,8 @@ fn make_finality_checkpoint_url() -> String {
 #[derive(Deserialize)]
 pub struct FinalityCheckpoint {
     #[allow(dead_code)]
-    #[serde(deserialize_with = "from_u32_string")]
-    epoch: u32,
+    #[serde(deserialize_with = "from_i32_string")]
+    epoch: i32,
     #[allow(dead_code)]
     root: String,
 }
@@ -314,7 +314,7 @@ impl BeaconNode {
         Ok(block)
     }
 
-    pub async fn get_state_root_by_slot(&self, slot: &u32) -> Result<Option<String>> {
+    pub async fn get_state_root_by_slot(&self, slot: &Slot) -> Result<Option<String>> {
         let url = make_state_root_url(slot);
 
         let res = self.client.get(&url).send().await?;
@@ -386,7 +386,7 @@ impl BeaconNode {
 
     pub async fn get_header_by_slot(
         &self,
-        slot: &u32,
+        slot: &Slot,
     ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
         let slot_timestamp = beacon_time::get_date_time_from_slot(slot);
         if slot_timestamp > Utc::now() {
@@ -635,7 +635,7 @@ pub mod tests {
         serde_json::from_reader::<BufReader<File>, ValidatorsEnvelope>(reader).unwrap();
     }
 
-    const SLOT_1229: u32 = 1229;
+    const SLOT_1229: Slot = 1229;
     const BLOCK_ROOT_1229: &str =
         "0x35376f52006e12b7e9247b457277fb34f6bd32d83a651e24c2669467607e0778";
     const STATE_ROOT_1229: &str =

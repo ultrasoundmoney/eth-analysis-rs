@@ -98,7 +98,7 @@ pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_o
                 WHERE slot >= $1
             )
         ",
-        *greater_than_or_equal as i32
+        *greater_than_or_equal
     )
     .execute(executor)
     .await
@@ -115,7 +115,7 @@ pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
             )
         ",
     )
-    .bind(*slot as i32)
+    .bind(*slot )
     .execute(executor)
     .await
     .unwrap();
@@ -137,7 +137,7 @@ pub struct BeaconBalancesSum {
 impl From<BeaconBalancesSumRow> for BeaconBalancesSum {
     fn from(row: BeaconBalancesSumRow) -> Self {
             Self{
-                slot: row.slot as u32,
+                slot: row.slot,
                 balances_sum: row.gwei.try_into().unwrap()
             }
     }
@@ -178,7 +178,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_balances", &17999, "")
+        store_state(&mut transaction, "0xtest_balances", &17999)
             .await
             .unwrap();
 
@@ -207,7 +207,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_balances", &17999, "")
+        store_state(&mut transaction, "0xtest_balances", &17999)
             .await
             .unwrap();
 

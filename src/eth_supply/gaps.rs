@@ -39,7 +39,9 @@ pub async fn sync_gaps() -> Result<()> {
 
     let mut progress = Progress::new(
         "sync-eth-supply-gas",
-        (last_slot - FIRST_STORED_ETH_SUPPLY_SLOT).into(),
+        (last_slot - FIRST_STORED_ETH_SUPPLY_SLOT)
+            .try_into()
+            .unwrap(),
     );
 
     for slot in FIRST_STORED_ETH_SUPPLY_SLOT..=last_slot {

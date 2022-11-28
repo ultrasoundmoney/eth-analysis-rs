@@ -8,7 +8,7 @@ use crate::execution_chain::node::BlockNumber;
 #[serde(rename_all = "camelCase")]
 pub struct Head {
     pub hash: String,
-    #[serde(deserialize_with = "from_u32_hex_str")]
+    #[serde(deserialize_with = "from_i32_hex_str")]
     pub number: BlockNumber,
     pub parent_hash: String,
     #[serde(deserialize_with = "from_unix_timestamp_hex_str")]

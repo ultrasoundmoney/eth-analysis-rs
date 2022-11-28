@@ -44,7 +44,10 @@ async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) 
     .get("exists")
 }
 
-async fn get_is_block_number_known<'a>(executor: impl PgExecutor<'a>, block_number: &u32) -> bool {
+async fn get_is_block_number_known<'a>(
+    executor: impl PgExecutor<'a>,
+    block_number: &BlockNumber,
+) -> bool {
     sqlx::query(
         r#"
             SELECT EXISTS (
@@ -54,7 +57,7 @@ async fn get_is_block_number_known<'a>(executor: impl PgExecutor<'a>, block_numb
             )
         "#,
     )
-    .bind(*block_number as i32)
+    .bind(*block_number)
     .fetch_one(executor)
     .await
     .unwrap()
@@ -87,7 +90,7 @@ async fn store_delta<'a>(executor: impl PgExecutor<'a>, supply_delta: &SupplyDel
         ",
     )
     .bind(supply_delta.block_hash.clone())
-    .bind(supply_delta.block_number as i32)
+    .bind(supply_delta.block_number)
     .bind(supply_delta.fee_burn.to_string())
     .bind(supply_delta.fixed_reward.to_string())
     .bind(supply_delta.parent_hash.to_string())
@@ -114,7 +117,7 @@ async fn store_execution_supply(
        ",
     )
     .bind(supply_delta.block_hash.clone())
-    .bind(supply_delta.block_number as i32)
+    .bind(supply_delta.block_number)
     .bind(balances.to_string())
     .execute(executor)
     .await
@@ -178,7 +181,7 @@ pub async fn add_delta(connection: &mut PgConnection, supply_delta: &SupplyDelta
     transaction.commit().await.unwrap();
 }
 
-async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_number: &u32) {
+async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_number: &BlockNumber) {
     let mut transaction = executor.begin().await.unwrap();
 
     sqlx::query(
@@ -187,7 +190,7 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_numb
             WHERE block_number >= $1
         "#,
     )
-    .bind(*gte_block_number as i32)
+    .bind(*gte_block_number)
     .execute(&mut *transaction)
     .await
     .unwrap();
@@ -198,7 +201,7 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_numb
             WHERE block_number >= $1
         "#,
     )
-    .bind(*gte_block_number as i32)
+    .bind(*gte_block_number)
     .execute(&mut *transaction)
     .await
     .unwrap();
@@ -206,19 +209,21 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_numb
     transaction.commit().await.unwrap();
 }
 
-pub async fn get_last_synced_supply_delta_number(executor: &mut PgConnection) -> Option<u32> {
-    sqlx::query(
+pub async fn get_last_synced_supply_delta_number(
+    executor: &mut PgConnection,
+) -> Option<BlockNumber> {
+    sqlx::query!(
         "
-            SELECT MAX(block_number) FROM execution_supply_deltas
+            SELECT
+                MAX(block_number)
+            FROM
+                execution_supply_deltas
         ",
     )
-    .map(|row: PgRow| {
-        let max = row.get::<Option<i32>, _>("max");
-        max.map(|max| max as u32)
-    })
     .fetch_one(executor)
     .await
     .unwrap()
+    .max
 }
 
 enum NextStep {

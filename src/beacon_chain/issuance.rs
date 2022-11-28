@@ -98,7 +98,7 @@ pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_e
                 WHERE slot >= $1
             )
         ",
-        *greater_than_or_equal as i32
+        *greater_than_or_equal 
     )
     .execute(connection)
     .await
@@ -115,7 +115,7 @@ pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
             )
         ",
     )
-    .bind(*slot as i32)
+    .bind(*slot )
     .execute(connection)
     .await
     .unwrap();
@@ -185,7 +185,7 @@ mod tests {
 
         let test_id = "timestamp_is_start_of_day";
 
-        store_state(&mut transaction, test_id, &3599, &test_id)
+        store_state(&mut transaction, test_id, &3599)
             .await
             .unwrap();
 
@@ -215,11 +215,11 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_1", &3599, "")
+        store_state(&mut transaction, "0xtest_issuance_1", &3599)
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_2", &10799, "")
+        store_state(&mut transaction, "0xtest_issuance_2", &10799)
             .await
             .unwrap();
 
@@ -249,7 +249,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance", &3599, "")
+        store_state(&mut transaction, "0xtest_issuance", &3599)
             .await
             .unwrap();
 
@@ -284,11 +284,11 @@ mod tests {
         let now_min_seven_days_slot = beacon_time::get_slot_from_date_time(&(Utc::now() - Duration::days(7)));
         let now_slot = beacon_time::get_slot_from_date_time(&Utc::now());
 
-        store_state(&mut transaction, "0xtest_issuance_1", &now_min_seven_days_slot, "")
+        store_state(&mut transaction, "0xtest_issuance_1", &now_min_seven_days_slot)
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_2", &now_slot, "")
+        store_state(&mut transaction, "0xtest_issuance_2", &now_slot)
             .await
             .unwrap();
 
@@ -321,11 +321,11 @@ mod tests {
         let now_min_seven_days_slot = beacon_time::get_slot_from_date_time(&(Utc::now() - Duration::days(7)));
         let now_slot = beacon_time::get_slot_from_date_time(&Utc::now());
 
-        store_state(&mut transaction, "0xtest_issuance_1", &now_min_seven_days_slot, "")
+        store_state(&mut transaction, "0xtest_issuance_1", &now_min_seven_days_slot)
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_2", &now_slot, "")
+        store_state(&mut transaction, "0xtest_issuance_2", &now_slot)
             .await
             .unwrap();
 

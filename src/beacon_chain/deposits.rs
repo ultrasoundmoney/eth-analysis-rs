@@ -93,7 +93,6 @@ mod tests {
             &mut transaction,
             &test_header.state_root(),
             &test_header.slot(),
-            "",
         )
         .await
         .unwrap();
