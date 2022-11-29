@@ -81,7 +81,7 @@ impl<'a> FromStr for CacheKey {
     }
 }
 
-pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey) {
+pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey) -> Result<()> {
     debug!(?key, "publishing cache update");
 
     sqlx::query!(
@@ -91,8 +91,9 @@ pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheK
         key.to_db_key()
     )
     .execute(executor)
-    .await
-    .unwrap();
+    .await?;
+
+    Ok(())
 }
 
 pub async fn get_serialized_caching_value(

@@ -226,7 +226,7 @@ pub async fn update_base_fee_stats(
     )
     .await?;
 
-    caching::publish_cache_update(executor, CacheKey::BaseFeePerGasStats).await;
+    caching::publish_cache_update(executor, CacheKey::BaseFeePerGasStats).await?;
 
     Ok(())
 }

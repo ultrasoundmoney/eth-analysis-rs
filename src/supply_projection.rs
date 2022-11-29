@@ -149,7 +149,7 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
 
     debug!("stored fresh projection inputs");
 
-    caching::publish_cache_update(&pool, CacheKey::SupplyProjectionInputs).await;
+    caching::publish_cache_update(&pool, CacheKey::SupplyProjectionInputs).await?;
 
     debug!(
         "published {} cache update",

@@ -137,7 +137,7 @@ pub async fn update_effective_balance_sum() -> Result<()> {
     )
     .await?;
 
-    caching::publish_cache_update(&mut connection, CacheKey::EffectiveBalanceSum).await;
+    caching::publish_cache_update(&mut connection, CacheKey::EffectiveBalanceSum).await?;
 
     Ok(())
 }

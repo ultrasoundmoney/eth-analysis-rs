@@ -86,7 +86,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
     )
     .await?;
 
-    caching::publish_cache_update(&mut connection, CacheKey::IssuanceBreakdown).await;
+    caching::publish_cache_update(&mut connection, CacheKey::IssuanceBreakdown).await?;
 
     info!("done updating issuance breakdown");
 

@@ -167,7 +167,7 @@ pub async fn update_validator_rewards() -> Result<()> {
     )
     .await?;
 
-    caching::publish_cache_update(&pool, CacheKey::ValidatorRewards).await;
+    caching::publish_cache_update(&pool, CacheKey::ValidatorRewards).await?;
 
     info!("done updating validator rewards");
 
