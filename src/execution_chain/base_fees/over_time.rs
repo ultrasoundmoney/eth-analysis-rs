@@ -11,7 +11,6 @@ use crate::{
     caching::{self, CacheKey},
     eth_units::WeiF64,
     execution_chain::BlockNumber,
-    key_value_store,
     time_frames::TimeFrame,
 };
 
@@ -237,12 +236,7 @@ pub async fn update_base_fee_over_time(
         since_merge: None,
     };
 
-    key_value_store::set_value(
-        executor,
-        CacheKey::BaseFeeOverTime.to_db_key(),
-        &serde_json::to_value(base_fee_over_time).unwrap(),
-    )
-    .await?;
+    caching::set_value(executor, &CacheKey::BaseFeeOverTime, base_fee_over_time).await?;
 
     caching::publish_cache_update(executor, CacheKey::BaseFeeOverTime).await?;
 
