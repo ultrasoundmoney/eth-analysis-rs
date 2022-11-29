@@ -18,6 +18,7 @@ use crate::{
 #[derive(Serialize)]
 struct SupplyDashboard {
     eth_supply_parts: SupplyParts,
+    fees_burned: Option<()>,
     slot: Slot,
     supply_over_time: SupplyOverTime,
     timestamp: DateTime<Utc>,
@@ -58,10 +59,11 @@ pub async fn update_cache(db_pool: &PgPool, slot: &Slot) -> Result<()> {
             update_individual_caches(db_pool, &supply_parts, &supply_over_time).await?;
 
             let supply_dashboard = SupplyDashboard {
+                eth_supply_parts: supply_parts,
+                fees_burned: None,
+                slot: *slot,
                 supply_over_time,
                 timestamp: beacon_time::get_date_time_from_slot(slot),
-                eth_supply_parts: supply_parts,
-                slot: *slot,
             };
 
             caching::set_value(db_pool, &CacheKey::SupplyDashboard, supply_dashboard).await?;
