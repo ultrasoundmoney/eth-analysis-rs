@@ -38,6 +38,26 @@
     },
     "query": "\n                SELECT\n                    number\n                FROM\n                    blocks_next\n                ORDER BY number DESC\n                LIMIT 1\n            "
   },
+  "046945e120820491c162a629c80a9cd3dc33508d97653b2ccb6d3b46328fd4df": {
+    "describe": {
+      "columns": [
+        {
+          "name": "balances_slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                balances_slot\n            FROM\n                eth_supply\n            WHERE\n                balances_slot = $1\n        "
+  },
   "0a008d415e6395b49f8168f50baeb5ccb61602fb739683a6ec0fbf98dbc3a490": {
     "describe": {
       "columns": [
@@ -113,6 +133,18 @@
       }
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot = $1\n        "
+  },
+  "1e90cd678867494569610cd2020e4f46e5c47427b53f6868f62c4a72d0deeb71": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM\n                eth_supply\n            WHERE\n                deposits_slot >= $1\n                OR balances_slot >= $1\n        "
   },
   "262e7c58ea23ae1e7b2694ff084a5594b35d80df367844abb6fc0ad7b56ac0a9": {
     "describe": {
@@ -348,6 +380,18 @@
       }
     },
     "query": "\n            SELECT\n                state_root\n            FROM\n                beacon_states\n            WHERE\n                slot = $1\n        "
+  },
+  "50a8d86ede499906daa6f8900b1c617e40adb8f8db31607d59dd80f38c7879f2": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            DELETE FROM\n                eth_supply\n            WHERE\n                deposits_slot = $1\n                OR balances_slot = $1\n        "
   },
   "5152e0dba03bc8d7baa8e8b2c2f7f3bca0fcae139dccba9c87e238ce33cb75b4": {
     "describe": {
@@ -870,6 +914,22 @@
       }
     },
     "query": "\n            SELECT\n                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                gwei\n            FROM\n                beacon_issuance\n            ORDER BY\n                DATE_TRUNC('day', timestamp), timestamp ASC\n        "
+  },
+  "f19d62204ffdb70367e90b6f5ca7fe64efe01776f90d3c8a86e8594b765c142b": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Int4",
+          "Int4",
+          "Int4",
+          "Numeric"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO eth_supply (\n                timestamp,\n                block_number,\n                deposits_slot,\n                balances_slot,\n                supply\n            )\n            VALUES ($1, $2, $3, $4, $5::NUMERIC)\n        "
   },
   "febfe61a125d3cb2bc555027c602842386096975e8387d3de410ca0847d2e56b": {
     "describe": {
