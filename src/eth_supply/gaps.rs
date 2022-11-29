@@ -10,16 +10,16 @@ use sqlx::{Connection, PgConnection};
 use tracing::warn;
 use tracing::{debug, info};
 
-use crate::eth_supply::get_supply_parts;
+use crate::eth_supply;
 use crate::{
     beacon_chain::{self, Slot},
-    db, eth_supply, log,
+    db, log,
 };
 
 // The first slot we have stored.
 const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = 4697813;
 
-pub async fn sync_gaps() -> Result<()> {
+pub async fn fill_gaps() -> Result<()> {
     log::init_with_env();
 
     info!("syncing gaps in eth supply");
@@ -50,20 +50,20 @@ pub async fn sync_gaps() -> Result<()> {
         if !stored_eth_supply {
             info!(slot, "missing eth_supply, filling gap");
 
-            let eth_supply_parts = get_supply_parts(&mut db_connection, &slot).await?;
+            let supply_parts = eth_supply::get_supply_parts(&mut db_connection, &slot).await?;
 
-            match eth_supply_parts {
+            match supply_parts {
                 None => {
                     warn!(slot, "eth supply parts unavailable for slot");
                 }
-                Some(eth_supply_parts) => {
+                Some(supply_parts) => {
                     eth_supply::store(
                         &mut db_connection,
                         &slot,
-                        &eth_supply_parts.execution_balances_sum.block_number,
-                        &eth_supply_parts.execution_balances_sum.balances_sum,
-                        &eth_supply_parts.beacon_deposits_sum.deposits_sum,
-                        &eth_supply_parts.beacon_balances_sum.balances_sum,
+                        &supply_parts.block_number(),
+                        &supply_parts.execution_balances_sum_next,
+                        &supply_parts.beacon_balances_sum_next,
+                        &supply_parts.beacon_deposits_sum_next,
                     )
                     .await?;
                 }

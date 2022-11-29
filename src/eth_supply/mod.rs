@@ -1,41 +1,34 @@
 mod gaps;
 mod over_time;
+mod parts;
+
+pub use gaps::fill_gaps as fill_eth_supply_gaps;
+
+pub use over_time::get_supply_over_time;
+pub use over_time::update_cache as update_supply_over_time_cache;
+pub use over_time::SupplyOverTime;
+
+pub use parts::get_supply_parts;
+pub use parts::update_cache as update_supply_parts_cache;
+pub use parts::SupplyParts;
 
 use std::cmp::Ordering;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use serde::Serialize;
 use sqlx::postgres::PgQueryResult;
-use sqlx::{Acquire, PgConnection, PgExecutor, PgPool};
+use sqlx::{Acquire, PgConnection, PgExecutor};
 use tracing::{debug, error, warn};
 
-use crate::beacon_chain::{
-    self, beacon_time, BeaconBalancesSum, BeaconDepositsSum, Slot, FIRST_POST_MERGE_SLOT,
-};
-use crate::caching::{self, CacheKey};
+use crate::beacon_chain::{beacon_time, Slot, FIRST_POST_MERGE_SLOT};
 use crate::eth_units::{EthF64, GweiNewtype, Wei};
-use crate::execution_chain::ExecutionBalancesSum;
 use crate::execution_chain::{self, BlockNumber};
-use crate::key_value_store;
-use crate::performance::TimedExt;
-
-pub use crate::eth_supply::over_time::update_supply_over_time;
-pub use gaps::sync_gaps;
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EthSupplyParts {
-    beacon_balances_sum: BeaconBalancesSum,
-    beacon_deposits_sum: BeaconDepositsSum,
-    execution_balances_sum: ExecutionBalancesSum,
-}
 
 pub async fn rollback_supply_from_slot(
     executor: &mut PgConnection,
     greater_than_or_equal: &Slot,
 ) -> sqlx::Result<PgQueryResult> {
-    sqlx::query(
+    sqlx::query!(
         "
             DELETE FROM
                 eth_supply
@@ -43,8 +36,8 @@ pub async fn rollback_supply_from_slot(
                 deposits_slot >= $1
                 OR balances_slot >= $1
         ",
+        *greater_than_or_equal
     )
-    .bind(*greater_than_or_equal)
     .execute(executor)
     .await
 }
@@ -53,7 +46,7 @@ pub async fn rollback_supply_slot(
     executor: &mut PgConnection,
     greater_than_or_equal: &Slot,
 ) -> sqlx::Result<PgQueryResult> {
-    sqlx::query(
+    sqlx::query!(
         "
             DELETE FROM
                 eth_supply
@@ -61,8 +54,8 @@ pub async fn rollback_supply_slot(
                 deposits_slot = $1
                 OR balances_slot = $1
         ",
+        *greater_than_or_equal
     )
-    .bind(*greater_than_or_equal)
     .execute(executor)
     .await
 }
@@ -75,7 +68,6 @@ pub async fn store(
     beacon_balances_sum: &GweiNewtype,
     beacon_deposits_sum: &GweiNewtype,
 ) -> sqlx::Result<PgQueryResult> {
-    // What we base the timestamp on is not-well defined.
     let timestamp = beacon_time::get_date_time_from_slot(&slot);
 
     debug!(%timestamp, slot, block_number, execution_balances_sum, %beacon_deposits_sum, %beacon_balances_sum, "storing eth supply");
@@ -83,37 +75,25 @@ pub async fn store(
     let supply =
         execution_balances_sum + beacon_balances_sum.into_wei() - beacon_deposits_sum.into_wei();
 
-    sqlx::query(
+    sqlx::query!(
         "
-            INSERT INTO
-                eth_supply (timestamp, block_number, deposits_slot, balances_slot, supply)
-            VALUES
-                ($1, $2, $3, $4, $5::NUMERIC)
+            INSERT INTO eth_supply (
+                timestamp,
+                block_number,
+                deposits_slot,
+                balances_slot,
+                supply
+            )
+            VALUES ($1, $2, $3, $4, $5::NUMERIC)
         ",
+        timestamp,
+        *block_number,
+        *slot,
+        *slot,
+        supply.to_string() as String
     )
-    .bind(timestamp)
-    .bind(*block_number)
-    .bind(*slot)
-    .bind(*slot)
-    .bind(supply.to_string())
     .execute(executor)
     .await
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-struct SupplyAtTime {
-    slot: Option<Slot>,
-    supply: EthF64,
-    timestamp: DateTime<Utc>,
-}
-
-#[derive(Serialize)]
-struct SupplySinceMerge {
-    balances_slot: Slot,
-    block_number: BlockNumber,
-    deposits_slot: Slot,
-    supply_by_hour: Vec<SupplyAtTime>,
-    timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -125,131 +105,34 @@ pub struct EthSupply {
     timestamp: DateTime<Utc>,
 }
 
-pub async fn update_supply_parts(
-    executor: &mut PgConnection,
-    eth_supply_parts: &EthSupplyParts,
-) -> Result<()> {
-    debug!("updating supply parts");
-
-    key_value_store::set_value_str(
-        &mut *executor,
-        &CacheKey::EthSupplyParts.to_db_key(),
-        // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
-        // as string however.
-        &serde_json::to_string(&eth_supply_parts).unwrap(),
-    )
-    .await;
-
-    caching::publish_cache_update(executor, CacheKey::EthSupplyParts).await;
-
-    Ok(())
-}
-
-pub async fn get_supply_parts(
-    executor: &mut PgConnection,
-    slot: &Slot,
-) -> Result<Option<EthSupplyParts>> {
-    let state_root = beacon_chain::get_state_root_by_slot(executor.acquire().await?, slot)
-        .await?
-        .expect("expect state_root to exist when getting supply parts for slot");
-
-    // Most slots have a block, we try to retrieve a block, if we fail, we use the most recent one
-    // instead.
-    let block = match beacon_chain::get_block_by_slot(executor.acquire().await?, slot).await? {
-        None => beacon_chain::get_block_before_slot(executor.acquire().await?, slot).await?,
-        Some(block) => block,
-    };
-
-    let block_hash = block.block_hash.expect("expect block hash to be available when updating eth supply for newly available execution balance slots");
-
-    let beacon_balances_sum =
-        beacon_chain::get_balances_by_state_root(executor.acquire().await?, &state_root).await?;
-
-    match beacon_balances_sum {
-        None => Ok(None),
-        Some(beacon_balances_sum) => {
-            let execution_balances = execution_chain::get_execution_balances_by_hash(
-                executor.acquire().await?,
-                &block_hash,
-            )
-            .await?;
-            let beacon_deposits_sum = beacon_chain::get_deposits_sum_by_state_root(
-                executor.acquire().await?,
-                &state_root,
-            )
-            .await?;
-
-            let eth_supply_parts = EthSupplyParts {
-                execution_balances_sum: ExecutionBalancesSum {
-                    block_number: execution_balances.block_number,
-                    balances_sum: execution_balances.balances_sum,
-                },
-                beacon_balances_sum: BeaconBalancesSum {
-                    slot: *slot,
-                    balances_sum: beacon_balances_sum,
-                },
-                beacon_deposits_sum: BeaconDepositsSum {
-                    deposits_sum: beacon_deposits_sum,
-                    slot: *slot,
-                },
-            };
-
-            Ok(Some(eth_supply_parts))
-        }
-    }
-}
-
 pub async fn get_supply_exists_by_slot(
     executor: impl PgExecutor<'_>,
     slot: &Slot,
 ) -> sqlx::Result<bool> {
-    sqlx::query(
+    sqlx::query!(
         "
             SELECT
-                1
+                balances_slot
             FROM
                 eth_supply
             WHERE
                 balances_slot = $1
         ",
+        *slot
     )
-    .bind(*slot)
     .fetch_optional(executor)
     .await
     .map(|row| row.is_some())
 }
 
-pub async fn update_caches(db_pool: &PgPool, slot: &Slot) -> Result<()> {
-    let eth_supply_parts = get_supply_parts(&mut *db_pool.acquire().await?, slot).await?;
-
-    match eth_supply_parts {
-        None => {
-            debug!(slot, "eth supply parts unavailable for slot, skipping eth supply parts and supply over time update");
-        }
-        Some(eth_supply_parts) => {
-            update_supply_parts(&mut *db_pool.acquire().await?, &eth_supply_parts).await?;
-
-            update_supply_over_time(
-                db_pool,
-                eth_supply_parts.beacon_balances_sum.slot,
-                eth_supply_parts.execution_balances_sum.block_number,
-            )
-            .timed("update-supply-over-time")
-            .await?;
-        }
-    };
-
-    Ok(())
-}
-
 async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> sqlx::Result<Option<Slot>> {
     sqlx::query!(
-        r#"
+        "
             SELECT
                 MAX(balances_slot)
             FROM
                 eth_supply
-        "#,
+        ",
     )
     .fetch_one(executor)
     .await
@@ -261,16 +144,16 @@ pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> 
 
     match eth_supply_parts {
         None => {
-            debug!(slot, "no balances available for slot, skipping");
+            debug!(slot, "supply parts unavailable skipping");
         }
-        Some(eth_supply_parts) => {
+        Some(supply_parts) => {
             store(
                 executor.acquire().await?,
                 &slot,
-                &eth_supply_parts.execution_balances_sum.block_number,
-                &eth_supply_parts.execution_balances_sum.balances_sum,
-                &eth_supply_parts.beacon_balances_sum.balances_sum,
-                &eth_supply_parts.beacon_deposits_sum.deposits_sum,
+                &supply_parts.block_number(),
+                &supply_parts.execution_balances_sum_next,
+                &supply_parts.beacon_balances_sum_next,
+                &supply_parts.beacon_deposits_sum_next,
             )
             .await?;
         }
@@ -279,8 +162,7 @@ pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> 
     Ok(())
 }
 
-/// Stores an eth supply for a given state_root.
-/// Currently only supports state roots with blocks.
+/// Stores an eth supply for a given slot.
 pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
     let last_stored_execution_balances_slot =
         execution_chain::get_last_stored_balances_slot(executor.acquire().await?).await?;
@@ -344,10 +226,13 @@ mod tests {
     use sqlx::Acquire;
 
     use crate::{
-        beacon_chain::{BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder},
+        beacon_chain::{
+            self, BeaconBalancesSum, BeaconBlockBuilder, BeaconDepositsSum,
+            BeaconHeaderSignedEnvelopeBuilder,
+        },
         db,
         eth_units::GweiNewtype,
-        execution_chain::{add_delta, ExecutionNodeBlock, SupplyDelta},
+        execution_chain::{add_delta, ExecutionBalancesSum, ExecutionNodeBlock, SupplyDelta},
     };
 
     use super::*;
@@ -439,12 +324,15 @@ mod tests {
         .await
         .unwrap();
 
-        let eth_supply_parts_test = EthSupplyParts {
+        let eth_supply_parts_test = SupplyParts {
             beacon_balances_sum: beacon_balances_sum.clone(),
+            beacon_balances_sum_next: beacon_balances_sum.balances_sum,
+            beacon_deposits_sum_next: beacon_deposits_sum,
             beacon_deposits_sum: BeaconDepositsSum {
                 deposits_sum: beacon_deposits_sum,
                 slot: test_header.slot(),
             },
+            execution_balances_sum_next: execution_balances_sum.balances_sum,
             execution_balances_sum: ExecutionBalancesSum {
                 block_number: execution_balances_sum.block_number,
                 balances_sum: execution_balances_sum.balances_sum,
@@ -500,10 +388,13 @@ mod tests {
             deposits_sum: GweiNewtype(5),
         };
 
-        let eth_supply_parts = EthSupplyParts {
+        let eth_supply_parts = SupplyParts {
             beacon_balances_sum,
+            beacon_balances_sum_next: beacon_balances_sum.balances_sum,
             beacon_deposits_sum,
+            beacon_deposits_sum_next: beacon_deposits_sum.deposits_sum,
             execution_balances_sum,
+            execution_balances_sum_next: execution_balances_sum.balances_sum,
         };
 
         store(
@@ -511,8 +402,8 @@ mod tests {
             &slot,
             &0,
             &eth_supply_parts.execution_balances_sum.balances_sum,
-            &eth_supply_parts.beacon_deposits_sum.deposits_sum,
-            &eth_supply_parts.beacon_balances_sum.balances_sum,
+            &eth_supply_parts.beacon_balances_sum_next,
+            &eth_supply_parts.beacon_deposits_sum_next,
         )
         .await
         .unwrap();
@@ -554,10 +445,13 @@ mod tests {
             deposits_sum: GweiNewtype(5),
         };
 
-        let eth_supply_parts = EthSupplyParts {
+        let eth_supply_parts = SupplyParts {
             beacon_balances_sum,
+            beacon_balances_sum_next: beacon_balances_sum.balances_sum,
             beacon_deposits_sum,
+            beacon_deposits_sum_next: beacon_deposits_sum.deposits_sum,
             execution_balances_sum,
+            execution_balances_sum_next: execution_balances_sum.balances_sum,
         };
 
         store(
@@ -565,8 +459,8 @@ mod tests {
             &slot,
             &0,
             &eth_supply_parts.execution_balances_sum.balances_sum,
-            &eth_supply_parts.beacon_deposits_sum.deposits_sum,
-            &eth_supply_parts.beacon_balances_sum.balances_sum,
+            &eth_supply_parts.beacon_balances_sum_next,
+            &eth_supply_parts.beacon_deposits_sum_next,
         )
         .await
         .unwrap();

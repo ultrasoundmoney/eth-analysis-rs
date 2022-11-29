@@ -10,12 +10,13 @@ use tracing::{debug, info, warn};
 
 use crate::{
     beacon_chain::{balances, beacon_time, deposits, issuance},
-    db, eth_supply,
+    db,
     eth_units::GweiNewtype,
     json_codecs::from_i32_string,
     log,
     performance::TimedExt,
 };
+use crate::{eth_supply, supply_dashboard};
 
 use super::node::{BeaconBlock, BeaconNode, StateRoot, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot, BEACON_URL};
@@ -272,7 +273,7 @@ pub async fn sync_slot_by_state_root(
 }
 
 async fn update_deferrable_analysis(db_pool: &PgPool, slot: &Slot) -> Result<()> {
-    eth_supply::update_caches(db_pool, slot).await?;
+    supply_dashboard::update_cache(db_pool, slot).await?;
 
     Ok(())
 }

@@ -7,15 +7,17 @@ use sqlx::{PgExecutor, PgPool, Row};
 use tracing::debug;
 
 use crate::beacon_chain::beacon_time;
+use crate::caching::{self, CacheKey};
+use crate::eth_units::EthF64;
 use crate::time_frames::LimitedTimeFrame::*;
-use crate::{
-    beacon_chain::Slot,
-    caching::{self, CacheKey},
-    execution_chain::BlockNumber,
-    time_frames::TimeFrame,
-};
+use crate::{beacon_chain::Slot, execution_chain::BlockNumber, time_frames::TimeFrame};
 
-use super::SupplyAtTime;
+#[derive(Debug, Clone, PartialEq, Serialize)]
+struct SupplyAtTime {
+    slot: Option<Slot>,
+    supply: EthF64,
+    timestamp: DateTime<Utc>,
+}
 
 async fn get_supply_over_time_time_frame(
     executor: impl PgExecutor<'_>,
@@ -191,7 +193,7 @@ async fn get_supply_over_time_time_frame(
 }
 
 #[derive(Serialize)]
-struct SupplyOverTime {
+pub struct SupplyOverTime {
     block_number: BlockNumber,
     d1: Vec<SupplyAtTime>,
     d30: Vec<SupplyAtTime>,
@@ -204,11 +206,11 @@ struct SupplyOverTime {
     timestamp: DateTime<Utc>,
 }
 
-pub async fn update_supply_over_time(
+pub async fn get_supply_over_time(
     executor: &PgPool,
     slot: Slot,
     block_number: BlockNumber,
-) -> Result<()> {
+) -> Result<SupplyOverTime> {
     debug!("updating supply over time");
 
     let (d1, d30, d7, h1, m5, since_merge, since_burn) = try_join!(
@@ -234,9 +236,13 @@ pub async fn update_supply_over_time(
         timestamp: beacon_time::get_date_time_from_slot(&slot),
     };
 
-    caching::set_value(executor, &CacheKey::SupplyOverTime, supply_over_time).await?;
+    Ok(supply_over_time)
+}
 
-    caching::publish_cache_update(executor, CacheKey::SupplyOverTime).await;
+pub async fn update_cache(db_pool: &PgPool, supply_over_time: &SupplyOverTime) -> Result<()> {
+    caching::set_value(db_pool, &CacheKey::SupplyOverTime, supply_over_time).await?;
+
+    caching::publish_cache_update(db_pool, CacheKey::SupplyOverTime).await?;
 
     Ok(())
 }
