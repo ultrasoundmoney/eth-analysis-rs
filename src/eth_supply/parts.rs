@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::Serialize;
 use sqlx::{Acquire, PgConnection, PgPool};
+use tracing::debug;
 
 use crate::{
     beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum, Slot},
@@ -73,7 +74,13 @@ pub async fn get_supply_parts(
     // Most slots have a block, we try to retrieve a block, if we fail, we use the most recent one
     // instead.
     let block = match beacon_chain::get_block_by_slot(executor.acquire().await?, slot).await? {
-        None => beacon_chain::get_block_before_slot(executor.acquire().await?, slot).await?,
+        None => {
+            debug!(
+                slot,
+                state_root, "no block available for slot, using most recent block before this slot"
+            );
+            beacon_chain::get_block_before_slot(executor.acquire().await?, slot).await?
+        }
         Some(block) => block,
     };
 
@@ -92,7 +99,7 @@ pub async fn get_supply_parts(
             .await?;
             let beacon_deposits_sum = beacon_chain::get_deposits_sum_by_state_root(
                 executor.acquire().await?,
-                &state_root,
+                &block.state_root,
             )
             .await?;
 
