@@ -12,6 +12,7 @@ use crate::{
     beacon_chain::{beacon_time, Slot},
     caching::{self, CacheKey},
     eth_supply::{self, SupplyOverTime, SupplyParts},
+    key_value_store,
     performance::TimedExt,
 };
 
@@ -66,7 +67,14 @@ pub async fn update_cache(db_pool: &PgPool, slot: &Slot) -> Result<()> {
                 timestamp: beacon_time::get_date_time_from_slot(slot),
             };
 
-            caching::set_value(db_pool, &CacheKey::SupplyDashboard, supply_dashboard).await?;
+            key_value_store::set_value_str(
+                db_pool,
+                &CacheKey::SupplyDashboard.to_db_key(),
+                // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
+                // as string however.
+                &serde_json::to_string(&supply_dashboard).unwrap(),
+            )
+            .await;
 
             caching::publish_cache_update(db_pool, CacheKey::SupplyDashboard).await?;
         }
