@@ -92,6 +92,10 @@ pub async fn get_supply_parts(
     match beacon_balances_sum {
         None => Ok(None),
         Some(beacon_balances_sum) => {
+            debug!(
+                slot,
+                state_root, block_hash, "looking up execution balances by hash"
+            );
             let execution_balances = execution_chain::get_execution_balances_by_hash(
                 executor.acquire().await?,
                 &block_hash,
