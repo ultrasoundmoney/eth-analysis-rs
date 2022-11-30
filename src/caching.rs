@@ -147,7 +147,9 @@ mod tests {
 
         let mut connection = db::get_test_db().await;
 
-        publish_cache_update(&mut connection, CacheKey::EffectiveBalanceSum).await;
+        publish_cache_update(&mut connection, CacheKey::EffectiveBalanceSum)
+            .await
+            .unwrap();
 
         let notification = notification_future.await.unwrap();
 
