@@ -43,7 +43,7 @@ fn get_historic_stream(block_range: &BlockRange) -> impl Stream<Item = Execution
 
 #[derive(Debug, Deserialize)]
 struct EthPriceRow {
-    usd: f64,
+    ethusd: f64,
     timestamp: String,
 }
 
@@ -57,7 +57,7 @@ impl From<EthPriceRow> for EthPrice {
     fn from(row: EthPriceRow) -> Self {
         Self {
             timestamp: row.timestamp.parse::<DateTime<Utc>>().unwrap(),
-            usd: row.usd,
+            usd: row.ethusd,
         }
     }
 }
