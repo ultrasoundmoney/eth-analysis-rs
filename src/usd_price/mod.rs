@@ -1,21 +1,21 @@
 mod bybit;
+mod heal;
 
-use std::collections::HashSet;
+pub use heal::heal_eth_prices;
 
 use anyhow::Result;
 use chrono::{DateTime, Duration, DurationRound, TimeZone, Utc};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sqlx::{postgres::PgRow, Connection, FromRow, PgConnection, Postgres, Row};
+use thiserror::Error;
 use tokio::time::sleep;
 use tracing::{debug, info};
-
-pub use crate::eth_prices::bybit::get_eth_price;
 
 use crate::{
     caching::{self, CacheKey},
     db,
-    execution_chain::LONDON_HARD_FORK_TIMESTAMP,
+    execution_chain::{ExecutionNodeBlock, LONDON_HARD_FORK_TIMESTAMP},
     key_value_store, log,
 };
 
@@ -201,82 +201,6 @@ pub async fn record_eth_price() -> Result<()> {
     }
 }
 
-pub async fn heal_eth_prices() {
-    log::init_with_env();
-
-    info!("healing missing eth prices");
-    let max_distance_in_minutes: i64 = std::env::args()
-        .collect::<Vec<String>>()
-        .get(1)
-        .and_then(|str| str.parse::<i64>().ok())
-        .unwrap_or(10);
-
-    debug!("getting all eth prices");
-    let mut connection = PgConnection::connect(&db::get_db_url_with_name("heal-eth-prices"))
-        .await
-        .unwrap();
-    let eth_prices = sqlx::query_as::<Postgres, EthPriceTimestamp>(
-        "
-            SELECT
-                timestamp
-            FROM
-                eth_prices
-        ",
-    )
-    .fetch_all(&mut connection)
-    .await
-    .unwrap();
-
-    if eth_prices.len() == 0 {
-        panic!("no eth prices found, are you running against a DB with prices?")
-    }
-
-    debug!("building set of known minutes");
-    let mut known_minutes = HashSet::new();
-
-    for eth_price in eth_prices.iter() {
-        known_minutes.insert(eth_price.timestamp.timestamp());
-    }
-
-    debug!("walking through all minutes since London hardfork to look for missing minutes");
-
-    let duration_since_london =
-        Utc::now().duration_round(Duration::minutes(1)).unwrap() - *LONDON_HARD_FORK_TIMESTAMP;
-    let minutes_since_london = duration_since_london.num_minutes();
-
-    let london_minute_timestamp = LONDON_HARD_FORK_TIMESTAMP
-        .duration_round(Duration::minutes(1))
-        .unwrap()
-        .timestamp();
-
-    for minute_n in 0..minutes_since_london {
-        let timestamp = london_minute_timestamp + minute_n * 60;
-        if !known_minutes.contains(&timestamp) {
-            let timestamp_date_time = Utc.timestamp_opt(timestamp, 0).unwrap();
-            debug!(minute = timestamp_date_time.to_string(), "missing minute");
-            let usd = bybit::get_closest_price_by_minute(
-                timestamp_date_time,
-                Duration::minutes(max_distance_in_minutes),
-            )
-            .await;
-            match usd {
-                None => {
-                    debug!(
-                        timestamp = timestamp_date_time.to_string(),
-                        "no Bybit price available",
-                    );
-                }
-                Some(usd) => {
-                    debug!("found a price on Bybit, adding it to the DB");
-                    store_price(&mut connection, timestamp_date_time, usd).await;
-                }
-            }
-        }
-    }
-
-    info!("done healing eth prices");
-}
-
 const RESYNC_ETH_PRICES_KEY: &str = "resync-eth-prices";
 
 async fn get_last_synced_minute(executor: &mut PgConnection) -> Option<u32> {
@@ -397,11 +321,61 @@ pub async fn resync_all() {
     }
 }
 
+#[derive(Debug, Error, PartialEq)]
+pub enum GetEthPriceError {
+    #[error("closest price to given block was more than 5min away")]
+    PriceTooOld,
+}
+
+pub async fn get_eth_price_by_block(
+    executor: &mut PgConnection,
+    block: &ExecutionNodeBlock,
+) -> Result<f64, GetEthPriceError> {
+    let (timestamp, ethusd) = sqlx::query(
+        "
+            SELECT
+              timestamp,
+              ethusd
+            FROM eth_prices
+            ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))
+            LIMIT 1
+        ",
+    )
+    .bind(block.timestamp)
+    .map(|row: PgRow| {
+        let timestamp = row.get::<DateTime<Utc>, _>("timestamp");
+        let ethusd = row.get::<f64, _>("ethusd");
+        (timestamp, ethusd)
+    })
+    .fetch_one(executor)
+    .await
+    .unwrap();
+
+    if block.timestamp - timestamp <= Duration::minutes(20) {
+        Ok(ethusd)
+    } else {
+        Err(GetEthPriceError::PriceTooOld)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::SubsecRound;
 
     use super::*;
+
+    fn make_test_block() -> ExecutionNodeBlock {
+        ExecutionNodeBlock {
+            base_fee_per_gas: 0,
+            difficulty: 0,
+            gas_used: 0,
+            hash: "0xtest".to_string(),
+            number: 0,
+            parent_hash: "0xparent".to_string(),
+            timestamp: Utc::now(),
+            total_difficulty: 0,
+        }
+    }
 
     #[tokio::test]
     async fn store_price_test() {
@@ -519,5 +493,47 @@ mod tests {
 
         let minute = get_last_synced_minute(&mut transaction).await;
         assert_eq!(minute, Some(1559));
+    }
+
+    #[tokio::test]
+    async fn insert_get_eth_price_test() {
+        let mut db = db::get_test_db().await;
+        let mut tx = db.begin().await.unwrap();
+        let test_block = make_test_block();
+
+        store_price(&mut *tx, Utc::now(), 5.2).await;
+        let ethusd = get_eth_price_by_block(&mut *tx, &test_block).await.unwrap();
+
+        assert_eq!(ethusd, 5.2);
+    }
+
+    #[tokio::test]
+    async fn get_eth_price_too_old_test() {
+        let mut db = db::get_test_db().await;
+        let mut tx = db.begin().await.unwrap();
+        let test_block = make_test_block();
+
+        store_price(&mut *tx, Utc::now() - Duration::minutes(21), 5.2).await;
+        let ethusd = get_eth_price_by_block(&mut *tx, &test_block).await;
+        assert_eq!(ethusd, Err(GetEthPriceError::PriceTooOld));
+    }
+
+    #[tokio::test]
+    async fn get_eth_price_old_block_test() {
+        let mut db = db::get_test_db().await;
+        let mut tx = db.begin().await.unwrap();
+        let test_block = make_test_block();
+
+        store_price(&mut *tx, Utc::now() - Duration::minutes(6), 4.0).await;
+        let ethusd = get_eth_price_by_block(
+            &mut *tx,
+            &ExecutionNodeBlock {
+                timestamp: Utc::now() - Duration::minutes(10),
+                ..test_block
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(ethusd, 4.0);
     }
 }

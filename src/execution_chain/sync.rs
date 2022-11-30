@@ -17,16 +17,15 @@ use std::{
 };
 use tracing::{debug, event, info, warn, Level};
 
-use super::{
-    eth_prices,
-    node::{BlockNumber, Head},
-};
 use crate::{
     db,
     execution_chain::{self, base_fees, block_store::BlockStore, ExecutionNode},
     log,
     performance::TimedExt,
+    usd_price,
 };
+
+use super::{node::Head, BlockNumber};
 
 async fn rollback_numbers<'a>(
     block_store: &mut BlockStore<'a>,
@@ -51,7 +50,7 @@ async fn sync_by_hash(
         .expect("block not to disappear between deciding to add it and adding it");
 
     let mut connection = db_pool.acquire().await.unwrap();
-    let eth_price = eth_prices::get_eth_price_by_block(&mut *connection, &block)
+    let eth_price = usd_price::get_eth_price_by_block(&mut *connection, &block)
         .await
         .expect("eth price close to block to be available");
 

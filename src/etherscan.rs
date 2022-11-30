@@ -2,7 +2,7 @@ use chrono::{TimeZone, Utc};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{env, eth_prices::EthPrice, eth_units::WeiString};
+use crate::{env, eth_units::WeiString, usd_price::EthPrice};
 
 lazy_static! {
     static ref ETHERSCAN_API_KEY: String = env::get_env_var_unsafe("ETHERSCAN_API_KEY");
