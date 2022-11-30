@@ -28,40 +28,40 @@ async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) 
         return true;
     }
 
-    sqlx::query(
+    sqlx::query!(
         r#"
             SELECT EXISTS (
                 SELECT 1
                 FROM execution_supply_deltas
                 WHERE block_hash = $1
-            )
+            ) AS "exists!"
         "#,
+        block_hash
     )
-    .bind(block_hash)
     .fetch_one(executor)
     .await
     .unwrap()
-    .get("exists")
+    .exists
 }
 
 async fn get_is_block_number_known<'a>(
     executor: impl PgExecutor<'a>,
     block_number: &BlockNumber,
 ) -> bool {
-    sqlx::query(
+    sqlx::query!(
         r#"
             SELECT EXISTS (
                 SELECT 1
                 FROM execution_supply_deltas
                 WHERE block_number = $1
-            )
+            ) AS "exists!"
         "#,
+        *block_number
     )
-    .bind(*block_number)
     .fetch_one(executor)
     .await
     .unwrap()
-    .get("exists")
+    .exists
 }
 
 async fn store_delta<'a>(executor: impl PgExecutor<'a>, supply_delta: &SupplyDelta) {
@@ -123,6 +123,7 @@ async fn store_execution_supply(
     .await
 }
 
+/// Gets the balances for a given execution layer hash. Only call for known balances.
 async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> i128 {
     // Instead of the genesis parent_hash being absent, it is set to GENESIS_PARENT_HASH.
     // We'd like to have all supply deltas making only an exception for the genesis hash, but we

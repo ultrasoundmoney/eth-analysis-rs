@@ -39,7 +39,7 @@ pub struct EthPriceStats {
     h24_change: f64,
 }
 
-async fn get_most_recent_price(executor: &mut PgConnection) -> EthPrice {
+async fn get_most_recent_price(executor: &mut PgConnection) -> sqlx::Result<EthPrice> {
     sqlx::query_as::<Postgres, EthPrice>(
         "
             SELECT
@@ -52,11 +52,10 @@ async fn get_most_recent_price(executor: &mut PgConnection) -> EthPrice {
     )
     .fetch_one(executor)
     .await
-    .unwrap()
 }
 
 async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd: f64) {
-    sqlx::query(
+    sqlx::query!(
         "
             INSERT INTO
                 eth_prices (timestamp, ethusd)
@@ -64,9 +63,9 @@ async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd:
             ON CONFLICT (timestamp) DO UPDATE SET
                 ethusd = excluded.ethusd
         ",
+        timestamp,
+        usd
     )
-    .bind(timestamp)
-    .bind(usd)
     .execute(executor)
     .await
     .unwrap();
@@ -74,19 +73,19 @@ async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd:
 
 #[allow(dead_code)]
 async fn get_h24_average(executor: &mut PgConnection) -> f64 {
-    sqlx::query(
-        "
+    sqlx::query!(
+        r#"
             SELECT
-                AVG(ethusd) AS average
+                AVG(ethusd) AS "average!"
             FROM
                 eth_prices
             WHERE timestamp >= NOW() - '24 hours'::INTERVAL
-        ",
+        "#,
     )
-    .map(|row: PgRow| row.get::<f64, _>("average"))
     .fetch_one(executor)
     .await
     .unwrap()
+    .average
 }
 
 async fn get_price_h24_ago(executor: &mut PgConnection, age_limit: Duration) -> Option<EthPrice> {
@@ -193,7 +192,7 @@ pub async fn record_eth_price() -> Result<()> {
         .await
         .unwrap();
 
-    let mut last_price = get_most_recent_price(&mut connection).await;
+    let mut last_price = get_most_recent_price(&mut connection).await?;
 
     loop {
         update_eth_price_with_most_recent(&mut connection, &mut last_price).await?;
@@ -331,28 +330,23 @@ pub async fn get_eth_price_by_block(
     executor: &mut PgConnection,
     block: &ExecutionNodeBlock,
 ) -> Result<f64, GetEthPriceError> {
-    let (timestamp, ethusd) = sqlx::query(
-        "
+    let row = sqlx::query!(
+        r#"
             SELECT
               timestamp,
-              ethusd
+              ethusd AS "ethusd!"
             FROM eth_prices
             ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))
             LIMIT 1
-        ",
+        "#,
+        block.timestamp,
     )
-    .bind(block.timestamp)
-    .map(|row: PgRow| {
-        let timestamp = row.get::<DateTime<Utc>, _>("timestamp");
-        let ethusd = row.get::<f64, _>("ethusd");
-        (timestamp, ethusd)
-    })
     .fetch_one(executor)
     .await
     .unwrap();
 
-    if block.timestamp - timestamp <= Duration::minutes(20) {
-        Ok(ethusd)
+    if block.timestamp - row.timestamp <= Duration::minutes(20) {
+        Ok(row.ethusd)
     } else {
         Err(GetEthPriceError::PriceTooOld)
     }
@@ -387,7 +381,7 @@ mod tests {
         };
 
         store_price(&mut transaction, test_price.timestamp, test_price.usd).await;
-        let eth_price = get_most_recent_price(&mut transaction).await;
+        let eth_price = get_most_recent_price(&mut transaction).await.unwrap();
         assert_eq!(eth_price, test_price);
     }
 
@@ -406,7 +400,7 @@ mod tests {
 
         store_price(&mut transaction, test_price_1.timestamp, test_price_1.usd).await;
         store_price(&mut transaction, test_price_2.timestamp, test_price_2.usd).await;
-        let eth_price = get_most_recent_price(&mut transaction).await;
+        let eth_price = get_most_recent_price(&mut transaction).await.unwrap();
         assert_eq!(eth_price, test_price_2);
     }
 
@@ -427,7 +421,7 @@ mod tests {
             .await
             .unwrap();
 
-        let eth_price = get_most_recent_price(&mut transaction).await;
+        let eth_price = get_most_recent_price(&mut transaction).await.unwrap();
 
         assert_ne!(eth_price, test_price);
     }

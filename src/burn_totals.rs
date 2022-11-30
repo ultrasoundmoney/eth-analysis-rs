@@ -57,8 +57,8 @@ async fn get_burn_total_all<'a>(executor: impl PgExecutor<'a>) -> Wei {
 async fn get_burn_total_limited_time_frame<'a>(
     executor: impl PgExecutor<'a>,
     limited_time_frame: LimitedTimeFrame,
-) -> Wei {
-    sqlx::query!(
+) -> Result<Wei> {
+    let row = sqlx::query!(
         "
             SELECT
                 SUM(gas_used::numeric(78) * base_fee_per_gas::numeric(78))::TEXT AS wei
@@ -69,11 +69,12 @@ async fn get_burn_total_limited_time_frame<'a>(
         ",
         Into::<PgInterval>::into(limited_time_frame)
     )
-    .fetch_one(executor)
-    .await
-    .unwrap()
-    .wei
-    .map_or(0, |wei| wei.parse::<i128>().unwrap())
+    .fetch_optional(executor)
+    .await?;
+
+    let wei = row.map_or(0, |row| row.wei.parse::<i128>().unwrap());
+
+    Ok(wei)
 }
 
 pub async fn get_burn_totals(db_pool: &PgPool) -> BurnTotals {

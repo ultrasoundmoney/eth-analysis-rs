@@ -59,6 +59,9 @@ impl SupplyParts {
 
 /// Retrieves the three components that make up the eth supply for a given slot.
 /// Validator balances are unreliable, which means getting supply parts is unreliable.
+/// be called for slots where the execution balances are known.
+/// TODO: rewrite so the argument passed forces the caller to verify the execution balances are
+/// known.
 pub async fn get_supply_parts(
     executor: &mut PgConnection,
     slot: &Slot,

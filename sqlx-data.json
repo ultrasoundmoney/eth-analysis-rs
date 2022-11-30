@@ -181,6 +181,32 @@
     },
     "query": "\n                SELECT slot FROM beacon_states\n                ORDER BY slot ASC\n            "
   },
+  "321e5d1396c1c0f4826c368eda58e7969a7747412b0d1135dc28f2295ff0eded": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "ethusd!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n              timestamp,\n              ethusd AS \"ethusd!\"\n            FROM eth_prices\n            ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))\n            LIMIT 1\n        "
+  },
   "36b6169564ef841d5cfe8e64835534b1156ac30c63afa408684aa6af967711ee": {
     "describe": {
       "columns": [
@@ -286,6 +312,24 @@
       }
     },
     "query": "\n            SELECT\n                effective_balance_sum\n            FROM\n                beacon_states\n            WHERE\n                state_root = $1\n        "
+  },
+  "3865039902e07965678afa4d85af5b180147403b8ce5a9a9f397c581043c76fb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "average!",
+          "ordinal": 0,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                AVG(ethusd) AS \"average!\"\n            FROM\n                eth_prices\n            WHERE timestamp >= NOW() - '24 hours'::INTERVAL\n        "
   },
   "3934610efaf4c43a866fe5ace218a62e5f26d1a431991937d2529eb617bdc18a": {
     "describe": {
@@ -503,6 +547,26 @@
       }
     },
     "query": "\n                DELETE FROM blocks_next\n                WHERE number >= $1\n            "
+  },
+  "73d291d9db99ddd05727fadba267f267d5b1b4a06c4bb827f76c101b185b6e08": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM execution_supply_deltas\n                WHERE block_number = $1\n            ) AS \"exists!\"\n        "
   },
   "74c729ccee7552d42a69774267a32655d8ba8b72b7959dc1763623a86fd5079d": {
     "describe": {
@@ -767,6 +831,26 @@
     },
     "query": "\n            INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
   },
+  "b963875714b300b2b0cc7694f8e77ad6f77203de4ad1e6b394a7c64ac380ea5c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM execution_supply_deltas\n                WHERE block_hash = $1\n            ) AS \"exists!\"\n        "
+  },
   "c3e675178c9b93119e5298a613b1c84cd0847ad39755d3e530cac5a52586a747": {
     "describe": {
       "columns": [
@@ -930,6 +1014,19 @@
       }
     },
     "query": "\n            INSERT INTO eth_supply (\n                timestamp,\n                block_number,\n                deposits_slot,\n                balances_slot,\n                supply\n            )\n            VALUES ($1, $2, $3, $4, $5::NUMERIC)\n        "
+  },
+  "f5e56d04d5d91fd87a0a3e17fa8791f193773d0e663ca6282ae7dd70b00abc4e": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Float8"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO\n                eth_prices (timestamp, ethusd)\n            VALUES ($1, $2)\n            ON CONFLICT (timestamp) DO UPDATE SET\n                ethusd = excluded.ethusd\n        "
   },
   "febfe61a125d3cb2bc555027c602842386096975e8387d3de410ca0847d2e56b": {
     "describe": {
