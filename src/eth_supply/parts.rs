@@ -26,6 +26,32 @@ pub struct SupplyParts {
 }
 
 impl SupplyParts {
+    pub fn new(
+        slot: &Slot,
+        block_number: &BlockNumber,
+        execution_balances_sum: Wei,
+        beacon_balances_sum: GweiNewtype,
+        beacon_deposits_sum: GweiNewtype,
+    ) -> Self {
+        Self {
+            beacon_balances_sum: BeaconBalancesSum {
+                slot: *slot,
+                balances_sum: beacon_balances_sum,
+            },
+            beacon_balances_sum_next: beacon_balances_sum,
+            beacon_deposits_sum: BeaconDepositsSum {
+                deposits_sum: beacon_deposits_sum,
+                slot: *slot,
+            },
+            beacon_deposits_sum_next: beacon_deposits_sum,
+            execution_balances_sum: ExecutionBalancesSum {
+                block_number: *block_number,
+                balances_sum: execution_balances_sum,
+            },
+            execution_balances_sum_next: execution_balances_sum,
+        }
+    }
+
     pub fn block_number(&self) -> BlockNumber {
         self.execution_balances_sum.block_number
     }
@@ -67,25 +93,15 @@ pub async fn get_supply_parts(
             )
             .await?;
 
-            let eth_supply_parts = SupplyParts {
-                execution_balances_sum: ExecutionBalancesSum {
-                    block_number: execution_balances.block_number,
-                    balances_sum: execution_balances.balances_sum,
-                },
-                beacon_balances_sum: BeaconBalancesSum {
-                    slot: *slot,
-                    balances_sum: beacon_balances_sum,
-                },
-                beacon_deposits_sum: BeaconDepositsSum {
-                    deposits_sum: beacon_deposits_sum,
-                    slot: *slot,
-                },
-                execution_balances_sum_next: execution_balances.balances_sum,
-                beacon_balances_sum_next: beacon_balances_sum,
-                beacon_deposits_sum_next: beacon_deposits_sum,
-            };
+            let supply_parts = SupplyParts::new(
+                slot,
+                &execution_balances.block_number,
+                execution_balances.balances_sum,
+                beacon_balances_sum,
+                beacon_deposits_sum,
+            );
 
-            Ok(Some(eth_supply_parts))
+            Ok(Some(supply_parts))
         }
     }
 }

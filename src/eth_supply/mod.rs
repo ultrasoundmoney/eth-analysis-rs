@@ -226,13 +226,10 @@ mod tests {
     use sqlx::Acquire;
 
     use crate::{
-        beacon_chain::{
-            self, BeaconBalancesSum, BeaconBlockBuilder, BeaconDepositsSum,
-            BeaconHeaderSignedEnvelopeBuilder,
-        },
+        beacon_chain::{self, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder},
         db,
         eth_units::GweiNewtype,
-        execution_chain::{add_delta, ExecutionBalancesSum, ExecutionNodeBlock, SupplyDelta},
+        execution_chain::{add_delta, ExecutionNodeBlock, SupplyDelta},
     };
 
     use super::*;
@@ -313,10 +310,6 @@ mod tests {
         )
         .await
         .unwrap();
-        let beacon_balances_sum = BeaconBalancesSum {
-            balances_sum: GweiNewtype(20),
-            slot: 0,
-        };
         let beacon_deposits_sum = beacon_chain::get_deposits_sum_by_state_root(
             &mut transaction,
             &test_header.state_root(),
@@ -324,20 +317,13 @@ mod tests {
         .await
         .unwrap();
 
-        let eth_supply_parts_test = SupplyParts {
-            beacon_balances_sum: beacon_balances_sum.clone(),
-            beacon_balances_sum_next: beacon_balances_sum.balances_sum,
-            beacon_deposits_sum_next: beacon_deposits_sum,
-            beacon_deposits_sum: BeaconDepositsSum {
-                deposits_sum: beacon_deposits_sum,
-                slot: test_header.slot(),
-            },
-            execution_balances_sum_next: execution_balances_sum.balances_sum,
-            execution_balances_sum: ExecutionBalancesSum {
-                block_number: execution_balances_sum.block_number,
-                balances_sum: execution_balances_sum.balances_sum,
-            },
-        };
+        let eth_supply_parts_test = SupplyParts::new(
+            &0,
+            &execution_balances_sum.block_number,
+            execution_balances_sum.balances_sum,
+            GweiNewtype(20),
+            beacon_deposits_sum,
+        );
 
         let eth_supply_parts = get_supply_parts(&mut transaction, &test_header.slot())
             .await
@@ -375,35 +361,21 @@ mod tests {
             .await
             .unwrap();
 
-        let execution_balances_sum = ExecutionBalancesSum {
-            block_number: 0,
-            balances_sum: GweiNewtype(10).into_wei(),
-        };
-        let beacon_balances_sum = BeaconBalancesSum {
-            balances_sum: GweiNewtype(20),
-            slot: 0,
-        };
-        let beacon_deposits_sum = BeaconDepositsSum {
-            slot: 0,
-            deposits_sum: GweiNewtype(5),
-        };
-
-        let eth_supply_parts = SupplyParts {
-            beacon_balances_sum,
-            beacon_balances_sum_next: beacon_balances_sum.balances_sum,
-            beacon_deposits_sum,
-            beacon_deposits_sum_next: beacon_deposits_sum.deposits_sum,
-            execution_balances_sum,
-            execution_balances_sum_next: execution_balances_sum.balances_sum,
-        };
+        let supply_parts = SupplyParts::new(
+            &slot,
+            &0,
+            GweiNewtype(10).into_wei(),
+            GweiNewtype(20),
+            GweiNewtype(5),
+        );
 
         store(
             &mut transaction,
             &slot,
             &0,
-            &eth_supply_parts.execution_balances_sum.balances_sum,
-            &eth_supply_parts.beacon_balances_sum_next,
-            &eth_supply_parts.beacon_deposits_sum_next,
+            &supply_parts.execution_balances_sum_next,
+            &supply_parts.beacon_balances_sum_next,
+            &supply_parts.beacon_deposits_sum_next,
         )
         .await
         .unwrap();
@@ -432,35 +404,21 @@ mod tests {
             .await
             .unwrap();
 
-        let execution_balances_sum = ExecutionBalancesSum {
-            block_number: 0,
-            balances_sum: GweiNewtype(10).into_wei(),
-        };
-        let beacon_balances_sum = BeaconBalancesSum {
-            balances_sum: GweiNewtype(20),
-            slot: 0,
-        };
-        let beacon_deposits_sum = BeaconDepositsSum {
-            slot: 0,
-            deposits_sum: GweiNewtype(5),
-        };
-
-        let eth_supply_parts = SupplyParts {
-            beacon_balances_sum,
-            beacon_balances_sum_next: beacon_balances_sum.balances_sum,
-            beacon_deposits_sum,
-            beacon_deposits_sum_next: beacon_deposits_sum.deposits_sum,
-            execution_balances_sum,
-            execution_balances_sum_next: execution_balances_sum.balances_sum,
-        };
+        let supply_parts = SupplyParts::new(
+            &slot,
+            &0,
+            GweiNewtype(10).into_wei(),
+            GweiNewtype(20),
+            GweiNewtype(5),
+        );
 
         store(
             &mut transaction,
             &slot,
             &0,
-            &eth_supply_parts.execution_balances_sum.balances_sum,
-            &eth_supply_parts.beacon_balances_sum_next,
-            &eth_supply_parts.beacon_deposits_sum_next,
+            &supply_parts.execution_balances_sum_next,
+            &supply_parts.beacon_balances_sum_next,
+            &supply_parts.beacon_deposits_sum_next,
         )
         .await
         .unwrap();
