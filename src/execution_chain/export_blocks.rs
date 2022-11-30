@@ -106,7 +106,11 @@ async fn write_blocks_from(gte_block_number: BlockNumber, to_path: &str) -> Resu
             .unwrap(),
     );
 
-    let file = fs::OpenOptions::new().append(true).open(&to_path).unwrap();
+    let file = fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&to_path)
+        .unwrap();
     let mut csv_writer = csv::Writer::from_writer(file);
 
     let mut closest_price_index = 0;
