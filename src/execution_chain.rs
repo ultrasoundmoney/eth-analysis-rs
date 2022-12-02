@@ -8,7 +8,6 @@ mod supply_deltas;
 mod sync;
 
 pub use balances::get_execution_balances_by_hash;
-pub use balances::get_last_stored_balances_slot;
 pub use balances::ExecutionBalancesSum;
 pub use block_store::BlockStore;
 pub use export_blocks::write_blocks_from_august;

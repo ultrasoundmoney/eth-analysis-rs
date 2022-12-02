@@ -2,7 +2,6 @@ mod gaps;
 mod over_time;
 mod parts;
 
-use futures::try_join;
 pub use gaps::fill_gaps as fill_eth_supply_gaps;
 
 pub use over_time::get_supply_over_time;
@@ -12,7 +11,6 @@ pub use over_time::SupplyOverTime;
 pub use parts::get_supply_parts;
 pub use parts::update_cache as update_supply_parts_cache;
 pub use parts::SupplyParts;
-use sqlx::PgPool;
 
 use std::cmp::Ordering;
 
@@ -188,22 +186,6 @@ pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Res
     .await?;
 
     Ok(row.map(|row| row.slot))
-}
-
-// Some supply related fns depend on execution balances. These sync independently. We ensure we
-// do not try to calculate supply dashboard values past the last known execution balances.
-pub async fn get_supply_update_limit_slot(db_pool: &PgPool) -> Result<Option<Slot>> {
-    let (last_stored_execution_balances_slot, last_stored_supply_slot) = try_join!(
-        get_last_stored_balances_slot(db_pool),
-        get_last_stored_supply_slot(db_pool)
-    )?;
-
-    match (last_stored_execution_balances_slot, last_stored_supply_slot) {
-        _ => Ok(None),
-        (Some(last_stored_execution_balances_slot), Some(last_stored_supply_slot)) => Ok(Some(
-            last_stored_execution_balances_slot.min(last_stored_supply_slot),
-        )),
-    }
 }
 
 /// Stores an eth supply for a given slot.

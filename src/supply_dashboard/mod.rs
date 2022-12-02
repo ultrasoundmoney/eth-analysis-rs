@@ -41,8 +41,11 @@ async fn update_individual_caches(
     Ok(())
 }
 
-pub async fn update_cache(db_pool: &PgPool, sync_limit_slot: &Slot) -> Result<()> {
-    let limit_slot = eth_supply::get_supply_update_limit_slot(db_pool).await?;
+pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
+    // Our limit is whatever the youngest of the table we depend on has stored, currently that is
+    // the last stored supply slot.
+    // TODO: make it more obvious what our limit is.
+    let limit_slot = eth_supply::get_last_stored_supply_slot(db_pool).await?;
 
     match limit_slot {
         None => {

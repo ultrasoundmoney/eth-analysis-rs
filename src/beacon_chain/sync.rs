@@ -272,8 +272,8 @@ pub async fn sync_slot_by_state_root(
     Ok(())
 }
 
-async fn update_deferrable_analysis(db_pool: &PgPool, slot: &Slot) -> Result<()> {
-    supply_dashboard::update_cache(db_pool, slot).await?;
+async fn update_deferrable_analysis(db_pool: &PgPool) -> Result<()> {
+    supply_dashboard::update_cache(db_pool).await?;
 
     Ok(())
 }
@@ -577,7 +577,7 @@ pub async fn sync_beacon_states() -> Result<()> {
 
             if last_on_chain_state_root == on_chain_state_root {
                 debug!("sync caught up with head of chain, updating deferrable analysis");
-                update_deferrable_analysis(&db_pool, &slot).await?;
+                update_deferrable_analysis(&db_pool).await?;
             } else {
                 debug!("sync not yet caught up with head of chain, skipping deferrable analysis");
             }
