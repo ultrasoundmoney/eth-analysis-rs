@@ -7,7 +7,6 @@ use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 use std::str::FromStr;
 
-use crate::beacon_chain::Slot;
 use crate::eth_units::Wei;
 use crate::json_codecs::to_i128_string;
 
@@ -19,29 +18,6 @@ pub struct ExecutionBalancesSum {
     pub block_number: BlockNumber,
     #[serde(serialize_with = "to_i128_string")]
     pub balances_sum: Wei,
-}
-
-pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
-    let row = sqlx::query!(
-        "
-            SELECT
-                beacon_states.slot
-            FROM
-                beacon_states
-            JOIN beacon_blocks ON
-                beacon_states.state_root = beacon_blocks.state_root
-            JOIN execution_supply ON
-                beacon_blocks.block_hash = execution_supply.block_hash
-            WHERE
-                execution_supply.block_hash IS NOT NULL
-            ORDER BY beacon_states.slot DESC
-            LIMIT 1
-        ",
-    )
-    .fetch_optional(executor)
-    .await?;
-
-    Ok(row.map(|row| row.slot))
 }
 
 #[derive(Debug, PartialEq)]

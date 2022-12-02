@@ -2,6 +2,7 @@ mod gaps;
 mod over_time;
 mod parts;
 
+use futures::try_join;
 pub use gaps::fill_gaps as fill_eth_supply_gaps;
 
 pub use over_time::get_supply_over_time;
@@ -11,6 +12,7 @@ pub use over_time::SupplyOverTime;
 pub use parts::get_supply_parts;
 pub use parts::update_cache as update_supply_parts_cache;
 pub use parts::SupplyParts;
+use sqlx::PgPool;
 
 use std::cmp::Ordering;
 
@@ -22,7 +24,8 @@ use tracing::{debug, error, warn};
 
 use crate::beacon_chain::{beacon_time, Slot, FIRST_POST_MERGE_SLOT};
 use crate::eth_units::{EthF64, GweiNewtype, Wei};
-use crate::execution_chain::{self, BlockNumber};
+
+use crate::execution_chain::BlockNumber;
 
 pub async fn rollback_supply_from_slot(
     executor: &mut PgConnection,
@@ -125,8 +128,8 @@ pub async fn get_supply_exists_by_slot(
     .map(|row| row.is_some())
 }
 
-async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> sqlx::Result<Option<Slot>> {
-    sqlx::query!(
+pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
+    let slot = sqlx::query!(
         "
             SELECT
                 MAX(balances_slot)
@@ -135,8 +138,10 @@ async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> sqlx::Res
         ",
     )
     .fetch_one(executor)
-    .await
-    .map(|row| row.max)
+    .await?
+    .max;
+
+    Ok(slot)
 }
 
 pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
@@ -162,23 +167,61 @@ pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> 
     Ok(())
 }
 
+pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
+    let row = sqlx::query!(
+        "
+            SELECT
+                beacon_states.slot
+            FROM
+                beacon_states
+            JOIN beacon_blocks ON
+                beacon_states.state_root = beacon_blocks.state_root
+            JOIN execution_supply ON
+                beacon_blocks.block_hash = execution_supply.block_hash
+            WHERE
+                execution_supply.block_hash IS NOT NULL
+            ORDER BY beacon_states.slot DESC
+            LIMIT 1
+        ",
+    )
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(row.map(|row| row.slot))
+}
+
+// Some supply related fns depend on execution balances. These sync independently. We ensure we
+// do not try to calculate supply dashboard values past the last known execution balances.
+pub async fn get_supply_update_limit_slot(db_pool: &PgPool) -> Result<Option<Slot>> {
+    let (last_stored_execution_balances_slot, last_stored_supply_slot) = try_join!(
+        get_last_stored_balances_slot(db_pool),
+        get_last_stored_supply_slot(db_pool)
+    )?;
+
+    match (last_stored_execution_balances_slot, last_stored_supply_slot) {
+        _ => Ok(None),
+        (Some(last_stored_execution_balances_slot), Some(last_stored_supply_slot)) => Ok(Some(
+            last_stored_execution_balances_slot.min(last_stored_supply_slot),
+        )),
+    }
+}
+
 /// Stores an eth supply for a given slot.
 pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
     let last_stored_execution_balances_slot =
-        execution_chain::get_last_stored_balances_slot(executor.acquire().await?).await?;
+        get_last_stored_balances_slot(executor.acquire().await?).await?;
 
     let slots_to_store = match last_stored_execution_balances_slot {
         None => {
             warn!("no execution balances have ever been stored, skipping store eth supply");
             vec![]
         }
-        Some(last_stored_execution_supply_slot) => {
+        Some(last_stored_execution_balances_slot) => {
             let last_stored_supply_slot =
                 get_last_stored_supply_slot(executor.acquire().await?).await?;
 
             // Don't exceed currently syncing slot. We wouldn't have the balances.
-            // TODO: make sync limit more obvious.
-            let last = last_stored_execution_balances_slot.min(*slot);
+            let sync_limit = last_stored_execution_balances_slot.min(*slot);
 
             match last_stored_supply_slot {
                 None => {
@@ -186,14 +229,14 @@ pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) -> Result
                         FIRST_POST_MERGE_SLOT,
                         "eth supply has never been stored, starting from FIRST_POST_MERGE_SLOT"
                     );
-                    let range = FIRST_POST_MERGE_SLOT..=last;
+                    let range = FIRST_POST_MERGE_SLOT..=sync_limit;
                     range.collect()
                 }
-                Some(last_stored_supply_slot) => match last_stored_supply_slot.cmp(&last) {
+                Some(last_stored_supply_slot) => match last_stored_supply_slot.cmp(&sync_limit) {
                     Ordering::Less => {
                         debug!("execution balances have updated, storing eth supply for new slots");
                         let first = last_stored_supply_slot + 1;
-                        let range = first..=last_stored_execution_supply_slot;
+                        let range = first..=last_stored_execution_balances_slot;
                         range.collect()
                     }
                     Ordering::Equal => {
@@ -229,7 +272,7 @@ mod tests {
         beacon_chain::{self, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder},
         db,
         eth_units::GweiNewtype,
-        execution_chain::{add_delta, ExecutionNodeBlock, SupplyDelta},
+        execution_chain::{self, add_delta, ExecutionNodeBlock, SupplyDelta},
     };
 
     use super::*;

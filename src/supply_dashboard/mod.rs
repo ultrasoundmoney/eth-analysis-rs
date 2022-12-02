@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use futures::try_join;
 use serde::Serialize;
 use sqlx::PgPool;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::{
     beacon_chain::{beacon_time, Slot},
@@ -41,44 +41,58 @@ async fn update_individual_caches(
     Ok(())
 }
 
-pub async fn update_cache(db_pool: &PgPool, slot: &Slot) -> Result<()> {
-    let supply_parts = eth_supply::get_supply_parts(&mut *db_pool.acquire().await?, slot).await?;
+pub async fn update_cache(db_pool: &PgPool, sync_limit_slot: &Slot) -> Result<()> {
+    let limit_slot = eth_supply::get_supply_update_limit_slot(db_pool).await?;
 
-    match supply_parts {
+    match limit_slot {
         None => {
-            debug!(
-                slot,
-                "eth supply parts unavailable for slot, skipping supply dashboard update"
-            );
+            warn!("cannot calculate supply dashboard without stored execution balances and beacon states, skipping update");
+            Ok(())
         }
-        Some(supply_parts) => {
-            let supply_over_time =
-                eth_supply::get_supply_over_time(db_pool, *slot, supply_parts.block_number())
+        Some(limit_slot) => {
+            let supply_parts =
+                eth_supply::get_supply_parts(&mut *db_pool.acquire().await?, &limit_slot).await?;
+
+            match supply_parts {
+                None => {
+                    debug!(
+                        limit_slot,
+                        "eth supply parts unavailable for slot, skipping supply dashboard update"
+                    );
+                }
+                Some(supply_parts) => {
+                    let supply_over_time = eth_supply::get_supply_over_time(
+                        db_pool,
+                        limit_slot,
+                        supply_parts.block_number(),
+                    )
                     .timed("get-supply-over-time")
                     .await?;
 
-            update_individual_caches(db_pool, &supply_parts, &supply_over_time).await?;
+                    update_individual_caches(db_pool, &supply_parts, &supply_over_time).await?;
 
-            let supply_dashboard = SupplyDashboard {
-                eth_supply_parts: supply_parts,
-                fees_burned: None,
-                slot: *slot,
-                supply_over_time,
-                timestamp: beacon_time::get_date_time_from_slot(slot),
+                    let supply_dashboard = SupplyDashboard {
+                        eth_supply_parts: supply_parts,
+                        fees_burned: None,
+                        slot: limit_slot,
+                        supply_over_time,
+                        timestamp: beacon_time::get_date_time_from_slot(&limit_slot),
+                    };
+
+                    key_value_store::set_value_str(
+                        db_pool,
+                        &CacheKey::SupplyDashboard.to_db_key(),
+                        // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
+                        // as string however.
+                        &serde_json::to_string(&supply_dashboard).unwrap(),
+                    )
+                    .await;
+
+                    caching::publish_cache_update(db_pool, CacheKey::SupplyDashboard).await?;
+                }
             };
 
-            key_value_store::set_value_str(
-                db_pool,
-                &CacheKey::SupplyDashboard.to_db_key(),
-                // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
-                // as string however.
-                &serde_json::to_string(&supply_dashboard).unwrap(),
-            )
-            .await;
-
-            caching::publish_cache_update(db_pool, CacheKey::SupplyDashboard).await?;
+            Ok(())
         }
-    };
-
-    Ok(())
+    }
 }
