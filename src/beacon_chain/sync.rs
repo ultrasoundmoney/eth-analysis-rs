@@ -502,7 +502,7 @@ pub async fn sync_beacon_states() -> Result<()> {
 
     while let Some(slot_from_stream) = slots_stream.next().await {
         if &slot_from_stream % 100 == 0 {
-            debug!("{}", progress.get_progress_string());
+            info!("fast-sync in progress, {}", progress.get_progress_string());
         }
 
         slots_queue.push_back(slot_from_stream);
