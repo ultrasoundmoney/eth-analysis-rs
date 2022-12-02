@@ -178,7 +178,7 @@ pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) -> Result
 
             // Don't exceed currently syncing slot. We wouldn't have the balances.
             // TODO: make sync limit more obvious.
-            let last = last_stored_execution_supply_slot.max(*slot);
+            let last = last_stored_execution_balances_slot.min(*slot);
 
             match last_stored_supply_slot {
                 None => {
