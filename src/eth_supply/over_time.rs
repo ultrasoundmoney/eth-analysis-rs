@@ -192,7 +192,7 @@ async fn get_supply_over_time_time_frame(
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct SupplyOverTime {
     block_number: BlockNumber,
     d1: Vec<SupplyAtTime>,

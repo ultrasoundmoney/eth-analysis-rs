@@ -44,7 +44,6 @@ async fn update_individual_caches(
 pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     // Our limit is whatever the youngest of the table we depend on has stored, currently that is
     // the last stored supply slot.
-    // TODO: make it more obvious what our limit is.
     let limit_slot = eth_supply::get_last_stored_supply_slot(db_pool).await?;
 
     match limit_slot {
@@ -72,13 +71,11 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
                     .timed("get-supply-over-time")
                     .await?;
 
-                    update_individual_caches(db_pool, &supply_parts, &supply_over_time).await?;
-
                     let supply_dashboard = SupplyDashboard {
-                        eth_supply_parts: supply_parts,
+                        eth_supply_parts: supply_parts.clone(),
                         fees_burned: None,
                         slot: limit_slot,
-                        supply_over_time,
+                        supply_over_time: supply_over_time.clone(),
                         timestamp: beacon_time::get_date_time_from_slot(&limit_slot),
                     };
 
@@ -92,6 +89,8 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
                     .await;
 
                     caching::publish_cache_update(db_pool, CacheKey::SupplyDashboard).await?;
+
+                    update_individual_caches(db_pool, &supply_parts, &supply_over_time).await?;
                 }
             };
 
