@@ -2,7 +2,7 @@ use anyhow::Result;
 use futures::TryStreamExt;
 use pit_wall::Progress;
 use sqlx::postgres::PgPoolOptions;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     beacon_chain::{balances, BeaconNode, FIRST_POST_LONDON_SLOT},
@@ -40,6 +40,8 @@ pub async fn backfill_balances_to_london() -> Result<()> {
     .fetch_one(&db_pool)
     .await?;
 
+    debug!(work_todo.count, "work todo");
+
     let mut rows = sqlx::query!(
         r#"
             SELECT
@@ -65,6 +67,7 @@ pub async fn backfill_balances_to_london() -> Result<()> {
     );
 
     while let Some(row) = rows.try_next().await? {
+        debug!(row.slot, "getting validator balances");
         let validator_balances = beacon_node
             .get_validator_balances(&row.state_root)
             .await?
