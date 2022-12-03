@@ -73,6 +73,7 @@ impl<'a> FromStr for CacheKey {
             "eth-price" => Ok(Self::EthPrice),
             "eth-supply-parts" => Ok(Self::EthSupplyParts),
             "issuance-breakdown" => Ok(Self::IssuanceBreakdown),
+            "supply-dashboard-analysis" => Ok(Self::SupplyDashboardAnalysis),
             "supply-over-time" => Ok(Self::SupplyOverTime),
             "supply-projection-inputs" => Ok(Self::SupplyProjectionInputs),
             "supply-since-merge" => Ok(Self::SupplySinceMerge),
