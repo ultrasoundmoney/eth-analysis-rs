@@ -24,6 +24,7 @@ pub struct SupplyParts {
     #[deprecated = "switch to execution_balances_sum_next"]
     pub execution_balances_sum: ExecutionBalancesSum,
     pub execution_balances_sum_next: Wei,
+    pub slot: Slot,
 }
 
 impl SupplyParts {
@@ -50,6 +51,7 @@ impl SupplyParts {
                 balances_sum: execution_balances_sum,
             },
             execution_balances_sum_next: execution_balances_sum,
+            slot: *slot,
         }
     }
 
