@@ -17,7 +17,7 @@ use crate::{
 };
 
 #[derive(Serialize)]
-struct SupplyDashboard {
+struct SupplyDashboardAnalysis {
     eth_supply_parts: SupplyParts,
     fees_burned: Option<()>,
     slot: Slot,
@@ -71,7 +71,7 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
                     .timed("get-supply-over-time")
                     .await?;
 
-                    let supply_dashboard_analysis = SupplyDashboard {
+                    let supply_dashboard_analysis = SupplyDashboardAnalysis {
                         eth_supply_parts: supply_parts.clone(),
                         fees_burned: None,
                         slot: limit_slot,
@@ -81,14 +81,15 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
 
                     key_value_store::set_value_str(
                         db_pool,
-                        &CacheKey::SupplyDashboard.to_db_key(),
+                        &CacheKey::SupplyDashboardAnalysis.to_db_key(),
                         // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
                         // as string however.
                         &serde_json::to_string(&supply_dashboard_analysis).unwrap(),
                     )
                     .await;
 
-                    caching::publish_cache_update(db_pool, CacheKey::SupplyDashboard).await?;
+                    caching::publish_cache_update(db_pool, CacheKey::SupplyDashboardAnalysis)
+                        .await?;
 
                     update_individual_caches(db_pool, &supply_parts, &supply_over_time).await?;
                 }
