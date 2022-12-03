@@ -29,6 +29,8 @@ pub use effective_balance_sum::{
 };
 pub use issuance::{get_current_issuance, get_issuance_by_start_of_day, get_last_week_issuance};
 
+pub use balances::backfill_balances_to_london;
+
 #[cfg(test)]
 pub use node::tests::BeaconBlockBuilder;
 #[cfg(test)]
@@ -53,6 +55,7 @@ use lazy_static::lazy_static;
 use crate::env;
 
 pub const FIRST_POST_MERGE_SLOT: Slot = 4700013;
+pub const FIRST_POST_LONDON_SLOT: Slot = 1778566;
 
 lazy_static! {
     static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");

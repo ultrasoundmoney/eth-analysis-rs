@@ -163,6 +163,32 @@
     },
     "query": "\n            INSERT INTO beacon_blocks (\n                block_hash,\n                block_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                parent_root,\n                state_root\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6\n            )\n        "
   },
+  "26dd7dbd4879fc2fb5f860ffadf149b7c95e88cc357a725e80424b6cff3a6609": {
+    "describe": {
+      "columns": [
+        {
+          "name": "state_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "slot",
+          "ordinal": 1,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot\n            FROM\n                beacon_states\n            LEFT JOIN beacon_validators_balance ON\n                beacon_states.state_root = beacon_validators_balance.state_root\n            WHERE\n                slot >= $1\n            AND\n                beacon_validators_balance.state_root IS NULL\n        "
+  },
   "28409ca2bee68e0969632f7278e521cae6fb20ec9247d24680b29ac9b727aaa2": {
     "describe": {
       "columns": [
@@ -467,6 +493,26 @@
       }
     },
     "query": "\n            INSERT INTO\n                beacon_states\n                (state_root, slot)\n            VALUES\n                ($1, $2)\n        "
+  },
+  "59eb5a8cc7847ed0ac216b3f6293810cb7b17c02e576ff7b99120f42d3273019": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                COUNT(*) AS \"count!\"\n            FROM\n                beacon_states\n            LEFT JOIN beacon_validators_balance ON\n                beacon_states.state_root = beacon_validators_balance.state_root\n            WHERE\n                slot >= $1\n            AND\n                beacon_validators_balance.state_root IS NULL\n        "
   },
   "61740107d0249a5ce47197e447b82e7cf0fb27c6e4ca3f5336513fec101a898c": {
     "describe": {

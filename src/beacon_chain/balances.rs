@@ -1,3 +1,5 @@
+mod backfill;
+
 use anyhow::Result;
 use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
@@ -9,6 +11,8 @@ use crate::supply_projection::GweiInTime;
 
 use super::node::{ValidatorBalance, BeaconNode};
 use super::{beacon_time, states, Slot};
+
+pub use backfill::backfill_balances_to_london;
 
 pub fn sum_validator_balances(validator_balances: &Vec<ValidatorBalance>) -> GweiNewtype {
     validator_balances

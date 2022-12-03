@@ -102,6 +102,8 @@ impl FirstOfDaySlotWithBlock {
 
 #[cfg(test)]
 mod tests {
+    use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
+
     use super::*;
 
     #[test]
@@ -160,5 +162,10 @@ mod tests {
     fn not_first_of_minute_test() {
         assert!(FirstOfMinuteSlot::new(&3).is_none());
         assert!(FirstOfMinuteSlot::new(&5).is_none());
+    }
+
+    #[test]
+    fn merge_from_date_time() {
+        dbg!(get_slot_from_date_time(&LONDON_HARD_FORK_TIMESTAMP));
     }
 }
