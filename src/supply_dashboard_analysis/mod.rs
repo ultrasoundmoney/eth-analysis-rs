@@ -71,7 +71,7 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
                     .timed("get-supply-over-time")
                     .await?;
 
-                    let supply_dashboard = SupplyDashboard {
+                    let supply_dashboard_analysis = SupplyDashboard {
                         eth_supply_parts: supply_parts.clone(),
                         fees_burned: None,
                         slot: limit_slot,
@@ -84,7 +84,7 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
                         &CacheKey::SupplyDashboard.to_db_key(),
                         // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
                         // as string however.
-                        &serde_json::to_string(&supply_dashboard).unwrap(),
+                        &serde_json::to_string(&supply_dashboard_analysis).unwrap(),
                     )
                     .await;
 

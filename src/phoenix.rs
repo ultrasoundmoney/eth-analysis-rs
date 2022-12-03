@@ -135,20 +135,20 @@ impl GroupedAnalysis1 {
 }
 
 #[derive(Debug, Deserialize)]
-struct SupplyDashboard {
+struct SupplyDashboardAnalysis {
     slot: Slot,
 }
 
-impl SupplyDashboard {
-    async fn get_current() -> Result<SupplyDashboard> {
-        let supply_dashboard =
+impl SupplyDashboardAnalysis {
+    async fn get_current() -> Result<SupplyDashboardAnalysis> {
+        let supply_dashboard_analysis =
             reqwest::get("https://usm-i7x0.ultrasound.money/api/v2/fees/supply-dashboard")
                 .await?
                 .error_for_status()?
-                .json::<SupplyDashboard>()
+                .json::<SupplyDashboardAnalysis>()
                 .await?;
 
-        Ok(supply_dashboard)
+        Ok(supply_dashboard_analysis)
     }
 
     fn ordinal(&self) -> Ordinal {
@@ -217,11 +217,11 @@ impl TryFrom<GroupedAnalysis1> for Phoenix {
     }
 }
 
-impl From<SupplyDashboard> for Phoenix {
-    fn from(supply_dashboard: SupplyDashboard) -> Self {
+impl From<SupplyDashboardAnalysis> for Phoenix {
+    fn from(supply_dashboard_analysis: SupplyDashboardAnalysis) -> Self {
         Self {
             name: "supply-dashboard",
-            last_seen: Ordinal::Slot(supply_dashboard.slot),
+            last_seen: Ordinal::Slot(supply_dashboard_analysis.slot),
         }
     }
 }
@@ -248,16 +248,16 @@ pub async fn monitor_critical_services() {
         grouped_analysis_1.expect("initial grouped-analysis-1 or panic")
     };
 
-    let initial_supply_dashboard = {
-        let supply_dashboard = SupplyDashboard::get_current().await;
+    let initial_supply_dashboard_analysis = {
+        let supply_dashboard_analysis = SupplyDashboardAnalysis::get_current().await;
 
-        if supply_dashboard.is_err() {
+        if supply_dashboard_analysis.is_err() {
             let message = "failed to fetch initial supply dashboard, impossible to calculate age";
             error!(message);
             alarm.fire(message).await;
             panic!("{}", message);
         }
-        supply_dashboard.expect("expect initial supply dashboard or panic")
+        supply_dashboard_analysis.expect("expect initial supply dashboard or panic")
     };
 
     let mut grouped_analysis_1_phoenix: Phoenix = {
@@ -273,7 +273,7 @@ pub async fn monitor_critical_services() {
         phoenix.expect("expect initial grouped analysis 1 phoenix or panic")
     };
 
-    let mut supply_dashboard_phoenix: Phoenix = initial_supply_dashboard.into();
+    let mut supply_dashboard_analysis_phoenix: Phoenix = initial_supply_dashboard_analysis.into();
 
     loop {
         if grouped_analysis_1_phoenix.is_slot_age_over_limit() {
@@ -282,9 +282,9 @@ pub async fn monitor_critical_services() {
                 .await;
         }
 
-        if supply_dashboard_phoenix.is_slot_age_over_limit() {
+        if supply_dashboard_analysis_phoenix.is_slot_age_over_limit() {
             alarm
-                .fire_dashboard_stalled(&supply_dashboard_phoenix)
+                .fire_dashboard_stalled(&supply_dashboard_analysis_phoenix)
                 .await;
         }
 
@@ -295,11 +295,11 @@ pub async fn monitor_critical_services() {
             grouped_analysis_1_phoenix.set_last_seen(Ordinal::Timestamp(timestamp));
         }
 
-        let supply_dashboard_ordinal = SupplyDashboard::get_current()
+        let supply_dashboard_analysis_ordinal = SupplyDashboardAnalysis::get_current()
             .await
-            .map(|supply_dashboard| supply_dashboard.ordinal());
-        if let Ok(supply_dashboard_ordinal) = supply_dashboard_ordinal {
-            supply_dashboard_phoenix.set_last_seen(supply_dashboard_ordinal);
+            .map(|supply_dashboard_analysis| supply_dashboard_analysis.ordinal());
+        if let Ok(supply_dashboard_analysis_ordinal) = supply_dashboard_analysis_ordinal {
+            supply_dashboard_analysis_phoenix.set_last_seen(supply_dashboard_analysis_ordinal);
         }
 
         sleep(Duration::seconds(10).to_std().unwrap()).await;

@@ -16,7 +16,7 @@ use crate::{
     log,
     performance::TimedExt,
 };
-use crate::{eth_supply, supply_dashboard};
+use crate::{eth_supply, supply_dashboard_analysis};
 
 use super::node::{BeaconBlock, BeaconNode, StateRoot, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot, BEACON_URL};
@@ -273,7 +273,7 @@ pub async fn sync_slot_by_state_root(
 }
 
 async fn update_deferrable_analysis(db_pool: &PgPool) -> Result<()> {
-    supply_dashboard::update_cache(db_pool).await?;
+    supply_dashboard_analysis::update_cache(db_pool).await?;
 
     Ok(())
 }
