@@ -38,7 +38,7 @@ struct Cache {
     eth_price_stats: CachedValue,
     eth_supply_parts: CachedValue,
     issuance_breakdown: CachedValue,
-    supply_dashboard: CachedValue,
+    supply_dashboard_analysis: CachedValue,
     supply_over_time: CachedValue,
     supply_projection_inputs: CachedValue,
     supply_since_merge: CachedValue,
@@ -181,7 +181,7 @@ fn get_cache_value_by_key<'a>(cache: &'a Arc<Cache>, key: &'a CacheKey) -> &'a C
         CacheKey::EthPrice => &cache.eth_price_stats,
         CacheKey::EthSupplyParts => &cache.eth_supply_parts,
         CacheKey::IssuanceBreakdown => &cache.issuance_breakdown,
-        CacheKey::SupplyDashboard => &cache.supply_dashboard,
+        CacheKey::SupplyDashboard => &cache.supply_dashboard_analysis,
         CacheKey::SupplyOverTime => &cache.supply_over_time,
         CacheKey::SupplyProjectionInputs => &cache.supply_projection_inputs,
         CacheKey::SupplySinceMerge => &cache.supply_since_merge,
@@ -254,7 +254,7 @@ pub async fn start_server() -> Result<()> {
         eth_price_stats,
         eth_supply_parts,
         issuance_breakdown,
-        supply_dashboard,
+        supply_dashboard_analysis,
         supply_over_time,
         supply_projection_inputs,
         supply_since_merge,
@@ -286,7 +286,7 @@ pub async fn start_server() -> Result<()> {
         eth_price_stats,
         eth_supply_parts,
         issuance_breakdown,
-        supply_dashboard,
+        supply_dashboard_analysis,
         supply_over_time,
         supply_projection_inputs,
         supply_since_merge,
@@ -365,9 +365,9 @@ pub async fn start_server() -> Result<()> {
                 }),
             )
             .route(
-                "/api/v2/fees/supply-dashboard",
+                "/api/v2/fees/supply-dashboard-analysis",
                 get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.supply_dashboard)
+                    get_cached(&state.clone().cache.supply_dashboard_analysis)
                         .await
                         .into_response()
                 }),

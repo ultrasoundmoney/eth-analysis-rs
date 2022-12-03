@@ -15,7 +15,7 @@ mod log;
 mod performance;
 mod phoenix;
 mod serve;
-mod supply_dashboard;
+mod supply_dashboard_analysis;
 mod supply_projection;
 mod time;
 mod time_frames;
