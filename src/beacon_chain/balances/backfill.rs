@@ -15,8 +15,8 @@ pub async fn backfill_balances_to_london() -> Result<()> {
     info!("backfilling beacon balances");
 
     let db_pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&db::get_db_url_with_name("heal-beacon-states"))
+        .max_connections(2)
+        .connect(&db::get_db_url_with_name("backfill-beacon-balances"))
         .await?;
 
     let beacon_node = BeaconNode::new();
@@ -59,7 +59,10 @@ pub async fn backfill_balances_to_london() -> Result<()> {
     )
     .fetch(&db_pool);
 
-    let mut progress = Progress::new("heal-block-hashes", work_todo.count.try_into().unwrap());
+    let mut progress = Progress::new(
+        "backfill-beacon-balances",
+        work_todo.count.try_into().unwrap(),
+    );
 
     while let Some(row) = rows.try_next().await? {
         let validator_balances = beacon_node
