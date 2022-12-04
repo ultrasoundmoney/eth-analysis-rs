@@ -249,7 +249,7 @@ pub async fn update_cache(db_pool: &PgPool, supply_over_time: &SupplyOverTime) -
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, DurationRound, SubsecRound};
+    use chrono::{Duration, SubsecRound};
     use sqlx::{Acquire, PgConnection};
 
     use crate::{
@@ -325,22 +325,25 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let test_timestamp = Utc::now().trunc_subsecs(0) - Duration::minutes(2);
+        // This step is inexact. We estimate the slot based on the timestamp. Then convert this
+        // estimated slot to the actual timestamp.
         let test_slot = beacon_time::get_slot_from_date_time(&test_timestamp);
+        let reverse_timestamp = beacon_time::get_date_time_from_slot(&test_slot);
 
         let test_supply_at_time = SupplyAtTime {
-            // TODO: why is the rounding needed?
-            timestamp: test_timestamp.duration_round(Duration::days(1)).unwrap(),
+            timestamp: reverse_timestamp,
             supply: 10.0,
-            slot: None,
+            slot: Some(test_slot),
         };
 
         store_test_eth_supply(&mut transaction, &test_slot, 10.0)
             .await
             .unwrap();
 
-        let since_merge = get_supply_over_time_time_frame(&mut transaction, &TimeFrame::SinceMerge)
-            .await
-            .unwrap();
+        let since_merge =
+            get_supply_over_time_time_frame(&mut transaction, &TimeFrame::Limited(Minute5))
+                .await
+                .unwrap();
 
         assert_eq!(since_merge, vec![test_supply_at_time]);
     }
