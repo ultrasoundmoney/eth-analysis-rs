@@ -9,6 +9,8 @@ mod rewards;
 mod states;
 mod sync;
 
+pub use balances::backfill_balances_to_london;
+pub use balances::backfill_daily_balances_to_london;
 pub use balances::get_balances_by_state_root;
 pub use balances::get_validator_balances_by_start_of_day;
 pub use balances::store_validators_balance;
@@ -28,8 +30,6 @@ pub use effective_balance_sum::{
     get_last_stored_effective_balance_sum, update_effective_balance_sum,
 };
 pub use issuance::{get_current_issuance, get_issuance_by_start_of_day, get_last_week_issuance};
-
-pub use balances::backfill_balances_to_london;
 
 #[cfg(test)]
 pub use node::tests::BeaconBlockBuilder;
