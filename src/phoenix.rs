@@ -1,3 +1,5 @@
+mod grouped_analysis_1;
+
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, Utc};
 
@@ -12,6 +14,8 @@ use crate::{
     beacon_chain::{beacon_time, Slot},
     env, log,
 };
+
+use self::grouped_analysis_1::GroupedAnalysis1;
 
 lazy_static! {
     static ref OPSGENIE_AUTH_HEADER: String = {
@@ -102,58 +106,9 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 enum Ordinal {
+    #[allow(dead_code)]
     Slot(Slot),
     Timestamp(DateTime<Utc>),
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct BlockFee {
-    mined_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GroupedAnalysis1 {
-    latest_block_fees: Vec<BlockFee>,
-}
-
-impl GroupedAnalysis1 {
-    async fn get_current() -> reqwest::Result<GroupedAnalysis1> {
-        reqwest::get("https://ultrasound.money/api/fees/grouped-analysis-1")
-            .await?
-            .error_for_status()?
-            .json::<GroupedAnalysis1>()
-            .await
-    }
-
-    fn timestamp(&self) -> Option<DateTime<Utc>> {
-        self.latest_block_fees
-            .first()
-            .map(|block_fee| block_fee.mined_at)
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct SupplyDashboardAnalysis {
-    slot: Slot,
-}
-
-impl SupplyDashboardAnalysis {
-    async fn get_current() -> Result<SupplyDashboardAnalysis> {
-        let supply_dashboard_analysis =
-            reqwest::get("https://usm-i7x0.ultrasound.money/api/v2/fees/supply-dashboard")
-                .await?
-                .error_for_status()?
-                .json::<SupplyDashboardAnalysis>()
-                .await?;
-
-        Ok(supply_dashboard_analysis)
-    }
-
-    fn ordinal(&self) -> Ordinal {
-        Ordinal::Slot(self.slot)
-    }
 }
 
 struct Phoenix {
@@ -207,21 +162,12 @@ impl TryFrom<GroupedAnalysis1> for Phoenix {
     type Error = anyhow::Error;
 
     fn try_from(value: GroupedAnalysis1) -> Result<Self, Self::Error> {
-        match value.latest_block_fees.first() {
+        match value.first_block_fee() {
             None => Err(anyhow!("empty list of block fees on grouped analysis 1")),
             Some(block_fee) => Ok(Self {
                 name: "grouped-analysis-1",
                 last_seen: Ordinal::Timestamp(block_fee.mined_at),
             }),
-        }
-    }
-}
-
-impl From<SupplyDashboardAnalysis> for Phoenix {
-    fn from(supply_dashboard_analysis: SupplyDashboardAnalysis) -> Self {
-        Self {
-            name: "supply-dashboard",
-            last_seen: Ordinal::Slot(supply_dashboard_analysis.slot),
         }
     }
 }
@@ -248,18 +194,6 @@ pub async fn monitor_critical_services() {
         grouped_analysis_1.expect("initial grouped-analysis-1 or panic")
     };
 
-    let initial_supply_dashboard_analysis = {
-        let supply_dashboard_analysis = SupplyDashboardAnalysis::get_current().await;
-
-        if supply_dashboard_analysis.is_err() {
-            let message = "failed to fetch initial supply dashboard, impossible to calculate age";
-            error!(message);
-            alarm.fire(message).await;
-            panic!("{}", message);
-        }
-        supply_dashboard_analysis.expect("expect initial supply dashboard or panic")
-    };
-
     let mut grouped_analysis_1_phoenix: Phoenix = {
         let phoenix = initial_grouped_analysis_1.try_into();
 
@@ -273,18 +207,10 @@ pub async fn monitor_critical_services() {
         phoenix.expect("expect initial grouped analysis 1 phoenix or panic")
     };
 
-    let mut supply_dashboard_analysis_phoenix: Phoenix = initial_supply_dashboard_analysis.into();
-
     loop {
         if grouped_analysis_1_phoenix.is_slot_age_over_limit() {
             alarm
                 .fire_dashboard_stalled(&grouped_analysis_1_phoenix)
-                .await;
-        }
-
-        if supply_dashboard_analysis_phoenix.is_slot_age_over_limit() {
-            alarm
-                .fire_dashboard_stalled(&supply_dashboard_analysis_phoenix)
                 .await;
         }
 
@@ -293,13 +219,6 @@ pub async fn monitor_critical_services() {
             .map(|grouped_analysis_1| grouped_analysis_1.timestamp());
         if let Ok(Some(timestamp)) = grouped_analysis_1_timestamp {
             grouped_analysis_1_phoenix.set_last_seen(Ordinal::Timestamp(timestamp));
-        }
-
-        let supply_dashboard_analysis_ordinal = SupplyDashboardAnalysis::get_current()
-            .await
-            .map(|supply_dashboard_analysis| supply_dashboard_analysis.ordinal());
-        if let Ok(supply_dashboard_analysis_ordinal) = supply_dashboard_analysis_ordinal {
-            supply_dashboard_analysis_phoenix.set_last_seen(supply_dashboard_analysis_ordinal);
         }
 
         sleep(Duration::seconds(10).to_std().unwrap()).await;
