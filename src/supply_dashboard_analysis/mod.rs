@@ -16,7 +16,7 @@ use crate::{
 
 #[derive(Serialize)]
 struct SupplyDashboardAnalysis {
-    eth_supply_parts: SupplyParts,
+    supply_parts: SupplyParts,
     fees_burned: Option<()>,
     slot: Slot,
     supply_over_time: SupplyOverTime,
@@ -70,7 +70,7 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
                     .await?;
 
                     // let supply_dashboard_analysis = SupplyDashboardAnalysis {
-                    //     eth_supply_parts: supply_parts.clone(),
+                    //     supply_parts: supply_parts.clone(),
                     //     fees_burned: None,
                     //     slot: limit_slot,
                     //     supply_over_time: supply_over_time.clone(),

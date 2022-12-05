@@ -143,9 +143,9 @@ pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Resul
 }
 
 pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
-    let eth_supply_parts = get_supply_parts(executor, slot).await?;
+    let supply_parts = get_supply_parts(executor, slot).await?;
 
-    match eth_supply_parts {
+    match supply_parts {
         None => {
             debug!(slot, "supply parts unavailable skipping");
         }
@@ -342,7 +342,7 @@ mod tests {
         .await
         .unwrap();
 
-        let eth_supply_parts_test = SupplyParts::new(
+        let supply_parts_test = SupplyParts::new(
             &0,
             &execution_balances_sum.block_number,
             execution_balances_sum.balances_sum,
@@ -350,12 +350,12 @@ mod tests {
             beacon_deposits_sum,
         );
 
-        let eth_supply_parts = get_supply_parts(&mut transaction, &test_header.slot())
+        let supply_parts = get_supply_parts(&mut transaction, &test_header.slot())
             .await
             .unwrap()
             .unwrap();
 
-        assert_eq!(eth_supply_parts, eth_supply_parts_test);
+        assert_eq!(supply_parts, supply_parts_test);
     }
 
     #[tokio::test]

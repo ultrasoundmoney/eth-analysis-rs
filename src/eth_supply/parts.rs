@@ -125,14 +125,14 @@ pub async fn get_supply_parts(
 pub async fn update_cache(db_pool: &PgPool, supply_parts: &SupplyParts) -> Result<()> {
     key_value_store::set_value_str(
         db_pool,
-        &CacheKey::EthSupplyParts.to_db_key(),
+        &CacheKey::SupplyParts.to_db_key(),
         // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
         // as string however.
         &serde_json::to_string(supply_parts).unwrap(),
     )
     .await;
 
-    caching::publish_cache_update(db_pool, CacheKey::EthSupplyParts).await?;
+    caching::publish_cache_update(db_pool, CacheKey::SupplyParts).await?;
 
     Ok(())
 }

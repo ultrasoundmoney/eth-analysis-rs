@@ -36,7 +36,7 @@ struct Cache {
     block_lag: CachedValue,
     effective_balance_sum: CachedValue,
     eth_price_stats: CachedValue,
-    eth_supply_parts: CachedValue,
+    supply_parts: CachedValue,
     issuance_breakdown: CachedValue,
     supply_dashboard_analysis: CachedValue,
     supply_over_time: CachedValue,
@@ -179,7 +179,7 @@ fn get_cache_value_by_key<'a>(cache: &'a Arc<Cache>, key: &'a CacheKey) -> &'a C
         CacheKey::BlockLag => &cache.block_lag,
         CacheKey::EffectiveBalanceSum => &cache.effective_balance_sum,
         CacheKey::EthPrice => &cache.eth_price_stats,
-        CacheKey::EthSupplyParts => &cache.eth_supply_parts,
+        CacheKey::SupplyParts => &cache.supply_parts,
         CacheKey::IssuanceBreakdown => &cache.issuance_breakdown,
         CacheKey::SupplyDashboardAnalysis => &cache.supply_dashboard_analysis,
         CacheKey::SupplyOverTime => &cache.supply_over_time,
@@ -252,7 +252,7 @@ pub async fn start_server() -> Result<()> {
         block_lag,
         effective_balance_sum,
         eth_price_stats,
-        eth_supply_parts,
+        supply_parts,
         issuance_breakdown,
         supply_dashboard_analysis,
         supply_over_time,
@@ -267,7 +267,7 @@ pub async fn start_server() -> Result<()> {
         get_value_hash_lock(&db_pool, &CacheKey::BlockLag),
         get_value_hash_lock(&db_pool, &CacheKey::EffectiveBalanceSum),
         get_value_hash_lock(&db_pool, &CacheKey::EthPrice),
-        get_value_hash_lock(&db_pool, &CacheKey::EthSupplyParts),
+        get_value_hash_lock(&db_pool, &CacheKey::SupplyParts),
         get_value_hash_lock(&db_pool, &CacheKey::IssuanceBreakdown),
         get_value_hash_lock(&db_pool, &CacheKey::SupplyDashboardAnalysis),
         get_value_hash_lock(&db_pool, &CacheKey::SupplyOverTime),
@@ -284,7 +284,7 @@ pub async fn start_server() -> Result<()> {
         block_lag,
         effective_balance_sum,
         eth_price_stats,
-        eth_supply_parts,
+        supply_parts,
         issuance_breakdown,
         supply_dashboard_analysis,
         supply_over_time,
@@ -356,10 +356,11 @@ pub async fn start_server() -> Result<()> {
                         .into_response()
                 }),
             )
+            // Deprecated, remove after frontend switches over.
             .route(
                 "/api/v2/fees/eth-supply-parts",
                 get(|state: StateExtension| async move {
-                    get_cached(&state.clone().cache.eth_supply_parts)
+                    get_cached(&state.clone().cache.supply_parts)
                         .await
                         .into_response()
                 }),
@@ -376,6 +377,14 @@ pub async fn start_server() -> Result<()> {
                 "/api/v2/fees/supply-over-time",
                 get(|state: StateExtension| async move {
                     get_cached(&state.clone().cache.supply_over_time).await
+                }),
+            )
+            .route(
+                "/api/v2/fees/supply-parts",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.supply_parts)
+                        .await
+                        .into_response()
                 }),
             )
             .route(
