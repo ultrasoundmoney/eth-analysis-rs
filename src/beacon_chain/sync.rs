@@ -568,15 +568,10 @@ pub async fn sync_beacon_states() -> Result<()> {
                 }
             }
 
-            let last_on_chain_state_root = beacon_node
-                .get_last_header()
-                .await?
-                .header
-                .message
-                .state_root;
+            let last_on_chain_slot = beacon_node.get_last_header().await?.header.message.slot;
 
-            if last_on_chain_state_root == on_chain_state_root {
-                debug!("sync caught up with head of chain, updating deferrable analysis");
+            if slot >= last_on_chain_slot - 1 {
+                debug!("sync within one slot of head of chain, updating deferrable analysis");
                 update_deferrable_analysis(&db_pool).await?;
             } else {
                 debug!("sync not yet caught up with head of chain, skipping deferrable analysis");
