@@ -1,4 +1,5 @@
 mod grouped_analysis_1;
+mod price_stats;
 mod supply_over_time;
 mod supply_parts;
 
@@ -16,8 +17,8 @@ use tracing::{debug, error, info, warn};
 use crate::{
     env, log,
     phoenix::{
-        grouped_analysis_1::GroupedAnalysis1Monitor, supply_over_time::SupplyOverTimeMonitor,
-        supply_parts::SupplyPartsMonitor,
+        grouped_analysis_1::GroupedAnalysis1Monitor, price_stats::EthPriceStatsMonitor,
+        supply_over_time::SupplyOverTimeMonitor, supply_parts::SupplyPartsMonitor,
     },
 };
 
@@ -148,6 +149,11 @@ pub async fn monitor_critical_services() {
     let mut alarm = Alarm::new();
 
     let mut phoenixes = vec![
+        Phoenix {
+            last_seen: Utc::now(),
+            monitor: Box::new(EthPriceStatsMonitor::new()),
+            name: "eth-price-stats",
+        },
         Phoenix {
             last_seen: Utc::now(),
             name: "grouped-analysis-1",

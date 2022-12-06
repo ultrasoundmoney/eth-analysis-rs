@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use super::PhoenixRefresher;
+use super::PhoenixMonitor;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +45,7 @@ impl GroupedAnalysis1Monitor {
 }
 
 #[async_trait]
-impl PhoenixRefresher for GroupedAnalysis1Monitor {
+impl PhoenixMonitor for GroupedAnalysis1Monitor {
     async fn refresh(&mut self) -> Result<DateTime<Utc>> {
         self.get_current_timestamp().await
     }

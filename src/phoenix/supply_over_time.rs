@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::beacon_chain::{beacon_time, Slot};
 
-use super::PhoenixRefresher;
+use super::PhoenixMonitor;
 
 #[derive(Debug, Deserialize)]
 struct SupplyOverTime {
@@ -13,7 +13,7 @@ struct SupplyOverTime {
 }
 
 impl SupplyOverTime {
-    async fn get_current() -> reqwest::Result<SupplyParts> {
+    async fn get_current() -> reqwest::Result<SupplyOverTime> {
         reqwest::get("https://ultrasound.money/api/v2/fees/supply-over-time")
             .await?
             .error_for_status()?
@@ -30,7 +30,7 @@ impl SupplyOverTimeMonitor {
     }
 
     pub async fn get_current_timestamp(&self) -> Result<DateTime<Utc>> {
-        SupplyParts::get_current()
+        SupplyOverTime::get_current()
             .await
             .map(|supply_parts| beacon_time::date_time_from_slot(&supply_parts.slot))
             .map_err(|e| e.into())
@@ -38,7 +38,7 @@ impl SupplyOverTimeMonitor {
 }
 
 #[async_trait]
-impl PhoenixRefresher for SupplyOverTimeMonitor {
+impl PhoenixMonitor for SupplyOverTimeMonitor {
     async fn refresh(&mut self) -> Result<DateTime<Utc>> {
         self.get_current_timestamp().await
     }

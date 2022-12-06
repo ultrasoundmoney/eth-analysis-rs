@@ -3,42 +3,40 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::beacon_chain::{beacon_time, Slot};
-
 use super::PhoenixMonitor;
 
 #[derive(Debug, Deserialize)]
-struct SupplyParts {
-    pub slot: Slot,
+struct EthPriceStats {
+    pub timestamp: DateTime<Utc>,
 }
 
-impl SupplyParts {
-    async fn get_current() -> reqwest::Result<SupplyParts> {
-        reqwest::get("https://ultrasound.money/api/v2/fees/supply-parts")
+impl EthPriceStats {
+    async fn get_current() -> reqwest::Result<EthPriceStats> {
+        reqwest::get("https://ultrasound.money/api/v2/fees/eth-price-stats")
             .await?
             .error_for_status()?
-            .json::<SupplyParts>()
+            .json::<EthPriceStats>()
             .await
     }
 }
 
-pub struct SupplyPartsMonitor {}
+pub struct EthPriceStatsMonitor {}
 
-impl SupplyPartsMonitor {
+impl EthPriceStatsMonitor {
     pub fn new() -> Self {
         Self {}
     }
 
     pub async fn get_current_timestamp(&self) -> Result<DateTime<Utc>> {
-        SupplyParts::get_current()
+        EthPriceStats::get_current()
             .await
-            .map(|supply_parts| beacon_time::date_time_from_slot(&supply_parts.slot))
+            .map(|eth_price_stats| eth_price_stats.timestamp)
             .map_err(|e| e.into())
     }
 }
 
 #[async_trait]
-impl PhoenixMonitor for SupplyPartsMonitor {
+impl PhoenixMonitor for EthPriceStatsMonitor {
     async fn refresh(&mut self) -> Result<DateTime<Utc>> {
         self.get_current_timestamp().await
     }
