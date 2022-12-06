@@ -629,6 +629,7 @@ name = "eth-analysis"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "async-tungstenite",
  "axum",
  "base64",

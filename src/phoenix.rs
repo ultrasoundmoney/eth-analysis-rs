@@ -1,6 +1,8 @@
 mod grouped_analysis_1;
+mod supply_parts;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 
 use lazy_static::lazy_static;
@@ -11,11 +13,9 @@ use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    beacon_chain::{beacon_time, Slot},
     env, log,
+    phoenix::{grouped_analysis_1::GroupedAnalysis1Monitor, supply_parts::SupplyPartsMonitor},
 };
-
-use self::grouped_analysis_1::GroupedAnalysis1;
 
 lazy_static! {
     static ref OPSGENIE_AUTH_HEADER: String = {
@@ -89,10 +89,10 @@ impl Alarm {
         self.last_fired = Some(Utc::now());
     }
 
-    async fn fire_dashboard_stalled(&mut self, phoenix: &Phoenix) {
+    async fn fire_dashboard_stalled(&mut self, name: &str) {
         let message = format!(
             "{} hasn't updated for more than {} seconds!",
-            phoenix.name,
+            name,
             PHOENIX_MAX_LIFESPAN.num_seconds()
         );
 
@@ -104,72 +104,33 @@ lazy_static! {
     static ref PHOENIX_MAX_LIFESPAN: Duration = Duration::minutes(6);
 }
 
-#[derive(Debug, Clone)]
-enum Ordinal {
-    #[allow(dead_code)]
-    Slot(Slot),
-    Timestamp(DateTime<Utc>),
-}
-
 struct Phoenix {
     name: &'static str,
-    last_seen: Ordinal,
+    last_seen: DateTime<Utc>,
+    refresher: Box<dyn PhoenixRefresher>,
 }
 
 impl Phoenix {
-    fn is_slot_age_over_limit(&self) -> bool {
-        match self.last_seen {
-            Ordinal::Slot(slot) => {
-                let slot_timestamp = beacon_time::get_date_time_from_slot(&slot);
-                let age = Utc::now() - slot_timestamp;
-                debug!(
-                    name = self.name,
-                    slot,
-                    age = age.num_seconds(),
-                    limit = PHOENIX_MAX_LIFESPAN.num_seconds(),
-                    "checking slot age"
-                );
-                age >= *PHOENIX_MAX_LIFESPAN
-            }
-            Ordinal::Timestamp(timestamp) => {
-                let age = Utc::now() - timestamp;
-                debug!(
-                    name = self.name,
-                    %timestamp,
-                    age = age.num_seconds(),
-                    limit = PHOENIX_MAX_LIFESPAN.num_seconds(),
-                    "checking block age"
-                );
-                age >= *PHOENIX_MAX_LIFESPAN
-            }
-        }
-    }
-
-    fn set_last_seen(&mut self, ordinal: Ordinal) {
+    fn is_age_over_limit(&self) -> bool {
+        let age = Utc::now() - self.last_seen;
         debug!(
             name = self.name,
-            ?ordinal,
-            "setting last seen to passed ordinal"
+            age = age.num_seconds(),
+            limit = PHOENIX_MAX_LIFESPAN.num_seconds(),
+            "checking age"
         );
-        self.last_seen = ordinal;
+        age >= *PHOENIX_MAX_LIFESPAN
+    }
+
+    fn set_last_seen(&mut self, last_seen: DateTime<Utc>) {
+        debug!(name = self.name, ?last_seen, "setting last seen");
+        self.last_seen = last_seen;
     }
 }
 
-#[derive(Debug)]
-struct MissingBlockFeesError;
-
-impl TryFrom<GroupedAnalysis1> for Phoenix {
-    type Error = anyhow::Error;
-
-    fn try_from(value: GroupedAnalysis1) -> Result<Self, Self::Error> {
-        match value.first_block_fee() {
-            None => Err(anyhow!("empty list of block fees on grouped analysis 1")),
-            Some(block_fee) => Ok(Self {
-                name: "grouped-analysis-1",
-                last_seen: Ordinal::Timestamp(block_fee.mined_at),
-            }),
-        }
-    }
+#[async_trait]
+trait PhoenixRefresher {
+    async fn refresh(&mut self) -> Result<DateTime<Utc>>;
 }
 
 pub async fn monitor_critical_services() {
@@ -182,43 +143,32 @@ pub async fn monitor_critical_services() {
 
     let mut alarm = Alarm::new();
 
-    let initial_grouped_analysis_1 = {
-        let grouped_analysis_1 = GroupedAnalysis1::get_current().await;
-        if grouped_analysis_1.is_err() {
-            let message =
-                "failed to fetch initial grouped-analysis-1 dashboard, impossible to calculate age";
-            error!(message);
-            alarm.fire(message).await;
-            panic!("{}", message);
-        }
-        grouped_analysis_1.expect("initial grouped-analysis-1 or panic")
-    };
-
-    let mut grouped_analysis_1_phoenix: Phoenix = {
-        let phoenix = initial_grouped_analysis_1.try_into();
-
-        if phoenix.is_err() {
-            let message = "failed to set up initial grouped-analysis-1 phoenix, missing block fees";
-            error!(message);
-            alarm.fire(message).await;
-            panic!("{}", message);
-        }
-
-        phoenix.expect("expect initial grouped analysis 1 phoenix or panic")
-    };
+    let mut phoenixes = vec![
+        Phoenix {
+            name: "supply-parts",
+            last_seen: Utc::now(),
+            refresher: Box::new(SupplyPartsMonitor::new()),
+        },
+        Phoenix {
+            name: "grouped-analysis-1",
+            last_seen: Utc::now(),
+            refresher: Box::new(GroupedAnalysis1Monitor::new()),
+        },
+    ];
 
     loop {
-        if grouped_analysis_1_phoenix.is_slot_age_over_limit() {
-            alarm
-                .fire_dashboard_stalled(&grouped_analysis_1_phoenix)
-                .await;
-        }
+        for phoenix in phoenixes.iter_mut() {
+            if phoenix.is_age_over_limit() {
+                alarm.fire_dashboard_stalled(&phoenix.name).await;
+            }
 
-        let grouped_analysis_1_timestamp = GroupedAnalysis1::get_current()
-            .await
-            .map(|grouped_analysis_1| grouped_analysis_1.timestamp());
-        if let Ok(Some(timestamp)) = grouped_analysis_1_timestamp {
-            grouped_analysis_1_phoenix.set_last_seen(Ordinal::Timestamp(timestamp));
+            let current = phoenix.refresher.refresh().await;
+            match current {
+                Ok(current) => phoenix.set_last_seen(current),
+                Err(err) => {
+                    error!(name = phoenix.name, ?err, "failed to refresh phoenix");
+                }
+            }
         }
 
         sleep(Duration::seconds(10).to_std().unwrap()).await;
