@@ -1,4 +1,5 @@
 mod grouped_analysis_1;
+mod supply_over_time;
 mod supply_parts;
 
 use anyhow::Result;
@@ -14,7 +15,10 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     env, log,
-    phoenix::{grouped_analysis_1::GroupedAnalysis1Monitor, supply_parts::SupplyPartsMonitor},
+    phoenix::{
+        grouped_analysis_1::GroupedAnalysis1Monitor, supply_over_time::SupplyOverTimeMonitor,
+        supply_parts::SupplyPartsMonitor,
+    },
 };
 
 lazy_static! {
@@ -107,7 +111,7 @@ lazy_static! {
 struct Phoenix {
     name: &'static str,
     last_seen: DateTime<Utc>,
-    refresher: Box<dyn PhoenixRefresher>,
+    monitor: Box<dyn PhoenixMonitor>,
 }
 
 impl Phoenix {
@@ -129,7 +133,7 @@ impl Phoenix {
 }
 
 #[async_trait]
-trait PhoenixRefresher {
+trait PhoenixMonitor {
     async fn refresh(&mut self) -> Result<DateTime<Utc>>;
 }
 
@@ -145,14 +149,19 @@ pub async fn monitor_critical_services() {
 
     let mut phoenixes = vec![
         Phoenix {
-            name: "supply-parts",
             last_seen: Utc::now(),
-            refresher: Box::new(SupplyPartsMonitor::new()),
+            name: "grouped-analysis-1",
+            monitor: Box::new(GroupedAnalysis1Monitor::new()),
         },
         Phoenix {
-            name: "grouped-analysis-1",
             last_seen: Utc::now(),
-            refresher: Box::new(GroupedAnalysis1Monitor::new()),
+            name: "supply-over-time",
+            monitor: Box::new(SupplyOverTimeMonitor::new()),
+        },
+        Phoenix {
+            last_seen: Utc::now(),
+            name: "supply-parts",
+            monitor: Box::new(SupplyPartsMonitor::new()),
         },
     ];
 
@@ -162,11 +171,15 @@ pub async fn monitor_critical_services() {
                 alarm.fire_dashboard_stalled(&phoenix.name).await;
             }
 
-            let current = phoenix.refresher.refresh().await;
+            let current = phoenix.monitor.refresh().await;
             match current {
                 Ok(current) => phoenix.set_last_seen(current),
                 Err(err) => {
-                    error!(name = phoenix.name, ?err, "failed to refresh phoenix");
+                    error!(
+                        name = phoenix.name,
+                        ?err,
+                        "failed to refresh phoenix monitor"
+                    );
                 }
             }
         }
