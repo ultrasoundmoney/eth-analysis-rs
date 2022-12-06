@@ -39,7 +39,7 @@ impl SupplyPartsMonitor {
 
 #[async_trait]
 impl PhoenixMonitor for SupplyPartsMonitor {
-    async fn refresh(&mut self) -> Result<DateTime<Utc>> {
+    async fn refresh(&self) -> Result<DateTime<Utc>> {
         self.get_current_timestamp().await
     }
 }

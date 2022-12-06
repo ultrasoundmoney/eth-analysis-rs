@@ -3,12 +3,19 @@ mod price_stats;
 mod supply_over_time;
 mod supply_parts;
 
+use std::sync::{Arc, Mutex};
+
 use anyhow::Result;
 use async_trait::async_trait;
+use axum::{routing::get, Router, Server};
 use chrono::{DateTime, Duration, Utc};
 
+use futures::try_join;
 use lazy_static::lazy_static;
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{
+    header::{HeaderMap, HeaderValue},
+    StatusCode,
+};
 use serde::Deserialize;
 use serde_json::json;
 use tokio::time::sleep;
@@ -112,7 +119,7 @@ lazy_static! {
 struct Phoenix {
     name: &'static str,
     last_seen: DateTime<Utc>,
-    monitor: Box<dyn PhoenixMonitor>,
+    monitor: Box<dyn PhoenixMonitor + Send + Sync>,
 }
 
 impl Phoenix {
@@ -135,12 +142,33 @@ impl Phoenix {
 
 #[async_trait]
 trait PhoenixMonitor {
-    async fn refresh(&mut self) -> Result<DateTime<Utc>>;
+    async fn refresh(&self) -> Result<DateTime<Utc>>;
 }
 
-pub async fn monitor_critical_services() {
-    log::init_with_env();
+async fn run_health_check_server(last_checked: Arc<Mutex<DateTime<Utc>>>) {
+    let app = Router::new().route(
+        "/healthz",
+        get(|| async move {
+            let last_checked = last_checked.lock().unwrap();
+            let age = Utc::now() - *last_checked;
+            if age > Duration::seconds(30) {
+                StatusCode::INTERNAL_SERVER_ERROR
+            } else {
+                StatusCode::OK
+            }
+        }),
+    );
 
+    let port = env::get_env_var("PORT").unwrap_or("8080".to_string());
+    let socket_addr = format!("0.0.0.0:{port}").parse().unwrap();
+    info!(%socket_addr, "starting health check server");
+    Server::bind(&socket_addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+}
+
+async fn run_alarm_loop(last_checked: Arc<Mutex<DateTime<Utc>>>) {
     info!(
         "releasing phoenix, dies after {} seconds",
         PHOENIX_MAX_LIFESPAN.num_seconds()
@@ -190,6 +218,31 @@ pub async fn monitor_critical_services() {
             }
         }
 
+        // Update the last checked time.
+        {
+            let mut last_checked = last_checked.lock().unwrap();
+            *last_checked = Utc::now();
+        }
+
         sleep(Duration::seconds(10).to_std().unwrap()).await;
     }
+}
+
+pub async fn monitor_critical_services() {
+    log::init_with_env();
+
+    // Used to share when we last checked with the health check endpoint.
+    let last_checked = Arc::new(Mutex::new(Utc::now()));
+
+    let last_checked_ref = last_checked.clone();
+
+    let alarm_thread = tokio::spawn(async move {
+        run_alarm_loop(last_checked).await;
+    });
+
+    let server_thread = tokio::spawn(async move {
+        run_health_check_server(last_checked_ref).await;
+    });
+
+    try_join!(server_thread, alarm_thread).unwrap();
 }
