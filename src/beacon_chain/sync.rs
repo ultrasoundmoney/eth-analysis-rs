@@ -185,8 +185,8 @@ async fn gather_sync_data(
 async fn get_sync_lag(beacon_node: &BeaconNode, syncing_slot: &Slot) -> Result<Duration> {
     let last_header = beacon_node.get_last_header().await?;
     let last_on_chain_slot = last_header.header.message.slot;
-    let last_on_chain_slot_date_time = beacon_time::get_date_time_from_slot(&last_on_chain_slot);
-    let slot_date_time = beacon_time::get_date_time_from_slot(&syncing_slot);
+    let last_on_chain_slot_date_time = beacon_time::date_time_from_slot(&last_on_chain_slot);
+    let slot_date_time = beacon_time::date_time_from_slot(&syncing_slot);
     let lag = last_on_chain_slot_date_time - slot_date_time;
     Ok(lag)
 }

@@ -35,7 +35,7 @@ pub async fn store_validators_balance(
         "
             INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
         ",
-        beacon_time::get_date_time_from_slot(slot),
+        beacon_time::date_time_from_slot(slot),
         state_root,
         gwei,
     )

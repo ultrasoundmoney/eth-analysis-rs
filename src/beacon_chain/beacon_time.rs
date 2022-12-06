@@ -13,7 +13,7 @@ lazy_static! {
     pub static ref SLOT_DURATION: Duration = Duration::seconds(12);
 }
 
-pub fn get_date_time_from_slot(slot: &Slot) -> DateTime<Utc> {
+pub fn date_time_from_slot(slot: &Slot) -> DateTime<Utc> {
     *GENESIS_TIMESTAMP + Duration::seconds((slot * 12).into())
 }
 
@@ -30,8 +30,8 @@ pub fn get_is_first_of_day(slot: &Slot) -> bool {
     match slot.cmp(&0) {
         Ordering::Equal => true,
         Ordering::Greater => {
-            let day_previous_slot = get_date_time_from_slot(&(slot - 1)).day();
-            let day = get_date_time_from_slot(&slot).day();
+            let day_previous_slot = date_time_from_slot(&(slot - 1)).day();
+            let day = date_time_from_slot(&slot).day();
 
             return day_previous_slot != day;
         }
@@ -58,8 +58,8 @@ fn get_is_first_of_minute(slot: &Slot) -> bool {
     match slot.cmp(&0) {
         Ordering::Equal => true,
         Ordering::Greater => {
-            let minute_of_previous_slot = get_date_time_from_slot(&(slot - 1)).minute();
-            let minute_of_slot = get_date_time_from_slot(&slot).minute();
+            let minute_of_previous_slot = date_time_from_slot(&(slot - 1)).minute();
+            let minute_of_slot = date_time_from_slot(&slot).minute();
 
             return minute_of_previous_slot != minute_of_slot;
         }
@@ -126,11 +126,11 @@ mod tests {
     #[test]
     fn get_timestamp_test() {
         assert_eq!(
-            get_date_time_from_slot(&0),
+            date_time_from_slot(&0),
             "2020-12-01T12:00:23Z".parse::<DateTime<Utc>>().unwrap()
         );
         assert_eq!(
-            get_date_time_from_slot(&3599),
+            date_time_from_slot(&3599),
             "2020-12-02T00:00:11Z".parse::<DateTime<Utc>>().unwrap()
         );
     }

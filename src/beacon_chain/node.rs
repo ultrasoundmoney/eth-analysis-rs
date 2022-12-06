@@ -388,7 +388,7 @@ impl BeaconNode {
         &self,
         slot: &Slot,
     ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
-        let slot_timestamp = beacon_time::get_date_time_from_slot(slot);
+        let slot_timestamp = beacon_time::date_time_from_slot(slot);
         if slot_timestamp > Utc::now() {
             return Err(anyhow!(
                 "tried to fetch slot: {}, with expected timestamp: {}, but can't fetch slots from the future",

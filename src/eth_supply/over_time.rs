@@ -233,7 +233,7 @@ pub async fn get_supply_over_time(
         since_burn,
         since_merge,
         slot,
-        timestamp: beacon_time::get_date_time_from_slot(&slot),
+        timestamp: beacon_time::date_time_from_slot(&slot),
     };
 
     Ok(supply_over_time)
@@ -328,7 +328,7 @@ mod tests {
         // This step is inexact. We estimate the slot based on the timestamp. Then convert this
         // estimated slot to the actual timestamp.
         let test_slot = beacon_time::get_slot_from_date_time(&test_timestamp);
-        let reverse_timestamp = beacon_time::get_date_time_from_slot(&test_slot);
+        let reverse_timestamp = beacon_time::date_time_from_slot(&test_slot);
 
         let test_supply_at_time = SupplyAtTime {
             timestamp: reverse_timestamp,

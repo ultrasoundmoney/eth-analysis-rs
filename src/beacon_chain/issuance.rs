@@ -24,7 +24,7 @@ pub async fn store_issuance(
         "
             INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
         ",
-        beacon_time::get_date_time_from_slot(&slot),
+        beacon_time::date_time_from_slot(&slot),
         state_root,
         gwei,
     )

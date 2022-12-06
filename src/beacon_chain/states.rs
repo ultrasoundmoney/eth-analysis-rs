@@ -17,7 +17,7 @@ trait SlotExt {
 
 impl SlotExt for Slot {
     fn get_date_time(&self) -> DateTime<Utc> {
-        beacon_time::get_date_time_from_slot(self)
+        beacon_time::date_time_from_slot(self)
     }
 }
 
