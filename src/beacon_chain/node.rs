@@ -9,11 +9,11 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
-    eth_units::GweiNewtype, execution_chain::BlockHash, json_codecs::from_i32_string,
+    eth_units::GweiNewtype, execution_chain::BlockHash, json_codecs::i32_from_string,
     performance::TimedExt,
 };
 
-use super::{beacon_time, Slot, BEACON_URL};
+use super::{slot_from_string, Slot, BEACON_URL};
 
 #[derive(Debug)]
 enum BlockId {
@@ -24,6 +24,12 @@ enum BlockId {
     Genesis,
     Head,
     Slot(Slot),
+}
+
+impl From<&Slot> for BlockId {
+    fn from(slot: &Slot) -> Self {
+        BlockId::Slot(slot.clone())
+    }
 }
 
 impl Display for BlockId {
@@ -63,7 +69,7 @@ pub struct BeaconBlockBody {
 pub struct BeaconBlock {
     pub body: BeaconBlockBody,
     pub parent_root: String,
-    #[serde(deserialize_with = "from_i32_string")]
+    #[serde(deserialize_with = "slot_from_string")]
     pub slot: Slot,
     pub state_root: String,
 }
@@ -149,7 +155,7 @@ fn make_validator_balances_by_state_url(state_root: &str) -> String {
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct BeaconHeader {
-    #[serde(deserialize_with = "from_i32_string")]
+    #[serde(deserialize_with = "slot_from_string")]
     pub slot: Slot,
     pub parent_root: BlockRoot,
     pub state_root: StateRoot,
@@ -233,7 +239,7 @@ fn make_finality_checkpoint_url() -> String {
 #[derive(Deserialize)]
 pub struct FinalityCheckpoint {
     #[allow(dead_code)]
-    #[serde(deserialize_with = "from_i32_string")]
+    #[serde(deserialize_with = "i32_from_string")]
     epoch: i32,
     #[allow(dead_code)]
     root: String,
@@ -285,7 +291,7 @@ impl BeaconNode {
 
     #[allow(dead_code)]
     pub async fn get_block_by_slot(&self, slot: &Slot) -> Result<Option<BeaconBlock>> {
-        self.get_block(&BlockId::Slot(*slot)).await
+        self.get_block(&slot.into()).await
     }
 
     pub async fn get_block_by_block_root(&self, block_root: &str) -> Result<Option<BeaconBlock>> {
@@ -388,7 +394,7 @@ impl BeaconNode {
         &self,
         slot: &Slot,
     ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
-        let slot_timestamp = beacon_time::date_time_from_slot(slot);
+        let slot_timestamp = slot.date_time();
         if slot_timestamp > Utc::now() {
             return Err(anyhow!(
                 "tried to fetch slot: {}, with expected timestamp: {}, but can't fetch slots from the future",
@@ -397,7 +403,8 @@ impl BeaconNode {
             ));
         }
 
-        self.get_header(&BlockId::Slot(*slot)).await
+        let block_id: BlockId = slot.into();
+        self.get_header(&block_id).await
     }
 
     #[allow(dead_code)]
@@ -416,7 +423,8 @@ impl BeaconNode {
         state_root: &str,
         slot: &Slot,
     ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
-        let header = self.get_header(&BlockId::Slot(*slot)).await?;
+        let block_id: BlockId = slot.into();
+        let header = self.get_header(&block_id).await?;
 
         match header {
             None => Ok(None),
@@ -571,7 +579,7 @@ pub mod tests {
             Self {
                 block_root,
                 state_root,
-                slot: 0,
+                slot: Slot(0),
                 parent_root: GENESIS_PARENT_ROOT.to_owned(),
             }
         }
@@ -635,7 +643,7 @@ pub mod tests {
         serde_json::from_reader::<BufReader<File>, ValidatorsEnvelope>(reader).unwrap();
     }
 
-    const SLOT_1229: Slot = 1229;
+    const SLOT_1229: Slot = Slot(1229);
     const BLOCK_ROOT_1229: &str =
         "0x35376f52006e12b7e9247b457277fb34f6bd32d83a651e24c2669467607e0778";
     const STATE_ROOT_1229: &str =
@@ -710,7 +718,10 @@ pub mod tests {
     #[tokio::test]
     async fn get_header_by_slot_test() {
         let beacon_node = BeaconNode::new();
-        beacon_node.get_header_by_slot(&4_000_000).await.unwrap();
+        beacon_node
+            .get_header_by_slot(&Slot(4_000_000))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -736,7 +747,7 @@ pub mod tests {
         beacon_node
             .get_header_by_state_root(
                 "0x2e3df8cebeb66206d2b26e6a36a63105f78c22c3ab4b7abaa11b4056b4519588",
-                &5000000,
+                &Slot(5000000),
             )
             .await
             .unwrap();

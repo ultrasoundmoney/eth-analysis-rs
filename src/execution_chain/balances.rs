@@ -63,7 +63,7 @@ mod tests {
 
     use super::*;
     use crate::beacon_chain::tests::store_custom_test_block;
-    use crate::beacon_chain::{BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder};
+    use crate::beacon_chain::{BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder, Slot};
     use crate::db;
     use crate::execution_chain::supply_deltas::add_delta;
     use crate::execution_chain::SupplyDelta;
@@ -76,7 +76,7 @@ mod tests {
         let test_id = "get_balances_by_hash";
         let block_hash = format!("0x{test_id}_block_hash");
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
-            .slot(&10)
+            .slot(&Slot(10))
             .build();
         let block = Into::<BeaconBlockBuilder>::into(&header)
             .block_hash(&block_hash)

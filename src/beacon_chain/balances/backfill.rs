@@ -6,7 +6,7 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 use tracing::{debug, info};
 
 use crate::{
-    beacon_chain::{balances, beacon_time::FirstOfDaySlot, BeaconNode, FIRST_POST_LONDON_SLOT},
+    beacon_chain::{balances, BeaconNode, Slot, FIRST_POST_LONDON_SLOT},
     db,
     execution_chain::LONDON_HARD_FORK_TIMESTAMP,
     log,
@@ -30,12 +30,12 @@ async fn backfill_balances(db_pool: &PgPool, work_todo: u64, daily_only: bool) -
                 beacon_validators_balance.state_root IS NULL
             ORDER BY slot DESC
         "#,
-        FIRST_POST_LONDON_SLOT,
+        FIRST_POST_LONDON_SLOT.0,
     )
     .fetch(db_pool)
     .try_filter(|row| {
         if daily_only {
-            let is_first_of_day_slot = FirstOfDaySlot::new(&row.slot).is_some();
+            let is_first_of_day_slot = Slot(row.slot).is_first_of_day();
             futures::future::ready(is_first_of_day_slot)
         } else {
             futures::future::ready(true)
@@ -53,8 +53,13 @@ async fn backfill_balances(db_pool: &PgPool, work_todo: u64, daily_only: bool) -
             .expect("expect block to exist for historic block_root");
         let balances_sum = balances::sum_validator_balances(&validator_balances);
 
-        balances::store_validators_balance(db_pool, &row.state_root, &row.slot, &balances_sum)
-            .await?;
+        balances::store_validators_balance(
+            db_pool,
+            &row.state_root,
+            &row.slot.into(),
+            &balances_sum,
+        )
+        .await?;
 
         progress.inc_work_done();
 
@@ -87,7 +92,7 @@ pub async fn backfill_balances_to_london() -> Result<()> {
             AND
                 beacon_validators_balance.state_root IS NULL
         "#,
-        FIRST_POST_LONDON_SLOT
+        FIRST_POST_LONDON_SLOT.0
     )
     .fetch_one(&db_pool)
     .await?;

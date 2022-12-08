@@ -7,7 +7,7 @@ use crate::eth_units::{to_gwei_string, GweiNewtype};
 
 use super::blocks::get_deposit_sum_from_block_root;
 use super::node::BeaconBlock;
-use super::states::Slot;
+use super::Slot;
 
 pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
     block
@@ -21,7 +21,7 @@ pub async fn get_deposit_sum_aggregated<'a>(
     executor: impl PgExecutor<'a>,
     block: &BeaconBlock,
 ) -> sqlx::Result<GweiNewtype> {
-    let parent_deposit_sum_aggregated = if block.slot == 0 {
+    let parent_deposit_sum_aggregated = if block.slot == Slot::GENESIS {
         GweiNewtype(0)
     } else {
         get_deposit_sum_from_block_root(executor, &block.parent_root).await?

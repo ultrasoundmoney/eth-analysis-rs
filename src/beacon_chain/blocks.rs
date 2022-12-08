@@ -95,7 +95,7 @@ pub async fn store_block(
 }
 
 #[allow(dead_code)]
-pub async fn get_last_block_slot(connection: &mut PgConnection) -> Result<Option<i32>> {
+pub async fn get_last_block_slot(connection: &mut PgConnection) -> Result<Option<Slot>> {
     let row = sqlx::query!(
         "
             SELECT
@@ -113,7 +113,7 @@ pub async fn get_last_block_slot(connection: &mut PgConnection) -> Result<Option
     .fetch_optional(connection)
     .await?;
 
-    let slot = row.map(|row| row.slot);
+    let slot = row.map(|row| Slot(row.slot));
 
     Ok(slot)
 }
@@ -130,7 +130,7 @@ pub async fn delete_blocks(connection: impl PgExecutor<'_>, greater_than_or_equa
                 WHERE beacon_states.slot >= $1
             )
         ",
-        *greater_than_or_equal
+        greater_than_or_equal.0
     )
     .execute(connection)
     .await
@@ -150,7 +150,7 @@ pub async fn delete_block(connection: impl PgExecutor<'_>, slot: &Slot) {
             )
         ",
     )
-    .bind(*slot)
+    .bind(slot.0)
     .execute(connection)
     .await
     .unwrap();
@@ -178,7 +178,7 @@ pub async fn get_block_before_slot(
             ORDER BY slot DESC 
             LIMIT 1
         ",
-        *less_than
+        less_than.0
     )
     .fetch_one(executor)
     .await?;
@@ -262,7 +262,7 @@ pub async fn get_block_by_slot(
             WHERE
                 slot = $1
         "#,
-        slot
+        slot.0
     )
     .fetch_optional(executor)
     .await?;
@@ -324,7 +324,7 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let state_root = format!("0xblock_test_state_root");
-        let slot = 0;
+        let slot = Slot(0);
 
         store_state(&mut transaction, &state_root, &slot)
             .await
@@ -377,7 +377,7 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "last_block_number_some_test";
-        let slot = 5923;
+        let slot = Slot(5923);
         let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
             .slot(&slot)
             .build();
@@ -397,9 +397,9 @@ mod tests {
         store_test_block(&mut transaction, "delete_block_test").await;
 
         let block_slot = get_last_block_slot(&mut transaction).await.unwrap();
-        assert_eq!(block_slot, Some(0));
+        assert_eq!(block_slot, Some(Slot(0)));
 
-        delete_blocks(&mut transaction, &0).await;
+        delete_blocks(&mut transaction, &Slot(0)).await;
 
         let block_slot = get_last_block_slot(&mut transaction).await.unwrap();
         assert_eq!(block_slot, None);
@@ -424,7 +424,9 @@ mod tests {
 
         store_custom_test_block(&mut transaction, &test_header_after, &test_block_after).await;
 
-        let last_block_before = get_block_before_slot(&mut transaction, &1).await.unwrap();
+        let last_block_before = get_block_before_slot(&mut transaction, &Slot(1))
+            .await
+            .unwrap();
 
         assert_eq!(test_header_before.root, last_block_before.block_root);
     }
@@ -453,7 +455,9 @@ mod tests {
         .await
         .unwrap();
 
-        let last_block_before = get_block_before_slot(&mut transaction, &1).await.unwrap();
+        let last_block_before = get_block_before_slot(&mut transaction, &Slot(1))
+            .await
+            .unwrap();
 
         assert_eq!(test_header_before.root, last_block_before.block_root);
     }
@@ -464,7 +468,7 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "get_block_test";
-        let slot = 374;
+        let slot = Slot(374);
         let state_root = format!("0x{test_id}_state_root");
         let block_root = format!("0x{test_id}_block_root");
         let block_hash = format!("0x{test_id}_block_hash");
@@ -509,13 +513,13 @@ mod tests {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
         let block = Into::<BeaconBlockBuilder>::into(&header).build();
 
-        let block_not_there = get_block_by_slot(&mut transaction, &0).await.unwrap();
+        let block_not_there = get_block_by_slot(&mut transaction, &Slot(0)).await.unwrap();
 
         assert_eq!(None, block_not_there);
 
         store_custom_test_block(&mut transaction, &header, &block).await;
 
-        let block_there = get_block_by_slot(&mut transaction, &0)
+        let block_there = get_block_by_slot(&mut transaction, &Slot(0))
             .await
             .unwrap()
             .unwrap();

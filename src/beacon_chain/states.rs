@@ -1,25 +1,10 @@
 mod heal;
 
-use chrono::{DateTime, Utc};
 use sqlx::PgExecutor;
 
-use super::beacon_time;
+use super::Slot;
 
 pub use heal::heal_beacon_states;
-
-// Beacon chain slots are defined as 12 second periods starting from genesis. With u32 our program
-// would overflow when the slot number passes 2_147_483_647. i32::MAX * 12 seconds = ~817 years.
-pub type Slot = i32;
-
-trait SlotExt {
-    fn get_date_time(&self) -> DateTime<Utc>;
-}
-
-impl SlotExt for Slot {
-    fn get_date_time(&self) -> DateTime<Utc> {
-        beacon_time::date_time_from_slot(self)
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub struct BeaconState {
@@ -30,14 +15,14 @@ pub struct BeaconState {
 pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState> {
     sqlx::query_as!(
         BeaconState,
-        "
+        r#"
             SELECT
                 beacon_states.state_root,
-                beacon_states.slot
+                beacon_states.slot AS "slot: Slot"
             FROM beacon_states
             ORDER BY slot DESC
             LIMIT 1
-        ",
+        "#,
     )
     .fetch_optional(executor)
     .await
@@ -59,7 +44,7 @@ pub async fn store_state(
                 ($1, $2)
         ",
         state_root,
-        *slot,
+        slot.0,
     )
     .execute(executor)
     .await?;
@@ -80,7 +65,7 @@ pub async fn get_state_root_by_slot(
             WHERE
                 slot = $1
         ",
-        *slot
+        slot.0
     )
     .fetch_optional(executor)
     .await?
@@ -95,7 +80,7 @@ pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal:
             DELETE FROM beacon_states
             WHERE slot >= $1
         ",
-        *greater_than_or_equal
+        greater_than_or_equal.0
     )
     .execute(executor)
     .await
@@ -108,7 +93,7 @@ pub async fn delete_state(executor: impl PgExecutor<'_>, slot: &Slot) {
             DELETE FROM beacon_states
             WHERE slot = $1
         ",
-        *slot
+        slot.0
     )
     .execute(executor)
     .await
@@ -127,7 +112,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
+        store_state(&mut transaction, "0xstate_root", &Slot(0))
             .await
             .unwrap();
 
@@ -135,7 +120,7 @@ mod tests {
 
         assert_eq!(
             BeaconState {
-                slot: 0,
+                slot: Slot(0),
                 state_root: "0xstate_root".to_string(),
             },
             state,
@@ -147,11 +132,11 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root_1", &0)
+        store_state(&mut transaction, "0xstate_root_1", &Slot(0))
             .await
             .unwrap();
 
-        store_state(&mut transaction, "0xstate_root_2", &1)
+        store_state(&mut transaction, "0xstate_root_2", &Slot(1))
             .await
             .unwrap();
 
@@ -160,7 +145,7 @@ mod tests {
         assert_eq!(
             state,
             BeaconState {
-                slot: 1,
+                slot: Slot(1),
                 state_root: "0xstate_root_2".to_string(),
             }
         );
@@ -171,14 +156,14 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &0)
+        store_state(&mut transaction, "0xstate_root", &Slot(0))
             .await
             .unwrap();
 
         let state = get_last_state(&mut transaction).await;
         assert!(state.is_some());
 
-        delete_states(&mut transaction, &0).await;
+        delete_states(&mut transaction, &Slot(0)).await;
 
         let state_after = get_last_state(&mut transaction).await;
         assert!(state_after.is_none());
@@ -189,9 +174,11 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest", &0).await.unwrap();
+        store_state(&mut transaction, "0xtest", &Slot(0))
+            .await
+            .unwrap();
 
-        let state_root = get_state_root_by_slot(&mut transaction, &0)
+        let state_root = get_state_root_by_slot(&mut transaction, &Slot(0))
             .await
             .unwrap()
             .unwrap();

@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use crate::beacon_chain::{beacon_time, Slot};
+use crate::beacon_chain::Slot;
 
 use super::PhoenixMonitor;
 
@@ -32,7 +32,7 @@ impl SupplyOverTimeMonitor {
     pub async fn get_current_timestamp(&self) -> Result<DateTime<Utc>> {
         SupplyOverTime::get_current()
             .await
-            .map(|supply_parts| beacon_time::date_time_from_slot(&supply_parts.slot))
+            .map(|supply_parts| supply_parts.slot.date_time())
             .map_err(|e| e.into())
     }
 }

@@ -78,8 +78,9 @@ pub async fn get_supply_parts(
     let block = match beacon_chain::get_block_by_slot(executor.acquire().await?, slot).await? {
         None => {
             debug!(
-                slot,
-                state_root, "no block available for slot, using most recent block before this slot"
+                %slot,
+                state_root,
+                "no block available for slot, using most recent block before this slot"
             );
             beacon_chain::get_block_before_slot(executor.acquire().await?, slot).await?
         }
@@ -95,8 +96,10 @@ pub async fn get_supply_parts(
         None => Ok(None),
         Some(beacon_balances_sum) => {
             debug!(
-                slot,
-                state_root, block_hash, "looking up execution balances by hash"
+                %slot,
+                state_root,
+                block_hash,
+                "looking up execution balances by hash"
             );
             let execution_balances = execution_chain::get_execution_balances_by_hash(
                 executor.acquire().await?,

@@ -6,7 +6,6 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, PgPool, Row};
 use tracing::debug;
 
-use crate::beacon_chain::beacon_time;
 use crate::caching::{self, CacheKey};
 use crate::eth_units::EthF64;
 use crate::time_frames::LimitedTimeFrame::*;
@@ -233,7 +232,7 @@ pub async fn get_supply_over_time(
         since_burn,
         since_merge,
         slot,
-        timestamp: beacon_time::date_time_from_slot(&slot),
+        timestamp: slot.date_time(),
     };
 
     Ok(supply_over_time)
@@ -253,7 +252,7 @@ mod tests {
     use sqlx::{Acquire, PgConnection};
 
     use crate::{
-        beacon_chain::{self, beacon_time, BeaconBalancesSum, BeaconDepositsSum},
+        beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum},
         db, eth_supply,
         eth_units::{EthF64, GweiNewtype},
         execution_chain::{BlockStore, ExecutionBalancesSum, ExecutionNodeBlock},
@@ -327,8 +326,8 @@ mod tests {
         let test_timestamp = Utc::now().trunc_subsecs(0) - Duration::minutes(2);
         // This step is inexact. We estimate the slot based on the timestamp. Then convert this
         // estimated slot to the actual timestamp.
-        let test_slot = beacon_time::get_slot_from_date_time(&test_timestamp);
-        let reverse_timestamp = beacon_time::date_time_from_slot(&test_slot);
+        let test_slot: Slot = Slot::from_date_time_rounded_down(&test_timestamp);
+        let reverse_timestamp = test_slot.date_time();
 
         let test_supply_at_time = SupplyAtTime {
             timestamp: reverse_timestamp,

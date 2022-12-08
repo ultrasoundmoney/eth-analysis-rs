@@ -10,7 +10,7 @@ use crate::eth_units::{to_gwei_string, GweiNewtype};
 use crate::supply_projection::GweiInTime;
 
 use super::node::{ValidatorBalance, BeaconNode};
-use super::{beacon_time, states, Slot};
+use super::{states, Slot};
 
 pub use backfill::backfill_balances_to_london;
 pub use backfill::backfill_daily_balances_to_london;
@@ -35,7 +35,7 @@ pub async fn store_validators_balance(
         "
             INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
         ",
-        beacon_time::date_time_from_slot(slot),
+        slot.date_time(),
         state_root,
         gwei,
     )
@@ -103,7 +103,7 @@ pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_o
                 WHERE slot >= $1
             )
         ",
-        *greater_than_or_equal
+        greater_than_or_equal.0
     )
     .execute(executor)
     .await
@@ -111,7 +111,7 @@ pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_o
 }
 
 pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
-    sqlx::query(
+    sqlx::query!(
         "
             DELETE FROM beacon_validators_balance
             WHERE state_root IN (
@@ -119,16 +119,11 @@ pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
                 WHERE slot = $1
             )
         ",
+        slot.0
     )
-    .bind(*slot )
     .execute(executor)
     .await
     .unwrap();
-}
-
-struct BeaconBalancesSumRow {
-    slot: i32,
-    gwei: i64
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -137,15 +132,6 @@ pub struct BeaconBalancesSum {
     pub slot: Slot,
     #[serde(serialize_with = "to_gwei_string")]
     pub balances_sum: GweiNewtype,
-}
-
-impl From<BeaconBalancesSumRow> for BeaconBalancesSum {
-    fn from(row: BeaconBalancesSumRow) -> Self {
-            Self{
-                slot: row.slot,
-                balances_sum: row.gwei.try_into().unwrap()
-            }
-    }
 }
 
 pub async fn get_balances_by_state_root(executor: impl PgExecutor<'_>, state_root: &str) -> Result<Option<GweiNewtype>> {
@@ -183,14 +169,14 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_balances", &17999)
+        store_state(&mut transaction, "0xtest_balances", &Slot(17999))
             .await
             .unwrap();
 
         store_validators_balance(
             &mut transaction,
             "0xtest_balances",
-            &17999,
+            &Slot(17999),
             &GweiNewtype(100),
         )
         .await.unwrap();
@@ -212,14 +198,14 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_balances", &17999)
+        store_state(&mut transaction, "0xtest_balances", &Slot(17999))
             .await
             .unwrap();
 
         store_validators_balance(
             &mut transaction,
             "0xtest_balances",
-            &17999,
+            &Slot(17999),
             &GweiNewtype(100),
         )
         .await.unwrap();
@@ -227,7 +213,7 @@ mod tests {
         let balances = get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
         assert_eq!(balances.len(), 1);
 
-        delete_validator_sums(&mut transaction, &17999).await;
+        delete_validator_sums(&mut transaction, &Slot(17999)).await;
 
         let balances = get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
         assert_eq!(balances.len(), 0);
@@ -246,7 +232,7 @@ mod tests {
         store_validators_balance(
             &mut transaction,
             &state_root,
-            &0,
+            &Slot(0),
             &GweiNewtype(100),
         )
         .await.unwrap();

@@ -56,7 +56,7 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
             match supply_parts {
                 None => {
                     debug!(
-                        limit_slot,
+                        %limit_slot,
                         "eth supply parts unavailable for slot, skipping supply dashboard update"
                     );
                 }

@@ -1,5 +1,4 @@
 mod balances;
-pub mod beacon_time;
 mod blocks;
 mod deposits;
 mod effective_balance_sum;
@@ -8,6 +7,7 @@ mod node;
 mod rewards;
 mod states;
 mod sync;
+mod units;
 
 pub use balances::backfill_balances_to_london;
 pub use balances::backfill_daily_balances_to_london;
@@ -23,6 +23,9 @@ pub use blocks::heal_block_hashes;
 pub use blocks::store_block;
 pub use blocks::GENESIS_PARENT_ROOT;
 
+use chrono::DateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 pub use deposits::get_deposits_sum_by_state_root;
 pub use deposits::BeaconDepositsSum;
 
@@ -46,19 +49,22 @@ pub use states::get_last_state;
 pub use states::get_state_root_by_slot;
 pub use states::heal_beacon_states;
 pub use states::store_state;
-pub use states::Slot;
 
 pub use sync::sync_beacon_states;
+
+pub use units::slot_from_string;
+pub use units::Slot;
 
 use lazy_static::lazy_static;
 
 use crate::env;
 
-pub const FIRST_POST_MERGE_SLOT: Slot = 4700013;
-pub const FIRST_POST_LONDON_SLOT: Slot = 1778566;
+pub const FIRST_POST_MERGE_SLOT: Slot = Slot(4700013);
+pub const FIRST_POST_LONDON_SLOT: Slot = Slot(1778566);
 
 lazy_static! {
     static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");
+    static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp_opt(1606824023, 0).unwrap();
 }
 
 #[cfg(test)]

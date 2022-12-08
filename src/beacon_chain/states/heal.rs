@@ -15,7 +15,7 @@ use crate::{
 };
 
 // The first slot we have stored.
-const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = 0;
+const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = Slot(0);
 
 const HEAL_BEACON_STATES_KEY: &str = "heal-beacon-states";
 
@@ -44,21 +44,21 @@ pub async fn heal_beacon_states() -> Result<()> {
     let last_slot = beacon_chain::get_last_state(&db_pool)
         .await
         .expect("a beacon state should be stored before trying to heal any")
-        .slot;
+        .slot
+        .0;
     let last_checked = get_last_checked(&db_pool).await?;
-    let starting_slot = last_checked.unwrap_or(FIRST_STORED_ETH_SUPPLY_SLOT);
+    let starting_slot = last_checked.unwrap_or(FIRST_STORED_ETH_SUPPLY_SLOT).0;
 
     debug!(
-        starting_slot,
-        last_slot, "checking first stored slot to last slot for gaps"
+        %starting_slot,
+        %last_slot,
+        "checking first stored slot to last slot for gaps"
     );
 
-    let mut progress = Progress::new(
-        "heal-beacon-states",
-        (last_slot - starting_slot).try_into().unwrap(),
-    );
+    let work_todo: u64 = (last_slot - starting_slot) as u64;
+    let mut progress = Progress::new("heal-beacon-states", work_todo);
 
-    let slots = (starting_slot..=last_slot).collect::<Vec<Slot>>();
+    let slots = (starting_slot..=last_slot).collect::<Vec<i32>>();
 
     for chunk in slots.chunks(10000) {
         let first = chunk.first().unwrap();
@@ -84,26 +84,27 @@ pub async fn heal_beacon_states() -> Result<()> {
         .await?
         .into_iter()
         .map(|row| (row.slot, row.state_root))
-        .collect::<HashMap<Slot, String>>();
+        .collect::<HashMap<i32, String>>();
 
         for slot in *first..=*last {
             let stored_state_root = stored_states.get(&slot).unwrap();
             let state_root = beacon_node
-                .get_state_root_by_slot(&slot)
+                .get_state_root_by_slot(&slot.into())
                 .await?
                 .expect("expect state_root to exist for historic slots");
 
             if *stored_state_root != state_root {
                 warn!("state root mismatch, rolling back stored and resyncing");
-                sync::rollback_slot(&mut *db_pool.acquire().await?, &slot).await?;
-                sync::sync_slot_by_state_root(&db_pool, &beacon_node, &state_root, &slot).await?;
-                info!(slot, "healed state at slot");
+                sync::rollback_slot(&mut *db_pool.acquire().await?, &slot.into()).await?;
+                sync::sync_slot_by_state_root(&db_pool, &beacon_node, &state_root, &slot.into())
+                    .await?;
+                info!(%slot, "healed state at slot");
             }
 
             progress.inc_work_done();
         }
 
-        store_last_checked(&db_pool, &last).await?;
+        store_last_checked(&db_pool, &last.into()).await?;
         info!("{}", progress.get_progress_string());
     }
 

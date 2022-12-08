@@ -1,6 +1,6 @@
 use serde::{de, Deserialize, Deserializer, Serializer};
 
-pub fn from_i32_string<'de, D>(deserializer: D) -> Result<i32, D::Error>
+pub fn i32_from_string<'de, D>(deserializer: D) -> Result<i32, D::Error>
 where
     D: Deserializer<'de>,
 {

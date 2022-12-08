@@ -9,10 +9,10 @@ use std::{cmp::Ordering, collections::VecDeque};
 use tracing::{debug, info, warn};
 
 use crate::{
-    beacon_chain::{balances, beacon_time, deposits, issuance},
+    beacon_chain::{balances, deposits, issuance, slot_from_string},
     db,
     eth_units::GweiNewtype,
-    json_codecs::from_i32_string,
+    json_codecs::i32_from_string,
     log,
     performance::TimedExt,
 };
@@ -65,16 +65,16 @@ impl Iterator for SlotRangeIntoIterator {
     type Item = Slot;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match (self.slot_range.greater_than_or_equal + self.index as Slot)
+        match (self.slot_range.greater_than_or_equal + self.index as i32)
             .cmp(&(self.slot_range.less_than_or_equal))
         {
             Ordering::Less => {
-                let current = self.slot_range.greater_than_or_equal + self.index as Slot;
+                let current = self.slot_range.greater_than_or_equal + self.index as i32;
                 self.index = self.index + 1;
                 Some(current)
             }
             Ordering::Equal => {
-                let current = self.slot_range.greater_than_or_equal + self.index as Slot;
+                let current = self.slot_range.greater_than_or_equal + self.index as i32;
                 self.index = self.index + 1;
                 Some(current)
             }
@@ -185,8 +185,8 @@ async fn gather_sync_data(
 async fn get_sync_lag(beacon_node: &BeaconNode, syncing_slot: &Slot) -> Result<Duration> {
     let last_header = beacon_node.get_last_header().await?;
     let last_on_chain_slot = last_header.header.message.slot;
-    let last_on_chain_slot_date_time = beacon_time::date_time_from_slot(&last_on_chain_slot);
-    let slot_date_time = beacon_time::date_time_from_slot(&syncing_slot);
+    let last_on_chain_slot_date_time = last_on_chain_slot.date_time();
+    let slot_date_time = syncing_slot.date_time();
     let lag = last_on_chain_slot_date_time - slot_date_time;
     Ok(lag)
 }
@@ -224,7 +224,7 @@ pub async fn sync_slot_by_state_root(
                 deposits::get_deposit_sum_aggregated(&mut transaction, &block).await?;
 
             debug!(
-                slot,
+                %slot,
                 state_root,
                 block_root = header.root,
                 "storing slot with block"
@@ -283,13 +283,13 @@ async fn update_deferrable_analysis(db_pool: &PgPool) -> Result<()> {
 struct FinalizedCheckpointEvent {
     block: String,
     state: String,
-    #[serde(deserialize_with = "from_i32_string")]
+    #[serde(deserialize_with = "i32_from_string")]
     epoch: i32,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 struct HeadEvent {
-    #[serde(deserialize_with = "from_i32_string")]
+    #[serde(deserialize_with = "slot_from_string")]
     slot: Slot,
     /// block_root
     block: String,
@@ -327,13 +327,13 @@ async fn stream_slots(slot_to_follow: Slot) -> impl Stream<Item = Slot> {
                     // Detect forward gaps in received slots, and fill them in.
                     if head.slot > last_slot && head.slot != last_slot + 1 {
                         debug!(
-                            head_slot = head.slot,
-                            last_slot, "head slot is more than one ahead of last_slot"
+                            head_slot = head.slot.to_string(),
+                            %last_slot, "head slot is more than one ahead of last_slot"
                         );
 
-                        for missing_slot in (last_slot + 1)..head.slot {
+                        for missing_slot in (last_slot + 1).0..head.slot.0 {
                             debug!(missing_slot, "adding missing slot to slots stream");
-                            tx.send(missing_slot).await.unwrap();
+                            tx.send(Slot(missing_slot)).await.unwrap();
                         }
                     }
 
@@ -382,7 +382,7 @@ async fn stream_slots_from(gte_slot: &Slot) -> impl Stream<Item = Slot> {
 
 async fn stream_slots_from_last(db_pool: &PgPool) -> impl Stream<Item = Slot> {
     let last_synced_state = states::get_last_state(db_pool).await;
-    let next_slot_to_sync = last_synced_state.map_or(0, |state| state.slot + 1);
+    let next_slot_to_sync = last_synced_state.map_or(Slot(0), |state| state.slot + 1);
     stream_slots_from(&next_slot_to_sync).await
 }
 
@@ -421,8 +421,8 @@ async fn estimate_slots_remaining(executor: impl PgExecutor<'_>, beacon_node: &B
     let last_on_chain = beacon_node.get_last_header().await.unwrap();
     let last_synced_slot = states::get_last_state(executor)
         .await
-        .map_or(0, |state| state.slot);
-    last_on_chain.slot() - last_synced_slot
+        .map_or(Slot(0), |state| state.slot);
+    last_on_chain.slot().0 - last_synced_slot.0
 }
 
 /// Searches backwards from the starting candidate to find a slot where stored and on-chain
@@ -463,7 +463,7 @@ async fn find_last_matching_slot(
     }
 
     debug!(
-        slot = candidate_slot,
+        slot = candidate_slot.0,
         "found a match state match between stored and on-chain"
     );
     Ok(candidate_slot)
@@ -501,7 +501,7 @@ pub async fn sync_beacon_states() -> Result<()> {
     );
 
     while let Some(slot_from_stream) = slots_stream.next().await {
-        if &slot_from_stream % 100 == 0 {
+        if &slot_from_stream.0 % 100 == 0 {
             info!("fast-sync in progress, {}", progress.get_progress_string());
         }
 
@@ -511,7 +511,7 @@ pub async fn sync_beacon_states() -> Result<()> {
         // the stream to the queue.
         // To be able to push things onto the queue during the loop, the lock should not be held.
         while let Some(slot) = slots_queue.pop_front() {
-            debug!(slot, "analyzing next slot on the queue");
+            debug!(%slot, "analyzing next slot on the queue");
 
             let on_chain_state_root =
                 beacon_node
@@ -524,7 +524,7 @@ pub async fn sync_beacon_states() -> Result<()> {
             let current_slot_stored_state_root =
                 states::get_state_root_by_slot(&db_pool, &slot).await?;
 
-            let last_matches = if slot == 0 {
+            let last_matches = if slot.0 == 0 {
                 true
             } else {
                 let last_stored_state_root =
@@ -559,12 +559,12 @@ pub async fn sync_beacon_states() -> Result<()> {
                     find_last_matching_slot(&db_pool, &beacon_node, &(slot - 1)).await?;
                 let first_invalid_slot = last_matching_slot + 1;
 
-                warn!(slot = last_matching_slot, "rolling back to slot");
+                warn!(slot = last_matching_slot.0, "rolling back to slot");
 
                 rollback_slots(&mut *db_pool.acquire().await?, &first_invalid_slot).await?;
 
-                for invalid_slot in (first_invalid_slot..=slot).rev() {
-                    slots_queue.push_front(invalid_slot);
+                for invalid_slot in (first_invalid_slot.0..=slot.0).rev() {
+                    slots_queue.push_front(invalid_slot.into());
                 }
             }
 
@@ -596,13 +596,15 @@ mod tests {
 
     #[test]
     fn slot_range_iterable_test() {
-        let range = (SlotRange::new(1, 4)).into_iter().collect::<Vec<Slot>>();
-        assert_eq!(range, vec![1, 2, 3, 4]);
+        let range = (SlotRange::new(Slot(1), Slot(4)))
+            .into_iter()
+            .collect::<Vec<Slot>>();
+        assert_eq!(range, vec![Slot(1), Slot(2), Slot(3), Slot(4)]);
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn stream_slots_from_test() {
-        let slots_stream = stream_slots_from(&4_300_000).await;
+        let slots_stream = stream_slots_from(&Slot(4_300_000)).await;
         let slots = slots_stream.take(10).collect::<Vec<Slot>>().await;
         assert_eq!(slots.len(), 10);
     }

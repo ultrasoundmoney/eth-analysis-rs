@@ -6,7 +6,7 @@ use sqlx::postgres::PgQueryResult;
 use sqlx::{Acquire, PgConnection, PgExecutor};
 use tracing::{debug, error, warn};
 
-use crate::beacon_chain::{beacon_time, Slot, FIRST_POST_MERGE_SLOT};
+use crate::beacon_chain::{Slot, FIRST_POST_MERGE_SLOT};
 use crate::eth_units::{GweiNewtype, Wei};
 
 use crate::execution_chain::BlockNumber;
@@ -25,7 +25,7 @@ pub async fn rollback_supply_from_slot(
                 deposits_slot >= $1
                 OR balances_slot >= $1
         ",
-        *greater_than_or_equal
+        greater_than_or_equal.0
     )
     .execute(executor)
     .await
@@ -43,7 +43,7 @@ pub async fn rollback_supply_slot(
                 deposits_slot = $1
                 OR balances_slot = $1
         ",
-        *greater_than_or_equal
+        greater_than_or_equal.0
     )
     .execute(executor)
     .await
@@ -57,9 +57,9 @@ pub async fn store(
     beacon_balances_sum: &GweiNewtype,
     beacon_deposits_sum: &GweiNewtype,
 ) -> sqlx::Result<PgQueryResult> {
-    let timestamp = beacon_time::date_time_from_slot(&slot);
+    let timestamp = slot.date_time();
 
-    debug!(%timestamp, slot, block_number, execution_balances_sum, %beacon_deposits_sum, %beacon_balances_sum, "storing eth supply");
+    debug!(%timestamp, %slot, block_number, execution_balances_sum, %beacon_deposits_sum, %beacon_balances_sum, "storing eth supply");
 
     let supply =
         execution_balances_sum + beacon_balances_sum.into_wei() - beacon_deposits_sum.into_wei();
@@ -77,8 +77,8 @@ pub async fn store(
         ",
         timestamp,
         *block_number,
-        *slot,
-        *slot,
+        slot.0,
+        slot.0,
         supply.to_string() as String
     )
     .execute(executor)
@@ -98,7 +98,7 @@ pub async fn get_supply_exists_by_slot(
             WHERE
                 balances_slot = $1
         ",
-        *slot
+        slot.0
     )
     .fetch_optional(executor)
     .await
@@ -118,7 +118,7 @@ pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Resul
     .await?
     .max;
 
-    Ok(slot)
+    Ok(slot.map(Slot))
 }
 
 pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
@@ -126,7 +126,7 @@ pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> 
 
     match supply_parts {
         None => {
-            debug!(slot, "supply parts unavailable skipping");
+            debug!(%slot, "supply parts unavailable skipping");
         }
         Some(supply_parts) => {
             store(
@@ -164,7 +164,7 @@ pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Res
     .fetch_optional(executor)
     .await?;
 
-    Ok(row.map(|row| row.slot))
+    Ok(row.map(|row| Slot(row.slot)))
 }
 
 /// Stores an eth supply for a given slot.
@@ -187,17 +187,17 @@ pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) -> Result
             match last_stored_supply_slot {
                 None => {
                     debug!(
-                        FIRST_POST_MERGE_SLOT,
+                        %FIRST_POST_MERGE_SLOT,
                         "eth supply has never been stored, starting from FIRST_POST_MERGE_SLOT"
                     );
-                    let range = FIRST_POST_MERGE_SLOT..=sync_limit;
+                    let range = FIRST_POST_MERGE_SLOT.0..=sync_limit.0;
                     range.collect()
                 }
                 Some(last_stored_supply_slot) => match last_stored_supply_slot.cmp(&sync_limit) {
                     Ordering::Less => {
                         debug!("execution balances have updated, storing eth supply for new slots");
                         let first = last_stored_supply_slot + 1;
-                        let range = first..=last_stored_execution_balances_slot;
+                        let range = first.0..=last_stored_execution_balances_slot.0;
                         range.collect()
                     }
                     Ordering::Equal => {
@@ -218,7 +218,7 @@ pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) -> Result
             slot,
             "storing eth supply for newly available execution balance slot"
         );
-        store_supply_for_slot(executor, &slot).await?;
+        store_supply_for_slot(executor, &Slot(slot)).await?;
     }
 
     Ok(())
@@ -323,7 +323,7 @@ mod tests {
         .unwrap();
 
         let supply_parts_test = SupplyParts::new(
-            &0,
+            &Slot(0),
             &execution_balances_sum.block_number,
             execution_balances_sum.balances_sum,
             GweiNewtype(20),
@@ -343,7 +343,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &0).await?;
+        let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &Slot(0)).await?;
 
         assert!(!eth_supply_exists);
 
@@ -358,7 +358,7 @@ mod tests {
 
         let test_block = make_test_block();
         let state_root = "0xstate_root";
-        let slot = 0;
+        let slot = Slot(0);
 
         block_store.store_block(&test_block, 0.0).await;
 
@@ -385,7 +385,7 @@ mod tests {
         .await
         .unwrap();
 
-        let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &0)
+        let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &slot)
             .await
             .unwrap();
 
@@ -401,7 +401,7 @@ mod tests {
         let test_id = "get_last_stored_supply_slot";
         let test_block = make_test_block();
         let state_root = format!("0x{test_id}_state_root");
-        let slot = 0;
+        let slot = Slot(0);
 
         block_store.store_block(&test_block, 0.0).await;
 
@@ -433,6 +433,6 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(0, last_stored_slot);
+        assert_eq!(Slot(0), last_stored_slot);
     }
 }

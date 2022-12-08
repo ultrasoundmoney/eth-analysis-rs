@@ -50,7 +50,7 @@ pub async fn heal_block_hashes() -> Result<()> {
             AND
                 block_hash IS NULL
         "#,
-        first_slot
+        first_slot.0
     )
     .fetch_one(&db_pool)
     .await?;
@@ -73,7 +73,7 @@ pub async fn heal_block_hashes() -> Result<()> {
             WHERE
                 slot >= $1
         "#,
-        first_slot
+        first_slot.0
     )
     .fetch(&db_pool);
 
@@ -102,7 +102,7 @@ pub async fn heal_block_hashes() -> Result<()> {
 
         if slot % 100 == 0 {
             info!("{}", progress.get_progress_string());
-            store_last_checked(&db_pool, &slot).await?;
+            store_last_checked(&db_pool, &slot.into()).await?;
         }
     }
 

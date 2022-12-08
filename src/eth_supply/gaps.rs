@@ -17,7 +17,7 @@ use crate::{
 };
 
 // The first slot we have stored.
-const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = 4697813;
+const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = Slot(4697813);
 
 pub async fn fill_gaps() -> Result<()> {
     log::init_with_env();
@@ -33,24 +33,22 @@ pub async fn fill_gaps() -> Result<()> {
         .slot;
 
     debug!(
-        FIRST_STORED_ETH_SUPPLY_SLOT,
-        last_slot, "checking first stored slot to last slot for gaps"
+        %FIRST_STORED_ETH_SUPPLY_SLOT,
+        %last_slot,
+        "checking first stored slot to last slot for gaps"
     );
 
-    let mut progress = Progress::new(
-        "sync-eth-supply-gas",
-        (last_slot - FIRST_STORED_ETH_SUPPLY_SLOT)
-            .try_into()
-            .unwrap(),
-    );
+    let work_todo = last_slot.0 - FIRST_STORED_ETH_SUPPLY_SLOT.0;
+    let mut progress = Progress::new("sync-eth-supply-gas", work_todo.try_into().unwrap());
 
-    for slot in FIRST_STORED_ETH_SUPPLY_SLOT..=last_slot {
+    for slot in FIRST_STORED_ETH_SUPPLY_SLOT.0..=last_slot.0 {
         let stored_eth_supply =
-            eth_supply::get_supply_exists_by_slot(&mut db_connection, &slot).await?;
+            eth_supply::get_supply_exists_by_slot(&mut db_connection, &Slot(slot)).await?;
         if !stored_eth_supply {
             info!(slot, "missing eth_supply, filling gap");
 
-            let supply_parts = eth_supply::get_supply_parts(&mut db_connection, &slot).await?;
+            let supply_parts =
+                eth_supply::get_supply_parts(&mut db_connection, &Slot(slot)).await?;
 
             match supply_parts {
                 None => {
@@ -59,7 +57,7 @@ pub async fn fill_gaps() -> Result<()> {
                 Some(supply_parts) => {
                     eth_supply::store(
                         &mut db_connection,
-                        &slot,
+                        &Slot(slot),
                         &supply_parts.block_number(),
                         &supply_parts.execution_balances_sum_next,
                         &supply_parts.beacon_balances_sum_next,
