@@ -7,7 +7,7 @@ use sqlx::{Acquire, PgConnection, PgExecutor};
 use tracing::{debug, error, warn};
 
 use crate::beacon_chain::{Slot, FIRST_POST_MERGE_SLOT};
-use crate::eth_units::{GweiNewtype, Wei};
+use crate::eth_units::{GweiNewtype, Wei, WeiNewtype};
 
 use crate::execution_chain::BlockNumber;
 
@@ -62,7 +62,7 @@ pub async fn store(
     debug!(%timestamp, %slot, block_number, execution_balances_sum, %beacon_deposits_sum, %beacon_balances_sum, "storing eth supply");
 
     let supply =
-        execution_balances_sum + beacon_balances_sum.into_wei() - beacon_deposits_sum.into_wei();
+        WeiNewtype(*execution_balances_sum) + beacon_balances_sum.wei() - beacon_deposits_sum.wei();
 
     sqlx::query!(
         "
@@ -79,7 +79,7 @@ pub async fn store(
         *block_number,
         slot.0,
         slot.0,
-        supply.to_string() as String
+        Into::<String>::into(supply) as String,
     )
     .execute(executor)
     .await
@@ -369,7 +369,7 @@ mod tests {
         let supply_parts = SupplyParts::new(
             &slot,
             &0,
-            GweiNewtype(10).into_wei(),
+            GweiNewtype(10).wei().0,
             GweiNewtype(20),
             GweiNewtype(5),
         );
@@ -412,7 +412,7 @@ mod tests {
         let supply_parts = SupplyParts::new(
             &slot,
             &0,
-            GweiNewtype(10).into_wei(),
+            GweiNewtype(10).wei().0,
             GweiNewtype(20),
             GweiNewtype(5),
         );

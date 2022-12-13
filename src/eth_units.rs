@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    num::TryFromIntError,
+    num::{ParseIntError, TryFromIntError},
     ops::{Add, Div, Sub},
     str::FromStr,
 };
@@ -11,7 +11,7 @@ pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
 pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
 
-pub const WEI_PER_GWEI: u64 = 1_000_000_000;
+pub const WEI_PER_ETH: i128 = 1_000_000_000_000_000_000;
 
 pub type WeiF64 = f64;
 
@@ -39,6 +39,8 @@ impl fmt::Display for GweiNewtype {
 }
 
 impl GweiNewtype {
+    const WEI_PER_GWEI: u64 = 1_000_000_000;
+
     pub fn new(gwei: u64) -> Self {
         Self(gwei)
     }
@@ -51,11 +53,12 @@ impl GweiNewtype {
         Self((eth * GWEI_PER_ETH_F64) as u64)
     }
 
-    pub fn into_wei(&self) -> Wei {
-        self.0 as i128 * WEI_PER_GWEI as i128
+    pub fn wei(&self) -> WeiNewtype {
+        let wei: i128 = self.0 as i128 * GweiNewtype::WEI_PER_GWEI as i128;
+        WeiNewtype(wei)
     }
 
-    pub fn into_eth(&self) -> EthF64 {
+    pub fn eth(&self) -> EthF64 {
         self.0 as f64 / GWEI_PER_ETH_F64
     }
 }
@@ -185,6 +188,54 @@ where
 {
     let gwei_str = gwei.0.to_string();
     serializer.serialize_str(&gwei_str)
+}
+
+#[derive(Clone, Copy, Debug, Serialize, PartialEq)]
+#[serde(transparent)]
+pub struct WeiNewtype(pub i128);
+
+impl From<WeiNewtype> for String {
+    fn from(WeiNewtype(amount): WeiNewtype) -> Self {
+        amount.to_string()
+    }
+}
+
+impl Add<WeiNewtype> for WeiNewtype {
+    type Output = Self;
+
+    fn add(self, WeiNewtype(rhs): Self) -> Self::Output {
+        let WeiNewtype(lhs) = self;
+        let result = lhs
+            .checked_add(rhs)
+            .expect("caused overflow in wei addition");
+        WeiNewtype(result)
+    }
+}
+
+impl Sub<WeiNewtype> for WeiNewtype {
+    type Output = Self;
+
+    fn sub(self, WeiNewtype(rhs): WeiNewtype) -> Self::Output {
+        let WeiNewtype(lhs) = self;
+        let result = lhs
+            .checked_sub(rhs)
+            .expect("caused underflow in wei subtraction");
+        WeiNewtype(result)
+    }
+}
+
+impl WeiNewtype {
+    pub fn from_eth(eth: i128) -> Self {
+        Self(eth * WEI_PER_ETH)
+    }
+}
+
+impl FromStr for WeiNewtype {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<i128>().map(WeiNewtype)
+    }
 }
 
 pub type Wei = i128;

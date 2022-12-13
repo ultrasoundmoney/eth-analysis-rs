@@ -6,7 +6,6 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, PgPool, Row};
 use tracing::debug;
 
-use crate::caching::{self, CacheKey};
 use crate::eth_units::EthF64;
 use crate::time_frames::LimitedTimeFrame::*;
 use crate::{beacon_chain::Slot, execution_chain::BlockNumber, time_frames::TimeFrame};
@@ -238,81 +237,14 @@ pub async fn get_supply_over_time(
     Ok(supply_over_time)
 }
 
-pub async fn update_cache(db_pool: &PgPool, supply_over_time: &SupplyOverTime) -> Result<()> {
-    caching::set_value(db_pool, &CacheKey::SupplyOverTime, supply_over_time).await?;
-
-    caching::publish_cache_update(db_pool, CacheKey::SupplyOverTime).await?;
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, SubsecRound};
-    use sqlx::{Acquire, PgConnection};
+    use sqlx::Acquire;
 
-    use crate::{
-        beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum},
-        db, eth_supply,
-        eth_units::{EthF64, GweiNewtype},
-        execution_chain::{BlockStore, ExecutionBalancesSum, ExecutionNodeBlock},
-    };
+    use crate::{db, eth_supply::test::store_test_eth_supply};
 
     use super::*;
-
-    // Replace with shared testing helper that helps easily build the right mock block.
-    fn make_test_block() -> ExecutionNodeBlock {
-        ExecutionNodeBlock {
-            base_fee_per_gas: 0,
-            difficulty: 0,
-            gas_used: 0,
-            hash: "0xtest".to_string(),
-            number: 0,
-            parent_hash: "0xparent".to_string(),
-            timestamp: Utc::now().trunc_subsecs(0),
-            total_difficulty: 10,
-        }
-    }
-
-    async fn store_test_eth_supply(
-        executor: &mut PgConnection,
-        slot: &Slot,
-        eth_supply: EthF64,
-    ) -> Result<()> {
-        let mut block_store = BlockStore::new(executor);
-
-        let test_block = make_test_block();
-        let state_root = "0xstate_root";
-
-        block_store.store_block(&test_block, 0.0).await;
-
-        beacon_chain::store_state(executor.acquire().await.unwrap(), state_root, slot).await?;
-
-        let execution_balances_sum = ExecutionBalancesSum {
-            block_number: 0,
-            balances_sum: GweiNewtype::from_eth_f64(eth_supply).into_wei(),
-        };
-        let beacon_balances_sum = BeaconBalancesSum {
-            balances_sum: GweiNewtype(0),
-            slot: *slot,
-        };
-        let beacon_deposits_sum = BeaconDepositsSum {
-            slot: *slot,
-            deposits_sum: GweiNewtype(0),
-        };
-
-        eth_supply::store(
-            executor,
-            slot,
-            &execution_balances_sum.block_number,
-            &execution_balances_sum.balances_sum,
-            &beacon_deposits_sum.deposits_sum,
-            &beacon_balances_sum.balances_sum,
-        )
-        .await?;
-
-        Ok(())
-    }
 
     #[ignore]
     #[tokio::test]

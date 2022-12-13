@@ -3,7 +3,7 @@ use std::{fmt::Display, str::FromStr};
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::Value;
-use sqlx::PgExecutor;
+use sqlx::{PgExecutor, PgPool};
 use thiserror::Error;
 use tracing::debug;
 
@@ -19,6 +19,7 @@ pub enum CacheKey {
     EthPrice,
     SupplyParts,
     IssuanceBreakdown,
+    SupplyChanges,
     SupplyDashboardAnalysis,
     SupplyOverTime,
     SupplyProjectionInputs,
@@ -44,6 +45,7 @@ impl CacheKey {
             &Self::EthPrice => "eth-price",
             &Self::SupplyParts => "supply-parts",
             &Self::IssuanceBreakdown => "issuance-breakdown",
+            &Self::SupplyChanges => "supply-changes",
             &Self::SupplyDashboardAnalysis => "supply-dashboard-analysis",
             &Self::SupplyOverTime => "supply-over-time",
             &Self::SupplyProjectionInputs => "supply-projection-inputs",
@@ -73,6 +75,7 @@ impl<'a> FromStr for CacheKey {
             "eth-price" => Ok(Self::EthPrice),
             "supply-parts" => Ok(Self::SupplyParts),
             "issuance-breakdown" => Ok(Self::IssuanceBreakdown),
+            "supply-changes" => Ok(Self::SupplyChanges),
             "supply-dashboard-analysis" => Ok(Self::SupplyDashboardAnalysis),
             "supply-over-time" => Ok(Self::SupplyOverTime),
             "supply-projection-inputs" => Ok(Self::SupplyProjectionInputs),
@@ -117,6 +120,16 @@ pub async fn set_value<'a>(
         &serde_json::to_value(value)?,
     )
     .await?;
+    Ok(())
+}
+
+pub async fn update_and_publish(
+    db_pool: &PgPool,
+    cache_key: CacheKey,
+    value: impl Serialize,
+) -> Result<()> {
+    set_value(db_pool, &cache_key, value).await?;
+    publish_cache_update(db_pool, cache_key).await?;
     Ok(())
 }
 

@@ -174,7 +174,9 @@ pub fn slot_from_string<'de, D>(deserializer: D) -> Result<Slot, D::Error>
 where
     D: Deserializer<'de>,
 {
-    i32::deserialize(deserializer).map(Slot)
+    String::deserialize(deserializer)
+        .map(|slot_text| slot_text.parse().expect("expect slot to be i32"))
+        .map(Slot)
 }
 
 #[derive(Debug)]

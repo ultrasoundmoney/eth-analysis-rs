@@ -1,12 +1,13 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use serde::Serialize;
 use sqlx::{Acquire, PgConnection, PgPool};
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::{
     beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum, Slot},
     caching::{self, CacheKey},
-    eth_units::{GweiNewtype, Wei},
+    eth_units::{GweiNewtype, Wei, WeiNewtype},
     execution_chain::{self, BlockNumber, ExecutionBalancesSum},
     key_value_store,
 };
@@ -58,6 +59,11 @@ impl SupplyParts {
     pub fn block_number(&self) -> BlockNumber {
         self.execution_balances_sum.block_number
     }
+
+    pub fn supply(&self) -> WeiNewtype {
+        WeiNewtype(self.execution_balances_sum_next) + self.beacon_balances_sum_next.wei()
+            - self.beacon_deposits_sum_next.wei()
+    }
 }
 
 /// Retrieves the three components that make up the eth supply for a given slot.
@@ -66,23 +72,23 @@ impl SupplyParts {
 /// TODO: rewrite so the argument passed forces the caller to verify the execution balances are
 /// known.
 pub async fn get_supply_parts(
-    executor: &mut PgConnection,
+    connection: &mut PgConnection,
     slot: &Slot,
 ) -> Result<Option<SupplyParts>> {
-    let state_root = beacon_chain::get_state_root_by_slot(executor.acquire().await?, slot)
+    let state_root = beacon_chain::get_state_root_by_slot(connection.acquire().await?, slot)
         .await?
         .expect("expect state_root to exist when getting supply parts for slot");
 
     // Most slots have a block, we try to retrieve a block, if we fail, we use the most recent one
     // instead.
-    let block = match beacon_chain::get_block_by_slot(executor.acquire().await?, slot).await? {
+    let block = match beacon_chain::get_block_by_slot(connection.acquire().await?, slot).await? {
         None => {
             debug!(
                 %slot,
                 state_root,
                 "no block available for slot, using most recent block before this slot"
             );
-            beacon_chain::get_block_before_slot(executor.acquire().await?, slot).await?
+            beacon_chain::get_block_before_slot(connection.acquire().await?, slot).await?
         }
         Some(block) => block,
     };
@@ -90,10 +96,13 @@ pub async fn get_supply_parts(
     let block_hash = block.block_hash.expect("expect block hash to be available when updating eth supply for newly available execution balance slots");
 
     let beacon_balances_sum =
-        beacon_chain::get_balances_by_state_root(executor.acquire().await?, &state_root).await?;
+        beacon_chain::get_balances_by_state_root(connection.acquire().await?, &state_root).await?;
 
     match beacon_balances_sum {
-        None => Ok(None),
+        None => {
+            warn!(%slot, "no beacon balances sum available for slot");
+            Ok(None)
+        }
         Some(beacon_balances_sum) => {
             debug!(
                 %slot,
@@ -102,12 +111,12 @@ pub async fn get_supply_parts(
                 "looking up execution balances by hash"
             );
             let execution_balances = execution_chain::get_execution_balances_by_hash(
-                executor.acquire().await?,
+                connection.acquire().await?,
                 &block_hash,
             )
             .await?;
             let beacon_deposits_sum = beacon_chain::get_deposits_sum_by_state_root(
-                executor.acquire().await?,
+                connection.acquire().await?,
                 &block.state_root,
             )
             .await?;
@@ -138,4 +147,26 @@ pub async fn update_cache(db_pool: &PgPool, supply_parts: &SupplyParts) -> Resul
     caching::publish_cache_update(db_pool, CacheKey::SupplyParts).await?;
 
     Ok(())
+}
+
+#[async_trait]
+pub trait SupplyPartsStore {
+    async fn get(&self, slot: &Slot) -> Result<Option<SupplyParts>>;
+}
+
+pub struct SupplyPartsStorePostgres<'a> {
+    db_pool: &'a PgPool,
+}
+
+impl<'a> SupplyPartsStorePostgres<'a> {
+    pub fn new(db_pool: &'a PgPool) -> Self {
+        Self { db_pool }
+    }
+}
+
+#[async_trait]
+impl SupplyPartsStore for SupplyPartsStorePostgres<'_> {
+    async fn get(&self, slot: &Slot) -> Result<Option<SupplyParts>> {
+        get_supply_parts(&mut self.db_pool.acquire().await?.detach(), slot).await
+    }
 }

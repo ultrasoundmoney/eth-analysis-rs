@@ -15,8 +15,8 @@ pub enum LimitedTimeFrame {
 
 use LimitedTimeFrame::*;
 
-impl From<LimitedTimeFrame> for Duration {
-    fn from(limited_time_frame: LimitedTimeFrame) -> Self {
+impl From<&LimitedTimeFrame> for Duration {
+    fn from(limited_time_frame: &LimitedTimeFrame) -> Self {
         match limited_time_frame {
             Day1 => Duration::days(1),
             Day30 => Duration::days(30),
@@ -29,7 +29,7 @@ impl From<LimitedTimeFrame> for Duration {
 
 impl From<LimitedTimeFrame> for PgInterval {
     fn from(limited_time_frame: LimitedTimeFrame) -> Self {
-        PgInterval::try_from(Into::<Duration>::into(limited_time_frame)).unwrap()
+        PgInterval::try_from(Into::<Duration>::into(&limited_time_frame)).unwrap()
     }
 }
 
@@ -117,6 +117,10 @@ impl LimitedTimeFrame {
             Hour1 => "h1",
             Minute5 => "m5",
         }
+    }
+
+    pub fn duration(&self) -> Duration {
+        Into::<Duration>::into(self)
     }
 }
 
