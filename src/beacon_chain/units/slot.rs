@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn first_of_minute_test() {
-        assert!(Slot(4).is_first_of_day());
+        assert!(Slot(4).is_first_of_minute());
     }
 
     #[test]
