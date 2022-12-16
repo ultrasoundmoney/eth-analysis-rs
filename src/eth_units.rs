@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use serde::{de, de::Visitor, Deserialize, Serialize, Serializer};
+use serde::{de, de::Visitor, Deserialize, Serialize};
 
 pub const GWEI_PER_ETH: u64 = 1_000_000_000;
 
@@ -23,13 +23,12 @@ pub type GweiF64 = f64;
 
 pub type EthF64 = f64;
 
-// TODO: Decide if using a NewType is worth it.
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
 // ~9_000_000_000 ETH, which is more than the entire supply.
 // When converting to f64 however, max safe is 2^53, so anything more than ~9M ETH will lose
 // accuracy. i.e. don't put this into JSON for amounts >9M ETH.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[serde(transparent)]
+#[serde(into = "String")]
 pub struct GweiNewtype(pub u64);
 
 impl fmt::Display for GweiNewtype {
@@ -182,12 +181,10 @@ impl<'de> Deserialize<'de> for GweiNewtype {
     }
 }
 
-pub fn to_gwei_string<S>(gwei: &GweiNewtype, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let gwei_str = gwei.0.to_string();
-    serializer.serialize_str(&gwei_str)
+impl From<GweiNewtype> for String {
+    fn from(GweiNewtype(amount): GweiNewtype) -> Self {
+        amount.to_string()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq)]
