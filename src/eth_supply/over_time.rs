@@ -206,7 +206,7 @@ pub struct SupplyOverTime {
 
 pub async fn get_supply_over_time(
     executor: &PgPool,
-    slot: Slot,
+    slot: &Slot,
     block_number: BlockNumber,
 ) -> Result<SupplyOverTime> {
     debug!("updating supply over time");
@@ -230,7 +230,7 @@ pub async fn get_supply_over_time(
         m5,
         since_burn,
         since_merge,
-        slot,
+        slot: *slot,
         timestamp: slot.date_time(),
     };
 
