@@ -238,7 +238,7 @@ pub async fn update_base_fee_over_time(
 
     caching::set_value(executor, &CacheKey::BaseFeeOverTime, base_fee_over_time).await?;
 
-    caching::publish_cache_update(executor, CacheKey::BaseFeeOverTime).await?;
+    caching::publish_cache_update(executor, &CacheKey::BaseFeeOverTime).await?;
 
     Ok(())
 }

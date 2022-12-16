@@ -177,7 +177,7 @@ async fn update_eth_price_with_most_recent(
         )
         .await?;
 
-        caching::publish_cache_update(connection, CacheKey::EthPrice).await?;
+        caching::publish_cache_update(connection, &CacheKey::EthPrice).await?;
     }
 
     Ok(())

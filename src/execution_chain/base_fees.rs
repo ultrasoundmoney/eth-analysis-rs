@@ -40,7 +40,7 @@ async fn update_last_base_fee(executor: &PgPool, block: &ExecutionNodeBlock) -> 
     )
     .await?;
 
-    caching::publish_cache_update(executor, CacheKey::BaseFeePerGas).await?;
+    caching::publish_cache_update(executor, &CacheKey::BaseFeePerGas).await?;
 
     Ok(())
 }

@@ -87,7 +87,7 @@ impl<'a> FromStr for CacheKey {
     }
 }
 
-pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: CacheKey) -> Result<()> {
+pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: &CacheKey) -> Result<()> {
     debug!(?key, "publishing cache update");
 
     sqlx::query!(
@@ -125,10 +125,10 @@ pub async fn set_value<'a>(
 
 pub async fn update_and_publish(
     db_pool: &PgPool,
-    cache_key: CacheKey,
+    cache_key: &CacheKey,
     value: impl Serialize,
 ) -> Result<()> {
-    set_value(db_pool, &cache_key, value).await?;
+    set_value(db_pool, cache_key, value).await?;
     publish_cache_update(db_pool, cache_key).await?;
     Ok(())
 }
@@ -161,7 +161,7 @@ mod tests {
 
         let mut connection = db::get_test_db().await;
 
-        publish_cache_update(&mut connection, CacheKey::EffectiveBalanceSum)
+        publish_cache_update(&mut connection, &CacheKey::EffectiveBalanceSum)
             .await
             .unwrap();
 

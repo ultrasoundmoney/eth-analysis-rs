@@ -58,7 +58,7 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     let supply_changes = supply_changes_store.get(&limit_slot, &supply_parts).await?;
 
     let supply_over_time =
-        eth_supply::get_supply_over_time(db_pool, limit_slot, supply_parts.block_number())
+        eth_supply::get_supply_over_time(db_pool, &limit_slot, supply_parts.block_number())
             .timed("get-supply-over-time")
             .await?;
 
@@ -83,9 +83,9 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     //     .await?;
 
     try_join!(
-        caching::update_and_publish(db_pool, CacheKey::SupplyParts, supply_parts),
-        caching::update_and_publish(db_pool, CacheKey::SupplyOverTime, supply_over_time),
-        caching::update_and_publish(db_pool, CacheKey::SupplyChanges, supply_changes),
+        caching::update_and_publish(db_pool, &CacheKey::SupplyParts, supply_parts),
+        caching::update_and_publish(db_pool, &CacheKey::SupplyOverTime, supply_over_time),
+        caching::update_and_publish(db_pool, &CacheKey::SupplyChanges, &supply_changes)
     )?;
 
     Ok(())

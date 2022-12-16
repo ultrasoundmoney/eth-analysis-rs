@@ -144,7 +144,7 @@ pub async fn update_cache(db_pool: &PgPool, supply_parts: &SupplyParts) -> Resul
     )
     .await;
 
-    caching::publish_cache_update(db_pool, CacheKey::SupplyParts).await?;
+    caching::publish_cache_update(db_pool, &CacheKey::SupplyParts).await?;
 
     Ok(())
 }
