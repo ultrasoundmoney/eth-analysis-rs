@@ -11,10 +11,10 @@ use tracing::{debug, info, warn};
 use crate::{
     beacon_chain::{balances, deposits, issuance, slot_from_string},
     db,
-    eth_units::GweiNewtype,
     json_codecs::i32_from_string,
     log,
     performance::TimedExt,
+    units::GweiNewtype,
 };
 use crate::{eth_supply, supply_dashboard_analysis};
 

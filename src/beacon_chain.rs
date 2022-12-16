@@ -71,7 +71,7 @@ lazy_static! {
 pub mod tests {
     use sqlx::{Acquire, PgConnection};
 
-    use crate::eth_units::GweiNewtype;
+    use crate::units::GweiNewtype;
 
     use super::{
         node::{tests::BeaconBlockBuilder, BeaconBlock},

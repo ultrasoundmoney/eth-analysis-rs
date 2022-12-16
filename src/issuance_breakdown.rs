@@ -6,9 +6,8 @@ use tracing::{debug, info};
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    db,
-    eth_units::{GweiNewtype, GWEI_PER_ETH},
-    etherscan, key_value_store, log,
+    db, etherscan, key_value_store, log,
+    units::{GweiNewtype, GWEI_PER_ETH},
 };
 
 #[derive(Debug, Serialize)]

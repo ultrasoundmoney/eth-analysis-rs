@@ -7,8 +7,8 @@ use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, Row};
 use std::str::FromStr;
 
-use crate::eth_units::Wei;
 use crate::json_codecs::to_i128_string;
+use crate::units::Wei;
 
 use super::BlockNumber;
 

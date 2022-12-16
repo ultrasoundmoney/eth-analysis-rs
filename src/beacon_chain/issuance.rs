@@ -3,7 +3,7 @@ use chrono::{Duration, DurationRound};
 use sqlx::{Acquire, PgConnection, PgExecutor };
 
 use crate::{
-    eth_units::GweiNewtype,
+    units::GweiNewtype,
     supply_projection::GweiInTime,
 };
 

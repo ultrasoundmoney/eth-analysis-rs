@@ -3,9 +3,9 @@ use chrono::{SubsecRound, Utc};
 use sqlx::{Acquire, PgConnection};
 
 use crate::beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum};
-use crate::eth_units::GweiNewtype;
 use crate::execution_chain::{BlockStore, ExecutionBalancesSum, ExecutionNodeBlock};
-use crate::{beacon_chain::Slot, eth_units::EthF64};
+use crate::units::GweiNewtype;
+use crate::{beacon_chain::Slot, units::EthF64};
 
 // Replace with shared testing helper that helps easily build the right mock block.
 pub fn make_test_block() -> ExecutionNodeBlock {

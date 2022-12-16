@@ -4,7 +4,7 @@ mod heal;
 use anyhow::Result;
 use sqlx::{PgConnection, PgExecutor, Row};
 
-use crate::eth_units::GweiNewtype;
+use crate::units::GweiNewtype;
 
 use super::{
     node::{BeaconBlock, BeaconHeaderSignedEnvelope},

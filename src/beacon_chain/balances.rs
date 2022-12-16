@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
 use sqlx::{PgConnection, PgExecutor, Row};
 
-use crate::eth_units::{to_gwei_string, GweiNewtype};
+use crate::units::{GweiNewtype};
 use crate::supply_projection::GweiInTime;
 
 use super::node::{ValidatorBalance, BeaconNode};

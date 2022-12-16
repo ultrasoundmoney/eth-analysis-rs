@@ -6,10 +6,10 @@ use tracing::{debug, warn};
 
 use crate::{
     caching::{self, CacheKey},
-    eth_units::WeiF64,
     execution_chain::{BlockNumber, ExecutionNodeBlock},
     key_value_store,
     time_frames::{LimitedTimeFrame, TimeFrame},
+    units::WeiF64,
 };
 
 async fn get_base_fee_per_gas_average(

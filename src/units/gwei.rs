@@ -1,27 +1,20 @@
 use std::{
     fmt,
-    num::{ParseIntError, TryFromIntError},
+    num::TryFromIntError,
     ops::{Add, Div, Sub},
     str::FromStr,
 };
 
 use serde::{de, de::Visitor, Deserialize, Serialize};
 
-pub const GWEI_PER_ETH: u64 = 1_000_000_000;
+use super::{
+    wei::{WeiNewtype, WeiString},
+    EthF64, GWEI_PER_ETH, GWEI_PER_ETH_F64,
+};
 
-pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
-
-pub const WEI_PER_ETH: i128 = 1_000_000_000_000_000_000;
-
-pub type WeiF64 = f64;
-
-#[allow(dead_code)]
 pub type Gwei = u64;
 
-#[allow(dead_code)]
 pub type GweiF64 = f64;
-
-pub type EthF64 = f64;
 
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
 // ~9_000_000_000 ETH, which is more than the entire supply.
@@ -186,60 +179,6 @@ impl From<GweiNewtype> for String {
         amount.to_string()
     }
 }
-
-#[derive(Clone, Copy, Debug, Serialize, PartialEq)]
-#[serde(into = "String")]
-pub struct WeiNewtype(pub i128);
-
-impl From<WeiNewtype> for String {
-    fn from(WeiNewtype(amount): WeiNewtype) -> Self {
-        amount.to_string()
-    }
-}
-
-impl Add<WeiNewtype> for WeiNewtype {
-    type Output = Self;
-
-    fn add(self, WeiNewtype(rhs): Self) -> Self::Output {
-        let WeiNewtype(lhs) = self;
-        let result = lhs
-            .checked_add(rhs)
-            .expect("caused overflow in wei addition");
-        WeiNewtype(result)
-    }
-}
-
-impl Sub<WeiNewtype> for WeiNewtype {
-    type Output = Self;
-
-    fn sub(self, WeiNewtype(rhs): WeiNewtype) -> Self::Output {
-        let WeiNewtype(lhs) = self;
-        let result = lhs
-            .checked_sub(rhs)
-            .expect("caused underflow in wei subtraction");
-        WeiNewtype(result)
-    }
-}
-
-impl WeiNewtype {
-    pub fn from_eth(eth: i128) -> Self {
-        Self(eth * WEI_PER_ETH)
-    }
-}
-
-impl FromStr for WeiNewtype {
-    type Err = ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<i128>().map(WeiNewtype)
-    }
-}
-
-pub type Wei = i128;
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct WeiString(pub String);
 
 #[cfg(test)]
 mod tests {

@@ -6,8 +6,8 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, PgPool, Row};
 use tracing::debug;
 
-use crate::eth_units::EthF64;
 use crate::time_frames::LimitedTimeFrame::*;
+use crate::units::EthF64;
 use crate::{beacon_chain::Slot, execution_chain::BlockNumber, time_frames::TimeFrame};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

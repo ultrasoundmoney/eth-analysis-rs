@@ -9,8 +9,8 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
-    eth_units::GweiNewtype, execution_chain::BlockHash, json_codecs::i32_from_string,
-    performance::TimedExt,
+    execution_chain::BlockHash, json_codecs::i32_from_string, performance::TimedExt,
+    units::GweiNewtype,
 };
 
 use super::{slot_from_string, Slot, BEACON_URL};

@@ -7,7 +7,7 @@ use sqlx::{Acquire, PgConnection, PgExecutor};
 use tracing::{debug, error, warn};
 
 use crate::beacon_chain::{Slot, FIRST_POST_MERGE_SLOT};
-use crate::eth_units::{GweiNewtype, Wei, WeiNewtype};
+use crate::units::{GweiNewtype, Wei, WeiNewtype};
 
 use crate::execution_chain::BlockNumber;
 

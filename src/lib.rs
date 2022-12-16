@@ -4,7 +4,6 @@ mod data_integrity;
 mod db;
 mod env;
 mod eth_supply;
-mod eth_units;
 mod etherscan;
 mod execution_chain;
 mod glassnode;
@@ -19,6 +18,7 @@ mod supply_dashboard_analysis;
 mod supply_projection;
 mod time;
 mod time_frames;
+mod units;
 mod update_by_hand;
 mod usd_price;
 

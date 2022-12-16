@@ -12,7 +12,7 @@ pub use sync::sync_deltas;
 
 use serde::Serialize;
 
-use crate::eth_units::Wei;
+use crate::units::Wei;
 
 use super::node::BlockNumber;
 

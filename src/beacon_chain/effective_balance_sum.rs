@@ -5,9 +5,8 @@ use tracing::info;
 use crate::{
     beacon_chain::states::get_last_state,
     caching::{self, CacheKey},
-    db,
-    eth_units::GweiNewtype,
-    key_value_store, log,
+    db, key_value_store, log,
+    units::GweiNewtype,
 };
 
 use super::{node::StateRoot, BeaconNode};

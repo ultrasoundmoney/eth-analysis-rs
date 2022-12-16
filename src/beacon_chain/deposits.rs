@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, Row};
 
-use crate::eth_units::{to_gwei_string, GweiNewtype};
+use crate::units::GweiNewtype;
 
 use super::blocks::get_deposit_sum_from_block_root;
 use super::node::BeaconBlock;

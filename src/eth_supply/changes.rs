@@ -7,9 +7,9 @@ use sqlx::{PgExecutor, PgPool};
 use crate::{
     beacon_chain::Slot,
     caching::{self, CacheKey},
-    eth_units::WeiNewtype,
     performance::TimedExt,
     time_frames::{LimitedTimeFrame, TimeFrame},
+    units::WeiNewtype,
 };
 
 use super::SupplyParts;
@@ -151,7 +151,7 @@ mod tests {
     use crate::{
         db,
         eth_supply::test::store_test_eth_supply,
-        eth_units::{GweiNewtype, WeiNewtype},
+        units::{GweiNewtype, WeiNewtype},
     };
 
     use super::*;

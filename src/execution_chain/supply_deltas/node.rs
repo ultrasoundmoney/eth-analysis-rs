@@ -11,8 +11,8 @@ use tokio::time::timeout;
 
 use crate::{
     env,
-    eth_units::Wei,
     execution_chain::{BlockNumber, SupplyDelta},
+    units::Wei,
 };
 
 use super::sync;

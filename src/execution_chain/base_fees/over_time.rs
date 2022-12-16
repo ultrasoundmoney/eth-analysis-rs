@@ -9,9 +9,9 @@ use crate::execution_chain::BELLATRIX_HARD_FORK_TIMESTAMP;
 use crate::time_frames::LimitedTimeFrame::*;
 use crate::{
     caching::{self, CacheKey},
-    eth_units::WeiF64,
     execution_chain::BlockNumber,
     time_frames::TimeFrame,
+    units::WeiF64,
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

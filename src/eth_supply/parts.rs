@@ -7,9 +7,9 @@ use tracing::{debug, warn};
 use crate::{
     beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum, Slot},
     caching::{self, CacheKey},
-    eth_units::{GweiNewtype, Wei, WeiNewtype},
     execution_chain::{self, BlockNumber, ExecutionBalancesSum},
     key_value_store,
+    units::{GweiNewtype, Wei, WeiNewtype},
 };
 
 // Remove deprecated fields after frontend switches over.

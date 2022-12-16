@@ -10,9 +10,9 @@ use crate::{
     beacon_chain,
     caching::{self, CacheKey},
     db,
-    eth_units::GWEI_PER_ETH_F64,
     glassnode::{self, GlassnodeDataPoint},
     key_value_store, log,
+    units::GWEI_PER_ETH_F64,
 };
 
 #[derive(Decode)]

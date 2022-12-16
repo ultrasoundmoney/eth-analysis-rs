@@ -8,8 +8,8 @@ use tracing::{debug, info};
 
 use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
-use crate::eth_units::{GweiNewtype, GWEI_PER_ETH, GWEI_PER_ETH_F64};
 use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
+use crate::units::{GweiNewtype, GWEI_PER_ETH, GWEI_PER_ETH_F64};
 use crate::{caching, db, key_value_store, log};
 
 #[derive(Debug, PartialEq, Serialize)]

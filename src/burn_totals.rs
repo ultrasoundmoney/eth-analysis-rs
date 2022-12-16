@@ -1,6 +1,6 @@
-use crate::eth_units::Wei;
 use crate::time_frames::LimitedTimeFrame;
 use crate::time_frames::TimeFrame;
+use crate::units::Wei;
 use chrono::Utc;
 use futures::join;
 use sqlx::postgres::types::PgInterval;

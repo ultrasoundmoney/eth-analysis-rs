@@ -11,9 +11,9 @@ use tracing::{debug, debug_span, event, Instrument, Level};
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    eth_units::GweiNewtype,
     key_value_store,
     time_frames::LimitedTimeFrame,
+    units::GweiNewtype,
 };
 
 use super::node::ExecutionNodeBlock;
