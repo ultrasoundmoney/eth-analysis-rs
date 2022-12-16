@@ -6,6 +6,7 @@ use sqlx::{PgExecutor, PgPool};
 
 use crate::{
     beacon_chain::Slot,
+    caching::{self, CacheKey},
     eth_units::WeiNewtype,
     performance::TimedExt,
     time_frames::{LimitedTimeFrame, TimeFrame},
@@ -127,6 +128,20 @@ impl<'a> SupplyChangesStore<'a> {
 
         Ok(supply_changes)
     }
+}
+
+pub async fn update_and_publish(
+    db_pool: &PgPool,
+    slot: &Slot,
+    supply_parts: &SupplyParts,
+) -> Result<()> {
+    let supply_changes = SupplyChangesStore::new(db_pool)
+        .get(slot, supply_parts)
+        .await?;
+    caching::set_value(db_pool, &CacheKey::SupplyChanges, &supply_changes).await?;
+    caching::publish_cache_update(db_pool, &CacheKey::SupplyChanges).await?;
+
+    Ok(())
 }
 
 #[cfg(test)]
