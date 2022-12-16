@@ -191,7 +191,7 @@ where
 }
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq)]
-#[serde(transparent)]
+#[serde(into = "String")]
 pub struct WeiNewtype(pub i128);
 
 impl From<WeiNewtype> for String {
