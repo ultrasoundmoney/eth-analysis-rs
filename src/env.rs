@@ -6,7 +6,7 @@ use std::env;
 use lazy_static::lazy_static;
 use tracing::{debug, warn};
 
-const SECRET_LOG_BLACKLIST: [&str; 2] = ["DATABASE_URL", "OPSGENIE_API_KEY"];
+const SECRET_LOG_BLACKLIST: [&str; 3] = ["DATABASE_URL", "OPSGENIE_API_KEY", "ETHERSCAN_API_KEY"];
 
 /// Get an environment variable, encoding found or missing as Option, and panic otherwise.
 pub fn get_env_var(key: &str) -> Option<String> {
