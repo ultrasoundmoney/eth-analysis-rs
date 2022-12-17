@@ -35,7 +35,6 @@ pub async fn get_deposit_sum_aggregated<'a>(
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct BeaconDepositsSum {
-    #[serde(serialize_with = "to_gwei_string")]
     pub deposits_sum: GweiNewtype,
     pub slot: Slot,
 }

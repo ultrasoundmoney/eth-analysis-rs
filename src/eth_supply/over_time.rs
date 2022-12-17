@@ -242,7 +242,7 @@ mod tests {
     use chrono::{Duration, SubsecRound};
     use sqlx::Acquire;
 
-    use crate::{db, eth_supply::test::store_test_eth_supply};
+    use crate::{db, eth_supply::test::store_test_eth_supply, units::EthNewtype};
 
     use super::*;
 
@@ -267,7 +267,7 @@ mod tests {
             slot: Some(test_slot),
         };
 
-        store_test_eth_supply(&mut transaction, &test_slot, 10.0)
+        store_test_eth_supply(&mut transaction, &test_slot, EthNewtype(10.0))
             .await
             .unwrap();
 

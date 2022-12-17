@@ -5,10 +5,8 @@
 use anyhow::Result;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, Row};
-use std::str::FromStr;
 
-use crate::json_codecs::to_i128_string;
-use crate::units::Wei;
+use crate::units::WeiNewtype;
 
 use super::BlockNumber;
 
@@ -16,14 +14,13 @@ use super::BlockNumber;
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionBalancesSum {
     pub block_number: BlockNumber,
-    #[serde(serialize_with = "to_i128_string")]
-    pub balances_sum: Wei,
+    pub balances_sum: WeiNewtype,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ExecutionSupply {
     pub block_number: BlockNumber,
-    pub balances_sum: Wei,
+    pub balances_sum: WeiNewtype,
 }
 
 pub async fn get_execution_balances_by_hash(
@@ -43,7 +40,7 @@ pub async fn get_execution_balances_by_hash(
     )
     .bind(block_hash)
     .map(|row: PgRow| {
-        let balances_sum = i128::from_str(row.get("balances_sum")).unwrap();
+        let balances_sum: WeiNewtype = (row.get::<String, _>("balances_sum")).parse().unwrap();
         let block_number = row.get::<i32, _>("block_number");
 
         ExecutionSupply {
@@ -104,7 +101,7 @@ mod tests {
         assert_eq!(
             ExecutionSupply {
                 block_number: 0,
-                balances_sum: 1
+                balances_sum: WeiNewtype(1)
             },
             balances
         );

@@ -68,7 +68,7 @@ pub async fn get_issuance_by_start_of_day(
 }
 
 pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
-    let row = sqlx::query!(
+    sqlx::query!(
         "
             SELECT
                 gwei
@@ -81,9 +81,8 @@ pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype 
     )
     .fetch_one(executor)
     .await
-    .unwrap();
-
-    GweiNewtype(row.gwei as u64)
+.map(|row| GweiNewtype(row.gwei))
+    .unwrap()
 }
 
 pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
@@ -119,7 +118,7 @@ pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
 }
 
 pub async fn get_day7_ago_issuance( executor: impl PgExecutor<'_>,) -> GweiNewtype {
-    let row = sqlx::query!(
+    sqlx::query!(
         "
             WITH
               issuance_distances AS (
@@ -146,9 +145,8 @@ pub async fn get_day7_ago_issuance( executor: impl PgExecutor<'_>,) -> GweiNewty
     )
     .fetch_one(executor)
     .await
-    .unwrap();
-
-    GweiNewtype(row.gwei as u64)
+    .map(|row| GweiNewtype(row.gwei))
+    .unwrap()
 }
 
 pub async fn get_last_week_issuance(executor: &mut PgConnection) -> GweiNewtype {

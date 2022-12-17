@@ -48,8 +48,7 @@ pub async fn get_stored_effective_balance_sum(
     .await
     .unwrap();
 
-    row.effective_balance_sum
-        .map(|effective_balance_sum| GweiNewtype(effective_balance_sum as u64))
+    row.effective_balance_sum.map(GweiNewtype)
 }
 
 #[allow(dead_code)]

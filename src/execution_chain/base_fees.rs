@@ -99,8 +99,10 @@ mod tests {
 
     #[test]
     fn get_issuance_test() {
-        let issuance =
-            get_issuance_time_frame(Hour1, GweiNewtype(SLOT_4658998_EFFECTIVE_BALANCE_SUM));
+        let issuance = get_issuance_time_frame(
+            Hour1,
+            GweiNewtype(SLOT_4658998_EFFECTIVE_BALANCE_SUM.try_into().unwrap()),
+        );
         assert_eq!(issuance, 69990251296.875);
     }
 

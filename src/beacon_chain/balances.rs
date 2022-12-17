@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
 use sqlx::{PgConnection, PgExecutor, Row};
 
-use crate::units::{GweiNewtype};
+use crate::units::GweiNewtype;
 use crate::supply_projection::GweiInTime;
 
 use super::node::{ValidatorBalance, BeaconNode};
@@ -130,7 +130,6 @@ pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
 #[serde(rename_all = "camelCase")]
 pub struct BeaconBalancesSum {
     pub slot: Slot,
-    #[serde(serialize_with = "to_gwei_string")]
     pub balances_sum: GweiNewtype,
 }
 

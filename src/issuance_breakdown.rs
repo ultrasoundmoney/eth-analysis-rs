@@ -7,7 +7,7 @@ use crate::{
     beacon_chain,
     caching::{self, CacheKey},
     db, etherscan, key_value_store, log,
-    units::{GweiNewtype, GWEI_PER_ETH},
+    units::{EthNewtype, GweiNewtype},
 };
 
 #[derive(Debug, Serialize)]
@@ -31,49 +31,48 @@ pub async fn update_issuance_breakdown() -> Result<()> {
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
-    let crowd_sale = GweiNewtype::from_eth_f64(60_108_506.26);
-    debug!("crowd sale: {} ETH", crowd_sale.0 / GWEI_PER_ETH);
+    let crowd_sale: GweiNewtype = EthNewtype(60_108_506.26).into();
+    debug!(
+        "crowd sale: {} ETH",
+        crowd_sale.0 / EthNewtype::GWEI_PER_ETH
+    );
 
-    let early_contributors_without_vitalik = GweiNewtype::from_eth_f64(8_418_324.49);
-    let vitalik = GweiNewtype::from_eth_f64(696_940.59);
+    let early_contributors_without_vitalik = EthNewtype(8_418_324.49);
+    let vitalik = EthNewtype(696_940.59);
     let early_contributors = early_contributors_without_vitalik + vitalik;
-    debug!(
-        "early contributors: {} ETH",
-        early_contributors.0 / GWEI_PER_ETH
-    );
+    debug!("early contributors: {} ETH", early_contributors.0);
 
-    let ethereum_foundation = GweiNewtype::from_eth_f64(3_483_159.75);
-    debug!(
-        "ethereum foundation: {} ETH",
-        ethereum_foundation.0 / GWEI_PER_ETH
-    );
+    let ethereum_foundation = EthNewtype(3_483_159.75);
+    debug!("ethereum foundation: {} ETH", ethereum_foundation.0);
 
     let proof_of_stake = beacon_chain::get_current_issuance(&mut connection).await;
     debug!(
         "proof of stake issuance: {} ETH",
-        proof_of_stake.0 / GWEI_PER_ETH
+        Into::<EthNewtype>::into(proof_of_stake)
     );
 
     let eth_supply_2 = etherscan::get_eth_supply_2().await.unwrap();
 
     debug!(
         "eth supply without beacon issuance, with burnt fees: {} ETH",
-        GweiNewtype::from(eth_supply_2.eth_supply.clone()).0 / GWEI_PER_ETH
+        Into::<EthNewtype>::into(eth_supply_2.eth_supply_min_beacon_issuance_plus_burn)
     );
 
-    let proof_of_work = GweiNewtype::from(eth_supply_2.eth_supply)
+    let eth_supply_min_beacon_issuance_plus_burn_gwei: GweiNewtype =
+        eth_supply_2.eth_supply_min_beacon_issuance_plus_burn.into();
+    let proof_of_work = eth_supply_min_beacon_issuance_plus_burn_gwei
         - crowd_sale
-        - ethereum_foundation
-        - early_contributors;
+        - ethereum_foundation.into()
+        - early_contributors.into();
     debug!(
         "proof of work issuance: {} ETH",
-        proof_of_work.0 / GWEI_PER_ETH
+        Into::<EthNewtype>::into(proof_of_work)
     );
 
     let issuance_breakdown = IssuanceBreakdown {
         crowd_sale,
-        early_contributors,
-        ethereum_foundation,
+        early_contributors: early_contributors.into(),
+        ethereum_foundation: ethereum_foundation.into(),
         proof_of_stake,
         proof_of_work,
     };

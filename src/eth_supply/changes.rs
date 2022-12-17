@@ -151,7 +151,7 @@ mod tests {
     use crate::{
         db,
         eth_supply::test::store_test_eth_supply,
-        units::{GweiNewtype, WeiNewtype},
+        units::{EthNewtype, WeiNewtype},
     };
 
     use super::*;
@@ -163,10 +163,10 @@ mod tests {
 
         let from_slot = Slot(0);
         let to_slot = Slot(25);
-        store_test_eth_supply(&mut transaction, &from_slot, 10.0)
+        store_test_eth_supply(&mut transaction, &from_slot, EthNewtype(10.0))
             .await
             .unwrap();
-        let to_supply = GweiNewtype::from_eth(20).wei();
+        let to_supply = EthNewtype(20.0).into();
         let supply_change_m5 = from_time_frame(
             &mut transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Minute5),

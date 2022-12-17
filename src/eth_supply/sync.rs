@@ -7,7 +7,7 @@ use sqlx::{Acquire, PgConnection, PgExecutor};
 use tracing::{debug, error, warn};
 
 use crate::beacon_chain::{Slot, FIRST_POST_MERGE_SLOT};
-use crate::units::{GweiNewtype, Wei, WeiNewtype};
+use crate::units::{GweiNewtype, WeiNewtype};
 
 use crate::execution_chain::BlockNumber;
 
@@ -53,16 +53,15 @@ pub async fn store(
     executor: impl PgExecutor<'_>,
     slot: &Slot,
     block_number: &BlockNumber,
-    execution_balances_sum: &Wei,
+    execution_balances_sum: &WeiNewtype,
     beacon_balances_sum: &GweiNewtype,
     beacon_deposits_sum: &GweiNewtype,
 ) -> sqlx::Result<PgQueryResult> {
     let timestamp = slot.date_time();
 
-    debug!(%timestamp, %slot, block_number, execution_balances_sum, %beacon_deposits_sum, %beacon_balances_sum, "storing eth supply");
+    debug!(%timestamp, %slot, block_number, %execution_balances_sum, %beacon_deposits_sum, %beacon_balances_sum, "storing eth supply");
 
-    let supply =
-        WeiNewtype(*execution_balances_sum) + beacon_balances_sum.wei() - beacon_deposits_sum.wei();
+    let supply = *execution_balances_sum + beacon_balances_sum.into() - beacon_deposits_sum.into();
 
     sqlx::query!(
         "
@@ -233,8 +232,8 @@ mod tests {
         beacon_chain::{self, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder},
         db,
         eth_supply::SupplyParts,
-        eth_units::GweiNewtype,
         execution_chain::{self, add_delta, ExecutionNodeBlock, SupplyDelta},
+        units::GweiNewtype,
     };
 
     use super::*;
@@ -369,7 +368,7 @@ mod tests {
         let supply_parts = SupplyParts::new(
             &slot,
             &0,
-            GweiNewtype(10).wei().0,
+            Into::<WeiNewtype>::into(GweiNewtype(10)),
             GweiNewtype(20),
             GweiNewtype(5),
         );
@@ -412,7 +411,7 @@ mod tests {
         let supply_parts = SupplyParts::new(
             &slot,
             &0,
-            GweiNewtype(10).wei().0,
+            GweiNewtype(10).into(),
             GweiNewtype(20),
             GweiNewtype(5),
         );

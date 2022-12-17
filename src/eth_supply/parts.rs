@@ -9,7 +9,7 @@ use crate::{
     caching::{self, CacheKey},
     execution_chain::{self, BlockNumber, ExecutionBalancesSum},
     key_value_store,
-    units::{GweiNewtype, Wei, WeiNewtype},
+    units::{GweiNewtype, WeiNewtype},
 };
 
 // Remove deprecated fields after frontend switches over.
@@ -24,7 +24,7 @@ pub struct SupplyParts {
     pub beacon_deposits_sum_next: GweiNewtype,
     #[deprecated = "switch to execution_balances_sum_next"]
     pub execution_balances_sum: ExecutionBalancesSum,
-    pub execution_balances_sum_next: Wei,
+    pub execution_balances_sum_next: WeiNewtype,
     pub slot: Slot,
 }
 
@@ -32,7 +32,7 @@ impl SupplyParts {
     pub fn new(
         slot: &Slot,
         block_number: &BlockNumber,
-        execution_balances_sum: Wei,
+        execution_balances_sum: WeiNewtype,
         beacon_balances_sum: GweiNewtype,
         beacon_deposits_sum: GweiNewtype,
     ) -> Self {
@@ -61,8 +61,8 @@ impl SupplyParts {
     }
 
     pub fn supply(&self) -> WeiNewtype {
-        WeiNewtype(self.execution_balances_sum_next) + self.beacon_balances_sum_next.wei()
-            - self.beacon_deposits_sum_next.wei()
+        self.execution_balances_sum_next + self.beacon_balances_sum_next.into()
+            - self.beacon_deposits_sum_next.into()
     }
 }
 

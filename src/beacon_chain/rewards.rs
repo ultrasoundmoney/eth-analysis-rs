@@ -9,7 +9,7 @@ use tracing::{debug, info};
 use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
 use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
-use crate::units::{GweiNewtype, GWEI_PER_ETH, GWEI_PER_ETH_F64};
+use crate::units::{EthNewtype, GweiNewtype, GWEI_PER_ETH_F64};
 use crate::{caching, db, key_value_store, log};
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -37,7 +37,7 @@ async fn get_tips_since_london<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result<Gw
     )
     .fetch_one(pool)
     .await
-    .map(|row| GweiNewtype(row.tips_since_london.round() as u64))
+    .map(|row| GweiNewtype(row.tips_since_london.round() as i64))
 }
 
 async fn get_tips_reward<'a>(
@@ -48,7 +48,8 @@ async fn get_tips_reward<'a>(
     debug!("tips since london {}", tips_since_london);
 
     let tips_per_year = tips_since_london as f64 / get_days_since_london() as f64 * 365.25;
-    let single_validator_share = (32_f64 * GWEI_PER_ETH as f64) / effective_balance_sum.0 as f64;
+    let single_validator_share =
+        (32_f64 * EthNewtype::GWEI_PER_ETH as f64) / effective_balance_sum.0 as f64;
     debug!("single validator share {}", tips_since_london);
 
     let tips_earned_per_year_per_validator = tips_per_year * single_validator_share;
@@ -57,11 +58,11 @@ async fn get_tips_reward<'a>(
         tips_earned_per_year_per_validator
     );
 
-    let apr = tips_earned_per_year_per_validator / (32 * GWEI_PER_ETH) as f64;
+    let apr = tips_earned_per_year_per_validator / (32 * EthNewtype::GWEI_PER_ETH) as f64;
     debug!("tips APR {}", apr);
 
     Ok(ValidatorReward {
-        annual_reward: GweiNewtype(tips_earned_per_year_per_validator.round() as u64),
+        annual_reward: GweiNewtype(tips_earned_per_year_per_validator.round() as i64),
         apr,
     })
 }
@@ -106,7 +107,7 @@ pub fn get_issuance_reward(GweiNewtype(effective_balance_sum): GweiNewtype) -> V
     debug!("APR: {:.2}%", apr * 100f64);
 
     ValidatorReward {
-        annual_reward: GweiNewtype(annual_reward as u64),
+        annual_reward: GweiNewtype(annual_reward as i64),
         apr,
     }
 }
@@ -137,7 +138,7 @@ async fn get_validator_rewards<'a>(
         issuance: issuance_reward,
         tips: tips_reward,
         mev: ValidatorReward {
-            annual_reward: GweiNewtype((0.3 * GWEI_PER_ETH_F64) as u64),
+            annual_reward: GweiNewtype((0.3 * GWEI_PER_ETH_F64) as i64),
             apr: 0.01,
         },
     }

@@ -4,7 +4,7 @@ use sqlx::{Acquire, PgConnection};
 
 use crate::beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum};
 use crate::execution_chain::{BlockStore, ExecutionBalancesSum, ExecutionNodeBlock};
-use crate::units::GweiNewtype;
+use crate::units::{EthNewtype, GweiNewtype};
 use crate::{beacon_chain::Slot, units::EthF64};
 
 // Replace with shared testing helper that helps easily build the right mock block.
@@ -24,7 +24,7 @@ pub fn make_test_block() -> ExecutionNodeBlock {
 pub async fn store_test_eth_supply(
     executor: &mut PgConnection,
     slot: &Slot,
-    eth_supply: EthF64,
+    eth_supply: EthNewtype,
 ) -> Result<()> {
     let mut block_store = BlockStore::new(executor);
 
@@ -37,7 +37,7 @@ pub async fn store_test_eth_supply(
 
     let execution_balances_sum = ExecutionBalancesSum {
         block_number: 0,
-        balances_sum: GweiNewtype::from_eth_f64(eth_supply).wei().0,
+        balances_sum: eth_supply.into(),
     };
     let beacon_balances_sum = BeaconBalancesSum {
         balances_sum: GweiNewtype(0),
