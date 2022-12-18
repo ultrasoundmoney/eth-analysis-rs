@@ -6,7 +6,6 @@ mod sync;
 #[cfg(test)]
 mod test;
 
-pub use changes::update_and_publish as update_and_publish_supply_changes;
 pub use changes::SupplyChanges;
 pub use changes::SupplyChangesStore;
 
