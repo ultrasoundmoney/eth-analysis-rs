@@ -3,6 +3,7 @@ mod gwei;
 mod wei;
 
 pub use gwei::Gwei;
+pub use gwei::GweiImprecise;
 pub use gwei::GweiNewtype;
 
 pub use wei::Wei;

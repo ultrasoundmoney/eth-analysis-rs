@@ -20,6 +20,10 @@ pub type GweiF64 = f64;
 #[serde(into = "String")]
 pub struct GweiNewtype(pub i64);
 
+// When precision doesn't matter that much, or amounts are known to be less than 9M ETH.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct GweiImprecise(pub f64);
+
 impl fmt::Display for GweiNewtype {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} gwei", self.0)

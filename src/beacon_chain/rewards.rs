@@ -9,13 +9,13 @@ use tracing::{debug, info};
 use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
 use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
-use crate::units::{EthNewtype, GweiNewtype, GWEI_PER_ETH_F64};
+use crate::units::{EthNewtype, GweiImprecise, GweiNewtype, GWEI_PER_ETH_F64};
 use crate::{caching, db, key_value_store, log};
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidatorReward {
-    annual_reward: GweiNewtype,
+    annual_reward: GweiImprecise,
     apr: f64,
 }
 
@@ -62,7 +62,7 @@ async fn get_tips_reward<'a>(
     debug!("tips APR {}", apr);
 
     Ok(ValidatorReward {
-        annual_reward: GweiNewtype(tips_earned_per_year_per_validator.round() as i64),
+        annual_reward: GweiImprecise(tips_earned_per_year_per_validator),
         apr,
     })
 }
@@ -107,7 +107,7 @@ pub fn get_issuance_reward(GweiNewtype(effective_balance_sum): GweiNewtype) -> V
     debug!("APR: {:.2}%", apr * 100f64);
 
     ValidatorReward {
-        annual_reward: GweiNewtype(annual_reward as i64),
+        annual_reward: GweiImprecise(annual_reward),
         apr,
     }
 }
@@ -138,7 +138,7 @@ async fn get_validator_rewards<'a>(
         issuance: issuance_reward,
         tips: tips_reward,
         mev: ValidatorReward {
-            annual_reward: GweiNewtype((0.3 * GWEI_PER_ETH_F64) as i64),
+            annual_reward: GweiImprecise(0.3 * GWEI_PER_ETH_F64),
             apr: 0.01,
         },
     }
