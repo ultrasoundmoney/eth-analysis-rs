@@ -6,9 +6,7 @@ use tracing::{debug, warn};
 
 use crate::{
     beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum, Slot},
-    caching::{self, CacheKey},
     execution_chain::{self, BlockNumber, ExecutionBalancesSum},
-    key_value_store,
     units::{GweiNewtype, WeiNewtype},
 };
 
@@ -132,21 +130,6 @@ pub async fn get_supply_parts(
             Ok(Some(supply_parts))
         }
     }
-}
-
-pub async fn update_cache(db_pool: &PgPool, supply_parts: &SupplyParts) -> Result<()> {
-    key_value_store::set_value_str(
-        db_pool,
-        &CacheKey::SupplyParts.to_db_key(),
-        // sqlx wants a Value, but serde_json does not support i128 in Value, it's happy to serialize
-        // as string however.
-        &serde_json::to_string(supply_parts).unwrap(),
-    )
-    .await;
-
-    caching::publish_cache_update(db_pool, &CacheKey::SupplyParts).await?;
-
-    Ok(())
 }
 
 #[async_trait]
