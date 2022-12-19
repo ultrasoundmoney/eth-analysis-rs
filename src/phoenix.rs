@@ -1,5 +1,6 @@
 mod grouped_analysis_1;
 mod price_stats;
+mod supply_changes;
 mod supply_over_time;
 mod supply_parts;
 
@@ -25,7 +26,8 @@ use crate::{
     env, log,
     phoenix::{
         grouped_analysis_1::GroupedAnalysis1Monitor, price_stats::EthPriceStatsMonitor,
-        supply_over_time::SupplyOverTimeMonitor, supply_parts::SupplyPartsMonitor,
+        supply_changes::SupplyChangesMonitor, supply_over_time::SupplyOverTimeMonitor,
+        supply_parts::SupplyPartsMonitor,
     },
 };
 
@@ -196,6 +198,11 @@ async fn run_alarm_loop(last_checked: Arc<Mutex<DateTime<Utc>>>) {
             last_seen: Utc::now(),
             name: "supply-parts",
             monitor: Box::new(SupplyPartsMonitor::new()),
+        },
+        Phoenix {
+            last_seen: Utc::now(),
+            name: "supply-changes",
+            monitor: Box::new(SupplyChangesMonitor::new()),
         },
     ];
 
