@@ -44,13 +44,15 @@ impl SupplyChange {
 
 #[derive(Debug, Serialize)]
 pub struct SupplyChanges {
-    m5: Option<SupplyChange>,
-    h1: Option<SupplyChange>,
     d1: Option<SupplyChange>,
-    d7: Option<SupplyChange>,
     d30: Option<SupplyChange>,
-    since_merge: Option<SupplyChange>,
+    d7: Option<SupplyChange>,
+    h1: Option<SupplyChange>,
+    m5: Option<SupplyChange>,
     since_burn: Option<SupplyChange>,
+    since_merge: Option<SupplyChange>,
+    slot: Slot,
+    timestamp: DateTime<Utc>,
 }
 
 impl SupplyChanges {
@@ -62,6 +64,7 @@ impl SupplyChanges {
         d30: Option<SupplyChange>,
         since_burn: Option<SupplyChange>,
         since_merge: Option<SupplyChange>,
+        slot: &Slot,
     ) -> Self {
         SupplyChanges {
             m5,
@@ -71,6 +74,8 @@ impl SupplyChanges {
             d30,
             since_merge,
             since_burn,
+            slot: *slot,
+            timestamp: slot.date_time(),
         }
     }
 }
@@ -158,7 +163,7 @@ impl<'a> SupplyChangesStore<'a> {
             from_time_frame(self.db_pool, &SinceMerge, slot, supply_parts.supply()),
         )?;
 
-        let supply_changes = SupplyChanges::new(m5, h1, d1, d7, d30, since_burn, since_merge);
+        let supply_changes = SupplyChanges::new(m5, h1, d1, d7, d30, since_burn, since_merge, slot);
 
         Ok(supply_changes)
     }
