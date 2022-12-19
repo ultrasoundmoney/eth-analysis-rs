@@ -5,7 +5,7 @@ use serde::Serialize;
 use sqlx::{PgExecutor, PgPool};
 
 use crate::{
-    beacon_chain::Slot,
+    beacon_chain::{Slot, FIRST_POST_LONDON_SLOT, FIRST_POST_MERGE_SLOT},
     performance::TimedExt,
     time_frames::{LimitedTimeFrame, TimeFrame},
     units::WeiNewtype,
@@ -75,6 +75,15 @@ impl SupplyChanges {
     }
 }
 
+// This number was recorded before we has a rigorous definition of how to combine the execution and
+// beacon chains to come up with a precise supply. After a rigorous supply is established for every
+// block and slot it would be good to update this number.
+const MERGE_SLOT_SUPPLY: WeiNewtype = WeiNewtype(120_521_140_924_621_298_474_538_089);
+
+// Until we have an eth supply calculated by adding together per-block supply deltas, we're using
+// an estimate based on glassnode data.
+const LONDON_SLOT_SUPPLY_ESTIMATE: WeiNewtype = WeiNewtype(117_397_725_113_869_100_000_000_000);
+
 async fn from_time_frame(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
@@ -109,7 +118,20 @@ async fn from_time_frame(
             })
             .context("query supply from balance")
         }
-        _ => unimplemented!(),
+        TimeFrame::SinceBurn => {
+            let supply_change = SupplyChange::new(
+                FIRST_POST_LONDON_SLOT,
+                LONDON_SLOT_SUPPLY_ESTIMATE,
+                *slot,
+                to_supply,
+            );
+            Ok(Some(supply_change))
+        }
+        TimeFrame::SinceMerge => {
+            let supply_change =
+                SupplyChange::new(FIRST_POST_MERGE_SLOT, MERGE_SLOT_SUPPLY, *slot, to_supply);
+            Ok(Some(supply_change))
+        }
     }
 }
 
