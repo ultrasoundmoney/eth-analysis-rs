@@ -54,15 +54,23 @@ pub struct SupplyChanges {
 }
 
 impl SupplyChanges {
-    fn new(m5: Option<SupplyChange>, h1: Option<SupplyChange>) -> Self {
+    fn new(
+        m5: Option<SupplyChange>,
+        h1: Option<SupplyChange>,
+        d1: Option<SupplyChange>,
+        d7: Option<SupplyChange>,
+        d30: Option<SupplyChange>,
+        since_burn: Option<SupplyChange>,
+        since_merge: Option<SupplyChange>,
+    ) -> Self {
         SupplyChanges {
             m5,
             h1,
-            d1: None,
-            d7: None,
-            d30: None,
-            since_merge: None,
-            since_burn: None,
+            d1,
+            d7,
+            d30,
+            since_merge,
+            since_burn,
         }
     }
 }
@@ -118,12 +126,17 @@ impl<'a> SupplyChangesStore<'a> {
         use LimitedTimeFrame::*;
         use TimeFrame::*;
 
-        let (m5, h1) = try_join!(
+        let (m5, h1, d1, d7, d30, since_burn, since_merge) = try_join!(
             from_time_frame(self.db_pool, &Limited(Minute5), slot, supply_parts.supply()),
-            from_time_frame(self.db_pool, &Limited(Hour1), slot, supply_parts.supply())
+            from_time_frame(self.db_pool, &Limited(Hour1), slot, supply_parts.supply()),
+            from_time_frame(self.db_pool, &Limited(Day1), slot, supply_parts.supply()),
+            from_time_frame(self.db_pool, &Limited(Day7), slot, supply_parts.supply()),
+            from_time_frame(self.db_pool, &Limited(Day30), slot, supply_parts.supply()),
+            from_time_frame(self.db_pool, &SinceBurn, slot, supply_parts.supply()),
+            from_time_frame(self.db_pool, &SinceMerge, slot, supply_parts.supply()),
         )?;
 
-        let supply_changes = SupplyChanges::new(m5, h1);
+        let supply_changes = SupplyChanges::new(m5, h1, d1, d7, d30, since_burn, since_merge);
 
         Ok(supply_changes)
     }
