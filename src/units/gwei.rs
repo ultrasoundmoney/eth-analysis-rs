@@ -7,10 +7,6 @@ use serde::{de, de::Visitor, Deserialize, Serialize};
 
 use super::{eth::EthNewtype, WeiNewtype};
 
-pub type Gwei = u64;
-
-pub type GweiF64 = f64;
-
 // Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
 // ~9_000_000_000 ETH, which is more than the entire supply.
 // When converting to f64 however, max safe is 2^53, so anything more than ~9M ETH will lose
