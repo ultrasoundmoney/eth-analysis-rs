@@ -10,6 +10,7 @@ use chrono::{DateTime, Duration, DurationRound, Utc};
 use futures::join;
 use serde::Serialize;
 use sqlx::{PgExecutor, PgPool};
+use tracing::info;
 
 use crate::{
     caching::{self, CacheKey},
@@ -212,6 +213,8 @@ async fn get_issuance_per_slot_estimate(issuance_store: impl IssuanceStore) -> f
 }
 
 pub async fn update_issuance_estimate() {
+    info!("updating issuance estimate");
+
     let db_pool = db::get_db_pool("update-issuance-estimate").await;
     let issuance_store = IssuanceStorePostgres::new(&db_pool);
 
@@ -231,6 +234,8 @@ pub async fn update_issuance_estimate() {
     caching::update_and_publish(&db_pool, &CacheKey::IssuanceEstimate, issuance_estimate)
         .await
         .unwrap();
+
+    info!("updated issuance estimate");
 }
 
 #[cfg(test)]
