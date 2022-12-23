@@ -42,64 +42,6 @@ pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal:
     .unwrap();
 }
 
-pub async fn get_block_by_hash(
-    executor: impl PgExecutor<'_>,
-    hash: &str,
-) -> Option<ExecutionNodeBlock> {
-    sqlx::query_as!(
-        ExecutionBlockRow,
-        r#"
-        SELECT
-            base_fee_per_gas,
-            difficulty,
-            gas_used,
-            hash,
-            number,
-            parent_hash,
-            timestamp,
-            total_difficulty::TEXT AS "total_difficulty!"
-        FROM
-            blocks_next
-        WHERE
-            hash = $1
-        "#,
-        hash
-    )
-    .fetch_optional(executor)
-    .await
-    .unwrap()
-    .map(|row| row.into())
-}
-
-pub async fn get_block_by_number(
-    executor: impl PgExecutor<'_>,
-    block_number: &BlockNumber,
-) -> Option<ExecutionNodeBlock> {
-    sqlx::query_as!(
-        ExecutionBlockRow,
-        r#"
-        SELECT
-            base_fee_per_gas,
-            difficulty,
-            gas_used,
-            hash,
-            number,
-            parent_hash,
-            timestamp,
-            total_difficulty::TEXT AS "total_difficulty!"
-        FROM
-            blocks_next
-        WHERE
-            number = $1
-        "#,
-        *block_number
-    )
-    .fetch_optional(executor)
-    .await
-    .unwrap()
-    .map(|row| row.into())
-}
-
 pub async fn get_is_parent_hash_known(connection: &mut PgConnection, hash: &str) -> bool {
     // TODO: once 12965000 the london hardfork block is in the DB, we can hardcode and check
     // the hash, skipping a DB roundtrip.
@@ -255,6 +197,35 @@ mod tests {
         }
     }
 
+    pub async fn get_block_by_number(
+        executor: impl PgExecutor<'_>,
+        block_number: &BlockNumber,
+    ) -> Option<ExecutionNodeBlock> {
+        sqlx::query_as!(
+            ExecutionBlockRow,
+            r#"
+        SELECT
+            base_fee_per_gas,
+            difficulty,
+            gas_used,
+            hash,
+            number,
+            parent_hash,
+            timestamp,
+            total_difficulty::TEXT AS "total_difficulty!"
+        FROM
+            blocks_next
+        WHERE
+            number = $1
+        "#,
+            *block_number
+        )
+        .fetch_optional(executor)
+        .await
+        .unwrap()
+        .map(|row| row.into())
+    }
+
     #[tokio::test]
     async fn store_block_test() {
         let mut db = db::get_test_db().await;
@@ -289,6 +260,35 @@ mod tests {
 
         delete_blocks(&mut tx, &0).await;
         assert_eq!(len(&mut tx,).await, 0);
+    }
+
+    pub async fn get_block_by_hash(
+        executor: impl PgExecutor<'_>,
+        hash: &str,
+    ) -> Option<ExecutionNodeBlock> {
+        sqlx::query_as!(
+            ExecutionBlockRow,
+            r#"
+        SELECT
+            base_fee_per_gas,
+            difficulty,
+            gas_used,
+            hash,
+            number,
+            parent_hash,
+            timestamp,
+            total_difficulty::TEXT AS "total_difficulty!"
+        FROM
+            blocks_next
+        WHERE
+            hash = $1
+        "#,
+            hash
+        )
+        .fetch_optional(executor)
+        .await
+        .unwrap()
+        .map(|row| row.into())
     }
 
     #[tokio::test]
