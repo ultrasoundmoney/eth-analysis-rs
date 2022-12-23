@@ -1,8 +1,6 @@
-use anyhow::Result;
 use chrono::Utc;
 
 use serde::Serialize;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::{Decode, PgExecutor, PgPool};
 use tracing::{debug, info};
 
@@ -10,7 +8,7 @@ use super::{balances, BeaconNode};
 use crate::caching::CacheKey;
 use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
 use crate::units::{EthNewtype, GweiImprecise, GweiNewtype, GWEI_PER_ETH_F64};
-use crate::{caching, db, key_value_store, log};
+use crate::{caching, db, log};
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,15 +136,12 @@ async fn get_validator_rewards(db_pool: &PgPool, beacon_node: &BeaconNode) -> Va
     }
 }
 
-pub async fn update_validator_rewards() -> Result<()> {
+pub async fn update_validator_rewards() {
     log::init_with_env();
 
     info!("updating validator rewards");
 
-    let db_pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&db::get_db_url_with_name("update-validator-rewards"))
-        .await?;
+    let db_pool = db::get_db_pool("update-validator-rewards").await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
@@ -155,16 +150,9 @@ pub async fn update_validator_rewards() -> Result<()> {
     let validator_rewards = get_validator_rewards(&db_pool, &beacon_node).await;
     debug!("validator rewards: {:?}", validator_rewards);
 
-    key_value_store::set_value(
-        &db_pool,
-        CacheKey::ValidatorRewards.to_db_key(),
-        &serde_json::to_value(validator_rewards).unwrap(),
-    )
-    .await?;
-
-    caching::publish_cache_update(&db_pool, &CacheKey::ValidatorRewards).await?;
+    caching::update_and_publish(&db_pool, &CacheKey::ValidatorRewards, validator_rewards)
+        .await
+        .unwrap();
 
     info!("done updating validator rewards");
-
-    Ok(())
 }
