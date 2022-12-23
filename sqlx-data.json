@@ -1,43 +1,5 @@
 {
   "db": "PostgreSQL",
-  "0095a39b2059c44bb70fc7e26c567227deae1dd658b8f5d73217b778627dc6dd": {
-    "describe": {
-      "columns": [
-        {
-          "name": "exists!",
-          "ordinal": 0,
-          "type_info": "Bool"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                  EXISTS(\n                    SELECT\n                      hash\n                    FROM\n                      blocks_next\n                    WHERE\n                      number = $1\n                  ) AS \"exists!\"\n            "
-  },
-  "017c881da2ebcd080ea65a96821f8a4320e7e839b3ff5aab079e16ce3fc2ddd0": {
-    "describe": {
-      "columns": [
-        {
-          "name": "number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n                SELECT\n                    number\n                FROM\n                    blocks_next\n                ORDER BY number DESC\n                LIMIT 1\n            "
-  },
   "046945e120820491c162a629c80a9cd3dc33508d97653b2ccb6d3b46328fd4df": {
     "describe": {
       "columns": [
@@ -207,68 +169,6 @@
     },
     "query": "\n            SELECT\n              timestamp,\n              ethusd AS \"ethusd!\"\n            FROM eth_prices\n            ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))\n            LIMIT 1\n        "
   },
-  "36b6169564ef841d5cfe8e64835534b1156ac30c63afa408684aa6af967711ee": {
-    "describe": {
-      "columns": [
-        {
-          "name": "base_fee_per_gas",
-          "ordinal": 0,
-          "type_info": "Int8"
-        },
-        {
-          "name": "difficulty",
-          "ordinal": 1,
-          "type_info": "Int8"
-        },
-        {
-          "name": "gas_used",
-          "ordinal": 2,
-          "type_info": "Int4"
-        },
-        {
-          "name": "hash",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "number",
-          "ordinal": 4,
-          "type_info": "Int4"
-        },
-        {
-          "name": "parent_hash",
-          "ordinal": 5,
-          "type_info": "Text"
-        },
-        {
-          "name": "timestamp",
-          "ordinal": 6,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "total_difficulty!",
-          "ordinal": 7,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM\n                    blocks_next\n                WHERE\n                    number = $1\n            "
-  },
   "36ceca3d7486bb5eafb2a8146c181adf99b6f2162bb27d273d537c036d3ae65d": {
     "describe": {
       "columns": [
@@ -425,24 +325,6 @@
     },
     "query": "\n            DELETE FROM\n                eth_supply\n            WHERE\n                deposits_slot = $1\n                OR balances_slot = $1\n        "
   },
-  "5152e0dba03bc8d7baa8e8b2c2f7f3bca0fcae139dccba9c87e238ce33cb75b4": {
-    "describe": {
-      "columns": [
-        {
-          "name": "count!",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n                SELECT COUNT(*) AS \"count!\" FROM blocks_next\n            "
-  },
   "525ee7f8caaabc8aeb791b8ccc613762405b9ef746d7b25dedada0240a67f9b5": {
     "describe": {
       "columns": [],
@@ -540,24 +422,6 @@
     },
     "query": "\n                SELECT\n                    balances_slot,\n                    supply::TEXT AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    balances_slot = $1\n                "
   },
-  "6e3427b92b80bc6d01fe740bf9a20a484dd1725de564cf13620e2a6bbf74b674": {
-    "describe": {
-      "columns": [
-        {
-          "name": "slot",
-          "ordinal": 0,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT\n                beacon_states.slot\n            FROM\n                beacon_blocks\n            JOIN\n                beacon_states\n            ON\n                beacon_states.state_root = beacon_blocks.state_root\n            ORDER BY slot DESC\n            LIMIT 1\n        "
-  },
   "6e5840a62473818a418e10adb6ba3c8808a9f057e7194a4910096fdaf503d699": {
     "describe": {
       "columns": [],
@@ -569,18 +433,6 @@
       }
     },
     "query": "\n            DELETE FROM beacon_blocks\n            WHERE state_root IN (\n                SELECT\n                    state_root\n                FROM\n                    beacon_states\n                WHERE beacon_states.slot >= $1\n            )\n        "
-  },
-  "73a4e423df6615c6fac510739e7cc18a7626439f2ccdf2b7b6193577ab00d4c3": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n                DELETE FROM blocks_next\n                WHERE number >= $1\n            "
   },
   "73d291d9db99ddd05727fadba267f267d5b1b4a06c4bb827f76c101b185b6e08": {
     "describe": {
@@ -651,6 +503,18 @@
       }
     },
     "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks \n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root \n            WHERE slot < $1\n            ORDER BY slot DESC \n            LIMIT 1\n        "
+  },
+  "7c8ce12377837516c1b52c711729f7ac5a07f0a924ff1227b5b7374de482ce7f": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        DELETE FROM blocks_next\n        WHERE number >= $1\n        "
   },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {
@@ -732,26 +596,6 @@
     },
     "query": "\n                SELECT\n                    slot,\n                    state_root\n                FROM\n                    beacon_states\n                WHERE\n                    slot >= $1\n                AND\n                    slot <= $2\n                ORDER BY\n                    slot ASC\n            "
   },
-  "95f051861a5ca96b593acc398f7f29d5c8ca859e7a76cc8888b00868a23563be": {
-    "describe": {
-      "columns": [
-        {
-          "name": "exists!",
-          "ordinal": 0,
-          "type_info": "Bool"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n                    SELECT\n                      EXISTS(\n                        SELECT\n                          hash\n                        FROM\n                          blocks_next\n                        WHERE\n                          hash = $1\n                      ) AS \"exists!\"\n                "
-  },
   "98198e4a1b074e7bcecc21a84f8cffa036865925ff1e10d0be5a84d4fb9be589": {
     "describe": {
       "columns": [
@@ -799,6 +643,24 @@
       }
     },
     "query": "\n            DELETE FROM beacon_validators_balance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot = $1\n            )\n        "
+  },
+  "a071befc1dabc8df4310891a11943b3d9e337870cc85e36fe30151a3a02937c0": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            number\n        FROM\n            blocks_next\n        ORDER BY number DESC\n        LIMIT 1\n        "
   },
   "a262647098b76d069f84fcabe8c4affa833727791f3a15c47b8b41e2f3fb5ea2": {
     "describe": {
@@ -849,6 +711,44 @@
       }
     },
     "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks\n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot = $1\n        "
+  },
+  "a941d512bdd0663097e3dc75ded6f308e8798ebf3002fbc8f9fe46938af8ed38": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            COUNT(*) AS \"count!\"\n        FROM\n            blocks_next\n        LIMIT 1\n        "
+  },
+  "ae9ffc0f31d3b31a5228f7bc4ce434509dcd5d5373cf65fe12f2ed0c658660ef": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n          EXISTS(\n            SELECT\n              hash\n            FROM\n              blocks_next\n            WHERE\n              number = $1\n          ) AS \"exists!\"\n        "
   },
   "afc80a58058ec48b784e3e6fabb6a2aaffac18fe875c12c880c73c86690fb4be": {
     "describe": {
@@ -947,24 +847,6 @@
     },
     "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot\n            FROM\n                beacon_states\n            LEFT JOIN beacon_validators_balance ON\n                beacon_states.state_root = beacon_validators_balance.state_root\n            WHERE\n                slot >= $1\n            AND\n                beacon_validators_balance.state_root IS NULL\n            ORDER BY slot DESC\n        "
   },
-  "c3e675178c9b93119e5298a613b1c84cd0847ad39755d3e530cac5a52586a747": {
-    "describe": {
-      "columns": [
-        {
-          "name": "count!",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n                SELECT\n                    COUNT(*) AS \"count!\"\n                FROM\n                    blocks_next\n                LIMIT 1\n            "
-  },
   "c49edba8e1bcb02e70d7d19ded33b9c77e5ceb140c06e04108dcf3a1c4893c6f": {
     "describe": {
       "columns": [],
@@ -991,6 +873,26 @@
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
   },
+  "c501cc1c1abf6bd7b5195866067f0e20d92e3a4b06012f106e4109a601b661e4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                gwei\n            FROM\n                beacon_validators_balance\n            WHERE\n                beacon_validators_balance.state_root = $1\n        "
+  },
   "db7b7fa09a36c2216aaa8ca90270fce68e90be39ce6c21fcd9fa70eee51fa65e": {
     "describe": {
       "columns": [
@@ -1008,68 +910,6 @@
       }
     },
     "query": "\n            WITH\n              issuance_distances AS (\n                SELECT\n                  gwei,\n                  timestamp,\n                  ABS(\n                    EXTRACT(\n                      epoch\n                      FROM\n                        (timestamp - (NOW() - '7 days':: INTERVAL))\n                    )\n                  ) AS distance_seconds\n                FROM\n                  beacon_issuance\n                ORDER BY\n                  distance_seconds ASC\n              )\n            SELECT gwei\n            FROM issuance_distances \n            WHERE distance_seconds <= 86400\n            LIMIT 1\n        "
-  },
-  "dee40e6dd15adfc421012d85806bf7e7ce55ac6e8c445b0c070bd9eadcebd253": {
-    "describe": {
-      "columns": [
-        {
-          "name": "base_fee_per_gas",
-          "ordinal": 0,
-          "type_info": "Int8"
-        },
-        {
-          "name": "difficulty",
-          "ordinal": 1,
-          "type_info": "Int8"
-        },
-        {
-          "name": "gas_used",
-          "ordinal": 2,
-          "type_info": "Int4"
-        },
-        {
-          "name": "hash",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "number",
-          "ordinal": 4,
-          "type_info": "Int4"
-        },
-        {
-          "name": "parent_hash",
-          "ordinal": 5,
-          "type_info": "Text"
-        },
-        {
-          "name": "timestamp",
-          "ordinal": 6,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "total_difficulty!",
-          "ordinal": 7,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM\n                    blocks_next\n                WHERE\n                    hash = $1\n            "
   },
   "e7fe80e33064951d3e22fc7a1868b50257db8acd15636663218b3f2ebff08a73": {
     "describe": {
@@ -1123,6 +963,26 @@
       }
     },
     "query": "\n            INSERT INTO\n                eth_prices (timestamp, ethusd)\n            VALUES ($1, $2)\n            ON CONFLICT (timestamp) DO UPDATE SET\n                ethusd = excluded.ethusd\n        "
+  },
+  "fb94c5d46f11bd825553e39935cfe7ca44aed2cc15a995c7cb486a51b64c35c5": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n              EXISTS(\n                SELECT\n                  hash\n                FROM\n                  blocks_next\n                WHERE\n                  hash = $1\n              ) AS \"exists!\"\n            "
   },
   "febfe61a125d3cb2bc555027c602842386096975e8387d3de410ca0847d2e56b": {
     "describe": {
