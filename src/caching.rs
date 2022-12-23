@@ -38,22 +38,22 @@ impl Display for CacheKey {
 impl CacheKey {
     pub fn to_db_key(&self) -> &'_ str {
         match self {
-            &Self::BaseFeeOverTime => "base-fee-over-time",
-            &Self::BaseFeePerGas => "current-base-fee",
-            &Self::BaseFeePerGasStats => "base-fee-per-gas-stats",
-            &Self::BlockLag => "block-lag",
-            &Self::EffectiveBalanceSum => "effective-balance-sum",
-            &Self::EthPrice => "eth-price",
-            &Self::SupplyParts => "supply-parts",
-            &Self::IssuanceBreakdown => "issuance-breakdown",
-            &Self::IssuanceEstimate => "issuance-estimate",
-            &Self::SupplyChanges => "supply-changes",
-            &Self::SupplyDashboardAnalysis => "supply-dashboard-analysis",
-            &Self::SupplyOverTime => "supply-over-time",
-            &Self::SupplyProjectionInputs => "supply-projection-inputs",
-            &Self::SupplySinceMerge => "supply-since-merge",
-            &Self::TotalDifficultyProgress => "total-difficulty-progress",
-            &Self::ValidatorRewards => "validator-rewards",
+            Self::BaseFeeOverTime => "base-fee-over-time",
+            Self::BaseFeePerGas => "current-base-fee",
+            Self::BaseFeePerGasStats => "base-fee-per-gas-stats",
+            Self::BlockLag => "block-lag",
+            Self::EffectiveBalanceSum => "effective-balance-sum",
+            Self::EthPrice => "eth-price",
+            Self::SupplyParts => "supply-parts",
+            Self::IssuanceBreakdown => "issuance-breakdown",
+            Self::IssuanceEstimate => "issuance-estimate",
+            Self::SupplyChanges => "supply-changes",
+            Self::SupplyDashboardAnalysis => "supply-dashboard-analysis",
+            Self::SupplyOverTime => "supply-over-time",
+            Self::SupplyProjectionInputs => "supply-projection-inputs",
+            Self::SupplySinceMerge => "supply-since-merge",
+            Self::TotalDifficultyProgress => "total-difficulty-progress",
+            Self::ValidatorRewards => "validator-rewards",
         }
     }
 }
@@ -64,7 +64,7 @@ pub enum ParseCacheKeyError {
     UnknownCacheKey(String),
 }
 
-impl<'a> FromStr for CacheKey {
+impl FromStr for CacheKey {
     type Err = ParseCacheKeyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -221,7 +221,7 @@ mod tests {
 
         let caching_value = key_value_store::get_deserializable_value::<TestJson>(
             &mut transaction,
-            &CacheKey::BaseFeePerGasStats.to_db_key(),
+            CacheKey::BaseFeePerGasStats.to_db_key(),
         )
         .await?
         .unwrap();

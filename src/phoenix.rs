@@ -66,7 +66,7 @@ impl Alarm {
     async fn fire(&mut self, message: &str) {
         if self.is_throttled() {
             warn!("alarm is throttled, ignoring request to fire alarm");
-            return ();
+            return;
         }
 
         error!(message, "firing alarm");

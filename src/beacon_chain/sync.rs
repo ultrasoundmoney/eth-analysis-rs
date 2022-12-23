@@ -14,7 +14,6 @@ use crate::{
     json_codecs::i32_from_string,
     log,
     performance::TimedExt,
-    units::GweiNewtype,
 };
 use crate::{eth_supply, supply_dashboard_analysis};
 
@@ -70,47 +69,17 @@ impl Iterator for SlotRangeIntoIterator {
         {
             Ordering::Less => {
                 let current = self.slot_range.greater_than_or_equal + self.index as i32;
-                self.index = self.index + 1;
+                self.index += 1;
                 Some(current)
             }
             Ordering::Equal => {
                 let current = self.slot_range.greater_than_or_equal + self.index as i32;
-                self.index = self.index + 1;
+                self.index += 1;
                 Some(current)
             }
             Ordering::Greater => None,
         }
     }
-}
-
-async fn store_state_with_block(
-    executor: &mut PgConnection,
-    block: &BeaconBlock,
-    deposit_sum: &GweiNewtype,
-    deposit_sum_aggregated: &GweiNewtype,
-    header: &BeaconHeaderSignedEnvelope,
-) -> Result<()> {
-    let is_parent_known = blocks::get_is_hash_known(&mut *executor, &header.parent_root()).await;
-    if !is_parent_known {
-        return Err(anyhow!(
-            "trying to insert beacon block with missing parent, block_root: {}, parent_root: {:?}",
-            header.root,
-            header.header.message.parent_root
-        ));
-    }
-
-    states::store_state(&mut *executor, &header.state_root(), &header.slot()).await?;
-
-    blocks::store_block(
-        &mut *executor,
-        block,
-        deposit_sum,
-        deposit_sum_aggregated,
-        header,
-    )
-    .await?;
-
-    Ok(())
 }
 
 struct SyncData {
@@ -147,10 +116,12 @@ async fn gather_sync_data(
             let block = beacon_node
                 .get_block_by_block_root(&header.root)
                 .await?
-                .expect(&format!(
-                    "expect a block to be ava)ilable for currently syncing block_root {}",
-                    header.root
-                ));
+                .unwrap_or_else(|| {
+                    panic!(
+                        "expect a block to be ava)ilable for currently syncing block_root {}",
+                        header.root
+                    )
+                });
             Some((header, block))
         }
     };
@@ -167,7 +138,7 @@ async fn gather_sync_data(
             None
         } else {
             let validator_balances = beacon_node
-                .get_validator_balances(&state_root)
+                .get_validator_balances(state_root)
                 .await?
                 .expect("expect validator balances to exist for given state_root");
             Some(validator_balances)
@@ -215,7 +186,7 @@ pub async fn sync_slot_by_state_root(
                 "storing slot without block, slot: {:?}, state_root: {}",
                 slot, state_root
             );
-            states::store_state(&mut transaction, &state_root, slot)
+            states::store_state(&mut transaction, state_root, slot)
                 .timed("store state without block")
                 .await;
         }
@@ -229,25 +200,36 @@ pub async fn sync_slot_by_state_root(
                 block_root = header.root,
                 "storing slot with block"
             );
-            store_state_with_block(
+            let is_parent_known =
+                blocks::get_is_hash_known(&mut transaction, &header.parent_root()).await;
+            if !is_parent_known {
+                return Err(anyhow!(
+            "trying to insert beacon block with missing parent, block_root: {}, parent_root: {:?}",
+            header.root,
+            header.header.message.parent_root
+        ));
+            }
+
+            states::store_state(&mut transaction, &header.state_root(), &header.slot()).await;
+
+            blocks::store_block(
                 &mut transaction,
                 block,
-                &deposits::get_deposit_sum_from_block(&block),
+                &deposits::get_deposit_sum_from_block(block),
                 &deposit_sum_aggregated,
                 header,
             )
-            .timed("store_state_with_block")
             .await;
         }
     }
 
     if let Some(ref validator_balances) = validator_balances {
         debug!("validator balances present");
-        let validator_balances_sum = balances::sum_validator_balances(&validator_balances);
+        let validator_balances_sum = balances::sum_validator_balances(validator_balances);
         balances::store_validators_balance(
             &mut transaction,
-            &state_root,
-            &slot,
+            state_root,
+            slot,
             &validator_balances_sum,
         )
         .await;
@@ -257,7 +239,7 @@ pub async fn sync_slot_by_state_root(
                 deposits::get_deposit_sum_aggregated(&mut transaction, &block).await;
             issuance::store_issuance(
                 &mut transaction,
-                &state_root,
+                state_root,
                 slot,
                 &issuance::calc_issuance(&validator_balances_sum, &deposit_sum_aggregated),
             )
@@ -512,14 +494,15 @@ pub async fn sync_beacon_states() -> Result<()> {
         while let Some(slot) = slots_queue.pop_front() {
             debug!(%slot, "analyzing next slot on the queue");
 
-            let on_chain_state_root =
-                beacon_node
-                    .get_state_root_by_slot(&slot)
-                    .await?
-                    .expect(&format!(
+            let on_chain_state_root = beacon_node
+                .get_state_root_by_slot(&slot)
+                .await?
+                .unwrap_or_else(|| {
+                    panic!(
                         "expect state_root to exist for slot {} to sync from queue",
                         slot
-                    ));
+                    )
+                });
             let current_slot_stored_state_root =
                 states::get_state_root_by_slot(&db_pool, &slot).await;
 

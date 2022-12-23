@@ -33,12 +33,12 @@ pub fn get_env_var(key: &str) -> Option<String> {
 
 /// Get an environment variable we can't run without.
 pub fn get_env_var_unsafe(key: &str) -> String {
-    get_env_var(key).expect(&format!("{key} should be in env"))
+    get_env_var(key).unwrap_or_else(|| panic!("{key} should be in env"))
 }
 
 /// Some things are different between environments. Urls we contact, timeouts we use, data we have.
 /// This enum is the main way to create these branches in our logic.
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum Env {
     Dev,
     Prod,
@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn get_env_bool_not_there_test() {
         let flag = get_env_bool("DOESNT_EXIST");
-        assert_eq!(flag, false);
+        assert!(!flag);
     }
 
     #[test]
@@ -119,7 +119,7 @@ mod tests {
         let test_key = "TEST_KEY_BOOL_TRUE";
         let test_value = "true";
         std::env::set_var(test_key, test_value);
-        assert_eq!(get_env_bool(test_key), true);
+        assert!(get_env_bool(test_key));
     }
 
     #[test]
@@ -127,7 +127,7 @@ mod tests {
         let test_key = "TEST_KEY_BOOL_TRUE2";
         let test_value = "TRUE";
         std::env::set_var(test_key, test_value);
-        assert_eq!(get_env_bool(test_key), true);
+        assert!(get_env_bool(test_key));
     }
 
     #[test]
@@ -135,6 +135,6 @@ mod tests {
         let test_key = "TEST_KEY_BOOL_FALSE";
         let test_value = "false";
         std::env::set_var(test_key, test_value);
-        assert_eq!(get_env_bool(test_key), false);
+        assert!(!get_env_bool(test_key));
     }
 }

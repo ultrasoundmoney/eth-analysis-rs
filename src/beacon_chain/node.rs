@@ -28,7 +28,7 @@ enum BlockId {
 
 impl From<&Slot> for BlockId {
     fn from(slot: &Slot) -> Self {
-        BlockId::Slot(slot.clone())
+        BlockId::Slot(*slot)
     }
 }
 
@@ -129,11 +129,7 @@ struct StateRootFirstEnvelope {
 }
 
 fn make_state_root_url(slot: &Slot) -> String {
-    format!(
-        "{}/eth/v1/beacon/states/{}/root",
-        *BEACON_URL,
-        slot.to_string()
-    )
+    format!("{}/eth/v1/beacon/states/{}/root", *BEACON_URL, slot)
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,7 +149,7 @@ fn make_validator_balances_by_state_url(state_root: &str) -> String {
     )
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 pub struct BeaconHeader {
     #[serde(deserialize_with = "slot_from_string")]
     pub slot: Slot,
@@ -161,7 +157,7 @@ pub struct BeaconHeader {
     pub state_root: StateRoot,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 pub struct BeaconHeaderEnvelope {
     pub message: BeaconHeader,
 }
@@ -169,7 +165,7 @@ pub struct BeaconHeaderEnvelope {
 /// Keccak hash of a beacon block.
 pub type BlockRoot = String;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 pub struct BeaconHeaderSignedEnvelope {
     /// Root (hash) of the block this header is about.
     pub root: BlockRoot,
@@ -277,7 +273,7 @@ impl BeaconNode {
                 let block = res
                     .json::<BeaconBlockVersionedEnvelope>()
                     .await
-                    .map(|envelope| envelope.data.message.into())?;
+                    .map(|envelope| envelope.data.message)?;
                 Ok(Some(block))
             }
             status => Err(anyhow!(
@@ -557,9 +553,9 @@ pub mod tests {
             Self {
                 block_hash: None,
                 deposits: vec![],
-                parent_root: header.parent_root().to_string(),
+                parent_root: header.parent_root(),
                 slot: header.slot(),
-                state_root: header.state_root().to_string(),
+                state_root: header.state_root(),
             }
         }
     }

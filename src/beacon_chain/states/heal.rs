@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    beacon_chain::{sync, Slot},
+    beacon_chain::{self, sync, Slot},
     key_value_store,
 };
 use anyhow::Result;
@@ -9,10 +9,7 @@ use pit_wall::Progress;
 use sqlx::{postgres::PgPoolOptions, PgExecutor};
 use tracing::{debug, info, warn};
 
-use crate::{
-    beacon_chain::{self, BeaconNode},
-    db, log,
-};
+use crate::{beacon_chain::BeaconNode, db, log};
 
 // The first slot we have stored.
 const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = Slot(0);

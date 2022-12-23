@@ -13,7 +13,7 @@ use super::{get_last_state, Slot};
 pub use backfill::backfill_balances_to_london;
 pub use backfill::backfill_daily_balances_to_london;
 
-pub fn sum_validator_balances(validator_balances: &Vec<ValidatorBalance>) -> GweiNewtype {
+pub fn sum_validator_balances(validator_balances: &[ValidatorBalance]) -> GweiNewtype {
     validator_balances
         .iter()
         .fold(GweiNewtype(0), |sum, validator_balance| {
@@ -42,7 +42,7 @@ pub async fn store_validators_balance(
     .unwrap();
 }
 
-pub async fn get_last_effective_balance_sum<'a>(
+pub async fn get_last_effective_balance_sum(
     executor: &mut PgConnection,
     beacon_node: &BeaconNode,
 ) -> GweiNewtype {

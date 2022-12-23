@@ -119,18 +119,12 @@ struct ValidatorRewards {
     mev: ValidatorReward,
 }
 
-async fn get_validator_rewards<'a>(
-    executor: &PgPool,
-    beacon_node: &BeaconNode,
-) -> ValidatorRewards {
-    let last_effective_balance_sum = balances::get_last_effective_balance_sum(
-        &mut executor.acquire().await.unwrap(),
-        beacon_node,
-    )
-    .await
-    .unwrap();
+async fn get_validator_rewards(db_pool: &PgPool, beacon_node: &BeaconNode) -> ValidatorRewards {
+    let mut connection = db_pool.acquire().await.unwrap();
+    let last_effective_balance_sum =
+        balances::get_last_effective_balance_sum(&mut connection, beacon_node).await;
     let issuance_reward = get_issuance_reward(last_effective_balance_sum);
-    let tips_reward = get_tips_reward(executor, last_effective_balance_sum)
+    let tips_reward = get_tips_reward(db_pool, last_effective_balance_sum)
         .await
         .unwrap();
 
@@ -149,26 +143,26 @@ pub async fn update_validator_rewards() -> Result<()> {
 
     info!("updating validator rewards");
 
-    let pool = PgPoolOptions::new()
+    let db_pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&db::get_db_url_with_name("update-validator-rewards"))
         .await?;
 
-    sqlx::migrate!().run(&pool).await.unwrap();
+    sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let beacon_node = BeaconNode::new();
 
-    let validator_rewards = get_validator_rewards(&pool, &beacon_node).await;
+    let validator_rewards = get_validator_rewards(&db_pool, &beacon_node).await;
     debug!("validator rewards: {:?}", validator_rewards);
 
     key_value_store::set_value(
-        &pool,
-        &CacheKey::ValidatorRewards.to_db_key(),
+        &db_pool,
+        CacheKey::ValidatorRewards.to_db_key(),
         &serde_json::to_value(validator_rewards).unwrap(),
     )
     .await?;
 
-    caching::publish_cache_update(&pool, &CacheKey::ValidatorRewards).await?;
+    caching::publish_cache_update(&db_pool, &CacheKey::ValidatorRewards).await?;
 
     info!("done updating validator rewards");
 

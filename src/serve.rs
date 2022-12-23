@@ -81,7 +81,7 @@ async fn etag_middleware<B: std::fmt::Debug>(
         body_bytes
     };
 
-    match bytes.len() == 0 {
+    match bytes.is_empty() {
         true => {
             trace!(path, "response without body, skipping etag");
             Ok(parts.into_response())
@@ -457,7 +457,7 @@ pub async fn start_server() -> Result<()> {
                     .layer(Extension(shared_state)),
             );
 
-    let port = env::get_env_var("PORT").unwrap_or("3002".to_string());
+    let port = env::get_env_var("PORT").unwrap_or_else(|| "3002".to_string());
 
     info!(port, "server listening");
     let socket_addr = format!("0.0.0.0:{port}").parse()?;

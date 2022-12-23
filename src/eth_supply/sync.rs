@@ -289,8 +289,7 @@ mod tests {
             &test_header.slot(),
             &GweiNewtype(20),
         )
-        .await
-        .unwrap();
+        .await;
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -307,7 +306,7 @@ mod tests {
 
         let execution_balances_sum = execution_chain::get_execution_balances_by_hash(
             &mut transaction,
-            &test_block.block_hash().unwrap(),
+            test_block.block_hash().unwrap(),
         )
         .await
         .unwrap();

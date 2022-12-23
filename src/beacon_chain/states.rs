@@ -6,7 +6,7 @@ use super::Slot;
 
 pub use heal::heal_beacon_states;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct BeaconState {
     pub slot: Slot,
     pub state_root: String,
@@ -27,7 +27,6 @@ pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState
     .fetch_optional(executor)
     .await
     .unwrap()
-    .map(|row| row.into())
 }
 
 pub async fn store_state(executor: impl PgExecutor<'_>, state_root: &str, slot: &Slot) {

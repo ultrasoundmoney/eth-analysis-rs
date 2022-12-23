@@ -13,7 +13,7 @@ pub async fn check_beacon_state_gaps() -> Result<()> {
 
     info!("checking for gaps in beacon states");
 
-    let mut connection: PgConnection = sqlx::Connection::connect(&*DB_URL).await.unwrap();
+    let mut connection: PgConnection = sqlx::Connection::connect(&DB_URL).await.unwrap();
 
     {
         let mut rows = sqlx::query!(

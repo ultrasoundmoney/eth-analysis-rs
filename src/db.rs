@@ -6,7 +6,7 @@ lazy_static! {
     pub static ref DB_URL: String = env::get_env_var_unsafe("DATABASE_URL");
 }
 
-pub fn get_db_url_with_name<'a>(name: &str) -> String {
+pub fn get_db_url_with_name(name: &str) -> String {
     format!("{}?application_name={name}", *DB_URL)
 }
 

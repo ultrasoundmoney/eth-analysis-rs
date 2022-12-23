@@ -278,7 +278,7 @@ mod tests {
 
         let is_hash_known = get_is_hash_known(&mut transaction, GENESIS_PARENT_ROOT).await;
 
-        assert_eq!(is_hash_known, true);
+        assert!(is_hash_known);
     }
 
     #[tokio::test]
@@ -288,7 +288,7 @@ mod tests {
 
         let is_hash_known = get_is_hash_known(&mut transaction, "0xnot_there").await;
 
-        assert_eq!(is_hash_known, false);
+        assert!(!is_hash_known);
     }
 
     #[tokio::test]
@@ -301,7 +301,7 @@ mod tests {
         let is_hash_known =
             get_is_hash_known(&mut transaction, "0xis_hash_known_test_block_root").await;
 
-        assert_eq!(is_hash_known, true);
+        assert!(is_hash_known);
     }
 
     #[tokio::test]
@@ -309,7 +309,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let state_root = format!("0xblock_test_state_root");
+        let state_root = "0xblock_test_state_root".to_string();
         let slot = Slot(0);
 
         store_state(&mut transaction, &state_root, &slot).await;
@@ -342,7 +342,7 @@ mod tests {
 
         let is_hash_known = get_is_hash_known(&mut transaction, "0xblock_root").await;
 
-        assert_eq!(is_hash_known, true);
+        assert!(is_hash_known);
     }
 
     #[tokio::test]

@@ -55,31 +55,6 @@ pub struct SupplyChanges {
     timestamp: DateTime<Utc>,
 }
 
-impl SupplyChanges {
-    fn new(
-        m5: Option<SupplyChange>,
-        h1: Option<SupplyChange>,
-        d1: Option<SupplyChange>,
-        d7: Option<SupplyChange>,
-        d30: Option<SupplyChange>,
-        since_burn: Option<SupplyChange>,
-        since_merge: Option<SupplyChange>,
-        slot: &Slot,
-    ) -> Self {
-        SupplyChanges {
-            m5,
-            h1,
-            d1,
-            d7,
-            d30,
-            since_merge,
-            since_burn,
-            slot: *slot,
-            timestamp: slot.date_time(),
-        }
-    }
-}
-
 // This number was recorded before we has a rigorous definition of how to combine the execution and
 // beacon chains to come up with a precise supply. After a rigorous supply is established for every
 // block and slot it would be good to update this number.
@@ -117,7 +92,7 @@ async fn from_time_frame(
             .map(|row| {
                 row.map(|row| {
                     let from_supply: WeiNewtype =
-                        (&row.supply).parse().expect("expect supply to be i128");
+                        row.supply.parse().expect("expect supply to be i128");
                     SupplyChange::new(from_slot, from_supply, *slot, to_supply)
                 })
             })
@@ -163,7 +138,17 @@ impl<'a> SupplyChangesStore<'a> {
             from_time_frame(self.db_pool, &SinceMerge, slot, supply_parts.supply()),
         )?;
 
-        let supply_changes = SupplyChanges::new(m5, h1, d1, d7, d30, since_burn, since_merge, slot);
+        let supply_changes = SupplyChanges {
+            m5,
+            h1,
+            d1,
+            d7,
+            d30,
+            since_burn,
+            since_merge,
+            slot: *slot,
+            timestamp: slot.date_time(),
+        };
 
         Ok(supply_changes)
     }
@@ -204,7 +189,7 @@ mod tests {
 
         assert_eq!(
             SupplyChange {
-                from_slot: from_slot,
+                from_slot,
                 from_timestamp: from_slot.date_time(),
                 from_supply: WeiNewtype::from_eth(10),
                 to_slot,

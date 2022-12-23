@@ -112,9 +112,7 @@ async fn get_base_fee_over_time(
             )
             .bind(ltf.get_postgres_interval())
             .map(|row: PgRow| {
-                let block_number: BlockNumber = row
-                    .get::<i32, _>("number")
-                    .try_into().unwrap();
+                let block_number: BlockNumber = row.get::<i32, _>("number");
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");
                 BaseFeeAtTime {
