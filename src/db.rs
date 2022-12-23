@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use sqlx::PgPool;
 
 use crate::env;
 
@@ -8,6 +9,12 @@ lazy_static! {
 
 pub fn get_db_url_with_name(name: &str) -> String {
     format!("{}?application_name={name}", *DB_URL)
+}
+
+pub async fn get_db_pool(name: &str) -> PgPool {
+    PgPool::connect(&get_db_url_with_name(name))
+        .await
+        .expect("expect DB to be available to connect")
 }
 
 #[cfg(test)]
