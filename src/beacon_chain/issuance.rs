@@ -1,10 +1,21 @@
-use anyhow::Result;
-use chrono::{Duration, DurationRound};
-use sqlx::{Acquire, PgConnection, PgExecutor };
+//! Tracks issuance on the beacon chain.
+//!
+//! As an experiment this module does not return Result wherever callers don't need it but simply
+//! unwraps. If we don't want to recover from failure anyway, what is the point in communicating it
+//! upwards.
+//! As an experiment this module exposes a Store trait and a Postgres implementation of it. Using
+//! this interface with transactions is an unsolved problem.
+use async_trait::async_trait;
+use chrono::{DateTime, Duration, DurationRound, Utc};
+use futures::join;
+use serde::Serialize;
+use sqlx::{PgExecutor, PgPool};
 
 use crate::{
-    units::GweiNewtype,
+    caching::{self, CacheKey},
+    db,
     supply_projection::GweiInTime,
+    units::GweiNewtype,
 };
 
 use super::Slot;
@@ -37,9 +48,7 @@ pub fn calc_issuance(
     *validator_balances_sum_gwei - *deposit_sum_aggregated
 }
 
-pub async fn get_issuance_by_start_of_day(
-    pool: impl PgExecutor<'_>,
-) -> Vec<GweiInTime> {
+pub async fn get_issuance_by_start_of_day(pool: impl PgExecutor<'_>) -> Vec<GweiInTime> {
     sqlx::query!(
         r#"
             SELECT
@@ -62,7 +71,6 @@ pub async fn get_issuance_by_start_of_day(
             }
         })
         .collect()
-         
     })
     .unwrap()
 }
@@ -81,7 +89,7 @@ pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype 
     )
     .fetch_one(executor)
     .await
-.map(|row| GweiNewtype(row.gwei))
+    .map(|row| GweiNewtype(row.gwei))
     .unwrap()
 }
 
@@ -94,7 +102,7 @@ pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_e
                 WHERE slot >= $1
             )
         ",
-        greater_than_or_equal.0 
+        greater_than_or_equal.0
     )
     .execute(connection)
     .await
@@ -117,7 +125,7 @@ pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
     .unwrap();
 }
 
-pub async fn get_day7_ago_issuance( executor: impl PgExecutor<'_>,) -> GweiNewtype {
+pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
     sqlx::query!(
         "
             WITH
@@ -149,15 +157,86 @@ pub async fn get_day7_ago_issuance( executor: impl PgExecutor<'_>,) -> GweiNewty
     .unwrap()
 }
 
-pub async fn get_last_week_issuance(executor: &mut PgConnection) -> GweiNewtype {
-    let current_issuance = get_current_issuance(executor.acquire().await.unwrap()).await;
-    let day7_ago_issuance = get_day7_ago_issuance(executor).await;
+pub async fn get_last_week_issuance(issuance_store: impl IssuanceStore) -> GweiNewtype {
+    let (current_issuance, day7_ago_issuance) = join!(
+        issuance_store.get_current_issuance(),
+        issuance_store.get_day7_ago_issuance()
+    );
     current_issuance - day7_ago_issuance
+}
+
+#[async_trait]
+pub trait IssuanceStore {
+    async fn get_current_issuance(&self) -> GweiNewtype;
+    async fn get_day7_ago_issuance(&self) -> GweiNewtype;
+}
+
+pub struct IssuanceStorePostgres<'a> {
+    pool: &'a PgPool,
+}
+
+impl<'a> IssuanceStorePostgres<'a> {
+    pub fn new(pool: &'a PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+impl IssuanceStore for &IssuanceStorePostgres<'_> {
+    async fn get_current_issuance(&self) -> GweiNewtype {
+        get_current_issuance(self.pool).await
+    }
+
+    async fn get_day7_ago_issuance(&self) -> GweiNewtype {
+        get_day7_ago_issuance(self.pool).await
+    }
+}
+
+const SLOTS_PER_MINUTE: u64 = 5;
+const MINUTES_PER_HOUR: u64 = 60;
+const HOURS_PER_DAY: u64 = 24;
+const DAYS_PER_WEEK: u64 = 7;
+const SLOTS_PER_WEEK: f64 =
+    (SLOTS_PER_MINUTE * MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_WEEK) as f64;
+
+#[derive(Debug, Serialize)]
+struct IssuanceEstimate {
+    slot: Slot,
+    timestamp: DateTime<Utc>,
+    issuance_per_slot_gwei: f64,
+}
+
+async fn get_issuance_per_slot_estimate(issuance_store: impl IssuanceStore) -> f64 {
+    let last_week_issuance = get_last_week_issuance(issuance_store).await;
+    last_week_issuance.0 as f64 / SLOTS_PER_WEEK
+}
+
+pub async fn update_issuance_estimate() {
+    let db_pool = db::get_db_pool("update-issuance-estimate").await;
+    let issuance_store = IssuanceStorePostgres::new(&db_pool);
+
+    let issuance_per_slot_gwei = get_issuance_per_slot_estimate(&issuance_store).await;
+    let slot = super::get_last_state(&db_pool)
+        .await
+        .expect("expect last state to exist in order to update issuance estimate")
+        .slot;
+
+    let timestamp = slot.date_time();
+    let issuance_estimate = IssuanceEstimate {
+        slot,
+        timestamp,
+        issuance_per_slot_gwei,
+    };
+
+    caching::update_and_publish(&db_pool, &CacheKey::IssuanceEstimate, issuance_estimate)
+        .await
+        .unwrap();
 }
 
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
+    use sqlx::Acquire;
 
     use super::*;
     use crate::{beacon_chain::states::store_state, db};
@@ -180,24 +259,17 @@ mod tests {
 
         let test_id = "timestamp_is_start_of_day";
 
-        store_state(&mut transaction, test_id, &Slot(3599))
-            .await
-            ;
+        store_state(&mut transaction, test_id, &Slot(3599)).await;
 
-        store_issuance(
-            &mut transaction,
-            test_id,
-            &Slot(3599),
-            &GweiNewtype(100),
-        )
-        .await.unwrap();
+        store_issuance(&mut transaction, test_id, &Slot(3599), &GweiNewtype(100)).await;
 
-        let validator_balances_by_day = get_issuance_by_start_of_day(&mut transaction)
-            .await;
+        let validator_balances_by_day = get_issuance_by_start_of_day(&mut transaction).await;
 
         let unix_timestamp = validator_balances_by_day.first().unwrap().t;
 
-        let datetime = Utc.timestamp_opt(unix_timestamp.try_into().unwrap(), 0).unwrap();
+        let datetime = Utc
+            .timestamp_opt(unix_timestamp.try_into().unwrap(), 0)
+            .unwrap();
 
         let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
 
@@ -265,43 +337,6 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let now_min_seven_days_slot = Slot::from_date_time_rounded_down(&(Utc::now() - Duration::days(7)));
-        let now_slot = Slot::from_date_time_rounded_down(&Utc::now());
-
-        store_state(&mut transaction, "0xtest_issuance_1", &now_min_seven_days_slot)
-            .await
-            .unwrap();
-
-        store_state(&mut transaction, "0xtest_issuance_2", &now_slot)
-            .await
-            .unwrap();
-
-        store_issuance(
-            &mut transaction,
-            "0xtest_issuance_1",
-            &now_min_seven_days_slot,
-            &GweiNewtype(100),
-        )
-        .await.unwrap();
-
-        store_issuance(
-            &mut transaction,
-            "0xtest_issuance_2",
-            &now_slot,
-            &GweiNewtype(110),
-        )
-        .await.unwrap();
-
-        let day7_ago_issuance = get_day7_ago_issuance(&mut transaction).await;
-
-        assert_eq!(day7_ago_issuance, GweiNewtype(100));
-    }
-
-    #[tokio::test]
-    async fn get_last_week_issuance_test() {
-        let mut connection = db::get_test_db().await;
-        let mut transaction = connection.begin().await.unwrap();
-
         let now_min_seven_days_slot =
             Slot::from_date_time_rounded_down(&(Utc::now() - Duration::days(7)));
         let now_slot = Slot::from_date_time_rounded_down(&Utc::now());
@@ -335,5 +370,26 @@ mod tests {
 
         assert_eq!(day7_ago_issuance, GweiNewtype(100));
     }
+
+    #[tokio::test]
+    async fn get_last_week_issuance_test() {
+        struct IssuanceStoreTest {}
+
+        #[async_trait]
+        impl IssuanceStore for IssuanceStoreTest {
+            async fn get_current_issuance(&self) -> GweiNewtype {
+                GweiNewtype(100)
+            }
+
+            async fn get_day7_ago_issuance(&self) -> GweiNewtype {
+                GweiNewtype(50)
+            }
+        }
+
+        let issuance_store = IssuanceStoreTest {};
+
+        let issuance = get_last_week_issuance(issuance_store).await;
+
+        assert_eq!(issuance, GweiNewtype(50));
     }
 }

@@ -34,6 +34,7 @@ async fn rollback_numbers(executor: impl PgExecutor<'_>, greater_than_or_equal: 
 }
 
 async fn sync_by_hash(
+    issuance_store: impl IssuanceStore,
     execution_node: &mut ExecutionNode,
     db_pool: &PgPool,
     hash: &str,
@@ -91,6 +92,7 @@ async fn get_next_step(db_pool: &PgPool, head: &Head) -> NextStep {
 }
 
 async fn sync_head(
+    issuance_store: impl IssuanceStore,
     execution_node: &mut ExecutionNode,
     db_pool: &PgPool,
     heads_queue: HeadsQueue,
@@ -142,7 +144,7 @@ async fn sync_head(
                 .push_front(HeadToSync::Fetched(head_event))
         }
         NextStep::AddToExisting => {
-            sync_by_hash(store, execution_node, db_pool, &head_event.hash)
+            sync_by_hash(issuance_store, execution_node, db_pool, &head_event.hash)
                 .timed("sync block by hash")
                 .await;
         }
@@ -280,6 +282,7 @@ pub async fn sync_blocks() -> Result<()> {
 
     let mut execution_node = ExecutionNode::connect().await;
 
+    let issuance_store = IssuanceStorePostgres::new(&db_pool);
 
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
 
@@ -304,6 +307,7 @@ pub async fn sync_blocks() -> Result<()> {
                     // Because we may encounter rollbacks, this step may add more heads to sync to
                     // the front of the queue.
                     sync_head(
+                        &issuance_store,
                         &mut execution_node,
                         &db_pool,
                         heads_queue.clone(),

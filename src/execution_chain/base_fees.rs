@@ -1,7 +1,6 @@
 mod over_time;
 mod stats;
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::{try_join, FutureExt};
 use serde::Serialize;
@@ -9,7 +8,7 @@ use sqlx::PgPool;
 use tracing::{debug, debug_span, event, Instrument, Level};
 
 use crate::{
-    beacon_chain,
+    beacon_chain::{self, IssuanceStore},
     caching::{self, CacheKey},
     time_frames::LimitedTimeFrame,
     units::GweiNewtype,
@@ -60,14 +59,15 @@ fn get_issuance_time_frame(
     max_issuance_per_epoch * limited_time_frame.get_epoch_count()
 }
 
-pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> Result<()> {
-    let issuance =
-        beacon_chain::get_last_week_issuance(&mut db_pool.acquire().await.unwrap()).await;
-
+pub async fn on_new_block(
+    db_pool: &PgPool,
+    issuance_store: impl IssuanceStore,
+    block: &ExecutionNodeBlock,
+) {
+    let issuance = beacon_chain::get_last_week_issuance(issuance_store).await;
     debug!("issuance: {issuance}");
 
     let barrier = get_barrier(issuance.0 as f64);
-
     debug!("barrier: {barrier}");
 
     try_join!(
@@ -76,9 +76,8 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> Resul
             .instrument(debug_span!("update_base_fee_stats")),
         over_time::update_base_fee_over_time(db_pool, barrier, &block.number)
             .instrument(debug_span!("update_base_fee_over_time"))
-    )?;
-
-    Ok(())
+    )
+    .unwrap();
 }
 
 #[cfg(test)]

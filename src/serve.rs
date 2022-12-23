@@ -38,6 +38,7 @@ struct Cache {
     eth_price_stats: CachedValue,
     supply_parts: CachedValue,
     issuance_breakdown: CachedValue,
+    issuance_estimate: CachedValue,
     supply_changes: CachedValue,
     supply_dashboard_analysis: CachedValue,
     supply_over_time: CachedValue,
@@ -182,6 +183,7 @@ fn get_cache_value_by_key<'a>(cache: &'a Arc<Cache>, key: &'a CacheKey) -> &'a C
         CacheKey::EthPrice => &cache.eth_price_stats,
         CacheKey::SupplyParts => &cache.supply_parts,
         CacheKey::IssuanceBreakdown => &cache.issuance_breakdown,
+        CacheKey::IssuanceEstimate => &cache.issuance_estimate,
         CacheKey::SupplyChanges => &cache.supply_changes,
         CacheKey::SupplyDashboardAnalysis => &cache.supply_dashboard_analysis,
         CacheKey::SupplyOverTime => &cache.supply_over_time,
@@ -256,6 +258,7 @@ pub async fn start_server() -> Result<()> {
         eth_price_stats,
         supply_parts,
         issuance_breakdown,
+        issuance_estimate,
         supply_changes,
         supply_dashboard_analysis,
         supply_over_time,
@@ -272,6 +275,7 @@ pub async fn start_server() -> Result<()> {
         get_value_hash_lock(&db_pool, &CacheKey::EthPrice),
         get_value_hash_lock(&db_pool, &CacheKey::SupplyParts),
         get_value_hash_lock(&db_pool, &CacheKey::IssuanceBreakdown),
+        get_value_hash_lock(&db_pool, &CacheKey::IssuanceEstimate),
         get_value_hash_lock(&db_pool, &CacheKey::SupplyChanges),
         get_value_hash_lock(&db_pool, &CacheKey::SupplyDashboardAnalysis),
         get_value_hash_lock(&db_pool, &CacheKey::SupplyOverTime),
@@ -290,6 +294,7 @@ pub async fn start_server() -> Result<()> {
         eth_price_stats,
         supply_parts,
         issuance_breakdown,
+        issuance_estimate,
         supply_changes,
         supply_dashboard_analysis,
         supply_over_time,
@@ -366,6 +371,14 @@ pub async fn start_server() -> Result<()> {
                 "/api/v2/fees/eth-supply-parts",
                 get(|state: StateExtension| async move {
                     get_cached(&state.clone().cache.supply_parts)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/issuance-estimate",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.issuance_estimate)
                         .await
                         .into_response()
                 }),

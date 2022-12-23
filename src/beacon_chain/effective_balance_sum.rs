@@ -1,9 +1,12 @@
 use anyhow::Result;
-use sqlx::{postgres::PgRow, Connection, PgConnection, PgExecutor, Row};
+use sqlx::{
+    postgres::{PgPoolOptions, PgRow},
+    PgExecutor, Row,
+};
 use tracing::info;
 
 use crate::{
-    beacon_chain::states::get_last_state,
+    beacon_chain,
     caching::{self, CacheKey},
     db, key_value_store, log,
     units::GweiNewtype,
@@ -67,7 +70,7 @@ pub async fn get_last_stored_effective_balance_sum(executor: impl PgExecutor<'_>
     )
     .map(|row: PgRow| {
         let effective_balance_sum_i64 = row.get::<i64, _>("effective_balance_sum");
-        GweiNewtype(effective_balance_sum_i64.try_into().unwrap())
+        GweiNewtype(effective_balance_sum_i64)
     })
     .fetch_one(executor)
     .await
@@ -104,38 +107,33 @@ pub async fn update_effective_balance_sum() -> Result<()> {
 
     info!("updating effective balance sum");
 
-    let mut connection =
-        PgConnection::connect(&db::get_db_url_with_name("update-effective-balance-sum"))
-            .await
-            .unwrap();
+    let db_pool = PgPoolOptions::new()
+        .connect(&db::get_db_url_with_name("update-effective-balance-sum"))
+        .await
+        .unwrap();
 
-    sqlx::migrate!().run(&mut connection).await.unwrap();
+    sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let beacon_node = BeaconNode::new();
-    let last_state = get_last_state(&mut connection)
+    let last_state = beacon_chain::get_last_state(&db_pool)
         .await
         .expect("at least one beacon slot to be synced before updating effective balances");
 
     let effective_balance_sum =
         get_effective_balance_sum(&beacon_node, &last_state.state_root).await;
 
-    store_effective_balance_sum(
-        &mut connection,
-        effective_balance_sum,
-        &last_state.state_root,
-    )
-    .await;
+    store_effective_balance_sum(&db_pool, effective_balance_sum, &last_state.state_root).await;
 
     let effective_balance_sum_f64: f64 = effective_balance_sum.into();
 
     key_value_store::set_value(
-        &mut connection,
+        &db_pool,
         CacheKey::EffectiveBalanceSum.to_db_key(),
         &effective_balance_sum_f64.into(),
     )
     .await?;
 
-    caching::publish_cache_update(&mut connection, &CacheKey::EffectiveBalanceSum).await?;
+    caching::publish_cache_update(&db_pool, &CacheKey::EffectiveBalanceSum).await?;
 
     Ok(())
 }

@@ -28,6 +28,7 @@ pub use beacon_chain::heal_beacon_states;
 pub use beacon_chain::heal_block_hashes;
 pub use beacon_chain::sync_beacon_states;
 pub use beacon_chain::update_effective_balance_sum;
+pub use beacon_chain::update_issuance_estimate;
 pub use beacon_chain::update_validator_rewards;
 
 pub use data_integrity::check_beacon_state_gaps;

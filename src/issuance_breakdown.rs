@@ -1,12 +1,11 @@
 use anyhow::Result;
 use serde::Serialize;
-use sqlx::{Connection, PgConnection};
 use tracing::{debug, info};
 
 use crate::{
-    beacon_chain,
+    beacon_chain::{IssuanceStore, IssuanceStorePostgres},
     caching::{self, CacheKey},
-    db, etherscan, key_value_store, log,
+    db, etherscan, log,
     units::{EthNewtype, GweiNewtype},
 };
 
@@ -24,12 +23,11 @@ pub async fn update_issuance_breakdown() -> Result<()> {
 
     info!("updating issuance breakdown");
 
-    let mut connection: PgConnection =
-        PgConnection::connect(&db::get_db_url_with_name("update-issuance-breakdown"))
-            .await
-            .unwrap();
+    let db_pool = db::get_db_pool("update-issuance-breakdown").await;
 
-    sqlx::migrate!().run(&mut connection).await.unwrap();
+    sqlx::migrate!().run(&db_pool).await.unwrap();
+
+    let issuance_store = IssuanceStorePostgres::new(&db_pool);
 
     let crowd_sale: GweiNewtype = EthNewtype(60_108_506.26).into();
     debug!(
@@ -45,7 +43,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
     let ethereum_foundation = EthNewtype(3_483_159.75);
     debug!("ethereum foundation: {} ETH", ethereum_foundation.0);
 
-    let proof_of_stake = beacon_chain::get_current_issuance(&mut connection).await;
+    let proof_of_stake = (&issuance_store).get_current_issuance().await;
     debug!(
         "proof of stake issuance: {} ETH",
         Into::<EthNewtype>::into(proof_of_stake)
@@ -77,14 +75,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
         proof_of_work,
     };
 
-    key_value_store::set_value(
-        &mut connection,
-        &CacheKey::IssuanceBreakdown.to_db_key(),
-        &serde_json::to_value(issuance_breakdown).unwrap(),
-    )
-    .await?;
-
-    caching::publish_cache_update(&mut connection, &CacheKey::IssuanceBreakdown).await?;
+    caching::update_and_publish(&db_pool, &CacheKey::IssuanceBreakdown, issuance_breakdown).await?;
 
     info!("done updating issuance breakdown");
 
