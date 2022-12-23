@@ -3,7 +3,7 @@ mod stats;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use futures::try_join;
+use futures::{try_join, FutureExt};
 use serde::Serialize;
 use sqlx::PgPool;
 use tracing::{debug, debug_span, event, Instrument, Level};
@@ -11,7 +11,6 @@ use tracing::{debug, debug_span, event, Instrument, Level};
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    key_value_store,
     time_frames::LimitedTimeFrame,
     units::GweiNewtype,
 };
@@ -24,8 +23,7 @@ struct BaseFeePerGas {
     wei: u64,
 }
 
-// Find a way to wrap the result of this fn in Ok whilst using try_join!
-async fn update_last_base_fee(executor: &PgPool, block: &ExecutionNodeBlock) -> anyhow::Result<()> {
+async fn update_last_base_fee(db_pool: &PgPool, block: &ExecutionNodeBlock) {
     event!(Level::DEBUG, "updating current base fee");
 
     let base_fee_per_gas = BaseFeePerGas {
@@ -33,16 +31,9 @@ async fn update_last_base_fee(executor: &PgPool, block: &ExecutionNodeBlock) -> 
         wei: block.base_fee_per_gas,
     };
 
-    key_value_store::set_value(
-        executor,
-        &CacheKey::BaseFeePerGas.to_db_key(),
-        &serde_json::to_value(base_fee_per_gas).unwrap(),
-    )
-    .await?;
-
-    caching::publish_cache_update(executor, &CacheKey::BaseFeePerGas).await?;
-
-    Ok(())
+    caching::update_and_publish(db_pool, &CacheKey::BaseFeePerGas, base_fee_per_gas)
+        .await
+        .unwrap();
 }
 
 const APPROXIMATE_GAS_USED_PER_BLOCK: u32 = 15_000_000u32;
@@ -65,8 +56,8 @@ fn get_issuance_time_frame(
     let max_issuance_per_epoch = (((BASE_REWARD_FACTOR as f64) * effective_balance_sum)
         / (effective_balance_sum.sqrt().floor()))
     .trunc();
-    let issuance = max_issuance_per_epoch * limited_time_frame.get_epoch_count();
-    return issuance;
+
+    max_issuance_per_epoch * limited_time_frame.get_epoch_count()
 }
 
 pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> Result<()> {
@@ -80,7 +71,7 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> Resul
     debug!("barrier: {barrier}");
 
     try_join!(
-        update_last_base_fee(db_pool, block).instrument(debug_span!("update_last_base_fee")),
+        update_last_base_fee(db_pool, block).map(|_| anyhow::Ok(())),
         stats::update_base_fee_stats(db_pool, barrier, block)
             .instrument(debug_span!("update_base_fee_stats")),
         over_time::update_base_fee_over_time(db_pool, barrier, &block.number)

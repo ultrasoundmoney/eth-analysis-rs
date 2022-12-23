@@ -96,7 +96,7 @@ pub async fn heal_block_hashes() -> Result<()> {
 
         debug!(block_root, block_hash, "setting block hash");
 
-        blocks::update_block_hash(&db_pool, &block_root, &block_hash).await?;
+        blocks::update_block_hash(&db_pool, &block_root, &block_hash).await;
 
         progress.inc_work_done();
 

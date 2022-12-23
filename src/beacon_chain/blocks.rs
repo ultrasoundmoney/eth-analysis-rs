@@ -1,8 +1,7 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
 mod heal;
 
-use anyhow::Result;
-use sqlx::{PgConnection, PgExecutor, Row};
+use sqlx::{PgExecutor, Row};
 
 use crate::units::GweiNewtype;
 
@@ -16,11 +15,11 @@ pub use heal::heal_block_hashes;
 pub const GENESIS_PARENT_ROOT: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-pub async fn get_deposit_sum_from_block_root<'a>(
-    executor: impl PgExecutor<'a>,
+pub async fn get_deposit_sum_from_block_root(
+    executor: impl PgExecutor<'_>,
     block_root: &str,
-) -> sqlx::Result<GweiNewtype> {
-    let deposit_sum_aggregated = sqlx::query!(
+) -> GweiNewtype {
+    sqlx::query!(
         "
             SELECT
                 deposit_sum_aggregated
@@ -32,12 +31,11 @@ pub async fn get_deposit_sum_from_block_root<'a>(
         block_root
     )
     .fetch_one(executor)
-    .await?
+    .await
+    .unwrap()
     .deposit_sum_aggregated
     .try_into()
-    .unwrap();
-
-    Ok(deposit_sum_aggregated)
+    .unwrap()
 }
 
 pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) -> bool {
@@ -66,7 +64,7 @@ pub async fn store_block(
     deposit_sum: &GweiNewtype,
     deposit_sum_aggregated: &GweiNewtype,
     header: &BeaconHeaderSignedEnvelope,
-) -> sqlx::Result<()> {
+) {
     sqlx::query!(
         "
             INSERT INTO beacon_blocks (
@@ -89,9 +87,8 @@ pub async fn store_block(
         header.state_root(),
     )
     .execute(executor)
-    .await?;
-
-    Ok(())
+    .await
+    .unwrap();
 }
 
 #[allow(dead_code)]
@@ -156,11 +153,8 @@ pub async fn delete_block(connection: impl PgExecutor<'_>, slot: &Slot) {
     .unwrap();
 }
 
-pub async fn get_block_before_slot(
-    executor: impl PgExecutor<'_>,
-    less_than: &Slot,
-) -> Result<DbBlock> {
-    let row = sqlx::query_as!(
+pub async fn get_block_before_slot(executor: impl PgExecutor<'_>, less_than: &Slot) -> DbBlock {
+    sqlx::query_as!(
         BlockDbRow,
         "
             SELECT
@@ -181,9 +175,9 @@ pub async fn get_block_before_slot(
         less_than.0
     )
     .fetch_one(executor)
-    .await?;
-
-    Ok(row.into())
+    .await
+    .unwrap()
+    .into()
 }
 
 #[derive(Debug, PartialEq)]
@@ -196,11 +190,7 @@ pub struct DbBlock {
     pub state_root: String,
 }
 
-pub async fn update_block_hash(
-    executor: impl PgExecutor<'_>,
-    block_root: &str,
-    block_hash: &str,
-) -> Result<()> {
+pub async fn update_block_hash(executor: impl PgExecutor<'_>, block_root: &str, block_hash: &str) {
     sqlx::query!(
         "
             UPDATE
@@ -214,9 +204,8 @@ pub async fn update_block_hash(
         block_root
     )
     .execute(executor)
-    .await?;
-
-    Ok(())
+    .await
+    .unwrap();
 }
 
 struct BlockDbRow {
@@ -241,11 +230,8 @@ impl From<BlockDbRow> for DbBlock {
     }
 }
 
-pub async fn get_block_by_slot(
-    executor: impl PgExecutor<'_>,
-    slot: &Slot,
-) -> sqlx::Result<Option<DbBlock>> {
-    let row = sqlx::query_as!(
+pub async fn get_block_by_slot(executor: impl PgExecutor<'_>, slot: &Slot) -> Option<DbBlock> {
+    sqlx::query_as!(
         BlockDbRow,
         r#"
             SELECT
@@ -265,9 +251,9 @@ pub async fn get_block_by_slot(
         slot.0
     )
     .fetch_optional(executor)
-    .await?;
-
-    Ok(row.map(|row| row.into()))
+    .await
+    .unwrap()
+    .map(|row| row.into())
 }
 
 #[cfg(test)]
@@ -326,9 +312,7 @@ mod tests {
         let state_root = format!("0xblock_test_state_root");
         let slot = Slot(0);
 
-        store_state(&mut transaction, &state_root, &slot)
-            .await
-            .unwrap();
+        store_state(&mut transaction, &state_root, &slot).await;
 
         store_block(
             &mut transaction,
@@ -354,8 +338,7 @@ mod tests {
                 },
             },
         )
-        .await
-        .unwrap();
+        .await;
 
         let is_hash_known = get_is_hash_known(&mut transaction, "0xblock_root").await;
 
@@ -367,7 +350,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let block_number = get_last_block_slot(&mut transaction).await.unwrap();
+        let block_number = get_last_block_slot(&mut transaction).await;
         assert_eq!(block_number, None);
     }
 
@@ -385,7 +368,7 @@ mod tests {
 
         store_custom_test_block(&mut transaction, &test_header, &test_block).await;
 
-        let last_block_slot = get_last_block_slot(&mut transaction).await.unwrap();
+        let last_block_slot = get_last_block_slot(&mut transaction).await;
         assert_eq!(last_block_slot, Some(slot));
     }
 
@@ -396,12 +379,12 @@ mod tests {
 
         store_test_block(&mut transaction, "delete_block_test").await;
 
-        let block_slot = get_last_block_slot(&mut transaction).await.unwrap();
+        let block_slot = get_last_block_slot(&mut transaction).await;
         assert_eq!(block_slot, Some(Slot(0)));
 
         delete_blocks(&mut transaction, &Slot(0)).await;
 
-        let block_slot = get_last_block_slot(&mut transaction).await.unwrap();
+        let block_slot = get_last_block_slot(&mut transaction).await;
         assert_eq!(block_slot, None);
     }
 
@@ -424,9 +407,7 @@ mod tests {
 
         store_custom_test_block(&mut transaction, &test_header_after, &test_block_after).await;
 
-        let last_block_before = get_block_before_slot(&mut transaction, &Slot(1))
-            .await
-            .unwrap();
+        let last_block_before = get_block_before_slot(&mut transaction, &Slot(1)).await;
 
         assert_eq!(test_header_before.root, last_block_before.block_root);
     }
@@ -452,12 +433,9 @@ mod tests {
             &test_header_after.state_root(),
             &test_header_after.slot(),
         )
-        .await
-        .unwrap();
+        .await;
 
-        let last_block_before = get_block_before_slot(&mut transaction, &Slot(1))
-            .await
-            .unwrap();
+        let last_block_before = get_block_before_slot(&mut transaction, &Slot(1)).await;
 
         assert_eq!(test_header_before.root, last_block_before.block_root);
     }
@@ -492,13 +470,10 @@ mod tests {
         )
         .await;
 
-        update_block_hash(&mut transaction, &block_root, &block_hash_after)
-            .await
-            .unwrap();
+        update_block_hash(&mut transaction, &block_root, &block_hash_after).await;
 
         let block = get_block_by_slot(&mut transaction, &header.slot())
             .await
-            .unwrap()
             .unwrap();
 
         assert_eq!(block_hash_after, block.block_hash.unwrap());
@@ -513,16 +488,13 @@ mod tests {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
         let block = Into::<BeaconBlockBuilder>::into(&header).build();
 
-        let block_not_there = get_block_by_slot(&mut transaction, &Slot(0)).await.unwrap();
+        let block_not_there = get_block_by_slot(&mut transaction, &Slot(0)).await;
 
         assert_eq!(None, block_not_there);
 
         store_custom_test_block(&mut transaction, &header, &block).await;
 
-        let block_there = get_block_by_slot(&mut transaction, &Slot(0))
-            .await
-            .unwrap()
-            .unwrap();
+        let block_there = get_block_by_slot(&mut transaction, &Slot(0)).await.unwrap();
 
         assert_eq!(header.root, block_there.block_root);
     }

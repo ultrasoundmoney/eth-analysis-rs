@@ -30,11 +30,7 @@ pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState
     .map(|row| row.into())
 }
 
-pub async fn store_state(
-    executor: impl PgExecutor<'_>,
-    state_root: &str,
-    slot: &Slot,
-) -> sqlx::Result<()> {
+pub async fn store_state(executor: impl PgExecutor<'_>, state_root: &str, slot: &Slot) {
     sqlx::query!(
         "
             INSERT INTO
@@ -47,16 +43,12 @@ pub async fn store_state(
         slot.0,
     )
     .execute(executor)
-    .await?;
-
-    Ok(())
+    .await
+    .unwrap();
 }
 
-pub async fn get_state_root_by_slot(
-    executor: impl PgExecutor<'_>,
-    slot: &Slot,
-) -> sqlx::Result<Option<String>> {
-    let state_root = sqlx::query!(
+pub async fn get_state_root_by_slot(executor: impl PgExecutor<'_>, slot: &Slot) -> Option<String> {
+    sqlx::query!(
         "
             SELECT
                 state_root
@@ -68,10 +60,9 @@ pub async fn get_state_root_by_slot(
         slot.0
     )
     .fetch_optional(executor)
-    .await?
-    .map(|row| row.state_root);
-
-    Ok(state_root)
+    .await
+    .unwrap()
+    .map(|row| row.state_root)
 }
 
 pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
@@ -112,9 +103,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &Slot(0))
-            .await
-            .unwrap();
+        store_state(&mut transaction, "0xstate_root", &Slot(0)).await;
 
         let state = get_last_state(&mut transaction).await.unwrap();
 
@@ -132,13 +121,9 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root_1", &Slot(0))
-            .await
-            .unwrap();
+        store_state(&mut transaction, "0xstate_root_1", &Slot(0)).await;
 
-        store_state(&mut transaction, "0xstate_root_2", &Slot(1))
-            .await
-            .unwrap();
+        store_state(&mut transaction, "0xstate_root_2", &Slot(1)).await;
 
         let state = get_last_state(&mut transaction).await.unwrap();
 
@@ -156,9 +141,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &Slot(0))
-            .await
-            .unwrap();
+        store_state(&mut transaction, "0xstate_root", &Slot(0)).await;
 
         let state = get_last_state(&mut transaction).await;
         assert!(state.is_some());
@@ -174,13 +157,10 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest", &Slot(0))
-            .await
-            .unwrap();
+        store_state(&mut transaction, "0xtest", &Slot(0)).await;
 
         let state_root = get_state_root_by_slot(&mut transaction, &Slot(0))
             .await
-            .unwrap()
             .unwrap();
 
         assert_eq!(state_root, "0xtest");

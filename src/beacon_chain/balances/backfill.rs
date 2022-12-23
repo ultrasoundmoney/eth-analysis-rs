@@ -59,7 +59,7 @@ async fn backfill_balances(db_pool: &PgPool, work_todo: u64, daily_only: bool) -
             &row.slot.into(),
             &balances_sum,
         )
-        .await?;
+        .await;
 
         progress.inc_work_done();
 

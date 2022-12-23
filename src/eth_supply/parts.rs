@@ -74,19 +74,19 @@ pub async fn get_supply_parts(
     slot: &Slot,
 ) -> Result<Option<SupplyParts>> {
     let state_root = beacon_chain::get_state_root_by_slot(connection.acquire().await?, slot)
-        .await?
+        .await
         .expect("expect state_root to exist when getting supply parts for slot");
 
     // Most slots have a block, we try to retrieve a block, if we fail, we use the most recent one
     // instead.
-    let block = match beacon_chain::get_block_by_slot(connection.acquire().await?, slot).await? {
+    let block = match beacon_chain::get_block_by_slot(connection.acquire().await?, slot).await {
         None => {
             debug!(
                 %slot,
                 state_root,
                 "no block available for slot, using most recent block before this slot"
             );
-            beacon_chain::get_block_before_slot(connection.acquire().await?, slot).await?
+            beacon_chain::get_block_before_slot(connection.acquire().await?, slot).await
         }
         Some(block) => block,
     };
@@ -94,7 +94,7 @@ pub async fn get_supply_parts(
     let block_hash = block.block_hash.expect("expect block hash to be available when updating eth supply for newly available execution balance slots");
 
     let beacon_balances_sum =
-        beacon_chain::get_balances_by_state_root(connection.acquire().await?, &state_root).await?;
+        beacon_chain::get_balances_by_state_root(connection.acquire().await?, &state_root).await;
 
     match beacon_balances_sum {
         None => {

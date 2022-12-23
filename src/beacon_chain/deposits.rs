@@ -5,9 +5,8 @@ use sqlx::{PgExecutor, Row};
 
 use crate::units::GweiNewtype;
 
-use super::blocks::get_deposit_sum_from_block_root;
 use super::node::BeaconBlock;
-use super::Slot;
+use super::{blocks, Slot};
 
 pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
     block
@@ -17,19 +16,17 @@ pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
         .fold(GweiNewtype(0), |sum, deposit| sum + deposit.data.amount)
 }
 
-pub async fn get_deposit_sum_aggregated<'a>(
-    executor: impl PgExecutor<'a>,
+pub async fn get_deposit_sum_aggregated(
+    executor: impl PgExecutor<'_>,
     block: &BeaconBlock,
-) -> sqlx::Result<GweiNewtype> {
+) -> GweiNewtype {
     let parent_deposit_sum_aggregated = if block.slot == Slot::GENESIS {
         GweiNewtype(0)
     } else {
-        get_deposit_sum_from_block_root(executor, &block.parent_root).await?
+        blocks::get_deposit_sum_from_block_root(executor, &block.parent_root).await
     };
 
-    let deposit_sum_aggregated = parent_deposit_sum_aggregated + get_deposit_sum_from_block(&block);
-
-    Ok(deposit_sum_aggregated)
+    parent_deposit_sum_aggregated + get_deposit_sum_from_block(block)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -93,8 +90,7 @@ mod tests {
             &test_header.state_root(),
             &test_header.slot(),
         )
-        .await
-        .unwrap();
+        .await;
 
         store_block(
             &mut transaction,
@@ -103,8 +99,7 @@ mod tests {
             &GweiNewtype(1),
             &test_header,
         )
-        .await
-        .unwrap();
+        .await;
 
         let deposits_sum =
             get_deposits_sum_by_state_root(&mut transaction, &test_header.state_root())

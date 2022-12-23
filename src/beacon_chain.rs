@@ -95,11 +95,8 @@ pub mod tests {
             &header.header.message.state_root,
             &header.header.message.slot,
         )
-        .await
-        .unwrap();
+        .await;
 
-        store_block(executor, block, &GweiNewtype(0), &GweiNewtype(0), header)
-            .await
-            .unwrap();
+        store_block(executor, block, &GweiNewtype(0), &GweiNewtype(0), header).await;
     }
 }

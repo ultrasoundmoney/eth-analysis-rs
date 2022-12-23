@@ -1,16 +1,14 @@
 mod backfill;
 
-use anyhow::Result;
 use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgRow;
-use sqlx::{PgConnection, PgExecutor, Row};
+use sqlx::{PgConnection, PgExecutor};
 
-use crate::units::GweiNewtype;
 use crate::supply_projection::GweiInTime;
+use crate::units::GweiNewtype;
 
-use super::node::{ValidatorBalance, BeaconNode};
-use super::{states, Slot};
+use super::node::{BeaconNode, ValidatorBalance};
+use super::{get_last_state, Slot};
 
 pub use backfill::backfill_balances_to_london;
 pub use backfill::backfill_daily_balances_to_london;
@@ -28,7 +26,7 @@ pub async fn store_validators_balance(
     state_root: &str,
     slot: &Slot,
     gwei: &GweiNewtype,
-) -> Result<()>{
+) {
     let gwei: i64 = gwei.to_owned().into();
 
     sqlx::query!(
@@ -40,16 +38,15 @@ pub async fn store_validators_balance(
         gwei,
     )
     .execute(pool)
-    .await?;
-
-    Ok(())
+    .await
+    .unwrap();
 }
 
 pub async fn get_last_effective_balance_sum<'a>(
     executor: &mut PgConnection,
     beacon_node: &BeaconNode,
-) -> anyhow::Result<GweiNewtype> {
-    let last_state_root = states::get_last_state(executor)
+) -> GweiNewtype {
+    let last_state_root = get_last_state(executor)
         .await
         .expect("can't calculate a last effective balance with an empty beacon_states table")
         .state_root;
@@ -62,12 +59,12 @@ pub async fn get_last_effective_balance_sum<'a>(
                 sum + validator.effective_balance
             })
         })
-        .map_err(anyhow::Error::msg)
+        .unwrap()
 }
 
 pub async fn get_validator_balances_by_start_of_day(
     executor: impl PgExecutor<'_>,
-) -> sqlx::Result<Vec<GweiInTime>> {
+) -> Vec<GweiInTime> {
     sqlx::query!(
         r#"
             SELECT
@@ -90,8 +87,7 @@ pub async fn get_validator_balances_by_start_of_day(
             }
         })
         .collect()
-         
-    })
+    }).unwrap()
 }
 
 pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
@@ -133,8 +129,11 @@ pub struct BeaconBalancesSum {
     pub balances_sum: GweiNewtype,
 }
 
-pub async fn get_balances_by_state_root(executor: impl PgExecutor<'_>, state_root: &str) -> Result<Option<GweiNewtype>> {
-    let row = sqlx::query(
+pub async fn get_balances_by_state_root(
+    executor: impl PgExecutor<'_>,
+    state_root: &str,
+) -> Option<GweiNewtype> {
+    sqlx::query!(
         "
             SELECT
                 gwei
@@ -143,23 +142,27 @@ pub async fn get_balances_by_state_root(executor: impl PgExecutor<'_>, state_roo
             WHERE
                 beacon_validators_balance.state_root = $1
         ",
-    ).bind(state_root)
-    .map(|row: PgRow| {
-        let gwei: GweiNewtype = row.get::<i64, _>("gwei").try_into().unwrap();
+        state_root
+    )
+    .fetch_optional(executor)
+    .await
+    .unwrap()
+    .map(|row| {
+        let gwei_i64: i64 = row.gwei;
+        let gwei: GweiNewtype = gwei_i64.try_into().unwrap();
         gwei
     })
-    .fetch_optional(executor)
-    .await?;
-
-    Ok(row)
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, TimeZone, Utc, DurationRound};
+    use chrono::{Duration, DurationRound, TimeZone, Utc};
     use sqlx::Connection;
 
-    use crate::{beacon_chain::{states::store_state, tests::store_test_block}, db};
+    use crate::{
+        beacon_chain::{states::store_state, tests::store_test_block},
+        db,
+    };
 
     use super::*;
 
@@ -168,9 +171,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_balances", &Slot(17999))
-            .await
-            .unwrap();
+        store_state(&mut transaction, "0xtest_balances", &Slot(17999)).await;
 
         store_validators_balance(
             &mut transaction,
@@ -178,14 +179,16 @@ mod tests {
             &Slot(17999),
             &GweiNewtype(100),
         )
-        .await.unwrap();
+        .await;
 
         let validator_balances_by_day =
-            get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
+            get_validator_balances_by_start_of_day(&mut transaction).await;
 
         let unix_timestamp = validator_balances_by_day.first().unwrap().t;
 
-        let datetime = Utc.timestamp_opt(unix_timestamp.try_into().unwrap(), 0).unwrap();
+        let datetime = Utc
+            .timestamp_opt(unix_timestamp.try_into().unwrap(), 0)
+            .unwrap();
 
         let start_of_day_datetime = datetime.duration_trunc(Duration::days(1)).unwrap();
 
@@ -197,9 +200,7 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_balances", &Slot(17999))
-            .await
-            .unwrap();
+        store_state(&mut transaction, "0xtest_balances", &Slot(17999)).await;
 
         store_validators_balance(
             &mut transaction,
@@ -207,14 +208,14 @@ mod tests {
             &Slot(17999),
             &GweiNewtype(100),
         )
-        .await.unwrap();
+        .await;
 
-        let balances = get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
+        let balances = get_validator_balances_by_start_of_day(&mut transaction).await;
         assert_eq!(balances.len(), 1);
 
         delete_validator_sums(&mut transaction, &Slot(17999)).await;
 
-        let balances = get_validator_balances_by_start_of_day(&mut transaction).await.unwrap();
+        let balances = get_validator_balances_by_start_of_day(&mut transaction).await;
         assert_eq!(balances.len(), 0);
     }
 
@@ -228,15 +229,11 @@ mod tests {
 
         store_test_block(&mut transaction, test_id).await;
 
-        store_validators_balance(
-            &mut transaction,
-            &state_root,
-            &Slot(0),
-            &GweiNewtype(100),
-        )
-        .await.unwrap();
+        store_validators_balance(&mut transaction, &state_root, &Slot(0), &GweiNewtype(100)).await;
 
-        let beacon_balances_sum = get_balances_by_state_root(&mut transaction, &state_root).await.unwrap().unwrap();
+        let beacon_balances_sum = get_balances_by_state_root(&mut transaction, &state_root)
+            .await
+            .unwrap();
 
         assert_eq!(GweiNewtype(100), beacon_balances_sum);
     }

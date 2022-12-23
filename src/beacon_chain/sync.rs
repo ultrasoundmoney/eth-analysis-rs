@@ -217,11 +217,11 @@ pub async fn sync_slot_by_state_root(
             );
             states::store_state(&mut transaction, &state_root, slot)
                 .timed("store state without block")
-                .await?;
+                .await;
         }
         Some((ref header, ref block)) => {
             let deposit_sum_aggregated =
-                deposits::get_deposit_sum_aggregated(&mut transaction, &block).await?;
+                deposits::get_deposit_sum_aggregated(&mut transaction, block).await;
 
             debug!(
                 %slot,
@@ -237,7 +237,7 @@ pub async fn sync_slot_by_state_root(
                 header,
             )
             .timed("store_state_with_block")
-            .await?;
+            .await;
         }
     }
 
@@ -250,18 +250,18 @@ pub async fn sync_slot_by_state_root(
             &slot,
             &validator_balances_sum,
         )
-        .await?;
+        .await;
 
         if let Some((_, block)) = header_block_tuple {
             let deposit_sum_aggregated =
-                deposits::get_deposit_sum_aggregated(&mut transaction, &block).await?;
+                deposits::get_deposit_sum_aggregated(&mut transaction, &block).await;
             issuance::store_issuance(
                 &mut transaction,
                 &state_root,
                 slot,
                 &issuance::calc_issuance(&validator_balances_sum, &deposit_sum_aggregated),
             )
-            .await?;
+            .await;
         }
 
         eth_supply::sync_eth_supply(&mut transaction, slot).await?;
@@ -433,7 +433,7 @@ async fn find_last_matching_slot(
     starting_candidate: &Slot,
 ) -> Result<Slot> {
     let mut candidate_slot = *starting_candidate;
-    let mut stored_state_root = states::get_state_root_by_slot(db_pool, &candidate_slot).await?;
+    let mut stored_state_root = states::get_state_root_by_slot(db_pool, &candidate_slot).await;
     let mut on_chain_state_root = beacon_node
         .get_header_by_slot(&candidate_slot)
         .await?
@@ -452,8 +452,7 @@ async fn find_last_matching_slot(
             }
             _ => {
                 candidate_slot = candidate_slot - 1;
-                stored_state_root =
-                    states::get_state_root_by_slot(db_pool, &candidate_slot).await?;
+                stored_state_root = states::get_state_root_by_slot(db_pool, &candidate_slot).await;
                 on_chain_state_root = beacon_node
                     .get_header_by_slot(&candidate_slot)
                     .await?
@@ -522,13 +521,13 @@ pub async fn sync_beacon_states() -> Result<()> {
                         slot
                     ));
             let current_slot_stored_state_root =
-                states::get_state_root_by_slot(&db_pool, &slot).await?;
+                states::get_state_root_by_slot(&db_pool, &slot).await;
 
             let last_matches = if slot.0 == 0 {
                 true
             } else {
                 let last_stored_state_root =
-                    states::get_state_root_by_slot(&db_pool, &(slot - 1)).await?;
+                    states::get_state_root_by_slot(&db_pool, &(slot - 1)).await;
                 match last_stored_state_root {
                     None => false,
                     Some(last_stored_state_root) => {
