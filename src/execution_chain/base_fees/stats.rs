@@ -236,7 +236,7 @@ mod tests {
     use chrono::{Duration, SubsecRound};
     use sqlx::Acquire;
 
-    use crate::{db, execution_chain::BlockStore};
+    use crate::{db, execution_chain};
 
     use super::*;
 
@@ -258,7 +258,6 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_1 = ExecutionNodeBlock {
             gas_used: 10,
             base_fee_per_gas: 10,
@@ -273,8 +272,8 @@ mod tests {
             ..make_test_block()
         };
 
-        block_store.store_block(&test_block_1, 0.0).await;
-        block_store.store_block(&test_block_2, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
 
         let average_base_fee_per_gas = get_base_fee_per_gas_average(
             &mut transaction,
@@ -291,7 +290,6 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_in_range = ExecutionNodeBlock {
             gas_used: 10,
             base_fee_per_gas: 10,
@@ -308,10 +306,8 @@ mod tests {
             ..make_test_block()
         };
 
-        block_store.store_block(&test_block_in_range, 0.0).await;
-        block_store
-            .store_block(&test_block_outside_range, 0.0)
-            .await;
+        execution_chain::store_block(&mut transaction, &test_block_in_range, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block_outside_range, 0.0).await;
 
         let average_base_fee_per_gas = get_base_fee_per_gas_average(
             &mut transaction,
@@ -328,7 +324,6 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_1 = ExecutionNodeBlock {
             gas_used: 10,
             base_fee_per_gas: 10,
@@ -344,8 +339,8 @@ mod tests {
             ..make_test_block()
         };
 
-        block_store.store_block(&test_block_1, 0.0).await;
-        block_store.store_block(&test_block_2, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
 
         let base_fee_per_gas_min_max = get_base_fee_per_gas_min_max(
             &mut transaction,

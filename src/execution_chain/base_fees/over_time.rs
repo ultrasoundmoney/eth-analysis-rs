@@ -250,7 +250,7 @@ mod tests {
 
     use crate::{
         db,
-        execution_chain::{block_store::BlockStore, ExecutionNodeBlock},
+        execution_chain::{self, ExecutionNodeBlock},
         time_frames::LimitedTimeFrame,
     };
 
@@ -274,7 +274,6 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut transaction);
         let excluded_block = ExecutionNodeBlock {
             timestamp: Utc::now().trunc_subsecs(0) - Duration::hours(2),
             ..make_test_block()
@@ -286,8 +285,8 @@ mod tests {
             ..make_test_block()
         };
 
-        block_store.store_block(&excluded_block, 0.0).await;
-        block_store.store_block(&included_block, 0.0).await;
+        execution_chain::store_block(&mut transaction, &excluded_block, 0.0).await;
+        execution_chain::store_block(&mut transaction, &included_block, 0.0).await;
 
         let base_fees_d1 = get_base_fee_over_time(
             &mut transaction,
@@ -311,7 +310,6 @@ mod tests {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let mut block_store = BlockStore::new(&mut transaction);
         let test_block_1 = make_test_block();
         let test_block_2 = ExecutionNodeBlock {
             hash: "0xtest2".to_string(),
@@ -321,8 +319,8 @@ mod tests {
             ..make_test_block()
         };
 
-        block_store.store_block(&test_block_1, 0.0).await;
-        block_store.store_block(&test_block_2, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
 
         let base_fees_h1 = get_base_fee_over_time(&mut transaction, &TimeFrame::Limited(Hour1))
             .await

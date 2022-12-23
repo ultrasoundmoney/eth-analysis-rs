@@ -1,5 +1,5 @@
 use chrono::{DateTime, SubsecRound, Utc};
-use sqlx::{Acquire, PgConnection};
+use sqlx::{Acquire, PgConnection, PgExecutor};
 
 use super::node::{BlockNumber, ExecutionNodeBlock};
 
@@ -29,227 +29,197 @@ impl From<ExecutionBlockRow> for ExecutionNodeBlock {
     }
 }
 
-pub struct BlockStore<'a> {
-    connection: &'a mut PgConnection,
+pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal: &BlockNumber) {
+    sqlx::query!(
+        "
+        DELETE FROM blocks_next
+        WHERE number >= $1
+        ",
+        *greater_than_or_equal
+    )
+    .execute(executor)
+    .await
+    .unwrap();
 }
 
-impl BlockStore<'_> {
-    #[allow(dead_code)]
-    pub async fn delete_block_by_number(&mut self, block_number: &BlockNumber) {
-        sqlx::query(
-            "
-                DELETE FROM blocks_next
-                WHERE number = $1
-            ",
-        )
-        .bind(*block_number)
-        .execute(self.connection.acquire().await.unwrap())
-        .await
-        .unwrap();
-    }
+pub async fn get_block_by_hash(
+    executor: impl PgExecutor<'_>,
+    hash: &str,
+) -> Option<ExecutionNodeBlock> {
+    sqlx::query_as!(
+        ExecutionBlockRow,
+        r#"
+        SELECT
+            base_fee_per_gas,
+            difficulty,
+            gas_used,
+            hash,
+            number,
+            parent_hash,
+            timestamp,
+            total_difficulty::TEXT AS "total_difficulty!"
+        FROM
+            blocks_next
+        WHERE
+            hash = $1
+        "#,
+        hash
+    )
+    .fetch_optional(executor)
+    .await
+    .unwrap()
+    .map(|row| row.into())
+}
 
-    pub async fn delete_blocks(&mut self, greater_than_or_equal: &BlockNumber) {
+pub async fn get_block_by_number(
+    executor: impl PgExecutor<'_>,
+    block_number: &BlockNumber,
+) -> Option<ExecutionNodeBlock> {
+    sqlx::query_as!(
+        ExecutionBlockRow,
+        r#"
+        SELECT
+            base_fee_per_gas,
+            difficulty,
+            gas_used,
+            hash,
+            number,
+            parent_hash,
+            timestamp,
+            total_difficulty::TEXT AS "total_difficulty!"
+        FROM
+            blocks_next
+        WHERE
+            number = $1
+        "#,
+        *block_number
+    )
+    .fetch_optional(executor)
+    .await
+    .unwrap()
+    .map(|row| row.into())
+}
+
+pub async fn get_is_parent_hash_known(connection: &mut PgConnection, hash: &str) -> bool {
+    // TODO: once 12965000 the london hardfork block is in the DB, we can hardcode and check
+    // the hash, skipping a DB roundtrip.
+    if is_empty(connection.acquire().await.unwrap()).await {
+        true
+    } else {
         sqlx::query!(
-            "
-                DELETE FROM blocks_next
-                WHERE number >= $1
-            ",
-            *greater_than_or_equal
-        )
-        .execute(self.connection.acquire().await.unwrap())
-        .await
-        .unwrap();
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_block_by_hash(&mut self, hash: &str) -> Option<ExecutionNodeBlock> {
-        sqlx::query_as!(
-            ExecutionBlockRow,
             r#"
+            SELECT
+              EXISTS(
                 SELECT
-                    base_fee_per_gas,
-                    difficulty,
-                    gas_used,
-                    hash,
-                    number,
-                    parent_hash,
-                    timestamp,
-                    total_difficulty::TEXT AS "total_difficulty!"
+                  hash
                 FROM
-                    blocks_next
+                  blocks_next
                 WHERE
-                    hash = $1
+                  hash = $1
+              ) AS "exists!"
             "#,
             hash
         )
-        .fetch_optional(self.connection.acquire().await.unwrap())
-        .await
-        .unwrap()
-        .map(|row| row.into())
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_block_by_number(
-        &mut self,
-        block_number: &BlockNumber,
-    ) -> Option<ExecutionNodeBlock> {
-        sqlx::query_as!(
-            ExecutionBlockRow,
-            r#"
-                SELECT
-                    base_fee_per_gas,
-                    difficulty,
-                    gas_used,
-                    hash,
-                    number,
-                    parent_hash,
-                    timestamp,
-                    total_difficulty::TEXT AS "total_difficulty!"
-                FROM
-                    blocks_next
-                WHERE
-                    number = $1
-            "#,
-            *block_number
-        )
-        .fetch_optional(self.connection.acquire().await.unwrap())
-        .await
-        .unwrap()
-        .map(|row| row.into())
-    }
-
-    pub async fn get_is_parent_hash_known(&mut self, hash: &str) -> bool {
-        // TODO: once 12965000 the london hardfork block is in the DB, we can hardcode and check
-        // the hash, skipping a DB roundtrip.
-        if self.is_empty().await {
-            true
-        } else {
-            sqlx::query!(
-                r#"
-                    SELECT
-                      EXISTS(
-                        SELECT
-                          hash
-                        FROM
-                          blocks_next
-                        WHERE
-                          hash = $1
-                      ) AS "exists!"
-                "#,
-                hash
-            )
-            .fetch_one(self.connection.acquire().await.unwrap())
-            .await
-            .unwrap()
-            .exists
-        }
-    }
-
-    pub async fn get_is_number_known(&mut self, block_number: &BlockNumber) -> bool {
-        sqlx::query!(
-            r#"
-                SELECT
-                  EXISTS(
-                    SELECT
-                      hash
-                    FROM
-                      blocks_next
-                    WHERE
-                      number = $1
-                  ) AS "exists!"
-            "#,
-            *block_number
-        )
-        .fetch_one(self.connection.acquire().await.unwrap())
+        .fetch_one(connection)
         .await
         .unwrap()
         .exists
     }
+}
 
-    pub async fn get_last_block_number(&mut self) -> Option<BlockNumber> {
-        sqlx::query!(
-            "
-                SELECT
-                    number
-                FROM
-                    blocks_next
-                ORDER BY number DESC
-                LIMIT 1
-            "
-        )
-        .fetch_optional(self.connection.acquire().await.unwrap())
-        .await
-        .unwrap()
-        .map(|row| row.number)
-    }
+pub async fn get_is_number_known(
+    executor: impl PgExecutor<'_>,
+    block_number: &BlockNumber,
+) -> bool {
+    sqlx::query!(
+        r#"
+        SELECT
+          EXISTS(
+            SELECT
+              hash
+            FROM
+              blocks_next
+            WHERE
+              number = $1
+          ) AS "exists!"
+        "#,
+        *block_number
+    )
+    .fetch_one(executor)
+    .await
+    .unwrap()
+    .exists
+}
 
-    #[allow(dead_code)]
-    async fn is_empty(&mut self) -> bool {
-        let count = sqlx::query!(
-            r#"
-                SELECT
-                    COUNT(*) AS "count!"
-                FROM
-                    blocks_next
-                LIMIT 1
-            "#
-        )
-        .fetch_one(self.connection.acquire().await.unwrap())
-        .await
-        .unwrap()
-        .count;
+pub async fn get_last_block_number(executor: impl PgExecutor<'_>) -> Option<BlockNumber> {
+    sqlx::query!(
+        "
+        SELECT
+            number
+        FROM
+            blocks_next
+        ORDER BY number DESC
+        LIMIT 1
+        "
+    )
+    .fetch_optional(executor)
+    .await
+    .unwrap()
+    .map(|row| row.number)
+}
 
-        count == 0
-    }
+pub async fn is_empty(executor: impl PgExecutor<'_>) -> bool {
+    let count = sqlx::query!(
+        r#"
+        SELECT
+            COUNT(*) AS "count!"
+        FROM
+            blocks_next
+        LIMIT 1
+        "#
+    )
+    .fetch_one(executor)
+    .await
+    .unwrap()
+    .count;
 
-    #[allow(dead_code)]
-    async fn len(&mut self) -> i64 {
-        sqlx::query!(
-            r#"
-                SELECT COUNT(*) AS "count!" FROM blocks_next
-            "#,
-        )
-        .fetch_one(self.connection.acquire().await.unwrap())
-        .await
-        .unwrap()
-        .count
-    }
+    count == 0
+}
 
-    pub fn new(connection: &mut PgConnection) -> BlockStore {
-        BlockStore { connection }
-    }
-
-    pub async fn store_block(&mut self, block: &ExecutionNodeBlock, eth_price: f64) {
-        sqlx::query(
-            "
-                INSERT INTO
-                    blocks_next (
-                        base_fee_per_gas,
-                        difficulty,
-                        eth_price,
-                        gas_used,
-                        hash,
-                        number,
-                        parent_hash,
-                        timestamp,
-                        total_difficulty
-                    )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::NUMERIC)
-            ",
-        )
-        .bind(block.base_fee_per_gas as i64)
-        .bind(block.difficulty as i64)
-        .bind(eth_price)
-        .bind(block.gas_used)
-        .bind(block.hash.clone())
-        .bind(block.number)
-        .bind(block.parent_hash.clone())
-        .bind(block.timestamp.trunc_subsecs(0))
-        .bind(block.total_difficulty.to_string())
-        .execute(self.connection.acquire().await.unwrap())
-        .await
-        .unwrap();
-    }
+pub async fn store_block(
+    executor: impl PgExecutor<'_>,
+    block: &ExecutionNodeBlock,
+    eth_price: f64,
+) {
+    sqlx::query(
+        "
+        INSERT INTO
+            blocks_next (
+                base_fee_per_gas,
+                difficulty,
+                eth_price,
+                gas_used,
+                hash,
+                number,
+                parent_hash,
+                timestamp,
+                total_difficulty
+            )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::NUMERIC)
+        ",
+    )
+    .bind(block.base_fee_per_gas as i64)
+    .bind(block.difficulty as i64)
+    .bind(eth_price)
+    .bind(block.gas_used)
+    .bind(block.hash.clone())
+    .bind(block.number)
+    .bind(block.parent_hash.clone())
+    .bind(block.timestamp.trunc_subsecs(0))
+    .bind(block.total_difficulty.to_string())
+    .execute(executor)
+    .await
+    .unwrap();
 }
 
 #[cfg(test)]
@@ -259,6 +229,18 @@ mod tests {
     use crate::db;
 
     use super::*;
+
+    async fn len(executor: impl PgExecutor<'_>) -> i64 {
+        sqlx::query!(
+            r#"
+        SELECT COUNT(*) AS "count!" FROM blocks_next
+        "#,
+        )
+        .fetch_one(executor)
+        .await
+        .unwrap()
+        .count
+    }
 
     fn make_test_block() -> ExecutionNodeBlock {
         ExecutionNodeBlock {
@@ -277,66 +259,46 @@ mod tests {
     async fn store_block_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
 
-        assert_eq!(block_store.len().await, 0);
+        assert_eq!(len(&mut tx).await, 0);
 
-        block_store.store_block(&test_block, 0.0).await;
-        assert_eq!(
-            block_store.get_block_by_number(&0).await.unwrap(),
-            test_block
-        );
-    }
-
-    #[tokio::test]
-    async fn delete_block_by_number_test() {
-        let mut db = db::get_test_db().await;
-        let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
-        let test_block = make_test_block();
-
-        block_store.store_block(&test_block, 0.0).await;
-        assert_eq!(block_store.len().await, 1);
-
-        block_store.delete_block_by_number(&test_block.number).await;
-        assert_eq!(block_store.len().await, 0);
+        store_block(&mut tx, &test_block, 0.0).await;
+        assert_eq!(get_block_by_number(&mut tx, &0).await.unwrap(), test_block);
     }
 
     #[tokio::test]
     async fn delete_blocks_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
-        block_store.store_block(&test_block, 0.0).await;
-        block_store
-            .store_block(
-                &ExecutionNodeBlock {
-                    hash: "0xtest1".to_string(),
-                    number: 1,
-                    parent_hash: "0xtest".to_string(),
-                    ..test_block
-                },
-                0.0,
-            )
-            .await;
+        store_block(&mut tx, &test_block, 0.0).await;
+        store_block(
+            &mut tx,
+            &ExecutionNodeBlock {
+                hash: "0xtest1".to_string(),
+                number: 1,
+                parent_hash: "0xtest".to_string(),
+                ..test_block
+            },
+            0.0,
+        )
+        .await;
 
-        assert_eq!(block_store.len().await, 2);
+        assert_eq!(len(&mut tx,).await, 2);
 
-        block_store.delete_blocks(&0).await;
-        assert_eq!(block_store.len().await, 0);
+        delete_blocks(&mut tx, &0).await;
+        assert_eq!(len(&mut tx,).await, 0);
     }
 
     #[tokio::test]
     async fn get_block_by_hash_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
 
-        block_store.store_block(&test_block, 0.0).await;
-        let stored_block = block_store.get_block_by_hash(&test_block.hash).await;
+        store_block(&mut *tx, &test_block, 0.0).await;
+        let stored_block = get_block_by_hash(&mut *tx, &test_block.hash).await;
         assert_eq!(stored_block, Some(test_block));
     }
 
@@ -344,11 +306,10 @@ mod tests {
     async fn get_block_by_number_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
 
-        block_store.store_block(&test_block, 0.0).await;
-        let stored_block = block_store.get_block_by_number(&test_block.number).await;
+        store_block(&mut *tx, &test_block, 0.0).await;
+        let stored_block = get_block_by_number(&mut *tx, &test_block.number).await;
         assert_eq!(stored_block, Some(test_block));
     }
 
@@ -356,9 +317,8 @@ mod tests {
     async fn get_is_first_parent_hash_known_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
 
-        let is_parent_known = block_store.get_is_parent_hash_known("0xnotthere").await;
+        let is_parent_known = get_is_parent_hash_known(&mut tx, "0xnotthere").await;
         assert!(is_parent_known);
     }
 
@@ -366,44 +326,40 @@ mod tests {
     async fn get_is_parent_hash_known_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
 
-        block_store.store_block(&test_block, 0.0).await;
-        assert!(!block_store.get_is_parent_hash_known("0xnotthere").await);
-        assert!(block_store.get_is_parent_hash_known(&test_block.hash).await);
+        store_block(&mut *tx, &test_block, 0.0).await;
+        assert!(!get_is_parent_hash_known(&mut tx, "0xnotthere").await);
+        assert!(get_is_parent_hash_known(&mut tx, &test_block.hash).await);
     }
 
     #[tokio::test]
     async fn get_is_number_known_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
 
-        block_store.store_block(&test_block, 0.0).await;
-        assert!(!block_store.get_is_number_known(&1).await);
-        assert!(block_store.get_is_number_known(&0).await);
+        store_block(&mut *tx, &test_block, 0.0).await;
+        assert!(!get_is_number_known(&mut tx, &1).await);
+        assert!(get_is_number_known(&mut tx, &0).await);
     }
 
     #[tokio::test]
     async fn get_empty_last_block_number_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
 
-        assert_eq!(block_store.get_last_block_number().await, None);
+        assert_eq!(get_last_block_number(&mut *tx,).await, None);
     }
 
     #[tokio::test]
     async fn get_last_block_number_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
 
-        block_store.store_block(&test_block, 0.0).await;
-        let last_block_number = block_store.get_last_block_number().await;
+        store_block(&mut *tx, &test_block, 0.0).await;
+        let last_block_number = get_last_block_number(&mut tx).await;
         assert_eq!(last_block_number, Some(0));
     }
 
@@ -411,19 +367,17 @@ mod tests {
     async fn is_empty_empty_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
 
-        assert!(block_store.is_empty().await);
+        assert!(is_empty(&mut tx,).await);
     }
 
     #[tokio::test]
     async fn is_empty_not_empty_test() {
         let mut db = db::get_test_db().await;
         let mut tx = db.begin().await.unwrap();
-        let mut block_store = BlockStore::new(&mut *tx);
         let test_block = make_test_block();
 
-        block_store.store_block(&test_block, 0.0).await;
-        assert!(!block_store.is_empty().await);
+        store_block(&mut tx, &test_block, 0.0).await;
+        assert!(!is_empty(&mut tx,).await);
     }
 }

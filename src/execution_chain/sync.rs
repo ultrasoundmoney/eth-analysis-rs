@@ -8,7 +8,7 @@
 
 use anyhow::Result;
 use futures::{SinkExt, Stream, StreamExt};
-use sqlx::PgPool;
+use sqlx::{PgExecutor, PgPool};
 use std::{
     cmp::Ordering,
     collections::VecDeque,
@@ -18,8 +18,9 @@ use std::{
 use tracing::{debug, event, info, warn, Level};
 
 use crate::{
+    beacon_chain::{IssuanceStore, IssuanceStorePostgres},
     db,
-    execution_chain::{self, base_fees, block_store::BlockStore, ExecutionNode},
+    execution_chain::{self, base_fees, ExecutionNode},
     log,
     performance::TimedExt,
     usd_price,
@@ -27,17 +28,12 @@ use crate::{
 
 use super::{node::Head, BlockNumber};
 
-async fn rollback_numbers<'a>(
-    block_store: &mut BlockStore<'a>,
-    greater_than_or_equal: &BlockNumber,
-) -> Result<()> {
+async fn rollback_numbers(executor: impl PgExecutor<'_>, greater_than_or_equal: &BlockNumber) {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
-    block_store.delete_blocks(&greater_than_or_equal).await;
-    Ok(())
+    execution_chain::delete_blocks(executor, greater_than_or_equal).await;
 }
 
 async fn sync_by_hash(
-    block_store: &mut BlockStore<'_>,
     execution_node: &mut ExecutionNode,
     db_pool: &PgPool,
     hash: &str,
@@ -50,11 +46,11 @@ async fn sync_by_hash(
         .expect("block not to disappear between deciding to add it and adding it");
 
     let mut connection = db_pool.acquire().await.unwrap();
-    let eth_price = usd_price::get_eth_price_by_block(&mut *connection, &block)
+    let eth_price = usd_price::get_eth_price_by_block(&mut connection, &block)
         .await
         .expect("eth price close to block to be available");
 
-    block_store.store_block(&block, eth_price).await;
+    execution_chain::store_block(db_pool, &block, eth_price).await;
 
     // Some computations can be skipped, others should be ran, and rolled back for every change in
     // the chain of blocks we've assembled. These are the ones that are skippable, and so skipped
@@ -72,18 +68,20 @@ enum NextStep {
     AddToExisting,
 }
 
-async fn get_next_step(block_store: &mut BlockStore<'_>, head: &Head) -> NextStep {
+async fn get_next_step(db_pool: &PgPool, head: &Head) -> NextStep {
     // Between the time we received the head event and requested a header for the given
     // block_root the block may have disappeared. Right now we panic, we could do better.
-    let is_parent_known = block_store
-        .get_is_parent_hash_known(&head.parent_hash)
-        .await;
+    let is_parent_known = execution_chain::get_is_parent_hash_known(
+        &mut db_pool.acquire().await.unwrap(),
+        &head.parent_hash,
+    )
+    .await;
 
     if !is_parent_known {
         return NextStep::HandleGap;
     }
 
-    let is_fork_block = block_store.get_is_number_known(&head.number).await;
+    let is_fork_block = execution_chain::get_is_number_known(db_pool, &head.number).await;
 
     if is_fork_block {
         return NextStep::HandleHeadFork;
@@ -93,7 +91,6 @@ async fn get_next_step(block_store: &mut BlockStore<'_>, head: &Head) -> NextSte
 }
 
 async fn sync_head(
-    store: &mut BlockStore<'_>,
     execution_node: &mut ExecutionNode,
     db_pool: &PgPool,
     heads_queue: HeadsQueue,
@@ -110,19 +107,18 @@ async fn sync_head(
 
     debug!("sync head from number: {}", head_event.number);
 
-    match get_next_step(store, &head_event).await {
+    match get_next_step(db_pool, &head_event).await {
         NextStep::HandleGap => {
             warn!("parent of block at block_number {} is missing, dropping min(our last block.block_number, new block.block_number) and queueing all blocks gte the received block, block: {}", head_event.number, head_event.hash);
 
-            let last_block_number = store
-                .get_last_block_number()
+            let last_block_number = execution_chain::get_last_block_number(db_pool)
                 .await
                 .expect("at least one block to be synced before rolling back");
 
             // Head number may be lower than our last synced. Roll back gte lowest of the two.
             let lowest_number = last_block_number.min(head_event.number);
 
-            rollback_numbers(store, &lowest_number).await?;
+            rollback_numbers(db_pool, &lowest_number).await;
 
             for number in (lowest_number..=head_event.number).rev() {
                 debug!("queueing {number} for sync after dropping");
@@ -138,7 +134,7 @@ async fn sync_head(
                 head_event.number, head_event.hash
             );
 
-            rollback_numbers(store, &head_event.number).await?;
+            rollback_numbers(db_pool, &head_event.number).await;
 
             heads_queue
                 .lock()
@@ -200,12 +196,12 @@ impl Iterator for BlockRangeIntoIterator {
         {
             Ordering::Less => {
                 let current = self.block_range.greater_than_or_equal + self.index as BlockNumber;
-                self.index = self.index + 1;
+                self.index += 1;
                 Some(current)
             }
             Ordering::Equal => {
                 let current = self.block_range.greater_than_or_equal + self.index as BlockNumber;
-                self.index = self.index + 1;
+                self.index += 1;
                 Some(current)
             }
             Ordering::Greater => None,
@@ -258,10 +254,7 @@ async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Head> {
 pub const EXECUTION_BLOCK_NUMBER_AUG_1ST: BlockNumber = 15253306;
 
 async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = Head> {
-    let mut connection = db.acquire().await.unwrap();
-    let mut block_store = BlockStore::new(&mut *connection);
-    let next_block_to_sync = block_store
-        .get_last_block_number()
+    let next_block_to_sync = execution_chain::get_last_block_number(db)
         .await
         .map_or(EXECUTION_BLOCK_NUMBER_AUG_1ST, |number| number + 1);
     stream_heads_from(next_block_to_sync).await
@@ -287,8 +280,6 @@ pub async fn sync_blocks() -> Result<()> {
 
     let mut execution_node = ExecutionNode::connect().await;
 
-    let mut connection = db_pool.acquire().await.unwrap();
-    let mut block_store = BlockStore::new(&mut connection);
 
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
 
@@ -313,7 +304,6 @@ pub async fn sync_blocks() -> Result<()> {
                     // Because we may encounter rollbacks, this step may add more heads to sync to
                     // the front of the queue.
                     sync_head(
-                        &mut block_store,
                         &mut execution_node,
                         &db_pool,
                         heads_queue.clone(),
@@ -331,59 +321,7 @@ pub async fn sync_blocks() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
-
-    use crate::execution_chain::node::ExecutionNodeBlock;
-
     use super::*;
-
-    #[tokio::test]
-    async fn rollback_last_first_test() -> Result<()> {
-        // This test should use transiactions somehow.
-        let db = PgPool::connect(&db::get_db_url_with_name("execution-sync-test")).await?;
-        let mut connection = db.acquire().await.unwrap();
-        let mut block_store = BlockStore::new(&mut connection);
-
-        block_store
-            .store_block(
-                &ExecutionNodeBlock {
-                    base_fee_per_gas: 0,
-                    difficulty: 0,
-                    gas_used: 0,
-                    hash: "0xtest".to_string(),
-                    number: 0,
-                    parent_hash: "0xparent".to_string(),
-                    timestamp: Utc::now(),
-                    total_difficulty: 0,
-                },
-                0.0,
-            )
-            .await;
-
-        block_store
-            .store_block(
-                &ExecutionNodeBlock {
-                    base_fee_per_gas: 0,
-                    difficulty: 0,
-                    gas_used: 0,
-                    hash: "0xhash2".to_string(),
-                    number: 1,
-                    parent_hash: "0xhash".to_string(),
-                    timestamp: Utc::now(),
-                    total_difficulty: 0,
-                },
-                0.0,
-            )
-            .await;
-
-        rollback_numbers(&mut block_store, &0).await?;
-
-        // This should blow up if the order is backwards but its not obvious how. Consider using
-        // mockall to create a mock instance of block_store so we can observe whether
-        // rollback_numbers is calling it correctly.
-
-        Ok(())
-    }
 
     #[test]
     fn block_range_iterable_test() {

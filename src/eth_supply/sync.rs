@@ -130,7 +130,7 @@ pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> 
         Some(supply_parts) => {
             store(
                 executor.acquire().await?,
-                &slot,
+                slot,
                 &supply_parts.block_number(),
                 &supply_parts.execution_balances_sum_next,
                 &supply_parts.beacon_balances_sum_next,
@@ -256,7 +256,6 @@ mod tests {
     async fn get_supply_parts_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
-        let mut block_store = execution_chain::BlockStore::new(&mut transaction);
 
         let test_id = "get_supply_parts";
         let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
@@ -266,15 +265,14 @@ mod tests {
 
         let execution_test_block = make_test_block();
 
-        block_store.store_block(&execution_test_block, 0.0).await;
+        execution_chain::store_block(&mut transaction, &execution_test_block, 0.0).await;
 
         beacon_chain::store_state(
             &mut transaction,
             &test_header.state_root(),
             &test_header.slot(),
         )
-        .await
-        .unwrap();
+        .await;
 
         beacon_chain::store_block(
             &mut transaction,
@@ -283,8 +281,7 @@ mod tests {
             &GweiNewtype(5),
             &test_header,
         )
-        .await
-        .unwrap();
+        .await;
 
         beacon_chain::store_validators_balance(
             &mut transaction,
@@ -353,17 +350,14 @@ mod tests {
     async fn get_eth_supply_exists_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
-        let mut block_store = execution_chain::BlockStore::new(&mut transaction);
 
         let test_block = make_test_block();
         let state_root = "0xstate_root";
         let slot = Slot(0);
 
-        block_store.store_block(&test_block, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, state_root, &slot)
-            .await
-            .unwrap();
+        beacon_chain::store_state(&mut transaction, state_root, &slot).await;
 
         let supply_parts = SupplyParts::new(
             &slot,
@@ -395,18 +389,15 @@ mod tests {
     async fn get_last_stored_supply_slot_test() {
         let mut connection = db::get_test_db().await;
         let mut transaction = connection.begin().await.unwrap();
-        let mut block_store = execution_chain::BlockStore::new(&mut transaction);
 
         let test_id = "get_last_stored_supply_slot";
         let test_block = make_test_block();
         let state_root = format!("0x{test_id}_state_root");
         let slot = Slot(0);
 
-        block_store.store_block(&test_block, 0.0).await;
+        execution_chain::store_block(&mut transaction, &test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, &state_root, &slot)
-            .await
-            .unwrap();
+        beacon_chain::store_state(&mut transaction, &state_root, &slot).await;
 
         let supply_parts = SupplyParts::new(
             &slot,
