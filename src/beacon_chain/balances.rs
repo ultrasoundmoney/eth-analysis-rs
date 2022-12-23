@@ -43,7 +43,7 @@ pub async fn store_validators_balance(
 }
 
 pub async fn get_last_effective_balance_sum(
-    executor: &mut PgConnection,
+    executor: impl PgExecutor<'_>,
     beacon_node: &BeaconNode,
 ) -> GweiNewtype {
     let last_state_root = get_last_state(executor)

@@ -118,9 +118,8 @@ struct ValidatorRewards {
 }
 
 async fn get_validator_rewards(db_pool: &PgPool, beacon_node: &BeaconNode) -> ValidatorRewards {
-    let mut connection = db_pool.acquire().await.unwrap();
     let last_effective_balance_sum =
-        balances::get_last_effective_balance_sum(&mut connection, beacon_node).await;
+        balances::get_last_effective_balance_sum(db_pool, beacon_node).await;
     let issuance_reward = get_issuance_reward(last_effective_balance_sum);
     let tips_reward = get_tips_reward(db_pool, last_effective_balance_sum)
         .await
