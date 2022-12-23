@@ -91,31 +91,7 @@ pub async fn store_block(
     .unwrap();
 }
 
-#[allow(dead_code)]
-pub async fn get_last_block_slot(connection: &mut PgConnection) -> Result<Option<Slot>> {
-    let row = sqlx::query!(
-        "
-            SELECT
-                beacon_states.slot
-            FROM
-                beacon_blocks
-            JOIN
-                beacon_states
-            ON
-                beacon_states.state_root = beacon_blocks.state_root
-            ORDER BY slot DESC
-            LIMIT 1
-        ",
-    )
-    .fetch_optional(connection)
-    .await?;
-
-    let slot = row.map(|row| Slot(row.slot));
-
-    Ok(slot)
-}
-
-pub async fn delete_blocks(connection: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
+pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
     sqlx::query!(
         "
             DELETE FROM beacon_blocks
@@ -129,12 +105,12 @@ pub async fn delete_blocks(connection: impl PgExecutor<'_>, greater_than_or_equa
         ",
         greater_than_or_equal.0
     )
-    .execute(connection)
+    .execute(executor)
     .await
     .unwrap();
 }
 
-pub async fn delete_block(connection: impl PgExecutor<'_>, slot: &Slot) {
+pub async fn delete_block(executor: impl PgExecutor<'_>, slot: &Slot) {
     sqlx::query(
         "
             DELETE FROM beacon_blocks
@@ -148,7 +124,7 @@ pub async fn delete_block(connection: impl PgExecutor<'_>, slot: &Slot) {
         ",
     )
     .bind(slot.0)
-    .execute(connection)
+    .execute(executor)
     .await
     .unwrap();
 }
@@ -264,12 +240,33 @@ mod tests {
     use crate::{
         beacon_chain::{
             node::{BeaconBlockBody, BeaconHeader, BeaconHeaderEnvelope, ExecutionPayload},
-            states::store_state,
+            store_state,
             tests::{store_custom_test_block, store_test_block},
             BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder,
         },
         db,
     };
+
+    pub async fn get_last_block_slot(executor: impl PgExecutor<'_>) -> Option<Slot> {
+        sqlx::query!(
+            "
+            SELECT
+                beacon_states.slot
+            FROM
+                beacon_blocks
+            JOIN
+                beacon_states
+            ON
+                beacon_states.state_root = beacon_blocks.state_root
+            ORDER BY slot DESC
+            LIMIT 1
+        ",
+        )
+        .fetch_optional(executor)
+        .await
+        .unwrap()
+        .map(|row| Slot(row.slot))
+    }
 
     #[tokio::test]
     async fn get_is_genesis_known_test() {
