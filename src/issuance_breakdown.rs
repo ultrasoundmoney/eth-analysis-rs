@@ -6,16 +6,16 @@ use crate::{
     beacon_chain::{IssuanceStore, IssuanceStorePostgres},
     caching::{self, CacheKey},
     db, etherscan, log,
-    units::{EthNewtype, GweiNewtype},
+    units::{EthNewtype, GweiImprecise, GweiNewtype},
 };
 
 #[derive(Debug, Serialize)]
 struct IssuanceBreakdown {
-    crowd_sale: GweiNewtype,
-    early_contributors: GweiNewtype,
-    ethereum_foundation: GweiNewtype,
-    proof_of_stake: GweiNewtype,
-    proof_of_work: GweiNewtype,
+    crowd_sale: GweiImprecise,
+    early_contributors: GweiImprecise,
+    ethereum_foundation: GweiImprecise,
+    proof_of_stake: GweiImprecise,
+    proof_of_work: GweiImprecise,
 }
 
 pub async fn update_issuance_breakdown() -> Result<()> {
@@ -68,11 +68,11 @@ pub async fn update_issuance_breakdown() -> Result<()> {
     );
 
     let issuance_breakdown = IssuanceBreakdown {
-        crowd_sale,
+        crowd_sale: crowd_sale.into(),
         early_contributors: early_contributors.into(),
         ethereum_foundation: ethereum_foundation.into(),
-        proof_of_stake,
-        proof_of_work,
+        proof_of_stake: proof_of_stake.into(),
+        proof_of_work: proof_of_work.into(),
     };
 
     caching::update_and_publish(&db_pool, &CacheKey::IssuanceBreakdown, issuance_breakdown).await?;

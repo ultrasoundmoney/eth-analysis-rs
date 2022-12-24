@@ -12,17 +12,13 @@ use super::{eth::EthNewtype, WeiNewtype};
 // When converting to f64 however, max safe is 2^53, so anything more than ~9M ETH will lose
 // accuracy. i.e. don't put this into JSON for amounts >9M ETH.
 // GweiNewtype should probably convert to and from f64 and be represented as f64 or to and from String and represented as i64.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(into = "String")]
 pub struct GweiNewtype(pub i64);
 
-// When precision doesn't matter that much, or amounts are known to be less than 9M ETH.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-pub struct GweiImprecise(pub f64);
-
 impl fmt::Display for GweiNewtype {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} gwei", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -65,7 +61,7 @@ impl Div<GweiNewtype> for GweiNewtype {
 
 impl From<GweiNewtype> for i64 {
     fn from(GweiNewtype(amount): GweiNewtype) -> Self {
-        i64::try_from(amount).unwrap()
+        amount
     }
 }
 
@@ -99,6 +95,22 @@ impl From<WeiNewtype> for GweiNewtype {
     }
 }
 
+// When precision doesn't matter that much, or amounts are known to be less than 9M ETH.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct GweiImprecise(pub f64);
+
+impl From<GweiNewtype> for GweiImprecise {
+    fn from(GweiNewtype(amount): GweiNewtype) -> Self {
+        GweiImprecise(amount as f64)
+    }
+}
+
+impl From<EthNewtype> for GweiImprecise {
+    fn from(EthNewtype(amount): EthNewtype) -> Self {
+        GweiImprecise(amount * EthNewtype::GWEI_PER_ETH as f64)
+    }
+}
+
 struct GweiAmountVisitor;
 
 impl<'de> Visitor<'de> for GweiAmountVisitor {
@@ -113,14 +125,12 @@ impl<'de> Visitor<'de> for GweiAmountVisitor {
     where
         E: de::Error,
     {
-        v.parse::<i64>()
-            .map(|gwei_i64| GweiNewtype(gwei_i64))
-            .map_err(|error| {
-                de::Error::invalid_value(
-                    de::Unexpected::Str(&format!("unexpected value: {}, error: {}", v, error)),
-                    &"a number as string: \"118908973575220938\", which fits within u64",
-                )
-            })
+        v.parse::<i64>().map(GweiNewtype).map_err(|error| {
+            de::Error::invalid_value(
+                de::Unexpected::Str(&format!("unexpected value: {}, error: {}", v, error)),
+                &"a number as string: \"118908973575220938\", which fits within u64",
+            )
+        })
     }
 
     fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
