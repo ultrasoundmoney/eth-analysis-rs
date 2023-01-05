@@ -90,7 +90,7 @@ async fn get_supply_over_time_time_frame(
                         timestamp ASC
                 ",
             )
-            .bind(ltf.get_postgres_interval())
+            .bind(ltf.postgres_interval())
             .map(|row: PgRow| {
                 let slot: Slot = row
                     .get::<i32, _>("balances_slot")
@@ -120,7 +120,7 @@ async fn get_supply_over_time_time_frame(
                         DATE_TRUNC('minute', timestamp), timestamp ASC
                 ",
             )
-            .bind(ltf.get_postgres_interval())
+            .bind(ltf.postgres_interval())
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("minute_timestamp");
                 let supply = row.get::<f64, _>("supply");
@@ -147,7 +147,7 @@ async fn get_supply_over_time_time_frame(
                         DATE_BIN('5 minutes', timestamp, '2022-01-01'), timestamp ASC
                 ",
             )
-            .bind(ltf.get_postgres_interval())
+            .bind(ltf.postgres_interval())
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("five_minute_timestamp");
                 let supply = row.get::<f64, _>("supply");
@@ -174,7 +174,7 @@ async fn get_supply_over_time_time_frame(
                         DATE_TRUNC('hour', timestamp), timestamp ASC
                 ",
             )
-            .bind(ltf.get_postgres_interval())
+            .bind(ltf.postgres_interval())
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("hour_timestamp");
                 let supply = row.get::<f64, _>("supply");

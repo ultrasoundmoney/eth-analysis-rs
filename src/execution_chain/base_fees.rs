@@ -56,7 +56,7 @@ fn get_issuance_time_frame(
         / (effective_balance_sum.sqrt().floor()))
     .trunc();
 
-    max_issuance_per_epoch * limited_time_frame.get_epoch_count()
+    max_issuance_per_epoch * limited_time_frame.epoch_count()
 }
 
 pub async fn on_new_block(

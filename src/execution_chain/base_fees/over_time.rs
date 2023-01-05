@@ -110,7 +110,7 @@ async fn get_base_fee_over_time(
                     ORDER BY number ASC
                 ",
             )
-            .bind(ltf.get_postgres_interval())
+            .bind(ltf.postgres_interval())
             .map(|row: PgRow| {
                 let block_number: BlockNumber = row.get::<i32, _>("number");
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
@@ -138,7 +138,7 @@ async fn get_base_fee_over_time(
                     ORDER BY minute_timestamp ASC
                 ",
             )
-            .bind(ltf.get_postgres_interval())
+            .bind(ltf.postgres_interval())
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("minute_timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");
@@ -165,7 +165,7 @@ async fn get_base_fee_over_time(
                     ORDER BY five_minute_timestamp ASC
                 ",
             )
-            .bind(ltf.get_postgres_interval())
+            .bind(ltf.postgres_interval())
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("five_minute_timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");
@@ -192,7 +192,7 @@ async fn get_base_fee_over_time(
                     ORDER BY hour_timestamp ASC
                 ",
             )
-            .bind(ltf.get_postgres_interval())
+            .bind(ltf.postgres_interval())
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("hour_timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");

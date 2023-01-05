@@ -69,7 +69,7 @@ impl Display for LimitedTimeFrame {
 }
 
 impl LimitedTimeFrame {
-    pub fn get_epoch_count(self) -> f64 {
+    pub fn epoch_count(self) -> f64 {
         match self {
             Day1 => 225.0,
             Day30 => 6750.0,
@@ -79,7 +79,7 @@ impl LimitedTimeFrame {
         }
     }
 
-    pub fn get_postgres_interval(&self) -> PgInterval {
+    pub fn postgres_interval(&self) -> PgInterval {
         match self {
             Day1 => PgInterval {
                 months: 0,

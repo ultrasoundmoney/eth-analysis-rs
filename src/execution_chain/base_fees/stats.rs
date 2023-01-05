@@ -57,7 +57,7 @@ async fn get_base_fee_per_gas_average(
                         timestamp >= NOW() - $1
                 ",
             )
-            .bind(limited_time_frame.get_postgres_interval())
+            .bind(limited_time_frame.postgres_interval())
             .map(|row: PgRow| row.get::<f64, _>("average"))
             .fetch_one(executor)
             .await
