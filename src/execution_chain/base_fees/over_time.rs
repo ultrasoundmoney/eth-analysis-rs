@@ -269,7 +269,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_base_fee_over_time_h1_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let excluded_block = ExecutionNodeBlock {
@@ -305,7 +305,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_base_fee_over_time_asc_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_block_1 = make_test_block();

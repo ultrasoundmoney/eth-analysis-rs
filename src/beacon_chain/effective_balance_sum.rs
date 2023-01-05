@@ -164,7 +164,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_store_effective_balance_sum_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         states::store_state(&mut transaction, "0xstate_root", &Slot(0)).await;
@@ -184,7 +184,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_not_stored_effective_balance_sum_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         states::store_state(&mut transaction, "0xstate_root", &Slot(0)).await;
@@ -197,7 +197,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_stored_effective_balance_sum_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         states::store_state(&mut transaction, "0xtest_root", &Slot(0)).await;

@@ -18,7 +18,7 @@ pub async fn get_db_pool(name: &str) -> PgPool {
 }
 
 #[cfg(test)]
-pub async fn get_test_db() -> sqlx::PgConnection {
+pub async fn get_test_db_connection() -> sqlx::PgConnection {
     use sqlx::Connection;
 
     if !DB_URL.contains("testdb") {
@@ -26,6 +26,15 @@ pub async fn get_test_db() -> sqlx::PgConnection {
     }
 
     Connection::connect(&DB_URL).await.unwrap()
+}
+
+#[cfg(test)]
+pub async fn get_test_db_pool() -> sqlx::PgPool {
+    if !DB_URL.contains("testdb") {
+        panic!("tried to run tests against db that is not 'testdb'");
+    }
+
+    PgPool::connect(&DB_URL).await.unwrap()
 }
 
 #[cfg(test)]

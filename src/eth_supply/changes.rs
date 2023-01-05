@@ -168,7 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn m5_supply_change_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let from_slot = Slot(0);

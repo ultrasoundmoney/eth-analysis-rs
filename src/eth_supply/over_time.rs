@@ -252,7 +252,7 @@ mod tests {
 
     #[tokio::test]
     async fn supply_over_time_m5_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_timestamp = Utc::now().trunc_subsecs(0) - Duration::minutes(2);

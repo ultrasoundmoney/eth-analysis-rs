@@ -254,7 +254,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_supply_parts_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "get_supply_parts";
@@ -335,7 +335,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_eth_supply_not_exists_test() -> Result<()> {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &Slot(0)).await?;
@@ -347,7 +347,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_eth_supply_exists_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_block = make_test_block();
@@ -386,7 +386,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_stored_supply_slot_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "get_last_stored_supply_slot";

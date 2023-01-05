@@ -78,7 +78,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_deposits_sum_by_state_root_test() {
-        let mut connection = db::get_test_db().await;
+        let mut connection = db::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "get_deposits_sum_by_state_root";
