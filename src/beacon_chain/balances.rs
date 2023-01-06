@@ -2,7 +2,7 @@ mod backfill;
 
 use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
-use sqlx::{PgConnection, PgExecutor};
+use sqlx::PgExecutor;
 
 use crate::supply_projection::GweiInTime;
 use crate::units::GweiNewtype;
