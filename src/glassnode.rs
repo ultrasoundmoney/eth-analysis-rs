@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use format_url::FormatUrl;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
@@ -22,100 +23,76 @@ pub struct GlassnodeDataPoint {
     pub v: f64,
 }
 
-#[derive(Serialize)]
-struct StakedDataParams<'a> {
-    a: &'static str,
-    api_key: &'a str,
-    c: &'static str,
-    f: &'static str,
-    i: &'static str,
-    s: i64,
-    u: i64,
-}
+pub async fn get_circulating_supply_data() -> Vec<GlassnodeDataPoint> {
+    let since = ("2015-07-30T00:00:00Z")
+        .parse::<DateTime<Utc>>()
+        .unwrap()
+        .timestamp()
+        .to_string();
+    let until = chrono::Utc::now().timestamp().to_string();
 
-#[derive(Serialize)]
-struct CirculatingSupplyDataParams<'a> {
-    a: &'static str,
-    api_key: &'a str,
-    c: &'static str,
-    f: &'static str,
-    i: &'static str,
-    s: i64,
-    u: i64,
-}
+    let url = FormatUrl::new(GLASSNODE_API)
+        .with_path_template("/v1/metrics/supply/current")
+        .with_query_params(vec![
+            ("a", "ETH"),
+            ("api_key", &GLASSNODE_API_KEY),
+            ("c", "NATIVE"),
+            ("f", "JSON"),
+            ("i", "24h"),
+            ("s", &since),
+            ("u", &until),
+        ])
+        .format_url();
 
-fn make_circulating_supply_data_url() -> String {
-    let params = CirculatingSupplyDataParams {
-        a: "ETH",
-        api_key: &*GLASSNODE_API_KEY,
-        c: "NATIVE",
-        f: "JSON",
-        i: "24h",
-        s: ("2015-07-30T00:00:00Z")
-            .parse::<DateTime<Utc>>()
-            .unwrap()
-            .timestamp(),
-        u: chrono::Utc::now().timestamp(),
-    };
-
-    format!(
-        "{GLASSNODE_API}/v1/metrics/supply/current?{}",
-        serde_qs::to_string(&params).unwrap()
-    )
-}
-
-pub async fn get_circulating_supply_data() -> reqwest::Result<Vec<GlassnodeDataPoint>> {
-    reqwest::get(make_circulating_supply_data_url())
-        .await?
-        .error_for_status()?
+    reqwest::get(url)
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
         .json::<Vec<GlassnodeDataPoint>>()
         .await
+        .unwrap()
 }
 
-#[derive(Serialize)]
-struct EthInSmartContractsDataParams<'a> {
-    a: &'static str,
-    api_key: &'a str,
-    f: &'static str,
-    i: &'static str,
-    s: i64,
-    u: i64,
-}
+pub async fn get_locked_eth_data() -> Vec<GlassnodeDataPoint> {
+    let since = ("2015-08-07T00:00:00Z")
+        .parse::<DateTime<Utc>>()
+        .unwrap()
+        .timestamp()
+        .to_string();
+    let until = chrono::Utc::now().timestamp().to_string();
+    let url = FormatUrl::new(GLASSNODE_API)
+        .with_path_template("/v1/metrics/distribution/supply_contracts")
+        .with_query_params(vec![
+            ("a", "ETH"),
+            ("api_key", &GLASSNODE_API_KEY),
+            ("f", "JSON"),
+            ("i", "24h"),
+            ("s", &since),
+            ("u", &until),
+        ])
+        .format_url();
 
-fn make_eth_in_smart_contracts_data_url() -> String {
-    let params = EthInSmartContractsDataParams {
-        a: "ETH",
-        api_key: &*GLASSNODE_API_KEY,
-        f: "JSON",
-        i: "24h",
-        s: ("2015-08-07T00:00:00Z")
-            .parse::<DateTime<Utc>>()
-            .unwrap()
-            .timestamp(),
-        u: chrono::Utc::now().timestamp(),
-    };
-
-    format!(
-        "{GLASSNODE_API}/v1/metrics/distribution/supply_contracts?{}",
-        serde_qs::to_string(&params).unwrap()
-    )
-}
-
-pub async fn get_locked_eth_data() -> reqwest::Result<Vec<GlassnodeDataPoint>> {
-    reqwest::get(make_eth_in_smart_contracts_data_url())
-        .await?
-        .error_for_status()?
+    reqwest::get(url)
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
         .json::<Vec<GlassnodeDataPointF>>()
         .await
         .map(|data_points| {
             data_points
                 .iter()
-                .filter_map(|data_point| match data_point.v {
-                    None => None,
-                    Some(v) => Some(GlassnodeDataPoint { t: data_point.t, v }),
+                .filter(|data_point| data_point.v.is_some())
+                .map(|data_point| GlassnodeDataPoint {
+                    t: data_point.t,
+                    v: data_point
+                        .v
+                        .expect("expect data point mapping only for data points with a v"),
                 })
                 .collect()
         })
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -124,11 +101,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_locked_eth_data() {
-        get_locked_eth_data().await.unwrap();
+        get_locked_eth_data().await;
     }
 
     #[tokio::test]
     async fn test_get_circulating_supply_data() {
-        get_circulating_supply_data().await.unwrap();
+        get_circulating_supply_data().await;
     }
 }
