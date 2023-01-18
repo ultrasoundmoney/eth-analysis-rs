@@ -250,17 +250,17 @@ mod tests {
     pub async fn get_last_block_slot(executor: impl PgExecutor<'_>) -> Option<Slot> {
         sqlx::query!(
             "
-            SELECT
-                beacon_states.slot
-            FROM
-                beacon_blocks
-            JOIN
-                beacon_states
-            ON
-                beacon_states.state_root = beacon_blocks.state_root
-            ORDER BY slot DESC
-            LIMIT 1
-        ",
+                SELECT
+                    beacon_states.slot
+                FROM
+                    beacon_blocks
+                JOIN
+                    beacon_states
+                ON
+                    beacon_states.state_root = beacon_blocks.state_root
+                ORDER BY slot DESC
+                LIMIT 1
+            ",
         )
         .fetch_optional(executor)
         .await
