@@ -43,12 +43,13 @@ use chrono::TimeZone;
 use chrono::Utc;
 use lazy_static::lazy_static;
 
+#[allow(dead_code)]
+pub const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
+pub const MERGE_BLOCK_NUMBER: u64 = 15_537_394;
+
 lazy_static! {
     pub static ref LONDON_HARD_FORK_TIMESTAMP: DateTime<Utc> =
         Utc.timestamp_opt(1628166822, 0).unwrap();
     pub static ref BELLATRIX_HARD_FORK_TIMESTAMP: DateTime<Utc> =
         "2022-09-15T06:42:42Z".parse::<DateTime<Utc>>().unwrap();
 }
-
-#[allow(dead_code)]
-pub const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
