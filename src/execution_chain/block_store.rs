@@ -175,8 +175,8 @@ mod tests {
     async fn len(executor: impl PgExecutor<'_>) -> i64 {
         sqlx::query!(
             r#"
-        SELECT COUNT(*) AS "count!" FROM blocks_next
-        "#,
+            SELECT COUNT(*) AS "count!" FROM blocks_next
+            "#,
         )
         .fetch_one(executor)
         .await
@@ -204,20 +204,20 @@ mod tests {
         sqlx::query_as!(
             ExecutionBlockRow,
             r#"
-        SELECT
-            base_fee_per_gas,
-            difficulty,
-            gas_used,
-            hash,
-            number,
-            parent_hash,
-            timestamp,
-            total_difficulty::TEXT AS "total_difficulty!"
-        FROM
-            blocks_next
-        WHERE
-            number = $1
-        "#,
+            SELECT
+                base_fee_per_gas,
+                difficulty,
+                gas_used,
+                hash,
+                number,
+                parent_hash,
+                timestamp,
+                total_difficulty::TEXT AS "total_difficulty!"
+            FROM
+                blocks_next
+            WHERE
+                number = $1
+            "#,
             *block_number
         )
         .fetch_optional(executor)
@@ -269,20 +269,20 @@ mod tests {
         sqlx::query_as!(
             ExecutionBlockRow,
             r#"
-        SELECT
-            base_fee_per_gas,
-            difficulty,
-            gas_used,
-            hash,
-            number,
-            parent_hash,
-            timestamp,
-            total_difficulty::TEXT AS "total_difficulty!"
-        FROM
-            blocks_next
-        WHERE
-            hash = $1
-        "#,
+            SELECT
+                base_fee_per_gas,
+                difficulty,
+                gas_used,
+                hash,
+                number,
+                parent_hash,
+                timestamp,
+                total_difficulty::TEXT AS "total_difficulty!"
+            FROM
+                blocks_next
+            WHERE
+                hash = $1
+            "#,
             hash
         )
         .fetch_optional(executor)
