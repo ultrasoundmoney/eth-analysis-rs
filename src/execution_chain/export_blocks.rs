@@ -1,4 +1,7 @@
-use crate::{execution_chain::node::BlockNumber, log};
+use crate::{
+    execution_chain::{node::BlockNumber, LONDON_HARD_FORK_BLOCK_NUMBER},
+    log,
+};
 use std::{
     cmp::Ordering,
     fs::{self, File},
@@ -20,8 +23,6 @@ use super::{
     sync::BlockRange,
     ExecutionNode,
 };
-
-const LONDON_HARD_FORK_BLOCK_NUMBER: BlockNumber = 12965000;
 
 fn get_historic_stream(block_range: &BlockRange) -> impl Stream<Item = ExecutionNodeBlock> {
     let (mut tx, rx) = futures::channel::mpsc::channel(10);

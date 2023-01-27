@@ -8,43 +8,47 @@ use crate::{
     caching::{self, CacheKey},
     execution_chain::{BlockNumber, ExecutionNodeBlock},
     key_value_store,
-    time_frames::{LimitedTimeFrame, TimeFrame},
+    time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::WeiF64,
 };
+
+use GrowingTimeFrame::*;
 
 async fn get_base_fee_per_gas_average(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
 ) -> WeiF64 {
     match time_frame {
-        TimeFrame::SinceMerge => {
-            sqlx::query(
-                "
-                    SELECT
-                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
-                    FROM
-                        blocks
-                    WHERE
-                        mined_at >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
-                ",
-            )
-            .map(|row: PgRow| row.get::<f64, _>("average"))
-            .fetch_one(executor)
-            .await.unwrap()
-        },
-        TimeFrame::SinceBurn => {
-            warn!("getting average fee for time frame 'since_burn' is slow, and may be incorrect depending on blocks_next backfill status");
-            sqlx::query(
-                "
-                    SELECT
-                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
-                    FROM
-                        blocks
-                ",
-            )
-            .map(|row: PgRow| row.get::<f64, _>("average"))
-            .fetch_one(executor)
-            .await.unwrap()
+        TimeFrame::Growing(growing_time_frame) => match growing_time_frame {
+            SinceMerge => {
+                sqlx::query(
+                    "
+                        SELECT
+                            SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
+                        FROM
+                            blocks
+                        WHERE
+                            mined_at >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
+                    ",
+                )
+                .map(|row: PgRow| row.get::<f64, _>("average"))
+                .fetch_one(executor)
+                .await.unwrap()
+            },
+            SinceBurn => {
+                warn!("getting average fee for time frame 'since_burn' is slow, and may be incorrect depending on blocks_next backfill status");
+                sqlx::query(
+                    "
+                        SELECT
+                            SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
+                        FROM
+                            blocks
+                    ",
+                )
+                .map(|row: PgRow| row.get::<f64, _>("average"))
+                .fetch_one(executor)
+                .await.unwrap()
+            },
         },
         TimeFrame::Limited(limited_time_frame) => {
             sqlx::query(
@@ -79,7 +83,7 @@ async fn get_base_fee_per_gas_min(
     time_frame: &TimeFrame,
 ) -> (BlockNumber, WeiF64) {
     match time_frame {
-        TimeFrame::SinceMerge => {
+        TimeFrame::Growing(SinceMerge) => {
             let row = sqlx::query!(
                 r#"
                     SELECT
@@ -99,7 +103,7 @@ async fn get_base_fee_per_gas_min(
 
             (row.number, row.base_fee_per_gas as f64)
         }
-        TimeFrame::SinceBurn => {
+        TimeFrame::Growing(SinceBurn) => {
             let row = sqlx::query!(
                 r#"
                     SELECT
@@ -147,7 +151,7 @@ async fn get_base_fee_per_gas_max(
     time_frame: &TimeFrame,
 ) -> (BlockNumber, WeiF64) {
     match time_frame {
-        TimeFrame::SinceMerge => {
+        TimeFrame::Growing(SinceMerge) => {
             let row = sqlx::query!(
                 r#"
                     SELECT
@@ -167,7 +171,7 @@ async fn get_base_fee_per_gas_max(
 
             (row.number, row.base_fee_per_gas as f64)
         }
-        TimeFrame::SinceBurn => {
+        TimeFrame::Growing(SinceBurn) => {
             let row = sqlx::query!(
                 r#"
                     SELECT
@@ -282,8 +286,14 @@ pub async fn update_base_fee_stats(
             executor,
             &TimeFrame::Limited(LimitedTimeFrame::Day30),
         ),
-        get_base_fee_per_gas_stats_time_frame(executor, &TimeFrame::SinceBurn),
-        get_base_fee_per_gas_stats_time_frame(executor, &TimeFrame::SinceMerge)
+        get_base_fee_per_gas_stats_time_frame(
+            executor,
+            &TimeFrame::Growing(GrowingTimeFrame::SinceBurn)
+        ),
+        get_base_fee_per_gas_stats_time_frame(
+            executor,
+            &TimeFrame::Growing(GrowingTimeFrame::SinceMerge)
+        )
     );
 
     let base_fee_per_gas_stats = BaseFeePerGasStats {

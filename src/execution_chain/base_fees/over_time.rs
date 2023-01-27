@@ -1,18 +1,20 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use futures::try_join;
+use futures::join;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 use tracing::debug;
 
 use crate::execution_chain::BELLATRIX_HARD_FORK_TIMESTAMP;
-use crate::time_frames::LimitedTimeFrame::*;
 use crate::{
     caching::{self, CacheKey},
     execution_chain::BlockNumber,
-    time_frames::TimeFrame,
+    time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::WeiF64,
 };
+
+use GrowingTimeFrame::*;
+use LimitedTimeFrame::*;
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 struct BaseFeeAtTime {
@@ -37,9 +39,9 @@ struct BaseFeeOverTime {
 async fn get_base_fee_over_time(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
-) -> sqlx::Result<Vec<BaseFeeAtTime>> {
+) -> Vec<BaseFeeAtTime> {
     match time_frame {
-        TimeFrame::SinceMerge => {
+        TimeFrame::Growing(SinceMerge) => {
             debug!("getting base fee over time since merge is slow");
             sqlx::query(
                 "
@@ -66,8 +68,9 @@ async fn get_base_fee_over_time(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         },
-        TimeFrame::SinceBurn => {
+        TimeFrame::Growing(SinceBurn) => {
             debug!("getting base fee over time since burn is slow");
             // Getting base fees since burn is slow. ~5s as of Oct 24 2022 or 2.7M blocks.
             // To improve performance, switch to calculating aggregates once, and storing them in a
@@ -94,6 +97,7 @@ async fn get_base_fee_over_time(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
         TimeFrame::Limited(ltf @ Minute5)
         | TimeFrame::Limited(ltf @ Hour1) => {
@@ -123,6 +127,7 @@ async fn get_base_fee_over_time(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
         TimeFrame::Limited(ltf @ Day1) => {
             sqlx::query(
@@ -150,6 +155,7 @@ async fn get_base_fee_over_time(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
         TimeFrame::Limited(ltf @ Day7) => {
             sqlx::query(
@@ -177,6 +183,7 @@ async fn get_base_fee_over_time(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
         TimeFrame::Limited(ltf @ Day30) => {
             sqlx::query(
@@ -204,6 +211,7 @@ async fn get_base_fee_over_time(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
     }
 }
@@ -213,14 +221,14 @@ pub async fn update_base_fee_over_time(
     barrier: f64,
     block_number: &BlockNumber,
 ) -> Result<()> {
-    let (m5, h1, d1, d7, d30, since_burn) = try_join!(
+    let (m5, h1, d1, d7, d30, since_burn) = join!(
         get_base_fee_over_time(executor, &TimeFrame::Limited(Minute5)),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Hour1)),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Day1),),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Day7),),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Day30)),
-        get_base_fee_over_time(executor, &TimeFrame::SinceBurn)
-    )?;
+        get_base_fee_over_time(executor, &TimeFrame::Growing(SinceBurn))
+    );
 
     let base_fee_over_time = BaseFeeOverTime {
         barrier,
@@ -290,8 +298,7 @@ mod tests {
             &mut transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
-        .await
-        .unwrap();
+        .await;
 
         assert_eq!(
             base_fees_d1,
@@ -320,9 +327,8 @@ mod tests {
         execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
         execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
 
-        let base_fees_h1 = get_base_fee_over_time(&mut transaction, &TimeFrame::Limited(Hour1))
-            .await
-            .unwrap();
+        let base_fees_h1 =
+            get_base_fee_over_time(&mut transaction, &TimeFrame::Limited(Hour1)).await;
 
         assert_eq!(
             base_fees_h1,

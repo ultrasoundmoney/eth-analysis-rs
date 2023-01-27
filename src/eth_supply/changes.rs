@@ -7,11 +7,15 @@ use sqlx::{PgExecutor, PgPool};
 use crate::{
     beacon_chain::{Slot, FIRST_POST_LONDON_SLOT, FIRST_POST_MERGE_SLOT},
     performance::TimedExt,
-    time_frames::{LimitedTimeFrame, TimeFrame},
+    time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::WeiNewtype,
 };
 
 use super::SupplyParts;
+
+use GrowingTimeFrame::*;
+use LimitedTimeFrame::*;
+use TimeFrame::*;
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct SupplyChange {
@@ -98,7 +102,7 @@ async fn from_time_frame(
             })
             .context("query supply from balance")
         }
-        TimeFrame::SinceBurn => {
+        TimeFrame::Growing(SinceBurn) => {
             let supply_change = SupplyChange::new(
                 FIRST_POST_LONDON_SLOT,
                 LONDON_SLOT_SUPPLY_ESTIMATE,
@@ -107,7 +111,7 @@ async fn from_time_frame(
             );
             Ok(Some(supply_change))
         }
-        TimeFrame::SinceMerge => {
+        TimeFrame::Growing(SinceMerge) => {
             let supply_change =
                 SupplyChange::new(FIRST_POST_MERGE_SLOT, MERGE_SLOT_SUPPLY, *slot, to_supply);
             Ok(Some(supply_change))
@@ -125,17 +129,24 @@ impl<'a> SupplyChangesStore<'a> {
     }
 
     pub async fn get(&self, slot: &Slot, supply_parts: &SupplyParts) -> Result<SupplyChanges> {
-        use LimitedTimeFrame::*;
-        use TimeFrame::*;
-
         let (m5, h1, d1, d7, d30, since_burn, since_merge) = try_join!(
             from_time_frame(self.db_pool, &Limited(Minute5), slot, supply_parts.supply()),
             from_time_frame(self.db_pool, &Limited(Hour1), slot, supply_parts.supply()),
             from_time_frame(self.db_pool, &Limited(Day1), slot, supply_parts.supply()),
             from_time_frame(self.db_pool, &Limited(Day7), slot, supply_parts.supply()),
             from_time_frame(self.db_pool, &Limited(Day30), slot, supply_parts.supply()),
-            from_time_frame(self.db_pool, &SinceBurn, slot, supply_parts.supply()),
-            from_time_frame(self.db_pool, &SinceMerge, slot, supply_parts.supply()),
+            from_time_frame(
+                self.db_pool,
+                &Growing(SinceBurn),
+                slot,
+                supply_parts.supply()
+            ),
+            from_time_frame(
+                self.db_pool,
+                &Growing(SinceMerge),
+                slot,
+                supply_parts.supply()
+            ),
         )?;
 
         let supply_changes = SupplyChanges {

@@ -1,14 +1,20 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use futures::try_join;
+use futures::join;
 use serde::Serialize;
 use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, PgPool, Row};
 use tracing::debug;
 
-use crate::time_frames::LimitedTimeFrame::*;
 use crate::units::EthF64;
-use crate::{beacon_chain::Slot, execution_chain::BlockNumber, time_frames::TimeFrame};
+use crate::{
+    beacon_chain::Slot,
+    execution_chain::BlockNumber,
+    time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
+};
+
+use GrowingTimeFrame::*;
+use LimitedTimeFrame::*;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 struct SupplyAtTime {
@@ -20,9 +26,9 @@ struct SupplyAtTime {
 async fn get_supply_over_time_time_frame(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
-) -> sqlx::Result<Vec<SupplyAtTime>> {
+) -> Vec<SupplyAtTime> {
     match time_frame {
-        TimeFrame::SinceBurn => {
+        TimeFrame::Growing(SinceBurn) => {
             sqlx::query(
                 "
                     -- We select only one row per day, using ORDER BY to make sure it's the first.
@@ -47,8 +53,9 @@ async fn get_supply_over_time_time_frame(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         },
-        TimeFrame::SinceMerge => {
+        TimeFrame::Growing(SinceMerge) => {
             sqlx::query(
                 "
                     SELECT
@@ -73,6 +80,7 @@ async fn get_supply_over_time_time_frame(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
         TimeFrame::Limited(ltf @ Minute5)
         | TimeFrame::Limited(ltf @ Hour1) => {
@@ -105,6 +113,7 @@ async fn get_supply_over_time_time_frame(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
         TimeFrame::Limited(ltf @ Day1) => {
             sqlx::query(
@@ -132,6 +141,7 @@ async fn get_supply_over_time_time_frame(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
         TimeFrame::Limited(ltf @ Day7) => {
             sqlx::query(
@@ -159,6 +169,7 @@ async fn get_supply_over_time_time_frame(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
         TimeFrame::Limited(ltf @ Day30) => {
             sqlx::query(
@@ -186,6 +197,7 @@ async fn get_supply_over_time_time_frame(
             })
             .fetch_all(executor)
             .await
+            .unwrap()
         }
     }
 }
@@ -211,15 +223,15 @@ pub async fn get_supply_over_time(
 ) -> Result<SupplyOverTime> {
     debug!("updating supply over time");
 
-    let (d1, d30, d7, h1, m5, since_merge, since_burn) = try_join!(
+    let (d1, d30, d7, h1, m5, since_merge, since_burn) = join!(
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day1)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day30)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day7)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Hour1)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Minute5)),
-        get_supply_over_time_time_frame(executor, &TimeFrame::SinceMerge),
-        get_supply_over_time_time_frame(executor, &TimeFrame::SinceBurn)
-    )?;
+        get_supply_over_time_time_frame(executor, &TimeFrame::Growing(SinceMerge)),
+        get_supply_over_time_time_frame(executor, &TimeFrame::Growing(SinceBurn))
+    );
 
     let supply_over_time = SupplyOverTime {
         block_number,
@@ -272,9 +284,7 @@ mod tests {
             .unwrap();
 
         let since_merge =
-            get_supply_over_time_time_frame(&mut transaction, &TimeFrame::Limited(Minute5))
-                .await
-                .unwrap();
+            get_supply_over_time_time_frame(&mut transaction, &TimeFrame::Limited(Minute5)).await;
 
         assert_eq!(since_merge, vec![test_supply_at_time]);
     }
