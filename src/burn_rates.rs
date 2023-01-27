@@ -1,76 +1,78 @@
+use serde::Serialize;
+
 use crate::burn_totals::BurnTotals;
-use crate::execution_chain::LONDON_HARDFORK_TIMESTAMP;
+use crate::time_frames::GrowingTimeFrame;
 use crate::time_frames::LimitedTimeFrame;
-use chrono::Duration;
-use chrono::Utc;
 
 type EthPerMinute = f64;
 
+#[derive(Debug, Serialize)]
 pub struct BurnRates {
-    all: EthPerMinute,
     d1: EthPerMinute,
     d30: EthPerMinute,
     d7: EthPerMinute,
     h1: EthPerMinute,
     m5: EthPerMinute,
+    since_burn: EthPerMinute,
+    since_merge: EthPerMinute,
 }
 
-fn get_burn_rate_limited_time_frame(
-    burn_totals: &BurnTotals,
-    limited_time_frame: LimitedTimeFrame,
-) -> f64 {
-    burn_totals.get_by_limited_time_frame(&limited_time_frame) as f64
-        / Into::<Duration>::into(limited_time_frame).num_minutes() as f64
-}
+impl From<BurnTotals> for BurnRates {
+    fn from(burn_totals: BurnTotals) -> Self {
+        let BurnTotals {
+            d1,
+            d30,
+            d7,
+            h1,
+            m5,
+            since_burn,
+            since_merge,
+        } = burn_totals;
 
-fn get_burn_rate_all(burn_totals: &BurnTotals) -> f64 {
-    let duration_since_london = Utc::now() - *LONDON_HARDFORK_TIMESTAMP;
-    burn_totals.all as f64 / duration_since_london.num_minutes() as f64
-}
+        let d1 = d1.0 as f64 / LimitedTimeFrame::Day1.duration().num_minutes() as f64;
+        let d30 = d30.0 as f64 / LimitedTimeFrame::Day30.duration().num_minutes() as f64;
+        let d7 = d7.0 as f64 / LimitedTimeFrame::Day7.duration().num_minutes() as f64;
+        let h1 = h1.0 as f64 / LimitedTimeFrame::Hour1.duration().num_minutes() as f64;
+        let m5 = m5.0 as f64 / LimitedTimeFrame::Minute5.duration().num_minutes() as f64;
+        let since_burn =
+            since_burn.0 as f64 / (GrowingTimeFrame::SinceBurn.duration()).num_minutes() as f64;
+        let since_merge =
+            since_merge.0 as f64 / (GrowingTimeFrame::SinceMerge.duration()).num_minutes() as f64;
 
-pub fn get_burn_rates(burn_totals: BurnTotals) -> BurnRates {
-    BurnRates {
-        all: get_burn_rate_all(&burn_totals),
-        m5: get_burn_rate_limited_time_frame(&burn_totals, LimitedTimeFrame::Minute5),
-        h1: get_burn_rate_limited_time_frame(&burn_totals, LimitedTimeFrame::Hour1),
-        d1: get_burn_rate_limited_time_frame(&burn_totals, LimitedTimeFrame::Day1),
-        d7: get_burn_rate_limited_time_frame(&burn_totals, LimitedTimeFrame::Day7),
-        d30: get_burn_rate_limited_time_frame(&burn_totals, LimitedTimeFrame::Day30),
+        BurnRates {
+            d1,
+            d30,
+            d7,
+            h1,
+            m5,
+            since_burn,
+            since_merge,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::units::EthNewtype;
+
     use super::*;
 
     #[tokio::test]
-    async fn burn_rate_all_test() {
+    async fn burn_rates_test() {
         let burn_totals = BurnTotals {
-            all: 100,
-            d1: 100,
-            d30: 100,
-            d7: 100,
-            h1: 100,
-            m5: 100,
+            d1: EthNewtype(100.0),
+            d30: EthNewtype(100.0),
+            d7: EthNewtype(100.0),
+            h1: EthNewtype(100.0),
+            m5: EthNewtype(100.0),
+            since_burn: EthNewtype(100.0),
+            since_merge: EthNewtype(100.0),
         };
-        let burn_rate_all = get_burn_rate_all(&burn_totals);
 
-        assert!(burn_rate_all > 0.0 && burn_rate_all < 1.0);
-    }
+        let burn_rates: BurnRates = burn_totals.into();
 
-    #[tokio::test]
-    async fn burn_rate_limited_time_frame_test() {
-        let burn_totals = BurnTotals {
-            all: 100,
-            d1: 100,
-            d30: 100,
-            d7: 100,
-            h1: 100,
-            m5: 100,
-        };
-        let burn_rate_m5 =
-            get_burn_rate_limited_time_frame(&burn_totals, LimitedTimeFrame::Minute5);
-
-        assert!(burn_rate_m5 > 0.0 && burn_rate_m5 <= 20.0);
+        assert!(burn_rates.since_burn > 0.0 && burn_rates.since_burn < 1.0);
+        assert!(burn_rates.since_merge > 0.0 && burn_rates.since_merge < 1.0);
+        assert_eq!(burn_rates.m5, 20.0);
     }
 }

@@ -1,11 +1,14 @@
 use std::{fmt::Display, ops::Add};
 
+use serde::Serialize;
+
 use super::{GweiNewtype, WeiNewtype};
 
 /// This type tracks an amount of ETH. It is likely you'd want to a more precise type such as
 /// GweiNewtype or WeiNewtype instead. Converting to ETH only at the last moment if imprecise is
 /// fine.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(transparent)]
 pub struct EthNewtype(pub f64);
 
 impl EthNewtype {
