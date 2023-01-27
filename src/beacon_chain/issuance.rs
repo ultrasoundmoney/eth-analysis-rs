@@ -6,7 +6,7 @@
 //! As an experiment this module exposes a Store trait and a Postgres implementation of it. Using
 //! this interface with transactions is an unsolved problem.
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, DurationRound, Utc};
+use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
 use sqlx::{PgExecutor, PgPool};
@@ -15,7 +15,6 @@ use tracing::info;
 use crate::{
     caching::{self, CacheKey},
     db,
-    supply_projection::GweiInTime,
     units::GweiNewtype,
 };
 
@@ -47,33 +46,6 @@ pub fn calc_issuance(
     deposit_sum_aggregated: &GweiNewtype,
 ) -> GweiNewtype {
     *validator_balances_sum_gwei - *deposit_sum_aggregated
-}
-
-pub async fn get_issuance_by_start_of_day(pool: impl PgExecutor<'_>) -> Vec<GweiInTime> {
-    sqlx::query!(
-        r#"
-            SELECT
-                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS "day_timestamp!",
-                gwei
-            FROM
-                beacon_issuance
-            ORDER BY
-                DATE_TRUNC('day', timestamp), timestamp ASC
-        "#
-    )
-    .fetch_all(pool)
-    .await
-    .map(|rows|  {
-        rows.iter()
-        .map(|row| {
-            GweiInTime {
-                t: row.day_timestamp.duration_trunc(Duration::days(1) ).unwrap().timestamp() as u64,
-                v: row.gwei
-            }
-        })
-        .collect()
-    })
-    .unwrap()
 }
 
 pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
@@ -240,11 +212,38 @@ pub async fn update_issuance_estimate() {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{TimeZone, Utc};
+    use chrono::{Duration, DurationRound, TimeZone, Utc};
     use sqlx::Acquire;
 
     use super::*;
-    use crate::{beacon_chain::states::store_state, db};
+    use crate::{beacon_chain::states::store_state, db, supply_projection::GweiInTime};
+
+    pub async fn get_issuance_by_start_of_day(pool: impl PgExecutor<'_>) -> Vec<GweiInTime> {
+        sqlx::query!(
+            r#"
+            SELECT
+                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS "day_timestamp!",
+                gwei
+            FROM
+                beacon_issuance
+            ORDER BY
+                DATE_TRUNC('day', timestamp), timestamp ASC
+            "#
+        )
+            .fetch_all(pool)
+            .await
+            .map(|rows|  {
+                rows.iter()
+                    .map(|row| {
+                        GweiInTime {
+                            t: row.day_timestamp.duration_trunc(Duration::days(1) ).unwrap().timestamp() as u64,
+                            v: row.gwei
+                        }
+                    })
+                .collect()
+            })
+        .unwrap()
+    }
 
     #[test]
     fn calc_issuance_test() {
