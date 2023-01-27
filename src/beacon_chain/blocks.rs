@@ -156,7 +156,7 @@ pub async fn get_block_before_slot(executor: impl PgExecutor<'_>, less_than: &Sl
     .into()
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DbBlock {
     block_root: String,
     deposit_sum: GweiNewtype,

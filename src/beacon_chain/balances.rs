@@ -122,7 +122,7 @@ pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
     .unwrap();
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BeaconBalancesSum {
     pub slot: Slot,

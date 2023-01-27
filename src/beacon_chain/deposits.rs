@@ -29,7 +29,7 @@ pub async fn get_deposit_sum_aggregated(
     parent_deposit_sum_aggregated + get_deposit_sum_from_block(block)
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BeaconDepositsSum {
     pub deposits_sum: GweiNewtype,
