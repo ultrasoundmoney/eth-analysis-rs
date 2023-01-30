@@ -25,7 +25,7 @@ use crate::{
     usd_price,
 };
 
-use super::{node::Head, BlockNumber, BlockRange};
+use super::{block_range::BlockRange, block_store, node::Head, BlockNumber};
 
 async fn rollback_numbers(executor: impl PgExecutor<'_>, greater_than_or_equal: &BlockNumber) {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
@@ -71,7 +71,7 @@ enum NextStep {
 async fn get_next_step(db_pool: &PgPool, head: &Head) -> NextStep {
     // Between the time we received the head event and requested a header for the given
     // block_root the block may have disappeared. Right now we panic, we could do better.
-    let is_parent_known = execution_chain::get_is_parent_hash_known(
+    let is_parent_known = block_store::get_is_parent_hash_known(
         &mut db_pool.acquire().await.unwrap(),
         &head.parent_hash,
     )
@@ -81,7 +81,7 @@ async fn get_next_step(db_pool: &PgPool, head: &Head) -> NextStep {
         return NextStep::HandleGap;
     }
 
-    let is_fork_block = execution_chain::get_is_number_known(db_pool, &head.number).await;
+    let is_fork_block = block_store::get_is_number_known(db_pool, &head.number).await;
 
     if is_fork_block {
         return NextStep::HandleHeadFork;

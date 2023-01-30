@@ -1,3 +1,5 @@
+use super::BlockNumber;
+
 #[derive(Clone)]
 pub struct BlockRange {
     pub greater_than_or_equal: BlockNumber,
