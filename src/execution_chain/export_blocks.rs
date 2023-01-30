@@ -20,8 +20,7 @@ use crate::execution_chain::sync::EXECUTION_BLOCK_NUMBER_AUG_1ST;
 
 use super::{
     node::{Difficulty, ExecutionNodeBlock, TotalDifficulty},
-    sync::BlockRange,
-    ExecutionNode,
+    BlockRange, ExecutionNode,
 };
 
 fn get_historic_stream(block_range: &BlockRange) -> impl Stream<Item = ExecutionNodeBlock> {

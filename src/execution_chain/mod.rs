@@ -1,6 +1,7 @@
 mod balances;
 mod base_fees;
-mod block_store;
+mod block_range;
+pub mod block_store;
 mod export_blocks;
 mod logs;
 mod node;
@@ -9,6 +10,8 @@ mod sync;
 
 pub use balances::get_execution_balances_by_hash;
 pub use balances::ExecutionBalancesSum;
+
+pub use block_range::BlockRange;
 
 pub use block_store::delete_blocks;
 pub use block_store::get_is_number_known;
