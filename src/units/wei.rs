@@ -11,7 +11,7 @@ use super::{EthNewtype, GweiNewtype, WEI_PER_ETH};
 
 pub type WeiF64 = f64;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]
 pub struct WeiNewtype(pub i128);
@@ -67,10 +67,11 @@ impl FromStr for WeiNewtype {
     }
 }
 
-impl From<String> for WeiNewtype {
-    fn from(string: String) -> Self {
-        let amount = i128::from_str(&string).expect("failed to parse wei");
-        WeiNewtype(amount)
+impl TryFrom<String> for WeiNewtype {
+    type Error = ParseIntError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse::<i128>().map(WeiNewtype)
     }
 }
 
