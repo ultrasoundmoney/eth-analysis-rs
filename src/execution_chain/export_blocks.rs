@@ -94,10 +94,8 @@ async fn write_blocks_from(gte_block_number: BlockNumber, to_path: &str) -> Resu
 
     debug!("done loading eth prices");
 
-    let mut historic_stream = get_historic_stream(&BlockRange {
-        greater_than_or_equal: gte_block_number,
-        less_than_or_equal: EARLIEST_STORED_DB_BLOCK_NUMBER,
-    });
+    let block_range = BlockRange::new(gte_block_number, EARLIEST_STORED_DB_BLOCK_NUMBER);
+    let mut historic_stream = get_historic_stream(&block_range);
 
     let mut progress = Progress::new(
         "write blocks",
