@@ -180,6 +180,19 @@ impl FromStr for TimeFrame {
     }
 }
 
+impl Display for TimeFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use GrowingTimeFrame::*;
+        use TimeFrame::*;
+
+        match self {
+            Growing(SinceBurn) => write!(f, "since-burn"),
+            Growing(SinceMerge) => write!(f, "since-merge"),
+            Limited(limited_time_frame) => write!(f, "{}", limited_time_frame),
+        }
+    }
+}
+
 static TIME_FRAMES: [TimeFrame; 7] = [
     TimeFrame::Limited(Minute5),
     TimeFrame::Limited(Hour1),
