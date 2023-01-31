@@ -17,7 +17,7 @@ use GrowingTimeFrame::*;
 use LimitedTimeFrame::*;
 use TimeFrame::*;
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct SupplyChange {
     from_slot: Slot,
     from_timestamp: DateTime<Utc>,

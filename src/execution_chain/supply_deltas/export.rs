@@ -58,20 +58,20 @@ pub async fn summary_from_deltas_csv() {
     tracing::info!("generating summary from deltas csv");
 
     let mut eth_prices_csv = csv::Reader::from_path("supply_deltas_1662636045.csv").unwrap();
-    let mut iter = eth_prices_csv.deserialize::<SupplyDeltaRowV1>();
+    let iter = eth_prices_csv.deserialize::<SupplyDeltaRowV1>();
 
     let mut sum = GENESIS_ETH_BALANCE;
     let mut self_destruct_count = 0u32;
     let mut self_destruct_sum = 0i128;
 
-    while let Some(row) = iter.next() {
+    for row in iter {
         let row = row.unwrap();
 
-        sum = sum + row.supply_delta;
-        self_destruct_sum = self_destruct_sum + row.self_destruct;
+        sum += row.supply_delta;
+        self_destruct_sum += row.self_destruct;
 
         if row.self_destruct != 0 {
-            self_destruct_count = self_destruct_count + 1;
+            self_destruct_count += 1;
         }
 
         if row.block_number == STOP_AT_BLOCK_NUMBER {

@@ -16,7 +16,7 @@ use crate::units::Wei;
 
 use super::node::BlockNumber;
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SupplyDelta {
     pub block_hash: String,
     pub block_number: BlockNumber,

@@ -136,7 +136,7 @@ pub fn stream_supply_deltas_from(
     let (mut tx, rx) = futures::channel::mpsc::unbounded();
 
     tokio::spawn(async move {
-        let url = format!("{}", &*EXECUTION_URL);
+        let url = (*EXECUTION_URL).to_string();
         let mut ws = connect_async(&url).await.unwrap().0;
 
         let deltas_subscribe_message = {
@@ -230,7 +230,7 @@ pub enum SupplyDeltaByBlockNumberError {
 pub async fn get_supply_delta_by_block_number(
     block_number: BlockNumber,
 ) -> Result<SupplyDelta, SupplyDeltaByBlockNumberError> {
-    let url = format!("{}", *EXECUTION_URL);
+    let url = (*EXECUTION_URL).to_string();
     let mut ws = connect_async(&url).await.unwrap().0;
 
     let deltas_subscribe_message = make_supply_delta_subscribe_message_v2(&(block_number));

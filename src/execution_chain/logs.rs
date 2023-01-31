@@ -38,7 +38,7 @@ pub async fn write_heads_log() {
         let is_jumping_ahead =
             !seen_block_hashes.is_empty() && !seen_block_hashes.contains(&head.parent_hash);
 
-        seen_block_heights.insert(head.number.clone());
+        seen_block_heights.insert(head.number);
         seen_block_hashes.insert(head.hash.clone());
 
         let head_log = HeadLog {

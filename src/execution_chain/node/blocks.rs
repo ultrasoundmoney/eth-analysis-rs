@@ -15,7 +15,7 @@ pub type TotalDifficulty = u128;
 /// Hash for a block on the execution layer.
 pub type BlockHash = String;
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionNodeBlock {
     pub hash: BlockHash,

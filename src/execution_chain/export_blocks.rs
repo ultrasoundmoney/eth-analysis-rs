@@ -34,7 +34,7 @@ fn get_historic_stream(block_range: &BlockRange) -> impl Stream<Item = Execution
                 .get_block_by_number(&block_number)
                 .await
                 .unwrap();
-            tx.send(block.into()).await.unwrap();
+            tx.send(block).await.unwrap();
         }
     });
 
@@ -107,7 +107,7 @@ async fn write_blocks_from(gte_block_number: BlockNumber, to_path: &str) -> Resu
     let file = fs::OpenOptions::new()
         .append(true)
         .create(true)
-        .open(&to_path)
+        .open(to_path)
         .unwrap();
     let mut csv_writer = csv::Writer::from_writer(file);
 
@@ -231,7 +231,7 @@ pub async fn write_blocks_from_london() -> Result<()> {
     match file {
         Err(_err) => {
             info!("first run, starting at london hardfork");
-            write_blocks_from(LONDON_HARD_FORK_BLOCK_NUMBER, &file_path).await?;
+            write_blocks_from(LONDON_HARD_FORK_BLOCK_NUMBER, file_path).await?;
         }
         Ok(file) => {
             // Because we interrupt the writing sometimes the last row may be malformed, if a file
@@ -250,7 +250,7 @@ pub async fn write_blocks_from_london() -> Result<()> {
                 .map(|row: Result<OutRow, _>| row.unwrap().number)
                 .unwrap_or(LONDON_HARD_FORK_BLOCK_NUMBER);
             info!(last_stored_block_number, "picking up from previous run");
-            write_blocks_from(last_stored_block_number + 1, &file_path).await?;
+            write_blocks_from(last_stored_block_number + 1, file_path).await?;
         }
     };
 

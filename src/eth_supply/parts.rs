@@ -11,7 +11,7 @@ use crate::{
 };
 
 // Remove deprecated fields after frontend switches over.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupplyParts {
     #[deprecated = "switch to beacon_balances_sum_next"]

@@ -42,7 +42,7 @@ pub async fn write_deltas_log() {
         let is_jumping_ahead =
             !seen_block_hashes.is_empty() && !seen_block_hashes.contains(&supply_delta.parent_hash);
 
-        seen_block_heights.insert(supply_delta.block_number.clone());
+        seen_block_heights.insert(supply_delta.block_number);
         seen_block_hashes.insert(supply_delta.block_hash.clone());
 
         let supply_delta_log = SupplyDeltaLog {

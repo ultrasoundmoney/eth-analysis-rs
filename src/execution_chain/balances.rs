@@ -10,14 +10,14 @@ use crate::units::WeiNewtype;
 
 use super::BlockNumber;
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionBalancesSum {
     pub block_number: BlockNumber,
     pub balances_sum: WeiNewtype,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ExecutionSupply {
     pub block_number: BlockNumber,
     pub balances_sum: WeiNewtype,
