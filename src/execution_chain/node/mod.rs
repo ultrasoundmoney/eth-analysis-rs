@@ -34,6 +34,9 @@ pub use blocks::Difficulty;
 pub use blocks::ExecutionNodeBlock;
 pub use blocks::TotalDifficulty;
 
+#[cfg(test)]
+pub use blocks::tests::ExecutionNodeBlockBuilder;
+
 lazy_static! {
     // TODO: set to normal GETH_URL (not supply delta fork)
     static ref EXECUTION_URL: String = env::get_env_var_unsafe("GETH_URL");

@@ -248,3 +248,36 @@ impl<'a> BurnSumStore<'a> {
         .unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::execution_chain::{block_store, ExecutionNodeBlockBuilder};
+    use crate::time_frames::{GrowingTimeFrame, TimeFrame};
+
+    use TimeFrame::*;
+
+    use super::*;
+
+    #[sqlx::test]
+    fn burn_sum_from_time_frame_test(pool: PgPool) {
+        let burn_sum_store = BurnSumStore::new(&pool);
+
+        let test_id = "burn_sum_from_time_frame";
+
+        let block_1 = ExecutionNodeBlockBuilder::new(test_id)
+            .with_burn(100)
+            .build();
+        let block_2 = ExecutionNodeBlockBuilder::from_parent(&block_1)
+            .with_burn(200)
+            .build();
+
+        block_store::store_block(&pool, &block_1, 0.0).await;
+        block_store::store_block(&pool, &block_2, 0.0).await;
+
+        let burn_sum = burn_sum_store
+            .burn_sum_from_time_frame(&Growing(GrowingTimeFrame::SinceBurn), &block_2)
+            .await;
+
+        assert_eq!(burn_sum, WeiNewtype::from(300));
+    }
+}

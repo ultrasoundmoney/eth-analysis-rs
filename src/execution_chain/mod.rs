@@ -31,6 +31,9 @@ pub use node::ExecutionNode;
 pub use node::ExecutionNodeBlock;
 pub use node::TotalDifficulty;
 
+#[cfg(test)]
+pub use node::ExecutionNodeBlockBuilder;
+
 pub use supply_deltas::add_delta;
 pub use supply_deltas::stream_supply_delta_chunks;
 pub use supply_deltas::stream_supply_deltas_from;

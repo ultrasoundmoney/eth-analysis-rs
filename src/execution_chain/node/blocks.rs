@@ -37,3 +37,85 @@ pub struct ExecutionNodeBlock {
     #[serde(deserialize_with = "from_u64_hex_str")]
     pub base_fee_per_gas: u64,
 }
+
+#[cfg(test)]
+pub mod tests {
+    use crate::time_frames::GrowingTimeFrame::*;
+
+    use super::*;
+
+    pub struct ExecutionNodeBlockBuilder {
+        hash: String,
+        number: BlockNumber,
+        parent_hash: String,
+        timestamp: DateTime<Utc>,
+        gas_used: i32,
+        base_fee_per_gas: u64,
+    }
+
+    impl ExecutionNodeBlockBuilder {
+        pub fn new(test_id: &str) -> Self {
+            let hash = format!("0x{test_id}_block_hash");
+
+            Self {
+                timestamp: SinceMerge.start(),
+                number: 0,
+                hash,
+                parent_hash: "0x0".to_string(),
+                gas_used: 0,
+                base_fee_per_gas: 0,
+            }
+        }
+
+        pub fn from_parent(parent: &ExecutionNodeBlock) -> Self {
+            let number = parent.number + 1;
+            let parent_hash = parent.hash.to_string();
+            let hash = format!("{parent_hash}_{number}");
+
+            Self {
+                timestamp: parent.timestamp + chrono::Duration::seconds(12),
+                number,
+                hash,
+                parent_hash,
+                gas_used: 0,
+                base_fee_per_gas: 0,
+            }
+        }
+
+        pub fn with_hash(mut self, hash: &str) -> Self {
+            self.hash = hash.to_string();
+            self
+        }
+
+        pub fn with_number(mut self, number: BlockNumber) -> Self {
+            self.number = number;
+            self
+        }
+
+        pub fn with_burn(mut self, burn: u64) -> Self {
+            self.gas_used = 10;
+            self.base_fee_per_gas = burn / 10;
+            self
+        }
+
+        pub fn with_parent(mut self, parent: &ExecutionNodeBlock) -> Self {
+            self.parent_hash = parent.hash.to_string();
+            self.number = parent.number + 1;
+            self.timestamp = parent.timestamp + chrono::Duration::seconds(12);
+            self
+        }
+
+        pub fn build(&self) -> ExecutionNodeBlock {
+            ExecutionNodeBlock {
+                base_fee_per_gas: self.base_fee_per_gas,
+                difficulty: 0,
+                gas_used: self.gas_used,
+                hash: self.hash.clone(),
+                number: self.number,
+                parent_hash: self.parent_hash.clone(),
+                timestamp: self.timestamp,
+                total_difficulty: 1,
+            }
+        }
+    }
+}
