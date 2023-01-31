@@ -15,6 +15,10 @@ impl BlockRange {
 
         Self { lowest, highest }
     }
+
+    pub fn count(&self) -> usize {
+        (self.highest - self.lowest + 1) as usize
+    }
 }
 
 pub struct BlockRangeIntoIterator {

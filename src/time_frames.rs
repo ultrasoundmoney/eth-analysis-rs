@@ -9,7 +9,7 @@ use crate::execution_chain::{BELLATRIX_HARD_FORK_TIMESTAMP, LONDON_HARD_FORK_TIM
 use GrowingTimeFrame::*;
 use LimitedTimeFrame::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LimitedTimeFrame {
     Day1,
     Day30,
@@ -127,7 +127,7 @@ impl Display for LimitedTimeFrame {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GrowingTimeFrame {
     SinceBurn,
     SinceMerge,
@@ -152,7 +152,7 @@ impl From<&GrowingTimeFrame> for Duration {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TimeFrame {
     Growing(GrowingTimeFrame),
     Limited(LimitedTimeFrame),

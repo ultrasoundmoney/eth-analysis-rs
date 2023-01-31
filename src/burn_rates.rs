@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::burn_totals::BurnTotals;
+use crate::burn_sums::BurnSums;
 use crate::time_frames::GrowingTimeFrame;
 use crate::time_frames::LimitedTimeFrame;
 
@@ -17,9 +17,9 @@ pub struct BurnRates {
     since_merge: EthPerMinute,
 }
 
-impl From<BurnTotals> for BurnRates {
-    fn from(burn_totals: BurnTotals) -> Self {
-        let BurnTotals {
+impl From<&BurnSums> for BurnRates {
+    fn from(burn_totals: &BurnSums) -> Self {
+        let BurnSums {
             d1,
             d30,
             d7,
@@ -59,7 +59,7 @@ mod tests {
 
     #[tokio::test]
     async fn burn_rates_test() {
-        let burn_totals = BurnTotals {
+        let burn_totals = BurnSums {
             d1: EthNewtype(100.0),
             d30: EthNewtype(100.0),
             d7: EthNewtype(100.0),
@@ -69,7 +69,7 @@ mod tests {
             since_merge: EthNewtype(100.0),
         };
 
-        let burn_rates: BurnRates = burn_totals.into();
+        let burn_rates: BurnRates = (&burn_totals).into();
 
         assert!(burn_rates.since_burn > 0.0 && burn_rates.since_burn < 1.0);
         assert!(burn_rates.since_merge > 0.0 && burn_rates.since_merge < 1.0);

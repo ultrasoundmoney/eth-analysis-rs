@@ -1,6 +1,6 @@
 mod beacon_chain;
 mod burn_rates;
-mod burn_totals;
+mod burn_sums;
 mod caching;
 mod data_integrity;
 mod db;

@@ -29,6 +29,7 @@ pub use node::BlockHash;
 pub use node::BlockNumber;
 pub use node::ExecutionNode;
 pub use node::ExecutionNodeBlock;
+pub use node::TotalDifficulty;
 
 pub use supply_deltas::add_delta;
 pub use supply_deltas::stream_supply_delta_chunks;

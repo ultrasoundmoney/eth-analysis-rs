@@ -8,7 +8,7 @@
 
 use anyhow::Result;
 use futures::{SinkExt, Stream, StreamExt};
-use sqlx::{PgExecutor, PgPool};
+use sqlx::PgPool;
 use std::{
     collections::VecDeque,
     iter::Iterator,
@@ -18,7 +18,7 @@ use tracing::{debug, event, info, warn, Level};
 
 use crate::{
     beacon_chain::{IssuanceStore, IssuanceStorePostgres},
-    db,
+    burn_sums, db,
     execution_chain::{self, base_fees, ExecutionNode},
     log,
     performance::TimedExt,
@@ -27,9 +27,15 @@ use crate::{
 
 use super::{block_range::BlockRange, block_store, node::Head, BlockNumber};
 
-async fn rollback_numbers(executor: impl PgExecutor<'_>, greater_than_or_equal: &BlockNumber) {
+async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber) {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
-    execution_chain::delete_blocks(executor, greater_than_or_equal).await;
+
+    let mut transaction = db_pool.begin().await.unwrap();
+
+    burn_sums::on_rollback(&mut transaction, greater_than_or_equal).await;
+    execution_chain::delete_blocks(&mut transaction, greater_than_or_equal).await;
+
+    transaction.commit();
 }
 
 async fn sync_by_hash(
@@ -59,6 +65,7 @@ async fn sync_by_hash(
     if is_synced {
         debug!("we're synced, running on_new_head for skippables");
         base_fees::on_new_block(db_pool, issuance_store, &block).await;
+        burn_sums::on_new_block(db_pool, &block).await;
     }
 }
 
