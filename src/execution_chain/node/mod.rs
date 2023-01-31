@@ -2,12 +2,6 @@ mod blocks;
 mod decoders;
 mod heads;
 
-pub use blocks::BlockHash;
-pub use blocks::BlockNumber;
-pub use blocks::Difficulty;
-pub use blocks::ExecutionNodeBlock;
-pub use blocks::TotalDifficulty;
-
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
@@ -24,7 +18,6 @@ use futures::{
     prelude::*,
     stream::{SplitSink, SplitStream},
 };
-pub use heads::Head;
 use heads::NewHeadMessage;
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -32,6 +25,14 @@ use serde_json::{json, Value};
 use tokio::net::TcpStream;
 
 use crate::env;
+
+pub use heads::Head;
+
+pub use blocks::BlockHash;
+pub use blocks::BlockNumber;
+pub use blocks::Difficulty;
+pub use blocks::ExecutionNodeBlock;
+pub use blocks::TotalDifficulty;
 
 lazy_static! {
     // TODO: set to normal GETH_URL (not supply delta fork)
@@ -93,7 +94,7 @@ impl IdPool {
         }
 
         while self.in_use_ids.contains(&self.next_id) {
-            self.next_id = self.next_id + 1;
+            self.next_id += 1;
         }
 
         self.in_use_ids.insert(self.next_id);
@@ -110,7 +111,7 @@ pub fn stream_new_heads() -> impl Stream<Item = Head> {
     let (mut new_heads_tx, new_heads_rx) = mpsc::unbounded();
 
     tokio::spawn(async move {
-        let url = format!("{}", *EXECUTION_URL);
+        let url = (*EXECUTION_URL).to_string();
         let mut ws = connect_async(&url).await.unwrap().0;
 
         let new_heads_subscribe_message = make_new_heads_subscribe_message();
@@ -120,7 +121,7 @@ pub fn stream_new_heads() -> impl Stream<Item = Head> {
             .unwrap();
 
         loop {
-            if let Some(_) = ws.next().await {
+            if (ws.next().await).is_some() {
                 tracing::debug!("got subscription confirmation message");
                 break;
             }
@@ -205,7 +206,7 @@ impl ExecutionNode {
 
         let message_handlers_am = Arc::new(Mutex::new(HashMap::with_capacity(u16::MAX.into())));
 
-        let url = format!("{}", &*EXECUTION_URL);
+        let url = (*EXECUTION_URL).to_string();
         let (ws_tx, ws_rx) = connect_async(&url).await.unwrap().0.split();
 
         // We'd like to read websocket messages concurrently so we read in a thread.
