@@ -193,25 +193,27 @@ impl Display for TimeFrame {
     }
 }
 
-static TIME_FRAMES: [TimeFrame; 7] = [
-    TimeFrame::Limited(Minute5),
-    TimeFrame::Limited(Hour1),
-    TimeFrame::Limited(Day1),
-    TimeFrame::Limited(Day7),
-    TimeFrame::Limited(Day30),
-    TimeFrame::Growing(SinceBurn),
-    TimeFrame::Growing(SinceMerge),
-];
-
-impl TimeFrame {
-    pub fn iterator() -> Iter<'static, TimeFrame> {
-        TIME_FRAMES.iter()
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::slice::Iter;
+
     use super::*;
+
+    static TIME_FRAMES: [TimeFrame; 7] = [
+        TimeFrame::Limited(Minute5),
+        TimeFrame::Limited(Hour1),
+        TimeFrame::Limited(Day1),
+        TimeFrame::Limited(Day7),
+        TimeFrame::Limited(Day30),
+        TimeFrame::Growing(SinceBurn),
+        TimeFrame::Growing(SinceMerge),
+    ];
+
+    impl TimeFrame {
+        pub fn iterator() -> Iter<'static, TimeFrame> {
+            TIME_FRAMES.iter()
+        }
+    }
 
     #[test]
     fn time_frame_iter_test() {

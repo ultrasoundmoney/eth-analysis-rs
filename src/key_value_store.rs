@@ -66,23 +66,6 @@ pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Val
     Ok(())
 }
 
-pub async fn set_value_str<'a>(executor: impl PgExecutor<'a>, key: &str, value_str: &str) {
-    debug!(key = key, "storing key value pair");
-
-    sqlx::query!(
-        "
-            INSERT INTO key_value_store (key, value) VALUES ($1, $2::jsonb)
-            ON CONFLICT (key) DO UPDATE SET
-                value = excluded.value
-        ",
-        key,
-        value_str.to_string() as String
-    )
-    .execute(executor)
-    .await
-    .unwrap();
-}
-
 #[cfg(test)]
 mod tests {
     use serde::{Deserialize, Serialize};
@@ -145,33 +128,6 @@ mod tests {
         let test_json_from_db = serde_json::from_value::<Option<String>>(value).unwrap();
 
         assert_eq!(test_json_from_db, None)
-    }
-
-    #[tokio::test]
-    async fn set_value_str_test() {
-        let mut connection = db::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
-
-        let test_json = TestJson {
-            name: "alex".to_string(),
-            age: 29,
-        };
-
-        let test_json_str = serde_json::to_string(&json!({
-            "name": "alex",
-            "age": 29
-        }))
-        .unwrap();
-
-        set_value_str(&mut transaction, "test-key", &test_json_str).await;
-
-        let value = get_value(&mut transaction, "test-key")
-            .await
-            .unwrap()
-            .unwrap();
-        let test_json_from_db = serde_json::from_value::<TestJson>(value).unwrap();
-
-        assert_eq!(test_json_from_db, test_json)
     }
 
     #[tokio::test]
