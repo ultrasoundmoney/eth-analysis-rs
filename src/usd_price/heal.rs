@@ -37,7 +37,7 @@ pub async fn heal_eth_prices() {
     .await
     .unwrap();
 
-    if eth_prices.len() == 0 {
+    if eth_prices.is_empty() {
         panic!("no eth prices found, are you running against a DB with prices?")
     }
 

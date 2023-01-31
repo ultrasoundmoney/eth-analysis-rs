@@ -18,7 +18,7 @@ pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> sqlx::Result
     .await?;
     // .map(|row: PgRow| row.get::<Option<Value>, _>("value"))
 
-    Ok(row.map(|row| row.value).flatten())
+    Ok(row.and_then(|row| row.value))
 }
 
 pub async fn get_deserializable_value<T>(

@@ -1,4 +1,4 @@
-use std::{fmt::Display, slice::Iter, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Duration, Utc};
 use sqlx::postgres::types::PgInterval;
@@ -9,7 +9,7 @@ use crate::execution_chain::{BELLATRIX_HARD_FORK_TIMESTAMP, LONDON_HARD_FORK_TIM
 use GrowingTimeFrame::*;
 use LimitedTimeFrame::*;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LimitedTimeFrame {
     Day1,
     Day30,
@@ -59,7 +59,7 @@ impl LimitedTimeFrame {
         }
     }
 
-    pub fn to_db_key(&self) -> &'_ str {
+    pub fn to_db_key(self) -> &'static str {
         match self {
             Day1 => "d1",
             Day30 => "d1",
@@ -127,7 +127,7 @@ impl Display for LimitedTimeFrame {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GrowingTimeFrame {
     SinceBurn,
     SinceMerge,
@@ -152,7 +152,7 @@ impl From<&GrowingTimeFrame> for Duration {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimeFrame {
     Growing(GrowingTimeFrame),
     Limited(LimitedTimeFrame),

@@ -167,7 +167,7 @@ async fn update_eth_price_with_most_recent(
         let eth_price_stats = EthPriceStats {
             timestamp: last_price.timestamp,
             usd: last_price.usd,
-            h24_change: calc_h24_change(&last_price, &price_h24_ago),
+            h24_change: calc_h24_change(last_price, &price_h24_ago),
         };
 
         key_value_store::set_value(
@@ -320,7 +320,7 @@ pub async fn resync_all() {
     }
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum GetEthPriceError {
     #[error("closest price to given block was more than 5min away")]
     PriceTooOld,
@@ -495,8 +495,8 @@ mod tests {
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
-        store_price(&mut *tx, Utc::now(), 5.2).await;
-        let ethusd = get_eth_price_by_block(&mut *tx, &test_block).await.unwrap();
+        store_price(&mut tx, Utc::now(), 5.2).await;
+        let ethusd = get_eth_price_by_block(&mut tx, &test_block).await.unwrap();
 
         assert_eq!(ethusd, 5.2);
     }
@@ -507,8 +507,8 @@ mod tests {
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
-        store_price(&mut *tx, Utc::now() - Duration::minutes(21), 5.2).await;
-        let ethusd = get_eth_price_by_block(&mut *tx, &test_block).await;
+        store_price(&mut tx, Utc::now() - Duration::minutes(21), 5.2).await;
+        let ethusd = get_eth_price_by_block(&mut tx, &test_block).await;
         assert_eq!(ethusd, Err(GetEthPriceError::PriceTooOld));
     }
 
@@ -518,9 +518,9 @@ mod tests {
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
-        store_price(&mut *tx, Utc::now() - Duration::minutes(6), 4.0).await;
+        store_price(&mut tx, Utc::now() - Duration::minutes(6), 4.0).await;
         let ethusd = get_eth_price_by_block(
-            &mut *tx,
+            &mut tx,
             &ExecutionNodeBlock {
                 timestamp: Utc::now() - Duration::minutes(10),
                 ..test_block

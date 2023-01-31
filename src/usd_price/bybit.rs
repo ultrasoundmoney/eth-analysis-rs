@@ -82,10 +82,7 @@ pub async fn get_eth_price() -> reqwest::Result<EthPrice> {
         .map(|cs| cs.last().unwrap().to_owned())
 }
 
-fn find_closest_price<'a>(
-    prices: &'a [EthPrice],
-    target_minute_rounded: DateTime<Utc>,
-) -> &'a EthPrice {
+fn find_closest_price(prices: &[EthPrice], target_minute_rounded: DateTime<Utc>) -> &'_ EthPrice {
     let mut best_distance = None;
     let mut best_candidate = None;
 
@@ -129,7 +126,7 @@ pub async fn get_closest_price_by_minute(
 
     let candles = get_eth_candles(start, end).await.unwrap();
 
-    if candles.len() == 0 {
+    if candles.is_empty() {
         None
     } else {
         let closest_price = find_closest_price(&candles, target_minute_rounded);

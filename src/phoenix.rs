@@ -74,7 +74,7 @@ impl Alarm {
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            HeaderValue::from_static(&*OPSGENIE_AUTH_HEADER),
+            HeaderValue::from_static(&OPSGENIE_AUTH_HEADER),
         );
 
         let res = self
@@ -161,7 +161,7 @@ async fn run_health_check_server(last_checked: Arc<Mutex<DateTime<Utc>>>) {
         }),
     );
 
-    let port = env::get_env_var("PORT").unwrap_or("8080".to_string());
+    let port = env::get_env_var("PORT").unwrap_or_else(|| "8080".to_string());
     let socket_addr = format!("0.0.0.0:{port}").parse().unwrap();
     info!(%socket_addr, "starting health check server");
     Server::bind(&socket_addr)
@@ -209,7 +209,7 @@ async fn run_alarm_loop(last_checked: Arc<Mutex<DateTime<Utc>>>) {
     loop {
         for phoenix in phoenixes.iter_mut() {
             if phoenix.is_age_over_limit() {
-                alarm.fire_dashboard_stalled(&phoenix.name).await;
+                alarm.fire_dashboard_stalled(phoenix.name).await;
             }
 
             let current = phoenix.monitor.refresh().await;

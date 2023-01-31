@@ -113,10 +113,9 @@ pub async fn run_cli() -> Result<()> {
         .default(0)
         .interact()?;
 
-    match target {
-        0 => set_eth_in_defi().await?,
-        _ => (),
-    };
+    if target == 0 {
+        set_eth_in_defi().await?
+    }
 
     term.write_line("goodbye!")?;
 

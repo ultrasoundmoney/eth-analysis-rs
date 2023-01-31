@@ -35,7 +35,7 @@ async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber)
     burn_sums::on_rollback(&mut transaction, greater_than_or_equal).await;
     execution_chain::delete_blocks(&mut transaction, greater_than_or_equal).await;
 
-    transaction.commit();
+    transaction.commit().await.unwrap();
 }
 
 async fn sync_by_hash(

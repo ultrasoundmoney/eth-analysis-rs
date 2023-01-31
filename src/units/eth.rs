@@ -36,13 +36,13 @@ impl Display for EthNewtype {
 /// NOTE: this loses precision.
 impl From<GweiNewtype> for EthNewtype {
     fn from(GweiNewtype(amount): GweiNewtype) -> Self {
-        EthNewtype((amount as f64 / EthNewtype::GWEI_PER_ETH as f64).into())
+        EthNewtype(amount as f64 / EthNewtype::GWEI_PER_ETH as f64)
     }
 }
 
 /// NOTE: this loses precision.
 impl From<WeiNewtype> for EthNewtype {
     fn from(WeiNewtype(amount): WeiNewtype) -> Self {
-        EthNewtype((amount as f64 / EthNewtype::WEI_PER_ETH as f64).into())
+        EthNewtype(amount as f64 / EthNewtype::WEI_PER_ETH as f64)
     }
 }

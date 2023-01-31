@@ -387,7 +387,7 @@ mod tests {
 
         let is_hash_known = get_is_hash_known(&mut transaction, "0xnot_there").await;
 
-        assert_eq!(is_hash_known, false);
+        assert!(!is_hash_known);
     }
 
     #[tokio::test]
@@ -410,7 +410,7 @@ mod tests {
         let is_hash_known =
             get_is_hash_known(&mut transaction, &supply_delta_test.block_hash).await;
 
-        assert_eq!(is_hash_known, true);
+        assert!(is_hash_known);
     }
 
     #[tokio::test]
@@ -420,7 +420,7 @@ mod tests {
 
         let is_block_number_known = get_is_block_number_known(&mut transaction, &0).await;
 
-        assert_eq!(is_block_number_known, false);
+        assert!(!is_block_number_known);
     }
 
     #[tokio::test]
@@ -443,7 +443,7 @@ mod tests {
         let is_block_number_known =
             get_is_block_number_known(&mut transaction, &supply_delta.block_number).await;
 
-        assert_eq!(is_block_number_known, true);
+        assert!(is_block_number_known);
     }
 
     #[tokio::test]
