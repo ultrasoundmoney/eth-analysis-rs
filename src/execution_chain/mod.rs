@@ -48,6 +48,7 @@ use chrono::Utc;
 use lazy_static::lazy_static;
 
 pub const LONDON_HARD_FORK_BLOCK_NUMBER: BlockNumber = 12965000;
+#[allow(dead_code)]
 pub const MERGE_BLOCK_NUMBER: i32 = 15_537_394;
 #[allow(dead_code)]
 pub const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;

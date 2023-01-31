@@ -492,36 +492,10 @@ pub mod tests {
     }
 
     impl BeaconBlockBuilder {
-        // pub fn new(state_root: &str) -> Self {
-        //     Self {
-        //         deposits: vec![],
-        //         parent_root: GENESIS_PARENT_ROOT.to_owned(),
-        //         slot: 0,
-        //         state_root: state_root.to_string(),
-        //         block_hash: None,
-        //     }
-        // }
-
         pub fn block_hash(mut self, block_hash: &str) -> Self {
             self.block_hash = Some(block_hash.to_string());
             self
         }
-
-        // pub fn parent_header(mut self, parent_header: &BeaconHeaderSignedEnvelope) -> Self {
-        //     self.parent_root = parent_header.root.to_owned();
-        //     self.slot = parent_header.slot();
-        //     self
-        // }
-
-        // pub fn parent_root(mut self, parent_root: &str) -> Self {
-        //     self.parent_root = parent_root.to_owned();
-        //     self
-        // }
-
-        // pub fn slot(mut self, slot: &Slot) -> Self {
-        //     self.slot = *slot;
-        //     self
-        // }
 
         pub fn build(self) -> BeaconBlock {
             let deposits = self

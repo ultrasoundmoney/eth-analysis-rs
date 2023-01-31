@@ -29,15 +29,6 @@ pub async fn get_test_db_connection() -> sqlx::PgConnection {
 }
 
 #[cfg(test)]
-pub async fn get_test_db_pool() -> sqlx::PgPool {
-    if !DB_URL.contains("testdb") {
-        panic!("tried to run tests against db that is not 'testdb'");
-    }
-
-    PgPool::connect(&DB_URL).await.unwrap()
-}
-
-#[cfg(test)]
 pub fn get_test_db_url() -> String {
     let url = get_db_url_with_name("testing");
     if !url.contains("testdb") {
