@@ -51,7 +51,7 @@ impl<'a> BurnSumStore<'a> {
                     FROM
                         blocks_next
                     WHERE
-                        timestamp >= $1 AND timestamp < $1 - $2::INTERVAL
+                        timestamp >= $1::TIMESTAMPTZ - $2::INTERVAL AND timestamp <= $1
                 "#,
                 block.timestamp,
                 limited_time_frame.postgres_interval()
