@@ -836,6 +836,22 @@
     },
     "query": "\n                SELECT\n                    slot,\n                    state_root\n                FROM\n                    beacon_states\n                WHERE\n                    slot >= $1\n                AND\n                    slot <= $2\n                ORDER BY\n                    slot ASC\n            "
   },
+  "977091bc9e425dc261ee83130b390e600e69abf4b7e8cf4df52cdd6dec7ed7ec": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Int4",
+          "Text",
+          "Timestamptz",
+          "Numeric"
+        ]
+      }
+    },
+    "query": "\n                INSERT INTO burn_sums (\n                    time_frame,\n                    block_number,\n                    block_hash,\n                    timestamp,\n                    sum\n                ) VALUES (\n                    $1,\n                    $2,\n                    $3,\n                    $4,\n                    $5::NUMERIC\n                )\n            "
+  },
   "98198e4a1b074e7bcecc21a84f8cffa036865925ff1e10d0be5a84d4fb9be589": {
     "describe": {
       "columns": [
