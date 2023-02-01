@@ -66,6 +66,8 @@ async fn sync_by_hash(
         debug!("we're synced, running on_new_head for skippables");
         base_fees::on_new_block(db_pool, issuance_store, &block).await;
         burn_sums::on_new_block(db_pool, &block).await;
+    } else {
+        debug!("not synced, skipping skippables");
     }
 }
 
@@ -113,7 +115,7 @@ async fn sync_head(
             .into(),
     };
 
-    debug!("sync head from number: {}", head_event.number);
+    debug!(number = head_event.number, "sync head");
 
     match get_next_step(db_pool, &head_event).await {
         NextStep::HandleGap => {
