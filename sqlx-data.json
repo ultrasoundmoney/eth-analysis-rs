@@ -389,27 +389,6 @@
     },
     "query": "\n                    SELECT\n                        number,\n                        base_fee_per_gas AS \"base_fee_per_gas!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= NOW() - $1::INTERVAL\n                    ORDER BY base_fee_per_gas DESC\n                    LIMIT 1\n                "
   },
-  "4ed4aa6611435d6b03f29552e19bfac78d851b2c4e3b66423a69b041e74a3b90": {
-    "describe": {
-      "columns": [
-        {
-          "name": "burn_sum!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4",
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n            FROM\n                blocks_next\n            WHERE\n                number >= $1 AND number <= $2\n            "
-  },
   "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
     "describe": {
       "columns": [
@@ -809,6 +788,27 @@
     },
     "query": "\n                    SELECT\n                        number,\n                        base_fee_per_gas AS \"base_fee_per_gas!\"\n                    FROM\n                        blocks\n                    ORDER BY base_fee_per_gas DESC\n                    LIMIT 1\n                "
   },
+  "8d77f90c7615dda4c120f1ce42cac40384fbfeec4fb785b5502daece1409c74f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "burn_sum!",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n                FROM\n                    blocks_next\n                WHERE\n                    number >= $1 AND number <= $2\n            "
+  },
   "8ecdb845a8d20242d267393d5c79173f8de281f872a806ec2dd85f49d1c675fc": {
     "describe": {
       "columns": [
@@ -967,22 +967,6 @@
       }
     },
     "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks\n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot = $1\n        "
-  },
-  "a289130a8beefcb2c9ed8e2ebc0eb9c2338794a070f283bd8dd6955b34dedf5c": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Int4",
-          "Text",
-          "Timestamptz",
-          "Numeric"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO burn_sums (\n                time_frame,\n                block_number,\n                block_hash,\n                timestamp,\n                sum\n            ) VALUES (\n                $1,\n                $2,\n                $3,\n                $4,\n                $5::NUMERIC\n            )\n            "
   },
   "a941d512bdd0663097e3dc75ded6f308e8798ebf3002fbc8f9fe46938af8ed38": {
     "describe": {
@@ -1228,27 +1212,7 @@
     },
     "query": "\n            WITH\n              issuance_distances AS (\n                SELECT\n                  gwei,\n                  timestamp,\n                  ABS(\n                    EXTRACT(\n                      epoch\n                      FROM\n                        (timestamp - (NOW() - '7 days':: INTERVAL))\n                    )\n                  ) AS distance_seconds\n                FROM\n                  beacon_issuance\n                ORDER BY\n                  distance_seconds ASC\n              )\n            SELECT gwei\n            FROM issuance_distances \n            WHERE distance_seconds <= 86400\n            LIMIT 1\n        "
   },
-  "e8a528475bace67d89f5d1865cdb007ac63f4f152cf66a55bff87fda7d84759b": {
-    "describe": {
-      "columns": [
-        {
-          "name": "burn_sum!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n                    SELECT\n                        SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= $1\n                "
-  },
-  "ebd324d92be79407ea22d6d7216a1124392f666038ff97e2dde279c7904aff39": {
+  "e6ddfd9c55b799fdfd94bd5a3e28d0420f4f09206edb2405764ccbff112744b5": {
     "describe": {
       "columns": [
         {
@@ -1284,7 +1248,27 @@
         ]
       }
     },
-    "query": "\n            SELECT\n                block_number,\n                block_hash,\n                timestamp,\n                sum::TEXT AS \"sum!\"\n            FROM burn_sums\n            WHERE time_frame = $1\n            ORDER BY block_number DESC\n            LIMIT 1\n            "
+    "query": "\n                SELECT\n                    block_number,\n                    block_hash,\n                    timestamp,\n                    sum::TEXT AS \"sum!\"\n                FROM burn_sums\n                WHERE time_frame = $1\n                ORDER BY block_number DESC\n                LIMIT 1\n            "
+  },
+  "e8a528475bace67d89f5d1865cdb007ac63f4f152cf66a55bff87fda7d84759b": {
+    "describe": {
+      "columns": [
+        {
+          "name": "burn_sum!",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n                    SELECT\n                        SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= $1\n                "
   },
   "f19d62204ffdb70367e90b6f5ca7fe64efe01776f90d3c8a86e8594b765c142b": {
     "describe": {
