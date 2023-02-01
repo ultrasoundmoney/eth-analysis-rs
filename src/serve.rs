@@ -354,6 +354,22 @@ pub async fn start_server() -> Result<()> {
                 }),
             )
             .route(
+                "/api/v2/fees/burn-sums",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.burn_sums)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/v2/fees/burn-rates",
+                get(|state: StateExtension| async move {
+                    get_cached(&state.clone().cache.burn_rates)
+                        .await
+                        .into_response()
+                }),
+            )
+            .route(
                 "/api/v2/fees/healthz",
                 get(|state: StateExtension| async move {
                     let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
