@@ -93,12 +93,12 @@ impl<'a> BurnSumStore<'a> {
     pub async fn burn_sum_from_block_range(&self, block_range: &BlockRange) -> WeiNewtype {
         sqlx::query!(
             r#"
-            SELECT
-                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS "burn_sum!"
-            FROM
-                blocks_next
-            WHERE
-                number >= $1 AND number <= $2
+                SELECT
+                    SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS "burn_sum!"
+                FROM
+                    blocks_next
+                WHERE
+                    number >= $1 AND number <= $2
             "#,
             block_range.lowest,
             block_range.highest
@@ -132,15 +132,15 @@ impl<'a> BurnSumStore<'a> {
     pub async fn last_burn_sum(&self, time_frame: &TimeFrame) -> Option<BurnSumRecord> {
         let row = sqlx::query!(
             r#"
-            SELECT
-                block_number,
-                block_hash,
-                timestamp,
-                sum::TEXT AS "sum!"
-            FROM burn_sums
-            WHERE time_frame = $1
-            ORDER BY block_number DESC
-            LIMIT 1
+                SELECT
+                    block_number,
+                    block_hash,
+                    timestamp,
+                    sum::TEXT AS "sum!"
+                FROM burn_sums
+                WHERE time_frame = $1
+                ORDER BY block_number DESC
+                LIMIT 1
             "#,
             time_frame.to_string()
         )
@@ -160,19 +160,19 @@ impl<'a> BurnSumStore<'a> {
     async fn store_burn_sum(&self, burn_sum: &BurnSumRecord) {
         sqlx::query!(
             "
-            INSERT INTO burn_sums (
-                time_frame,
-                block_number,
-                block_hash,
-                timestamp,
-                sum
-            ) VALUES (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5::NUMERIC
-            )
+                INSERT INTO burn_sums (
+                    time_frame,
+                    block_number,
+                    block_hash,
+                    timestamp,
+                    sum
+                ) VALUES (
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5::NUMERIC
+                )
             ",
             burn_sum.time_frame.to_string(),
             burn_sum.block_number,
