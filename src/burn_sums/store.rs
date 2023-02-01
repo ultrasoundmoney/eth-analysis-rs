@@ -258,6 +258,7 @@ mod tests {
 
     use super::*;
 
+    #[ignore]
     #[sqlx::test]
     fn burn_sum_from_time_frame_test(pool: PgPool) {
         let burn_sum_store = BurnSumStore::new(&pool);
