@@ -84,7 +84,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_set_value_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_json = TestJson {
@@ -110,7 +110,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_null_value_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         set_value(
@@ -132,7 +132,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_set_serializable_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_json = TestJson {

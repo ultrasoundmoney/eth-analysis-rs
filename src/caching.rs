@@ -160,14 +160,14 @@ mod tests {
     // notifications fire on the "cache-update" channel. Needs a test DB to work reliably.
     #[tokio::test]
     async fn test_publish_cache_update() {
-        let mut listener = sqlx::postgres::PgListener::connect(&db::get_test_db_url())
+        let mut listener = sqlx::postgres::PgListener::connect(&db::tests::get_test_db_url())
             .await
             .unwrap();
         listener.listen("cache-update").await.unwrap();
 
         let notification_future = async { listener.recv().await };
 
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
 
         publish_cache_update(&mut connection, &CacheKey::EffectiveBalanceSum)
             .await
@@ -183,7 +183,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_raw_caching_value_test() -> Result<()> {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_json = TestJson {
@@ -210,7 +210,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_set_caching_value_test() -> Result<()> {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_json = TestJson {

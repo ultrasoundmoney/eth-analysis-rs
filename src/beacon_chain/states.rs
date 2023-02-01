@@ -99,7 +99,7 @@ mod tests {
 
     #[tokio::test]
     async fn store_state_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &Slot(0)).await;
@@ -117,7 +117,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_state_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root_1", &Slot(0)).await;
@@ -137,7 +137,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_state_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xstate_root", &Slot(0)).await;
@@ -153,7 +153,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_state_root_by_slot_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest", &Slot(0)).await;

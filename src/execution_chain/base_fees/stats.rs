@@ -346,7 +346,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_average_fee_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_block_1 = ExecutionNodeBlock {
@@ -377,7 +377,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_average_fee_within_range_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_block_in_range = ExecutionNodeBlock {
@@ -410,7 +410,7 @@ mod tests {
 
     #[tokio::test]
     async fn base_fee_per_gas_min_max_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_block_1 = ExecutionNodeBlock {

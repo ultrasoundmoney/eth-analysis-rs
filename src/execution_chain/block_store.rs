@@ -228,7 +228,7 @@ mod tests {
 
     #[tokio::test]
     async fn store_block_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
@@ -240,7 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_blocks_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
         store_block(&mut tx, &test_block, 0.0).await;
@@ -293,7 +293,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_block_by_hash_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
@@ -304,7 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_block_by_number_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
@@ -315,7 +315,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_first_parent_hash_known_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
 
         let is_parent_known = get_is_parent_hash_known(&mut tx, "0xnotthere").await;
@@ -324,7 +324,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_parent_hash_known_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
@@ -335,7 +335,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_is_number_known_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
@@ -346,7 +346,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_empty_last_block_number_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
 
         assert_eq!(get_last_block_number(&mut *tx,).await, None);
@@ -354,7 +354,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_last_block_number_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 
@@ -365,7 +365,7 @@ mod tests {
 
     #[tokio::test]
     async fn is_empty_empty_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
 
         assert!(is_empty(&mut tx,).await);
@@ -373,7 +373,7 @@ mod tests {
 
     #[tokio::test]
     async fn is_empty_not_empty_test() {
-        let mut db = db::get_test_db_connection().await;
+        let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
         let test_block = make_test_block();
 

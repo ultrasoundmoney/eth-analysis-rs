@@ -67,7 +67,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_execution_supply_by_hash_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "get_balances_by_hash";

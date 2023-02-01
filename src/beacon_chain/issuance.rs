@@ -258,7 +258,7 @@ mod tests {
 
     #[tokio::test]
     async fn timestamp_is_start_of_day_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "timestamp_is_start_of_day";
@@ -282,7 +282,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_current_issuance_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance_1", &Slot(3599)).await;
@@ -312,7 +312,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_issuance_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_issuance", &Slot(3599)).await;
@@ -338,7 +338,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_day7_ago_issuance_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let now_min_seven_days_slot =

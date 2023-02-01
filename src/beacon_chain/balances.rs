@@ -168,7 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn timestamp_is_start_of_day_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_balances", &Slot(17999)).await;
@@ -197,7 +197,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_balance_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         store_state(&mut transaction, "0xtest_balances", &Slot(17999)).await;
@@ -221,7 +221,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_balances_by_state_root_test() {
-        let mut connection = db::get_test_db_connection().await;
+        let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
         let test_id = "get_balances_by_state_root";
