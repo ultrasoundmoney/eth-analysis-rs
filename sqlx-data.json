@@ -158,27 +158,6 @@
     },
     "query": "\n            DELETE FROM\n                eth_supply\n            WHERE\n                deposits_slot >= $1\n                OR balances_slot >= $1\n        "
   },
-  "20ecf2b815368483309f4b4d57a4e358ae6410955ad06588db17537f1e0f9a95": {
-    "describe": {
-      "columns": [
-        {
-          "name": "burn_sum!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Interval"
-        ]
-      }
-    },
-    "query": "\n                    SELECT \n                        SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= $1 AND timestamp < $1 - $2::INTERVAL\n                "
-  },
   "262e7c58ea23ae1e7b2694ff084a5594b35d80df367844abb6fc0ad7b56ac0a9": {
     "describe": {
       "columns": [],
@@ -388,6 +367,27 @@
       }
     },
     "query": "\n                    SELECT\n                        number,\n                        base_fee_per_gas AS \"base_fee_per_gas!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= NOW() - $1::INTERVAL\n                    ORDER BY base_fee_per_gas DESC\n                    LIMIT 1\n                "
+  },
+  "4cd58dc184875f6bb223f8adc70d5ee5361a2e79983c23c71c250209e688498a": {
+    "describe": {
+      "columns": [
+        {
+          "name": "burn_sum!",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n                    SELECT \n                        SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= $1::TIMESTAMPTZ - $2::INTERVAL AND timestamp <= $1\n                "
   },
   "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
     "describe": {
