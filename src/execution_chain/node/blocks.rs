@@ -68,27 +68,16 @@ pub mod tests {
         }
 
         pub fn from_parent(parent: &ExecutionNodeBlock) -> Self {
+            let parent_hash = parent.hash.clone();
             let number = parent.number + 1;
-            let parent_hash = parent.hash.to_string();
             let hash = format!("{parent_hash}_{number}");
-
-            Self {
-                timestamp: parent.timestamp + chrono::Duration::seconds(12),
-                number,
-                hash,
-                parent_hash,
-                gas_used: 0,
-                base_fee_per_gas: 0,
-            }
+            Self::new("from_parent")
+                .with_hash(&hash)
+                .with_parent(parent)
         }
 
         pub fn with_hash(mut self, hash: &str) -> Self {
             self.hash = hash.to_string();
-            self
-        }
-
-        pub fn with_number(mut self, number: BlockNumber) -> Self {
-            self.number = number;
             self
         }
 
