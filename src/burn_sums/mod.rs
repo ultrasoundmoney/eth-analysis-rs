@@ -36,28 +36,20 @@
 
 mod store;
 
-use chrono::DateTime;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
-use sqlx::PgConnection;
-use sqlx::PgPool;
-use tracing::debug;
-use tracing::info;
+use sqlx::{PgConnection, PgPool};
+use tracing::{debug, info};
 
-use crate::burn_rates::BurnRates;
-use crate::caching;
-use crate::caching::CacheKey;
-use crate::execution_chain::BlockNumber;
-use crate::execution_chain::BlockRange;
-use crate::execution_chain::ExecutionNodeBlock;
-use crate::time_frames::GrowingTimeFrame;
-use crate::time_frames::LimitedTimeFrame;
-use crate::time_frames::TimeFrame;
-use crate::units::EthNewtype;
-use crate::units::WeiNewtype;
-
-use store::BurnSumStore;
+use crate::{
+    burn_rates::BurnRates,
+    burn_sums::store::BurnSumStore,
+    caching::{self, CacheKey},
+    execution_chain::{BlockNumber, BlockRange, ExecutionNodeBlock},
+    time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
+    units::{EthNewtype, WeiNewtype},
+};
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct BurnSums {
