@@ -251,17 +251,21 @@ impl<'a> BurnSumStore<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::execution_chain::{block_store, ExecutionNodeBlockBuilder};
-    use crate::time_frames::{GrowingTimeFrame, TimeFrame};
+    use crate::{
+        db::tests::TestDb,
+        execution_chain::{block_store, ExecutionNodeBlockBuilder},
+        time_frames::{GrowingTimeFrame, TimeFrame},
+    };
 
     use TimeFrame::*;
 
     use super::*;
 
-    #[ignore]
-    #[sqlx::test]
-    fn burn_sum_from_time_frame_test(pool: PgPool) {
-        let burn_sum_store = BurnSumStore::new(&pool);
+    #[tokio::test]
+    async fn burn_sum_from_time_frame_test() {
+        let test_db = TestDb::new().await;
+        let pool = test_db.pool();
+        let burn_sum_store = BurnSumStore::new(pool);
 
         let test_id = "burn_sum_from_time_frame";
 
@@ -272,8 +276,8 @@ mod tests {
             .with_burn(200)
             .build();
 
-        block_store::store_block(&pool, &block_1, 0.0).await;
-        block_store::store_block(&pool, &block_2, 0.0).await;
+        block_store::store_block(pool, &block_1, 0.0).await;
+        block_store::store_block(pool, &block_2, 0.0).await;
 
         let burn_sum = burn_sum_store
             .burn_sum_from_time_frame(&Growing(GrowingTimeFrame::SinceBurn), &block_2)
