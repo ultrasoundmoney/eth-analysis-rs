@@ -14,6 +14,7 @@ impl<'a> BlockStore<'a> {
         Self { db_pool }
     }
 
+    #[allow(dead_code)]
     pub async fn block_number_exists(&self, block_number: &BlockNumber) -> bool {
         sqlx::query!(
             r#"
@@ -31,6 +32,7 @@ impl<'a> BlockStore<'a> {
         .exists
     }
 
+    #[allow(dead_code)]
     pub async fn block_hash_exists(&self, block_hash: &str) -> bool {
         sqlx::query!(
             r#"
@@ -48,6 +50,7 @@ impl<'a> BlockStore<'a> {
         .exists
     }
 
+    #[allow(dead_code)]
     pub async fn delete_blocks_from_range(&self, block_range: &BlockRange) {
         sqlx::query!(
             "
@@ -66,6 +69,7 @@ impl<'a> BlockStore<'a> {
         .unwrap();
     }
 
+    #[allow(dead_code)]
     pub async fn store_block(&self, block: &ExecutionNodeBlock, eth_price: f64) {
         block_store::store_block(self.db_pool, block, eth_price).await
     }
@@ -97,14 +101,15 @@ impl<'a> BlockStore<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::execution_chain::ExecutionNodeBlockBuilder;
+    use crate::{db::tests::TestDb, execution_chain::ExecutionNodeBlockBuilder};
 
     use super::*;
 
-    #[sqlx::test]
-    async fn block_number_exists_test(pool: PgPool) {
+    #[tokio::test]
+    async fn block_number_exists_test() {
+        let test_db = TestDb::new().await;
         let test_id = "block_number_exists";
-        let block_store = BlockStore::new(&pool);
+        let block_store = BlockStore::new(test_db.pool());
 
         let test_number = 1351;
         let test_block = ExecutionNodeBlockBuilder::new(test_id)
@@ -118,10 +123,11 @@ mod tests {
         assert!(block_store.block_number_exists(&test_number).await);
     }
 
-    #[sqlx::test]
-    async fn block_hash_exists_test(pool: PgPool) {
+    #[tokio::test]
+    async fn block_hash_exists_test() {
+        let test_db = TestDb::new().await;
         let test_id = "block_hash_exists";
-        let block_store = BlockStore::new(&pool);
+        let block_store = BlockStore::new(test_db.pool());
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
