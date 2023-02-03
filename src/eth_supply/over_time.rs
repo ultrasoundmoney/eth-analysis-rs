@@ -17,6 +17,31 @@ struct SupplyAtTime {
     timestamp: DateTime<Utc>,
 }
 
+async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> sqlx::Result<SupplyAtTime> {
+    sqlx::query(
+        "
+            SELECT
+                timestamp,
+                supply::FLOAT8 / 1e18 AS supply
+            FROM
+                eth_supply
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ",
+    )
+    .map(|row: PgRow| {
+        let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
+        let supply = row.get::<f64, _>("supply");
+        SupplyAtTime {
+            slot: None,
+            timestamp,
+            supply,
+        }
+    })
+    .fetch_one(executor)
+    .await
+}
+
 async fn get_supply_over_time_time_frame(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
@@ -211,15 +236,19 @@ pub async fn get_supply_over_time(
 ) -> Result<SupplyOverTime> {
     debug!("updating supply over time");
 
-    let (d1, d30, d7, h1, m5, since_merge, since_burn) = try_join!(
+    let (d1, d30, d7, h1, m5, mut since_merge, mut since_burn, last_supply_point) = try_join!(
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day1)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day30)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day7)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Hour1)),
         get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Minute5)),
         get_supply_over_time_time_frame(executor, &TimeFrame::SinceMerge),
-        get_supply_over_time_time_frame(executor, &TimeFrame::SinceBurn)
+        get_supply_over_time_time_frame(executor, &TimeFrame::SinceBurn),
+        get_last_supply_point(executor)
     )?;
+
+    since_merge.push(last_supply_point.clone());
+    since_burn.push(last_supply_point.clone());
 
     let supply_over_time = SupplyOverTime {
         block_number,
