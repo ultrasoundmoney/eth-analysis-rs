@@ -36,17 +36,19 @@
 
 mod store;
 
+use std::cmp::Ordering;
+
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
 use sqlx::{PgConnection, PgPool};
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::{
     burn_rates::BurnRates,
     burn_sums::store::BurnSumStore,
     caching::{self, CacheKey},
-    execution_chain::{BlockNumber, BlockRange, ExecutionNodeBlock},
+    execution_chain::{BlockNumber, BlockRange, BlockStore, ExecutionNodeBlock},
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::{EthNewtype, WeiNewtype},
 };
@@ -64,122 +66,148 @@ pub struct BurnSums {
 
 #[derive(Debug)]
 pub struct BurnSumRecord {
-    time_frame: TimeFrame,
-    block_number: BlockNumber,
-    block_hash: String,
-    timestamp: DateTime<Utc>,
+    last_included_block_hash: String,
+    first_included_block_number: BlockNumber,
+    last_included_block_number: BlockNumber,
     sum: WeiNewtype,
+    time_frame: TimeFrame,
+    timestamp: DateTime<Utc>,
 }
 
 pub async fn on_rollback(connection: &mut PgConnection, block_number_gte: &BlockNumber) {
     BurnSumStore::delete_new_sums_tx(connection, block_number_gte).await;
 }
 
-async fn expired_burn_for_time_frame(
+async fn expired_burn_from(
+    block_store: &BlockStore<'_>,
     burn_sum_store: &BurnSumStore<'_>,
     last_burn_sum: &BurnSumRecord,
+    block: &ExecutionNodeBlock,
     limited_time_frame: &LimitedTimeFrame,
-) -> WeiNewtype {
-    // The earliest blocks included in the last limited time frame sum.
-    let last_sum_earliest_timestamp = last_burn_sum.timestamp - limited_time_frame.duration();
+) -> Option<(BlockNumber, WeiNewtype)> {
+    // The first included block for the next sum may have jumped forward zero or
+    // more blocks. Meaning zero or more blocks are now considered expired but
+    // still included for this limited time frame sum.
+    let age_limit = block.timestamp - limited_time_frame.duration();
+    let first_included_block_number = block_store
+        .first_block_number_after_or_at(&age_limit)
+        .await
+        .expect(
+            "failed to get first block number after or at block.timestamp - limited_time_frame",
+        );
 
-    // The earliest block which should be excluded in the current limited time frame sum. Meaning,
-    // every block, before _but not including_ this timestamp should be removed from the sum.
-    let current_sum_earliest_timestamp = Utc::now() - limited_time_frame.duration();
+    match first_included_block_number.cmp(&last_burn_sum.first_included_block_number) {
+        Ordering::Less => {
+            // Current block number should be > the last sum's block number. So the
+            // first included block should be greater or equal too, yet the first included
+            // block number for the current block is smaller. This should be
+            // impossible.
+            panic!("first included block number for current block is smaller than the last sum's first included block number");
+        }
+        Ordering::Equal => {
+            // The last sum included the same blocks as the current block, so the
+            // new sum is the same as the last sum.
+            debug!("first included block number is the same for the current block and the last sum, no expired burn");
+            None
+        }
+        Ordering::Greater => {
+            let expired_block_range = BlockRange::new(
+                last_burn_sum.first_included_block_number,
+                first_included_block_number - 1,
+            );
 
-    debug!(
-        last_sum_earliest_timestamp = last_sum_earliest_timestamp.to_rfc3339(),
-        current_sum_earliest_timestamp = current_sum_earliest_timestamp.to_rfc3339(),
-        "calculating expired burn for time frame"
-    );
+            let expired_included_burn = burn_sum_store
+                .burn_sum_from_block_range(&expired_block_range)
+                .await;
 
-    let expired_included_burn = burn_sum_store
-        .burn_sum_from_time_range(last_sum_earliest_timestamp, current_sum_earliest_timestamp)
+            debug!(%expired_block_range, %expired_included_burn, %limited_time_frame, "subtracting expired burn");
+
+            Some((first_included_block_number, expired_included_burn))
+        }
+    }
+}
+
+async fn calc_new_burn_sum_record_from_scratch(
+    burn_sum_store: &BurnSumStore<'_>,
+    block: &ExecutionNodeBlock,
+    time_frame: &TimeFrame,
+) -> BurnSumRecord {
+    let range = BlockRange::from_last_plus_time_frame(&block.number, time_frame);
+    let sum = burn_sum_store.burn_sum_from_block_range(&range).await;
+    BurnSumRecord {
+        first_included_block_number: range.start,
+        last_included_block_hash: block.hash.clone(),
+        last_included_block_number: range.end,
+        sum,
+        time_frame: time_frame.clone(),
+        timestamp: block.timestamp,
+    }
+}
+
+async fn calc_new_burn_sum_record_from_last(
+    block_store: &BlockStore<'_>,
+    burn_sum_store: &BurnSumStore<'_>,
+    last_burn_sum: &BurnSumRecord,
+    block: &ExecutionNodeBlock,
+    time_frame: &TimeFrame,
+) -> BurnSumRecord {
+    let new_burn_range = BlockRange::from_last_plus_time_frame(&block.number, time_frame);
+    let new_burn = burn_sum_store
+        .burn_sum_from_block_range(&new_burn_range)
         .await;
 
-    let expired_block_count = burn_sum_store
-        .blocks_from_time_range(last_sum_earliest_timestamp, current_sum_earliest_timestamp)
-        .await
-        .len();
+    let expired_burn_sum = match time_frame {
+        TimeFrame::Limited(limited_time_frame) => {
+            expired_burn_from(
+                block_store,
+                burn_sum_store,
+                last_burn_sum,
+                block,
+                limited_time_frame,
+            )
+            .await
+        }
+        TimeFrame::Growing(_) => None,
+    };
 
-    debug!(
-        %limited_time_frame,
-        %last_sum_earliest_timestamp,
-        %current_sum_earliest_timestamp,
-        expired_block_count,
-        %expired_included_burn,
-        "calculated expired burn"
-    );
+    let sum = match expired_burn_sum.map(|(_, sum)| sum) {
+        Some(expired_burn_sum) => new_burn - expired_burn_sum + last_burn_sum.sum,
+        None => new_burn + last_burn_sum.sum,
+    };
 
-    expired_included_burn
+    let first_included_block_number = expired_burn_sum
+        .map(|(first_included_block_number, _)| first_included_block_number)
+        // If there is no expired burn, the first included did not change.
+        .unwrap_or(last_burn_sum.first_included_block_number);
+
+    BurnSumRecord {
+        first_included_block_number,
+        last_included_block_hash: block.hash.clone(),
+        last_included_block_number: new_burn_range.end,
+        sum,
+        time_frame: time_frame.clone(),
+        timestamp: block.timestamp,
+    }
 }
 
 async fn calc_new_burn_sum_record(
+    block_store: &BlockStore<'_>,
     burn_sum_store: &BurnSumStore<'_>,
     block: &ExecutionNodeBlock,
     time_frame: &TimeFrame,
 ) -> BurnSumRecord {
     match burn_sum_store.last_burn_sum(time_frame).await {
-        None => {
-            info!("no burn sum record found, calculating from scratch for time frame {time_frame}");
-
-            let burn_sum = burn_sum_store
-                .burn_sum_from_time_frame(time_frame, block)
-                .await;
-
-            debug!(%burn_sum, %time_frame, "new burn sum from scratch");
-
-            BurnSumRecord {
-                time_frame: *time_frame,
-                block_number: block.number,
-                block_hash: block.hash.clone(),
-                timestamp: block.timestamp,
-                sum: burn_sum,
-            }
-        }
         Some(last_burn_sum) => {
-            debug!(?last_burn_sum, "found last burn sum record");
-
-            // Add in-time-frame burn.
-            let new_range = BlockRange::new(last_burn_sum.block_number + 1, block.number);
-            let new_burn = burn_sum_store.burn_sum_from_block_range(&new_range).await;
-            debug!(
-                block_count = new_range.count(),
-                %new_burn, %time_frame, "new in-time-frame-burn"
-            );
-
-            match time_frame {
-                // If the time frame is unlimited, add the new burn.
-                TimeFrame::Growing(_) => {
-                    let new_burn_sum = last_burn_sum.sum + new_burn;
-                    BurnSumRecord {
-                        time_frame: *time_frame,
-                        block_number: block.number,
-                        block_hash: block.hash.clone(),
-                        timestamp: block.timestamp,
-                        sum: new_burn_sum,
-                    }
-                }
-                // If the time frame is limited, add the new burn and remove expired-but-included burn.
-                TimeFrame::Limited(limited_time_frame) => {
-                    let expired_included_burn = expired_burn_for_time_frame(
-                        burn_sum_store,
-                        &last_burn_sum,
-                        limited_time_frame,
-                    )
-                    .await;
-
-                    let new_burn_sum = last_burn_sum.sum + new_burn - expired_included_burn;
-                    BurnSumRecord {
-                        time_frame: *time_frame,
-                        block_number: block.number,
-                        block_hash: block.hash.clone(),
-                        timestamp: block.timestamp,
-                        sum: new_burn_sum,
-                    }
-                }
-            }
+            calc_new_burn_sum_record_from_last(
+                block_store,
+                burn_sum_store,
+                &last_burn_sum,
+                block,
+                time_frame,
+            )
+            .await
         }
+        None => calc_new_burn_sum_record_from_scratch(burn_sum_store, block, time_frame).await,
     }
 }
 
@@ -188,16 +216,17 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) {
     use LimitedTimeFrame::*;
     use TimeFrame::*;
 
+    let block_store = BlockStore::new(db_pool);
     let burn_sum_store = BurnSumStore::new(db_pool);
 
     let (since_burn, since_merge, d30, d7, d1, h1, m5) = join!(
-        calc_new_burn_sum_record(&burn_sum_store, block, &Growing(SinceBurn)),
-        calc_new_burn_sum_record(&burn_sum_store, block, &Growing(SinceMerge)),
-        calc_new_burn_sum_record(&burn_sum_store, block, &Limited(Day30)),
-        calc_new_burn_sum_record(&burn_sum_store, block, &Limited(Day7)),
-        calc_new_burn_sum_record(&burn_sum_store, block, &Limited(Day1)),
-        calc_new_burn_sum_record(&burn_sum_store, block, &Limited(Hour1)),
-        calc_new_burn_sum_record(&burn_sum_store, block, &Limited(Minute5)),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Growing(SinceBurn)),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Growing(SinceMerge)),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day30)),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day7)),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day1)),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Hour1)),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Minute5)),
     );
 
     let burn_sums = [&since_burn, &since_merge, &d30, &d7, &d1, &h1, &m5];

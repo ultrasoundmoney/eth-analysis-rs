@@ -29,6 +29,16 @@ impl LimitedTimeFrame {
         }
     }
 
+    pub fn slot_count(self) -> u32 {
+        match self {
+            Day1 => 7200,
+            Day30 => 216000,
+            Day7 => 50400,
+            Hour1 => 300,
+            Minute5 => 25,
+        }
+    }
+
     pub fn postgres_interval(&self) -> PgInterval {
         match self {
             Day1 => PgInterval {

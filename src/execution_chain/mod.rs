@@ -2,6 +2,7 @@ mod balances;
 mod base_fees;
 mod block_range;
 pub mod block_store;
+mod block_store_next;
 mod export_blocks;
 mod logs;
 mod node;
@@ -18,6 +19,8 @@ pub use block_store::get_is_number_known;
 pub use block_store::get_is_parent_hash_known;
 pub use block_store::get_last_block_number;
 pub use block_store::store_block;
+
+pub use block_store_next::BlockStore;
 
 pub use export_blocks::write_blocks_from_august;
 pub use export_blocks::write_blocks_from_london;
@@ -51,7 +54,6 @@ use chrono::Utc;
 use lazy_static::lazy_static;
 
 pub const LONDON_HARD_FORK_BLOCK_NUMBER: BlockNumber = 12965000;
-#[allow(dead_code)]
 pub const MERGE_BLOCK_NUMBER: i32 = 15_537_394;
 #[allow(dead_code)]
 pub const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;

@@ -81,6 +81,11 @@ pub mod tests {
             self
         }
 
+        pub fn with_number(mut self, number: BlockNumber) -> Self {
+            self.number = number;
+            self
+        }
+
         pub fn with_burn(mut self, burn: u64) -> Self {
             self.gas_used = 10;
             self.base_fee_per_gas = burn / 10;

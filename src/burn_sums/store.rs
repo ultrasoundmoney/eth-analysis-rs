@@ -1,9 +1,8 @@
-use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 use tracing::debug;
 
 use crate::{
-    execution_chain::{BlockNumber, BlockRange, ExecutionNodeBlock},
+    execution_chain::{BlockNumber, BlockRange},
     time_frames::TimeFrame,
     units::WeiNewtype,
 };
@@ -21,75 +20,6 @@ impl<'a> BurnSumStore<'a> {
         Self { db_pool }
     }
 
-    pub async fn burn_sum_from_time_frame(
-        &self,
-        time_frame: &TimeFrame,
-        block: &ExecutionNodeBlock,
-    ) -> WeiNewtype {
-        match time_frame {
-            TimeFrame::Growing(growing_time_frame) => sqlx::query!(
-                r#"
-                    SELECT
-                        SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS "burn_sum!"
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= $1
-                "#,
-                growing_time_frame.start()
-            )
-            .fetch_one(self.db_pool)
-            .await
-            .unwrap()
-            .burn_sum
-            .parse()
-            .unwrap(),
-            TimeFrame::Limited(limited_time_frame) => sqlx::query!(
-                r#"
-                    SELECT 
-                        SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS "burn_sum!"
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= $1::TIMESTAMPTZ - $2::INTERVAL AND timestamp <= $1
-                "#,
-                block.timestamp,
-                limited_time_frame.postgres_interval()
-            )
-            .fetch_one(self.db_pool)
-            .await
-            .unwrap()
-            .burn_sum
-            .parse()
-            .unwrap(),
-        }
-    }
-
-    pub async fn burn_sum_from_time_range(
-        &self,
-        from_gte: DateTime<Utc>,
-        to_lt: DateTime<Utc>,
-    ) -> WeiNewtype {
-        sqlx::query!(
-            r#"
-                SELECT
-                    SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS "burn_sum!"
-                FROM
-                    blocks_next
-                WHERE
-                    timestamp >= $1 AND timestamp < $2
-            "#,
-            from_gte,
-            to_lt
-        )
-        .fetch_one(self.db_pool)
-        .await
-        .unwrap()
-        .burn_sum
-        .parse()
-        .unwrap()
-    }
-
     pub async fn burn_sum_from_block_range(&self, block_range: &BlockRange) -> WeiNewtype {
         sqlx::query!(
             r#"
@@ -100,8 +30,8 @@ impl<'a> BurnSumStore<'a> {
                 WHERE
                     number >= $1 AND number <= $2
             "#,
-            block_range.lowest,
-            block_range.highest
+            block_range.start,
+            block_range.end
         )
         .fetch_one(self.db_pool)
         .await
@@ -119,7 +49,7 @@ impl<'a> BurnSumStore<'a> {
         sqlx::query!(
             "
                 DELETE FROM burn_sums
-                WHERE block_number < $1
+                WHERE last_included_block_number < $1
             ",
             block_number_limit
         )
@@ -133,13 +63,14 @@ impl<'a> BurnSumStore<'a> {
         let row = sqlx::query!(
             r#"
                 SELECT
-                    block_number,
-                    block_hash,
+                    first_included_block_number,
+                    last_included_block_number,
+                    last_included_block_hash,
                     timestamp,
                     sum::TEXT AS "sum!"
                 FROM burn_sums
                 WHERE time_frame = $1
-                ORDER BY block_number DESC
+                ORDER BY last_included_block_number DESC
                 LIMIT 1
             "#,
             time_frame.to_string()
@@ -149,11 +80,12 @@ impl<'a> BurnSumStore<'a> {
         .unwrap();
 
         row.map(|row| BurnSumRecord {
-            time_frame: *time_frame,
-            block_number: row.block_number,
-            block_hash: row.block_hash,
-            timestamp: row.timestamp,
+            first_included_block_number: row.first_included_block_number,
+            last_included_block_hash: row.last_included_block_hash,
+            last_included_block_number: row.last_included_block_number,
             sum: row.sum.parse().unwrap(),
+            time_frame: *time_frame,
+            timestamp: row.timestamp,
         })
     }
 
@@ -162,8 +94,9 @@ impl<'a> BurnSumStore<'a> {
             "
                 INSERT INTO burn_sums (
                     time_frame,
-                    block_number,
-                    block_hash,
+                    first_included_block_number,
+                    last_included_block_number,
+                    last_included_block_hash,
                     timestamp,
                     sum
                 ) VALUES (
@@ -171,12 +104,14 @@ impl<'a> BurnSumStore<'a> {
                     $2,
                     $3,
                     $4,
-                    $5::NUMERIC
+                    $5,
+                    $6::NUMERIC
                 )
             ",
             burn_sum.time_frame.to_string(),
-            burn_sum.block_number,
-            burn_sum.block_hash,
+            burn_sum.first_included_block_number,
+            burn_sum.last_included_block_number,
+            burn_sum.last_included_block_hash,
             burn_sum.timestamp,
             Into::<String>::into(burn_sum.sum) as String
         )
@@ -191,55 +126,16 @@ impl<'a> BurnSumStore<'a> {
         }
     }
 
-    // For debugging pursposes only
-    pub async fn blocks_from_time_range(
-        &self,
-        from_gte: DateTime<Utc>,
-        to_lt: DateTime<Utc>,
-    ) -> Vec<ExecutionNodeBlock> {
-        let rows = sqlx::query!(
-            r#"
-                SELECT
-                    base_fee_per_gas,
-                    difficulty,
-                    gas_used,
-                    hash,
-                    number,
-                    parent_hash,
-                    timestamp,
-                    total_difficulty::TEXT AS "total_difficulty!"
-                FROM blocks_next
-                WHERE timestamp >= $1 AND timestamp < $2
-            "#,
-            from_gte,
-            to_lt
-        )
-        .fetch_all(self.db_pool)
-        .await
-        .unwrap();
-
-        rows.into_iter()
-            .map(|row| ExecutionNodeBlock {
-                hash: row.hash,
-                number: row.number,
-                parent_hash: row.parent_hash,
-                timestamp: row.timestamp,
-                difficulty: row.difficulty as u64,
-                total_difficulty: row.total_difficulty.parse().unwrap(),
-                gas_used: row.gas_used,
-                base_fee_per_gas: row.base_fee_per_gas as u64,
-            })
-            .collect()
-    }
-
     pub async fn delete_new_sums_tx(
         transaction: &mut PgConnection,
         block_number_gte: &BlockNumber,
     ) {
         sqlx::query!(
             "
-                DELETE FROM burn_sums
-                WHERE block_number >= $1
+                DELETE FROM
+                    burn_sums
+                WHERE
+                    last_included_block_number >= $1
             ",
             block_number_gte
         )
@@ -254,15 +150,12 @@ mod tests {
     use crate::{
         db::tests::TestDb,
         execution_chain::{block_store, ExecutionNodeBlockBuilder},
-        time_frames::{GrowingTimeFrame, TimeFrame},
     };
-
-    use TimeFrame::*;
 
     use super::*;
 
     #[tokio::test]
-    async fn burn_sum_from_time_frame_test() {
+    async fn burn_sum_from_block_range_test() {
         let test_db = TestDb::new().await;
         let pool = test_db.pool();
         let burn_sum_store = BurnSumStore::new(pool);
@@ -280,7 +173,10 @@ mod tests {
         block_store::store_block(pool, &block_2, 0.0).await;
 
         let burn_sum = burn_sum_store
-            .burn_sum_from_time_frame(&Growing(GrowingTimeFrame::SinceBurn), &block_2)
+            .burn_sum_from_block_range(&BlockRange {
+                start: block_1.number,
+                end: block_2.number,
+            })
             .await;
 
         assert_eq!(burn_sum, WeiNewtype::from(300));

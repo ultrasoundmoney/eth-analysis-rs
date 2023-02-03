@@ -158,6 +158,19 @@
     },
     "query": "\n            DELETE FROM\n                eth_supply\n            WHERE\n                deposits_slot >= $1\n                OR balances_slot >= $1\n        "
   },
+  "234f2f9212631cb57e7b54ff430452ed0816df20620d94f37b643f310302ba77": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                DELETE FROM\n                    blocks_next\n                WHERE\n                    number >= $1\n                AND\n                    number <= $2\n            "
+  },
   "262e7c58ea23ae1e7b2694ff084a5594b35d80df367844abb6fc0ad7b56ac0a9": {
     "describe": {
       "columns": [],
@@ -219,18 +232,6 @@
     },
     "query": "\n            SELECT\n              timestamp,\n              ethusd AS \"ethusd!\"\n            FROM eth_prices\n            ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))\n            LIMIT 1\n        "
   },
-  "32cfe786be54b9f71fa9c8a9dd827991717c15e2ae56b8b81589ecefeb8fed91": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n                DELETE FROM burn_sums\n                WHERE block_number < $1\n            "
-  },
   "36ceca3d7486bb5eafb2a8146c181adf99b6f2162bb27d273d537c036d3ae65d": {
     "describe": {
       "columns": [
@@ -274,6 +275,18 @@
       }
     },
     "query": "\n            SELECT\n                effective_balance_sum\n            FROM\n                beacon_states\n            WHERE\n                state_root = $1\n        "
+  },
+  "374da8ba641367f188ec7d4e2eb20555bd1f8c31325d50679aeff2744b67b166": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                DELETE FROM\n                    burn_sums\n                WHERE\n                    last_included_block_number >= $1\n            "
   },
   "3865039902e07965678afa4d85af5b180147403b8ce5a9a9f397c581043c76fb": {
     "describe": {
@@ -368,26 +381,49 @@
     },
     "query": "\n                    SELECT\n                        number,\n                        base_fee_per_gas AS \"base_fee_per_gas!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= NOW() - $1::INTERVAL\n                    ORDER BY base_fee_per_gas DESC\n                    LIMIT 1\n                "
   },
-  "4cd58dc184875f6bb223f8adc70d5ee5361a2e79983c23c71c250209e688498a": {
+  "47ae6cbe8066e89d826f1acce2a5b67cc21dc7bf53fc6045cc2c1d4788f4969e": {
     "describe": {
       "columns": [
         {
-          "name": "burn_sum!",
+          "name": "first_included_block_number",
           "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_included_block_number",
+          "ordinal": 1,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_included_block_hash",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "timestamp",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "sum!",
+          "ordinal": 4,
           "type_info": "Text"
         }
       ],
       "nullable": [
+        false,
+        false,
+        false,
+        false,
         null
       ],
       "parameters": {
         "Left": [
-          "Timestamptz",
-          "Interval"
+          "Text"
         ]
       }
     },
-    "query": "\n                    SELECT \n                        SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= $1::TIMESTAMPTZ - $2::INTERVAL AND timestamp <= $1\n                "
+    "query": "\n                SELECT\n                    first_included_block_number,\n                    last_included_block_number,\n                    last_included_block_hash,\n                    timestamp,\n                    sum::TEXT AS \"sum!\"\n                FROM burn_sums\n                WHERE time_frame = $1\n                ORDER BY last_included_block_number DESC\n                LIMIT 1\n            "
   },
   "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
     "describe": {
@@ -492,6 +528,26 @@
     },
     "query": "\n            SELECT\n                deposit_sum_aggregated\n            FROM\n                beacon_blocks\n            WHERE\n                block_root = $1\n        "
   },
+  "626b362205b5db3b0dd9ef498ace0bfc50625da0cc21baa6aef480764b2fdbf5": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                SELECT EXISTS (\n                    SELECT 1\n                    FROM blocks_next\n                    WHERE number = $1\n                ) AS \"exists!\"\n            "
+  },
   "65b6a62649270388952eb823c8d7b1f686d73d744f7a2262ebe6ac380ec1cc04": {
     "describe": {
       "columns": [
@@ -517,81 +573,6 @@
       }
     },
     "query": "\n                SELECT\n                    balances_slot,\n                    supply::TEXT AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    balances_slot = $1\n                "
-  },
-  "69601a16351b6d20108efd17a48e8d4856601aa472d9669037ad13fb7a1a2196": {
-    "describe": {
-      "columns": [
-        {
-          "name": "base_fee_per_gas",
-          "ordinal": 0,
-          "type_info": "Int8"
-        },
-        {
-          "name": "difficulty",
-          "ordinal": 1,
-          "type_info": "Int8"
-        },
-        {
-          "name": "gas_used",
-          "ordinal": 2,
-          "type_info": "Int4"
-        },
-        {
-          "name": "hash",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "number",
-          "ordinal": 4,
-          "type_info": "Int4"
-        },
-        {
-          "name": "parent_hash",
-          "ordinal": 5,
-          "type_info": "Text"
-        },
-        {
-          "name": "timestamp",
-          "ordinal": 6,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "total_difficulty!",
-          "ordinal": 7,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                    base_fee_per_gas,\n                    difficulty,\n                    gas_used,\n                    hash,\n                    number,\n                    parent_hash,\n                    timestamp,\n                    total_difficulty::TEXT AS \"total_difficulty!\"\n                FROM blocks_next\n                WHERE timestamp >= $1 AND timestamp < $2\n            "
-  },
-  "6c615c97e83ed9e8e33b3015aef29b9b53e7f80cc6d4e8e55832723ca18ff142": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n                DELETE FROM burn_sums\n                WHERE block_number >= $1\n            "
   },
   "6e5840a62473818a418e10adb6ba3c8808a9f057e7194a4910096fdaf503d699": {
     "describe": {
@@ -687,6 +668,18 @@
     },
     "query": "\n        DELETE FROM blocks_next\n        WHERE number >= $1\n        "
   },
+  "7e8d1dee7681167f7b296b0a52f94d4aeeaf3659abf39eb7bdb2c8862d03e0a5": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                DELETE FROM burn_sums\n                WHERE last_included_block_number < $1\n            "
+  },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {
       "columns": [
@@ -743,6 +736,23 @@
       }
     },
     "query": "\n                    SELECT\n                        number,\n                        base_fee_per_gas AS \"base_fee_per_gas!\"\n                    FROM\n                        blocks\n                    WHERE\n                        mined_at >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ\n                    ORDER BY base_fee_per_gas DESC\n                    LIMIT 1\n                "
+  },
+  "8b67a0201ef382937c42c6a0c6a03ed05e20edea1d8ba16bcd2857bb29349898": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Int4",
+          "Int4",
+          "Text",
+          "Timestamptz",
+          "Numeric"
+        ]
+      }
+    },
+    "query": "\n                INSERT INTO burn_sums (\n                    time_frame,\n                    first_included_block_number,\n                    last_included_block_number,\n                    last_included_block_hash,\n                    timestamp,\n                    sum\n                ) VALUES (\n                    $1,\n                    $2,\n                    $3,\n                    $4,\n                    $5,\n                    $6::NUMERIC\n                )\n            "
   },
   "8c73136998c1db86353e475ce346ec87d78a2daf0d9775e9c0f88b119c0fe632": {
     "describe": {
@@ -836,22 +846,6 @@
     },
     "query": "\n                SELECT\n                    slot,\n                    state_root\n                FROM\n                    beacon_states\n                WHERE\n                    slot >= $1\n                AND\n                    slot <= $2\n                ORDER BY\n                    slot ASC\n            "
   },
-  "977091bc9e425dc261ee83130b390e600e69abf4b7e8cf4df52cdd6dec7ed7ec": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Int4",
-          "Text",
-          "Timestamptz",
-          "Numeric"
-        ]
-      }
-    },
-    "query": "\n                INSERT INTO burn_sums (\n                    time_frame,\n                    block_number,\n                    block_hash,\n                    timestamp,\n                    sum\n                ) VALUES (\n                    $1,\n                    $2,\n                    $3,\n                    $4,\n                    $5::NUMERIC\n                )\n            "
-  },
   "98198e4a1b074e7bcecc21a84f8cffa036865925ff1e10d0be5a84d4fb9be589": {
     "describe": {
       "columns": [
@@ -917,6 +911,26 @@
       }
     },
     "query": "\n        SELECT\n            number\n        FROM\n            blocks_next\n        ORDER BY number DESC\n        LIMIT 1\n        "
+  },
+  "a128a24cba6188946073001cefb5759fff35d30382f5ce3c46bf7cbf243c9107": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    number\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= $1\n                ORDER BY\n                    timestamp ASC\n                LIMIT 1\n            "
   },
   "a262647098b76d069f84fcabe8c4affa833727791f3a15c47b8b41e2f3fb5ea2": {
     "describe": {
@@ -1042,27 +1056,6 @@
       }
     },
     "query": "\n            UPDATE\n                beacon_states\n            SET\n                effective_balance_sum = $1\n            WHERE\n                state_root = $2\n        "
-  },
-  "b14e5c802feffbce764ddd35fefd2a624252c267d97b32caeb9bda0180ab43d0": {
-    "describe": {
-      "columns": [
-        {
-          "name": "burn_sum!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                    SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= $1 AND timestamp < $2\n            "
   },
   "b7bb6881fa2d0a591071a9f538fddfb4d2ee6bb4ffee3154bf6cd9fd0c8ebbe9": {
     "describe": {
@@ -1212,34 +1205,16 @@
     },
     "query": "\n            WITH\n              issuance_distances AS (\n                SELECT\n                  gwei,\n                  timestamp,\n                  ABS(\n                    EXTRACT(\n                      epoch\n                      FROM\n                        (timestamp - (NOW() - '7 days':: INTERVAL))\n                    )\n                  ) AS distance_seconds\n                FROM\n                  beacon_issuance\n                ORDER BY\n                  distance_seconds ASC\n              )\n            SELECT gwei\n            FROM issuance_distances \n            WHERE distance_seconds <= 86400\n            LIMIT 1\n        "
   },
-  "e6ddfd9c55b799fdfd94bd5a3e28d0420f4f09206edb2405764ccbff112744b5": {
+  "dd70adb90ca892149cd1019e8d646bd19608d15633971cdaae85d61400f077d6": {
     "describe": {
       "columns": [
         {
-          "name": "block_number",
+          "name": "exists!",
           "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "block_hash",
-          "ordinal": 1,
-          "type_info": "Text"
-        },
-        {
-          "name": "timestamp",
-          "ordinal": 2,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "sum!",
-          "ordinal": 3,
-          "type_info": "Text"
+          "type_info": "Bool"
         }
       ],
       "nullable": [
-        false,
-        false,
-        false,
         null
       ],
       "parameters": {
@@ -1248,27 +1223,7 @@
         ]
       }
     },
-    "query": "\n                SELECT\n                    block_number,\n                    block_hash,\n                    timestamp,\n                    sum::TEXT AS \"sum!\"\n                FROM burn_sums\n                WHERE time_frame = $1\n                ORDER BY block_number DESC\n                LIMIT 1\n            "
-  },
-  "e8a528475bace67d89f5d1865cdb007ac63f4f152cf66a55bff87fda7d84759b": {
-    "describe": {
-      "columns": [
-        {
-          "name": "burn_sum!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n                    SELECT\n                        SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= $1\n                "
+    "query": "\n                SELECT EXISTS (\n                    SELECT 1\n                    FROM blocks_next\n                    WHERE hash = $1\n                ) AS \"exists!\"\n            "
   },
   "f19d62204ffdb70367e90b6f5ca7fe64efe01776f90d3c8a86e8594b765c142b": {
     "describe": {
