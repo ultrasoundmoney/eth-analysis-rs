@@ -26,10 +26,6 @@ impl BlockRange {
         }
     }
 
-    pub fn count(&self) -> usize {
-        (self.end - self.start + 1) as usize
-    }
-
     pub fn from_last_plus_time_frame(last: &BlockNumber, time_frame: &TimeFrame) -> Self {
         use GrowingTimeFrame::*;
         use TimeFrame::*;
@@ -96,6 +92,12 @@ mod tests {
     use crate::time_frames::LimitedTimeFrame;
 
     use super::*;
+
+    impl BlockRange {
+        pub fn count(&self) -> usize {
+            (self.end - self.start + 1) as usize
+        }
+    }
 
     #[test]
     fn block_range_from_time_frame_test() {
