@@ -23,12 +23,12 @@ impl<'a> BurnSumStore<'a> {
     pub async fn burn_sum_from_block_range(&self, block_range: &BlockRange) -> WeiNewtype {
         sqlx::query!(
             r#"
-                SELECT
-                    SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS "burn_sum!"
-                FROM
-                    blocks_next
-                WHERE
-                    number >= $1 AND number <= $2
+            SELECT
+                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS "burn_sum!"
+            FROM
+                blocks_next
+            WHERE
+                number >= $1 AND number <= $2
             "#,
             block_range.start,
             block_range.end
@@ -48,8 +48,8 @@ impl<'a> BurnSumStore<'a> {
 
         sqlx::query!(
             "
-                DELETE FROM burn_sums
-                WHERE last_included_block_number < $1
+            DELETE FROM burn_sums
+            WHERE last_included_block_number < $1
             ",
             block_number_limit
         )
@@ -62,16 +62,16 @@ impl<'a> BurnSumStore<'a> {
     pub async fn last_burn_sum(&self, time_frame: &TimeFrame) -> Option<BurnSumRecord> {
         let row = sqlx::query!(
             r#"
-                SELECT
-                    first_included_block_number,
-                    last_included_block_number,
-                    last_included_block_hash,
-                    timestamp,
-                    sum::TEXT AS "sum!"
-                FROM burn_sums
-                WHERE time_frame = $1
-                ORDER BY last_included_block_number DESC
-                LIMIT 1
+            SELECT
+                first_included_block_number,
+                last_included_block_number,
+                last_included_block_hash,
+                timestamp,
+                sum::TEXT AS "sum!"
+            FROM burn_sums
+            WHERE time_frame = $1
+            ORDER BY last_included_block_number DESC
+            LIMIT 1
             "#,
             time_frame.to_string()
         )
@@ -92,21 +92,21 @@ impl<'a> BurnSumStore<'a> {
     async fn store_burn_sum(&self, burn_sum: &BurnSumRecord) {
         sqlx::query!(
             "
-                INSERT INTO burn_sums (
-                    time_frame,
-                    first_included_block_number,
-                    last_included_block_number,
-                    last_included_block_hash,
-                    timestamp,
-                    sum
-                ) VALUES (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5,
-                    $6::NUMERIC
-                )
+            INSERT INTO burn_sums (
+                time_frame,
+                first_included_block_number,
+                last_included_block_number,
+                last_included_block_hash,
+                timestamp,
+                sum
+            ) VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6::NUMERIC
+            )
             ",
             burn_sum.time_frame.to_string(),
             burn_sum.first_included_block_number,
@@ -132,10 +132,10 @@ impl<'a> BurnSumStore<'a> {
     ) {
         sqlx::query!(
             "
-                DELETE FROM
-                    burn_sums
-                WHERE
-                    last_included_block_number >= $1
+            DELETE FROM
+                burn_sums
+            WHERE
+                last_included_block_number >= $1
             ",
             block_number_gte
         )
