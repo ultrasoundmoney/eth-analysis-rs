@@ -29,9 +29,7 @@ pub async fn store_issuance(
     let gwei: i64 = gwei.to_owned().into();
 
     sqlx::query!(
-        "
-            INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
-        ",
+        "INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)",
         slot.date_time(),
         state_root,
         gwei,
@@ -51,13 +49,13 @@ pub fn calc_issuance(
 pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
     sqlx::query!(
         "
-            SELECT
-                gwei
-            FROM
-                beacon_issuance
-            ORDER BY
-                timestamp DESC
-            LIMIT 1
+        SELECT
+            gwei
+        FROM
+            beacon_issuance
+        ORDER BY
+            timestamp DESC
+        LIMIT 1
         ",
     )
     .fetch_one(executor)
@@ -69,11 +67,11 @@ pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype 
 pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
     sqlx::query!(
         "
-            DELETE FROM beacon_issuance
-            WHERE state_root IN (
-                SELECT state_root FROM beacon_states
-                WHERE slot >= $1
-            )
+        DELETE FROM beacon_issuance
+        WHERE state_root IN (
+            SELECT state_root FROM beacon_states
+            WHERE slot >= $1
+        )
         ",
         greater_than_or_equal.0
     )
@@ -85,11 +83,11 @@ pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_e
 pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
     sqlx::query!(
         "
-            DELETE FROM beacon_issuance
-            WHERE state_root IN (
-                SELECT state_root FROM beacon_states
-                WHERE slot = $1
-            )
+        DELETE FROM beacon_issuance
+        WHERE state_root IN (
+            SELECT state_root FROM beacon_states
+            WHERE slot = $1
+        )
         ",
         slot.0
     )
@@ -101,27 +99,27 @@ pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
 pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
     sqlx::query!(
         "
-            WITH
-              issuance_distances AS (
-                SELECT
-                  gwei,
-                  timestamp,
-                  ABS(
-                    EXTRACT(
-                      epoch
-                      FROM
-                        (timestamp - (NOW() - '7 days':: INTERVAL))
-                    )
-                  ) AS distance_seconds
-                FROM
-                  beacon_issuance
-                ORDER BY
-                  distance_seconds ASC
-              )
-            SELECT gwei
-            FROM issuance_distances 
-            WHERE distance_seconds <= 86400
-            LIMIT 1
+        WITH
+          issuance_distances AS (
+            SELECT
+              gwei,
+              timestamp,
+              ABS(
+                EXTRACT(
+                  epoch
+                  FROM
+                    (timestamp - (NOW() - '7 days':: INTERVAL))
+                )
+              ) AS distance_seconds
+            FROM
+              beacon_issuance
+            ORDER BY
+              distance_seconds ASC
+          )
+        SELECT gwei
+        FROM issuance_distances 
+        WHERE distance_seconds <= 86400
+        LIMIT 1
         ",
     )
     .fetch_one(executor)
@@ -229,7 +227,7 @@ mod tests {
             ORDER BY
                 DATE_TRUNC('day', timestamp), timestamp ASC
             "#
-        )
+            )
             .fetch_all(pool)
             .await
             .map(|rows|  {
