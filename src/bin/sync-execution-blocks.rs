@@ -1,6 +1,4 @@
-use anyhow::Result;
-
 #[tokio::main]
-pub async fn main() -> Result<()> {
+pub async fn main() {
     eth_analysis::sync_execution_blocks().await
 }

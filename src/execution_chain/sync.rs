@@ -219,7 +219,7 @@ enum HeadToSync {
 }
 type HeadsQueue = Arc<Mutex<VecDeque<HeadToSync>>>;
 
-pub async fn sync_blocks() -> Result<()> {
+pub async fn sync_blocks() {
     log::init_with_env();
 
     info!("syncing execution blocks");
@@ -264,13 +264,12 @@ pub async fn sync_blocks() -> Result<()> {
                         next_head,
                     )
                     .timed("sync head")
-                    .await?;
+                    .await
+                    .unwrap();
                 }
             }
         }
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
