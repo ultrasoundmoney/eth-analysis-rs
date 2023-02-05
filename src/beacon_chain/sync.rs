@@ -445,7 +445,7 @@ async fn find_last_matching_slot(
 
     debug!(
         slot = candidate_slot.0,
-        "found a match state match between stored and on-chain"
+        "found a state match between stored and on-chain"
     );
     Ok(candidate_slot)
 }
