@@ -1,5 +1,5 @@
 use chrono::{DateTime, SubsecRound, Utc};
-use sqlx::{Acquire, PgConnection, PgExecutor};
+use sqlx::PgExecutor;
 
 use super::node::{BlockNumber, ExecutionNodeBlock};
 
@@ -42,57 +42,6 @@ pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal:
     .unwrap();
 }
 
-pub async fn get_is_parent_hash_known(connection: &mut PgConnection, hash: &str) -> bool {
-    // TODO: once 12965000 the london hardfork block is in the DB, we can hardcode and check
-    // the hash, skipping a DB roundtrip.
-    if is_empty(connection.acquire().await.unwrap()).await {
-        true
-    } else {
-        sqlx::query!(
-            r#"
-            SELECT
-              EXISTS(
-                SELECT
-                  hash
-                FROM
-                  blocks_next
-                WHERE
-                  hash = $1
-              ) AS "exists!"
-            "#,
-            hash
-        )
-        .fetch_one(connection)
-        .await
-        .unwrap()
-        .exists
-    }
-}
-
-pub async fn get_is_number_known(
-    executor: impl PgExecutor<'_>,
-    block_number: &BlockNumber,
-) -> bool {
-    sqlx::query!(
-        r#"
-        SELECT
-          EXISTS(
-            SELECT
-              hash
-            FROM
-              blocks_next
-            WHERE
-              number = $1
-          ) AS "exists!"
-        "#,
-        *block_number
-    )
-    .fetch_one(executor)
-    .await
-    .unwrap()
-    .exists
-}
-
 pub async fn get_last_block_number(executor: impl PgExecutor<'_>) -> Option<BlockNumber> {
     sqlx::query!(
         "
@@ -108,24 +57,6 @@ pub async fn get_last_block_number(executor: impl PgExecutor<'_>) -> Option<Bloc
     .await
     .unwrap()
     .map(|row| row.number)
-}
-
-pub async fn is_empty(executor: impl PgExecutor<'_>) -> bool {
-    let count = sqlx::query!(
-        r#"
-        SELECT
-            COUNT(*) AS "count!"
-        FROM
-            blocks_next
-        LIMIT 1
-        "#
-    )
-    .fetch_one(executor)
-    .await
-    .unwrap()
-    .count;
-
-    count == 0
 }
 
 pub async fn store_block(
@@ -167,6 +98,7 @@ pub async fn store_block(
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, DurationRound, Utc};
+    use sqlx::Acquire;
 
     use crate::db;
 
@@ -314,37 +246,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_is_first_parent_hash_known_test() {
-        let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
-
-        let is_parent_known = get_is_parent_hash_known(&mut tx, "0xnotthere").await;
-        assert!(is_parent_known);
-    }
-
-    #[tokio::test]
-    async fn get_is_parent_hash_known_test() {
-        let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
-        let test_block = make_test_block();
-
-        store_block(&mut *tx, &test_block, 0.0).await;
-        assert!(!get_is_parent_hash_known(&mut tx, "0xnotthere").await);
-        assert!(get_is_parent_hash_known(&mut tx, &test_block.hash).await);
-    }
-
-    #[tokio::test]
-    async fn get_is_number_known_test() {
-        let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
-        let test_block = make_test_block();
-
-        store_block(&mut *tx, &test_block, 0.0).await;
-        assert!(!get_is_number_known(&mut tx, &1).await);
-        assert!(get_is_number_known(&mut tx, &0).await);
-    }
-
-    #[tokio::test]
     async fn get_empty_last_block_number_test() {
         let mut db = db::tests::get_test_db_connection().await;
         let mut tx = db.begin().await.unwrap();
@@ -361,23 +262,5 @@ mod tests {
         store_block(&mut *tx, &test_block, 0.0).await;
         let last_block_number = get_last_block_number(&mut tx).await;
         assert_eq!(last_block_number, Some(0));
-    }
-
-    #[tokio::test]
-    async fn is_empty_empty_test() {
-        let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
-
-        assert!(is_empty(&mut tx,).await);
-    }
-
-    #[tokio::test]
-    async fn is_empty_not_empty_test() {
-        let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
-        let test_block = make_test_block();
-
-        store_block(&mut tx, &test_block, 0.0).await;
-        assert!(!is_empty(&mut tx,).await);
     }
 }

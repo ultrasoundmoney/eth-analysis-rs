@@ -251,6 +251,20 @@ pub async fn sync_slot_by_state_root(
 
     transaction.commit().await?;
 
+    let last_on_chain_state_root = beacon_node
+        .get_last_header()
+        .await?
+        .header
+        .message
+        .state_root;
+
+    if last_on_chain_state_root == *state_root {
+        debug!("sync caught up with head of chain, updating deferrable analysis");
+        update_deferrable_analysis(&db_pool).await?;
+    } else {
+        debug!("sync not yet caught up with head of chain, skipping deferrable analysis");
+    }
+
     Ok(())
 }
 
@@ -548,20 +562,6 @@ pub async fn sync_beacon_states() -> Result<()> {
                 for invalid_slot in (first_invalid_slot.0..=slot.0).rev() {
                     slots_queue.push_front(invalid_slot.into());
                 }
-            }
-
-            let last_on_chain_state_root = beacon_node
-                .get_last_header()
-                .await?
-                .header
-                .message
-                .state_root;
-
-            if last_on_chain_state_root == on_chain_state_root {
-                debug!("sync caught up with head of chain, updating deferrable analysis");
-                update_deferrable_analysis(&db_pool).await?;
-            } else {
-                debug!("sync not yet caught up with head of chain, skipping deferrable analysis");
             }
         }
 

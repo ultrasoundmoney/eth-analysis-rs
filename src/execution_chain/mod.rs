@@ -15,8 +15,6 @@ pub use balances::ExecutionBalancesSum;
 pub use block_range::BlockRange;
 
 pub use block_store::delete_blocks;
-pub use block_store::get_is_number_known;
-pub use block_store::get_is_parent_hash_known;
 pub use block_store::get_last_block_number;
 pub use block_store::store_block;
 
@@ -27,6 +25,7 @@ pub use export_blocks::write_blocks_from_london;
 
 pub use logs::write_heads_log as write_execution_heads_log;
 
+pub use node::stream_heads_from;
 pub use node::stream_new_heads;
 pub use node::BlockHash;
 pub use node::BlockNumber;
@@ -53,6 +52,8 @@ use chrono::TimeZone;
 use chrono::Utc;
 use lazy_static::lazy_static;
 
+pub const LONDON_HARD_FORK_BLOCK_HASH: &str =
+    "0x9b83c12c69edb74f6c8dd5d052765c1adf940e320bd1291696e6fa07829eee71";
 pub const LONDON_HARD_FORK_BLOCK_NUMBER: BlockNumber = 12965000;
 pub const MERGE_BLOCK_NUMBER: i32 = 15_537_394;
 #[allow(dead_code)]

@@ -6,26 +6,21 @@
 //! code, adding more tests, and improving designs. This side should slowly take over more
 //! responsibilities.
 
-use anyhow::Result;
-use futures::{SinkExt, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use sqlx::PgPool;
-use std::{
-    collections::VecDeque,
-    iter::Iterator,
-    sync::{Arc, Mutex},
-};
-use tracing::{debug, event, info, warn, Level};
+use std::{collections::VecDeque, iter::Iterator};
+use tracing::{debug, info, warn};
 
 use crate::{
     beacon_chain::{IssuanceStore, IssuanceStorePostgres},
     burn_sums, db,
-    execution_chain::{self, base_fees, ExecutionNode},
+    execution_chain::{self, base_fees, BlockStore, ExecutionNode},
     log,
     performance::TimedExt,
     usd_price,
 };
 
-use super::{block_range::BlockRange, block_store, node::Head, BlockNumber};
+use super::{BlockNumber, LONDON_HARD_FORK_BLOCK_HASH};
 
 async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber) {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
@@ -71,153 +66,50 @@ async fn sync_by_hash(
     }
 }
 
-enum NextStep {
-    HandleGap,
-    HandleHeadFork,
-    AddToExisting,
-}
-
-async fn get_next_step(db_pool: &PgPool, head: &Head) -> NextStep {
-    // Between the time we received the head event and requested a header for the given
-    // block_root the block may have disappeared. Right now we panic, we could do better.
-    let is_parent_known = block_store::get_is_parent_hash_known(
-        &mut db_pool.acquire().await.unwrap(),
-        &head.parent_hash,
-    )
-    .await;
-
-    if !is_parent_known {
-        return NextStep::HandleGap;
-    }
-
-    let is_fork_block = block_store::get_is_number_known(db_pool, &head.number).await;
-
-    if is_fork_block {
-        return NextStep::HandleHeadFork;
-    }
-
-    NextStep::AddToExisting
-}
-
-async fn sync_head(
-    issuance_store: impl IssuanceStore,
+async fn find_last_matching_block_number(
     execution_node: &mut ExecutionNode,
-    db_pool: &PgPool,
-    heads_queue: HeadsQueue,
-    head_to_sync: HeadToSync,
-) -> Result<()> {
-    let head_event = match head_to_sync {
-        HeadToSync::Fetched(head) => head,
-        HeadToSync::Refetch(block_number) => execution_node
-            .get_block_by_number(&block_number)
+    block_store: &BlockStore<'_>,
+    starting_candidate: BlockNumber,
+) -> BlockNumber {
+    let mut current_candidate_number = starting_candidate;
+    loop {
+        let on_chain_block = execution_node
+            .get_block_by_number(&current_candidate_number)
             .await
-            .expect("chain not to get shorter since scheduling refetch head sync")
-            .into(),
-    };
+            .unwrap();
+        let current_stored_hash = block_store
+            .hash_from_number(&current_candidate_number)
+            .await
+            .unwrap();
 
-    debug!(number = head_event.number, "sync head");
-
-    match get_next_step(db_pool, &head_event).await {
-        NextStep::HandleGap => {
-            warn!("parent of block at block_number {} is missing, dropping min(our last block.block_number, new block.block_number) and queueing all blocks gte the received block, block: {}", head_event.number, head_event.hash);
-
-            let last_block_number = execution_chain::get_last_block_number(db_pool)
-                .await
-                .expect("at least one block to be synced before rolling back");
-
-            // Head number may be lower than our last synced. Roll back gte lowest of the two.
-            let lowest_number = last_block_number.min(head_event.number);
-
-            rollback_numbers(db_pool, &lowest_number).await;
-
-            for number in (lowest_number..=head_event.number).rev() {
-                debug!("queueing {number} for sync after dropping");
-                heads_queue
-                    .lock()
-                    .unwrap()
-                    .push_front(HeadToSync::Refetch(number));
-            }
+        if current_stored_hash == on_chain_block.hash {
+            break;
         }
-        NextStep::HandleHeadFork => {
-            info!(
-                "block at number {} creates a fork, rolling back our last block - {}",
-                head_event.number, head_event.hash
-            );
 
-            rollback_numbers(db_pool, &head_event.number).await;
-
-            heads_queue
-                .lock()
-                .unwrap()
-                .push_front(HeadToSync::Fetched(head_event))
-        }
-        NextStep::AddToExisting => {
-            sync_by_hash(issuance_store, execution_node, db_pool, &head_event.hash)
-                .timed("sync block by hash")
-                .await;
-        }
-    };
-
-    Ok(())
+        current_candidate_number -= 1;
+    }
+    current_candidate_number
 }
 
-fn get_historic_stream(block_range: BlockRange) -> impl Stream<Item = Head> {
-    let (mut tx, rx) = futures::channel::mpsc::channel(10);
-
-    tokio::spawn(async move {
-        let mut execution_node = ExecutionNode::connect().await;
-        for block_number in block_range {
-            let block = execution_node
-                .get_block_by_number(&block_number)
-                .await
-                .unwrap();
-            tx.send(block.into()).await.unwrap();
-        }
-    });
-
-    rx
-}
-
-async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Head> {
-    event!(Level::DEBUG, "streaming heads from {gte_slot}");
-
-    let mut execution_node = ExecutionNode::connect().await;
-    let last_block_on_start = execution_node.get_latest_block().await;
-    event!(
-        Level::DEBUG,
-        "last block on chain: {}",
-        &last_block_on_start.number
-    );
-
-    // We stream heads as requested until caught up with the chain and then pass heads as they come
-    // in from our node. The only way to be sure how high we should stream, is to wait for the
-    // first head from the node to come in. We don't want to wait. So ask for the latest head, take
-    // this as the max, and immediately start listening for new heads. Running the small risk the
-    // chain has advanced between these two calls.
-    let heads_stream = execution_chain::stream_new_heads();
-
-    let block_range = BlockRange::new(gte_slot, last_block_on_start.number - 1);
-
-    let historic_heads_stream = get_historic_stream(block_range);
-
-    historic_heads_stream.chain(heads_stream)
+async fn estimate_blocks_remaining(
+    block_store: &BlockStore<'_>,
+    execution_node: &mut ExecutionNode,
+) -> i32 {
+    let last_on_chain = execution_node.get_latest_block().await;
+    let last_stored = block_store.last().await;
+    last_on_chain.number - last_stored.number
 }
 
 pub const EXECUTION_BLOCK_NUMBER_AUG_1ST: BlockNumber = 15253306;
 
-async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = Head> {
+async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = BlockNumber> {
     let next_block_to_sync = execution_chain::get_last_block_number(db)
         .await
         .map_or(EXECUTION_BLOCK_NUMBER_AUG_1ST, |number| number + 1);
-    stream_heads_from(next_block_to_sync).await
+    execution_chain::stream_heads_from(next_block_to_sync).await
 }
 
-#[derive(Clone, Debug)]
-enum HeadToSync {
-    Fetched(Head),
-    Refetch(BlockNumber),
-}
-type HeadsQueue = Arc<Mutex<VecDeque<HeadToSync>>>;
+type HeadsQueue = VecDeque<BlockNumber>;
 
 pub async fn sync_blocks() {
     log::init_with_env();
@@ -231,56 +123,77 @@ pub async fn sync_blocks() {
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let mut execution_node = ExecutionNode::connect().await;
-
     let issuance_store = IssuanceStorePostgres::new(&db_pool);
-
+    let block_store = BlockStore::new(&db_pool);
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
+    let mut heads_queue: HeadsQueue = VecDeque::new();
 
-    let heads_queue: HeadsQueue = Arc::new(Mutex::new(VecDeque::new()));
+    let mut progress = pit_wall::Progress::new(
+        "sync-execution-blocks",
+        estimate_blocks_remaining(&block_store, &mut execution_node)
+            .await
+            .try_into()
+            .unwrap(),
+    );
 
-    while let Some(head_event) = heads_stream.next().await {
-        heads_queue
-            .lock()
-            .unwrap()
-            .push_back(HeadToSync::Fetched(head_event));
+    while let Some(head_block_number) = heads_stream.next().await {
+        heads_queue.push_back(head_block_number);
 
-        // Work through the heads queue until it's empty and we're ready to move the next head from
-        // the stream to the queue.
-        loop {
-            let next_head = { heads_queue.lock().unwrap().pop_front() };
-            match next_head {
-                None => {
-                    // Continue syncing heads from the stream.
-                    break;
-                }
-                Some(next_head) => {
-                    // Because we may encounter rollbacks, this step may add more heads to sync to
-                    // the front of the queue.
-                    sync_head(
-                        &issuance_store,
-                        &mut execution_node,
-                        &db_pool,
-                        heads_queue.clone(),
-                        next_head,
-                    )
-                    .timed("sync head")
-                    .await
-                    .unwrap();
+        // The heads queue allows us to walk backwards for rollbacks, then forwards to sync what we
+        // dropped in the loop below, and then break to continue where we left off in the outer
+        // loop, the heads stream.
+        while let Some(next_block_number) = heads_queue.pop_front() {
+            let next_block = execution_node
+                .get_block_by_number(&next_block_number)
+                .await
+                .expect("expect chain to never get shorter");
+
+            // Either we can add a block, or we need to roll back first. We can add a block when the
+            // last stored block matches the one on-chain, and nothing is stored for the current block
+            // number. If either condition fails, we need to roll back first, and then sync to the
+            // current head.
+            let last_stored_block = block_store.last().await;
+            let last_matches = if next_block.hash == LONDON_HARD_FORK_BLOCK_HASH {
+                true
+            } else {
+                last_stored_block.hash == next_block.parent_hash
+            };
+            let current_number_is_free = !block_store.number_exists(&next_block_number).await;
+
+            if last_matches && current_number_is_free {
+                // Add to the chain.
+                debug!(number = next_block.number, "syncing next block by hash");
+                sync_by_hash(
+                    &issuance_store,
+                    &mut execution_node,
+                    &db_pool,
+                    &next_block.hash,
+                )
+                .timed("sync_by_hash")
+                .await;
+            } else {
+                // Roll back until we're following the canonical chain again, queue all rolled
+                // back blocks.
+                let last_matching_block_number = find_last_matching_block_number(
+                    &mut execution_node,
+                    &block_store,
+                    last_stored_block.number - 1,
+                )
+                .await;
+
+                warn!(last_matching_block_number, "rolling back to block number");
+
+                let first_invalid_block_number = last_matching_block_number + 1;
+
+                rollback_numbers(&db_pool, &first_invalid_block_number).await;
+
+                for block_number in (first_invalid_block_number..=next_block.number).rev() {
+                    debug!(block_number, "rolling back and requeueing");
+                    heads_queue.push_front(block_number);
                 }
             }
         }
-    }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn block_range_iterable_test() {
-        let range = (BlockRange::new(1, 4))
-            .into_iter()
-            .collect::<Vec<BlockNumber>>();
-        assert_eq!(range, vec![1, 2, 3, 4]);
+        progress.inc_work_done();
     }
 }

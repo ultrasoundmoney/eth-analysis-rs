@@ -100,6 +100,14 @@ mod tests {
     }
 
     #[test]
+    fn block_range_iterable_test() {
+        let range = (BlockRange::new(1, 4))
+            .into_iter()
+            .collect::<Vec<BlockNumber>>();
+        assert_eq!(range, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
     fn block_range_from_time_frame_test() {
         // For a 5 minute time frame with a 12 second block time there should be at any point 25
         // blocks within the time frame.

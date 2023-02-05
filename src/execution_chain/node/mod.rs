@@ -14,11 +14,10 @@ use async_tungstenite::{
     WebSocketStream,
 };
 use futures::{
-    channel::{mpsc, oneshot},
+    channel::oneshot,
     prelude::*,
     stream::{SplitSink, SplitStream},
 };
-use heads::NewHeadMessage;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -26,19 +25,20 @@ use tokio::net::TcpStream;
 
 use crate::env;
 
-pub use heads::Head;
-
 pub use blocks::BlockHash;
 pub use blocks::BlockNumber;
 pub use blocks::Difficulty;
 pub use blocks::ExecutionNodeBlock;
 pub use blocks::TotalDifficulty;
 
+pub use heads::stream_heads_from;
+pub use heads::stream_new_heads;
+pub use heads::Head;
+
 #[cfg(test)]
 pub use blocks::tests::ExecutionNodeBlockBuilder;
 
 lazy_static! {
-    // TODO: set to normal GETH_URL (not supply delta fork)
     static ref EXECUTION_URL: String = env::get_env_var_unsafe("GETH_URL");
 }
 
@@ -54,28 +54,6 @@ struct RpcError {
 enum RpcMessage {
     RpcMessageError { id: u16, error: RpcError },
     RpcMessageResult { id: u16, result: serde_json::Value },
-}
-
-#[allow(dead_code)]
-fn make_eth_unsubscribe_message(id: &str) -> String {
-    let msg = json!({
-        "id": 0,
-        "method": "eth_unsubscribe",
-        "params": [id]
-
-    });
-
-    serde_json::to_string(&msg).unwrap()
-}
-
-fn make_new_heads_subscribe_message() -> String {
-    let msg = json!({
-        "id": 0,
-        "method": "eth_subscribe",
-        "params": ["newHeads"]
-    });
-
-    serde_json::to_string(&msg).unwrap()
 }
 
 struct IdPool {
@@ -110,44 +88,6 @@ impl IdPool {
     }
 }
 
-pub fn stream_new_heads() -> impl Stream<Item = Head> {
-    let (mut new_heads_tx, new_heads_rx) = mpsc::unbounded();
-
-    tokio::spawn(async move {
-        let url = (*EXECUTION_URL).to_string();
-        let mut ws = connect_async(&url).await.unwrap().0;
-
-        let new_heads_subscribe_message = make_new_heads_subscribe_message();
-
-        ws.send(Message::text(new_heads_subscribe_message))
-            .await
-            .unwrap();
-
-        loop {
-            if (ws.next().await).is_some() {
-                tracing::debug!("got subscription confirmation message");
-                break;
-            }
-        }
-
-        while let Some(message_result) = ws.next().await {
-            let message = message_result.unwrap();
-
-            // We get ping messages too. Do nothing with those.
-            if message.is_ping() {
-                continue;
-            }
-
-            let new_head_message =
-                serde_json::from_str::<NewHeadMessage>(&message.into_text().unwrap()).unwrap();
-            let new_head = Head::from(new_head_message);
-            new_heads_tx.send(new_head).await.unwrap();
-        }
-    });
-
-    new_heads_rx
-}
-
 type NodeMessageRx = SplitStream<WebSocketStream<TokioAdapter<TcpStream>>>;
 type MessageHandlersShared =
     Arc<Mutex<HashMap<u16, oneshot::Sender<Result<serde_json::Value, RpcError>>>>>;
@@ -167,7 +107,7 @@ async fn handle_messages(
         }
 
         let message_text = message.into_text()?;
-        let rpc_message = serde_json::from_str::<RpcMessage>(&message_text).unwrap();
+        let rpc_message: RpcMessage = serde_json::from_str(&message_text).unwrap();
 
         let id = match rpc_message {
             RpcMessage::RpcMessageResult { id, .. } => id,

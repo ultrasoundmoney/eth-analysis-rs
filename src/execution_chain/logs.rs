@@ -1,10 +1,11 @@
-use crate::execution_chain::BlockNumber;
-use crate::log;
+use std::{collections::HashSet, iter::Iterator};
+
 use chrono::SubsecRound;
 use futures::StreamExt;
 use serde::Serialize;
-use std::collections::HashSet;
-use std::iter::Iterator;
+
+use crate::execution_chain::{self, BlockNumber};
+use crate::log;
 
 #[derive(Serialize)]
 struct HeadLog {
@@ -24,7 +25,7 @@ pub async fn write_heads_log() {
 
     tracing::info!("writing heads log {timestamp}");
 
-    let mut heads_stream = crate::execution_chain::stream_new_heads();
+    let mut heads_stream = execution_chain::stream_new_heads();
 
     let file_path = format!("heads_log_{}.csv", timestamp);
 

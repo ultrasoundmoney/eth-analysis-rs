@@ -18,11 +18,11 @@ impl<'a> BlockStore<'a> {
     pub async fn number_exists(&self, block_number: &BlockNumber) -> bool {
         sqlx::query!(
             r#"
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM blocks_next
-                    WHERE number = $1
-                ) AS "exists!"
+            SELECT EXISTS (
+                SELECT 1
+                FROM blocks_next
+                WHERE number = $1
+            ) AS "exists!"
             "#,
             block_number
         )
@@ -36,11 +36,11 @@ impl<'a> BlockStore<'a> {
     pub async fn hash_exists(&self, block_hash: &str) -> bool {
         sqlx::query!(
             r#"
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM blocks_next
-                    WHERE hash = $1
-                ) AS "exists!"
+            SELECT EXISTS (
+                SELECT 1
+                FROM blocks_next
+                WHERE hash = $1
+            ) AS "exists!"
             "#,
             block_hash
         )
@@ -54,12 +54,12 @@ impl<'a> BlockStore<'a> {
     pub async fn delete_from_range(&self, block_range: &BlockRange) {
         sqlx::query!(
             "
-                DELETE FROM
-                    blocks_next
-                WHERE
-                    number >= $1
-                AND
-                    number <= $2
+            DELETE FROM
+                blocks_next
+            WHERE
+                number >= $1
+            AND
+                number <= $2
             ",
             block_range.start,
             block_range.end
@@ -77,15 +77,15 @@ impl<'a> BlockStore<'a> {
     pub async fn first_number_after_or_at(&self, timestamp: &DateTime<Utc>) -> Option<BlockNumber> {
         sqlx::query!(
             "
-                SELECT
-                    number
-                FROM
-                    blocks_next
-                WHERE
-                    timestamp >= $1
-                ORDER BY
-                    timestamp ASC
-                LIMIT 1
+            SELECT
+                number
+            FROM
+                blocks_next
+            WHERE
+                timestamp >= $1
+            ORDER BY
+                timestamp ASC
+            LIMIT 1
             ",
             timestamp
         )
@@ -93,6 +93,59 @@ impl<'a> BlockStore<'a> {
         .await
         .unwrap()
         .map(|row| row.number)
+    }
+
+    pub async fn last(&self) -> ExecutionNodeBlock {
+        sqlx::query!(
+            r#"
+            SELECT
+                base_fee_per_gas,
+                difficulty,
+                eth_price,
+                gas_used,
+                hash,
+                number,
+                parent_hash,
+                timestamp,
+                total_difficulty::TEXT AS "total_difficulty!"
+            FROM
+                blocks_next
+            ORDER BY
+                number DESC
+            LIMIT 1
+            "#
+        )
+        .fetch_one(self.db_pool)
+        .await
+        .map(|row| ExecutionNodeBlock {
+            base_fee_per_gas: row.base_fee_per_gas as u64,
+            difficulty: row.difficulty as u64,
+            gas_used: row.gas_used,
+            hash: row.hash,
+            number: row.number,
+            parent_hash: row.parent_hash,
+            timestamp: row.timestamp,
+            total_difficulty: row.total_difficulty.parse().unwrap(),
+        })
+        .unwrap()
+    }
+
+    pub async fn hash_from_number(&self, block_number: &BlockNumber) -> Option<String> {
+        sqlx::query!(
+            r#"
+            SELECT
+                hash
+            FROM
+                blocks_next
+            WHERE
+                number = $1
+            "#,
+            block_number
+        )
+        .fetch_optional(self.db_pool)
+        .await
+        .unwrap()
+        .map(|row| row.hash)
     }
 }
 
@@ -103,7 +156,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn block_number_exists_test() {
+    async fn number_exists_test() {
         let test_db = TestDb::new().await;
         let test_id = "block_number_exists";
         let block_store = BlockStore::new(test_db.pool());
@@ -113,15 +166,17 @@ mod tests {
             .with_number(test_number)
             .build();
 
-        assert!(!block_store.block_number_exists(&test_number).await);
+        assert!(!block_store.number_exists(&test_number).await);
 
         block_store.add(&test_block, 0.0).await;
 
-        assert!(block_store.block_number_exists(&test_number).await);
+        assert!(block_store.number_exists(&test_number).await);
+
+        test_db.cleanup().await;
     }
 
     #[tokio::test]
-    async fn block_hash_exists_test() {
+    async fn hash_exists_test() {
         let test_db = TestDb::new().await;
         let test_id = "block_hash_exists";
         let block_store = BlockStore::new(test_db.pool());
@@ -129,11 +184,55 @@ mod tests {
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
         // Test the hash does not exist.
-        assert!(!block_store.block_hash_exists(&test_block.hash).await);
+        assert!(!block_store.hash_exists(&test_block.hash).await);
 
         block_store.add(&test_block, 0.0).await;
 
         // Test the hash exists.
-        assert!(block_store.block_hash_exists(&test_block.hash).await);
+        assert!(block_store.hash_exists(&test_block.hash).await);
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn last_test() {
+        let test_db = TestDb::new().await;
+        let test_id = "last";
+        let block_store = BlockStore::new(test_db.pool());
+
+        let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
+
+        block_store.add(&test_block, 0.0).await;
+
+        let last_block = block_store.last().await;
+
+        assert_eq!(last_block, test_block);
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn hash_from_number_test() {
+        let test_db = TestDb::new().await;
+        let test_id = "hash_from_number";
+        let block_store = BlockStore::new(test_db.pool());
+
+        let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
+
+        assert!(block_store
+            .hash_from_number(&test_block.number)
+            .await
+            .is_none());
+
+        block_store.add(&test_block, 0.0).await;
+
+        let hash = block_store
+            .hash_from_number(&test_block.number)
+            .await
+            .unwrap();
+
+        assert_eq!(hash, test_block.hash);
+
+        test_db.cleanup().await;
     }
 }
