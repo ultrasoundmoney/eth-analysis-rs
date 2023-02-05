@@ -90,7 +90,7 @@ async fn expired_burn_from(
     // still included for this limited time frame sum.
     let age_limit = block.timestamp - limited_time_frame.duration();
     let first_included_block_number = block_store
-        .first_block_number_after_or_at(&age_limit)
+        .first_number_after_or_at(&age_limit)
         .await
         .expect(
             "failed to get first block number after or at block.timestamp - limited_time_frame",

@@ -15,7 +15,7 @@ impl<'a> BlockStore<'a> {
     }
 
     #[allow(dead_code)]
-    pub async fn block_number_exists(&self, block_number: &BlockNumber) -> bool {
+    pub async fn number_exists(&self, block_number: &BlockNumber) -> bool {
         sqlx::query!(
             r#"
                 SELECT EXISTS (
@@ -33,7 +33,7 @@ impl<'a> BlockStore<'a> {
     }
 
     #[allow(dead_code)]
-    pub async fn block_hash_exists(&self, block_hash: &str) -> bool {
+    pub async fn hash_exists(&self, block_hash: &str) -> bool {
         sqlx::query!(
             r#"
                 SELECT EXISTS (
@@ -51,7 +51,7 @@ impl<'a> BlockStore<'a> {
     }
 
     #[allow(dead_code)]
-    pub async fn delete_blocks_from_range(&self, block_range: &BlockRange) {
+    pub async fn delete_from_range(&self, block_range: &BlockRange) {
         sqlx::query!(
             "
                 DELETE FROM
@@ -70,14 +70,11 @@ impl<'a> BlockStore<'a> {
     }
 
     #[allow(dead_code)]
-    pub async fn store_block(&self, block: &ExecutionNodeBlock, eth_price: f64) {
+    pub async fn add(&self, block: &ExecutionNodeBlock, eth_price: f64) {
         block_store::store_block(self.db_pool, block, eth_price).await
     }
 
-    pub async fn first_block_number_after_or_at(
-        &self,
-        timestamp: &DateTime<Utc>,
-    ) -> Option<BlockNumber> {
+    pub async fn first_number_after_or_at(&self, timestamp: &DateTime<Utc>) -> Option<BlockNumber> {
         sqlx::query!(
             "
                 SELECT
@@ -118,7 +115,7 @@ mod tests {
 
         assert!(!block_store.block_number_exists(&test_number).await);
 
-        block_store.store_block(&test_block, 0.0).await;
+        block_store.add(&test_block, 0.0).await;
 
         assert!(block_store.block_number_exists(&test_number).await);
     }
@@ -134,7 +131,7 @@ mod tests {
         // Test the hash does not exist.
         assert!(!block_store.block_hash_exists(&test_block.hash).await);
 
-        block_store.store_block(&test_block, 0.0).await;
+        block_store.add(&test_block, 0.0).await;
 
         // Test the hash exists.
         assert!(block_store.block_hash_exists(&test_block.hash).await);
