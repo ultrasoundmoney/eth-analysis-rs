@@ -19,7 +19,8 @@ pub async fn get_db_pool(name: &str) -> PgPool {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::Utc;
+    use std::sync::atomic::AtomicUsize;
+
     use sqlx::postgres::PgPoolOptions;
 
     use super::*;
@@ -48,9 +49,14 @@ pub mod tests {
         name: String,
     }
 
+    static DB_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
+    fn get_id() -> usize {
+        DB_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
     impl TestDb {
         pub async fn new() -> Self {
-            let name = format!("testdb_{}", Utc::now().timestamp_millis());
+            let name = format!("testdb_{}", get_id());
 
             let mut connection = get_test_db_connection().await;
             sqlx::query(&format!("CREATE DATABASE {}", name))
@@ -72,19 +78,14 @@ pub mod tests {
         pub fn pool(&self) -> &PgPool {
             &self.pool
         }
-    }
 
-    #[cfg(test)]
-    impl Drop for TestDb {
-        fn drop(&mut self) {
-            let db_name = self.name.clone();
-            tokio::spawn(async move {
-                let mut db_connection = get_test_db_connection().await;
-                sqlx::query(&format!("DROP DATABASE {}", db_name))
-                    .execute(&mut db_connection)
-                    .await
-                    .unwrap();
-            });
+        pub async fn cleanup(&self) {
+            self.pool.close().await;
+            let mut connection = get_test_db_connection().await;
+            sqlx::query(&format!("DROP DATABASE {}", self.name))
+                .execute(&mut connection)
+                .await
+                .unwrap();
         }
     }
 }

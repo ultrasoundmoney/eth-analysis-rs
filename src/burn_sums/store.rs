@@ -180,5 +180,7 @@ mod tests {
             .await;
 
         assert_eq!(burn_sum, WeiNewtype::from(300));
+
+        test_db.cleanup().await;
     }
 }
