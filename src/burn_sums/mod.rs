@@ -154,7 +154,8 @@ async fn calc_new_burn_sum_record_from_last(
     time_frame: &TimeFrame,
 ) -> BurnSumRecord {
     debug!(%block.number, %block.hash, %time_frame, "calculating new burn sum record from last");
-    let new_burn_range = BlockRange::from_last_plus_time_frame(&block.number, time_frame);
+    let new_burn_range =
+        BlockRange::new(last_burn_sum.last_included_block_number + 1, block.number);
     let new_burn = burn_sum_store
         .burn_sum_from_block_range(&new_burn_range)
         .await;
