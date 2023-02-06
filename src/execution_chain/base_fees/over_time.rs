@@ -2,9 +2,8 @@ use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
-use tracing::{debug, warn};
+use tracing::warn;
 
-use crate::execution_chain::BELLATRIX_HARD_FORK_TIMESTAMP;
 use crate::{
     caching::{self, CacheKey},
     execution_chain::BlockNumber,
@@ -41,7 +40,7 @@ async fn get_base_fee_over_time(
 ) -> Vec<BaseFeeAtTime> {
     match time_frame {
         TimeFrame::Growing(growing_time_frame) => {
-            warn!("getting base fee over time for growing time frame is slow");
+            warn!(time_frame = %growing_time_frame, "getting base fee over time for growing time frame is slow");
             sqlx::query!(
                 r#"
                     SELECT
