@@ -8,6 +8,7 @@ use crate::{
     caching::{self, CacheKey},
     execution_chain::{BlockNumber, ExecutionNodeBlock},
     key_value_store,
+    performance::TimedExt,
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::WeiF64,
 };
@@ -23,12 +24,12 @@ async fn get_base_fee_per_gas_average(
                 warn!(time_frame = %growing_time_frame, "getting average fee for growing time frame is slow");
                 sqlx::query!(
                     r#"
-                        SELECT
-                            SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS "average!"
-                        FROM
-                            blocks_next
-                        WHERE
-                            number >= $1
+                    SELECT
+                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS "average!"
+                    FROM
+                        blocks_next
+                    WHERE
+                        number >= $1
                     "#,
                     growing_time_frame.start_block_number()
                 )
@@ -38,12 +39,12 @@ async fn get_base_fee_per_gas_average(
         TimeFrame::Limited(limited_time_frame) => {
             sqlx::query(
                 "
-                    SELECT
-                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= NOW() - $1
+                SELECT
+                    SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= NOW() - $1
                 ",
             )
             .bind(limited_time_frame.postgres_interval())
@@ -71,15 +72,15 @@ async fn get_base_fee_per_gas_min(
         TimeFrame::Growing(SinceMerge) => {
             let row = sqlx::query!(
                 r#"
-                    SELECT
-                        number,
-                        base_fee_per_gas AS "base_fee_per_gas!"
-                    FROM
-                        blocks
-                    WHERE
-                        mined_at >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
-                    ORDER BY base_fee_per_gas ASC
-                    LIMIT 1
+                SELECT
+                    number,
+                    base_fee_per_gas AS "base_fee_per_gas!"
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
+                ORDER BY base_fee_per_gas ASC
+                LIMIT 1
                 "#,
             )
             .fetch_one(executor)
@@ -91,13 +92,13 @@ async fn get_base_fee_per_gas_min(
         TimeFrame::Growing(SinceBurn) => {
             let row = sqlx::query!(
                 r#"
-                    SELECT
-                        number,
-                        base_fee_per_gas AS "base_fee_per_gas!"
-                    FROM
-                        blocks
-                    ORDER BY base_fee_per_gas ASC
-                    LIMIT 1
+                SELECT
+                    number,
+                    base_fee_per_gas AS "base_fee_per_gas!"
+                FROM
+                    blocks_next
+                ORDER BY base_fee_per_gas ASC
+                LIMIT 1
                 "#,
             )
             .fetch_one(executor)
@@ -107,17 +108,25 @@ async fn get_base_fee_per_gas_min(
             (row.number, row.base_fee_per_gas as f64)
         }
         TimeFrame::Limited(limited_time_frame) => {
+            // Using a CTE because Postgres will ...
             let row = sqlx::query!(
                 r#"
+                WITH blocks_in_time_frame AS (
                     SELECT
                         number,
-                        base_fee_per_gas AS "base_fee_per_gas!"
+                        base_fee_per_gas
                     FROM
                         blocks_next
                     WHERE
                         timestamp >= NOW() - $1::INTERVAL
-                    ORDER BY base_fee_per_gas ASC
-                    LIMIT 1
+                )
+                SELECT
+                    number,
+                    base_fee_per_gas AS "base_fee_per_gas!"
+                FROM
+                    blocks_in_time_frame
+                ORDER BY base_fee_per_gas ASC
+                LIMIT 1
                 "#,
                 limited_time_frame.postgres_interval(),
             )
@@ -139,15 +148,15 @@ async fn get_base_fee_per_gas_max(
         TimeFrame::Growing(SinceMerge) => {
             let row = sqlx::query!(
                 r#"
-                    SELECT
-                        number,
-                        base_fee_per_gas AS "base_fee_per_gas!"
-                    FROM
-                        blocks
-                    WHERE
-                        mined_at >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
-                    ORDER BY base_fee_per_gas DESC
-                    LIMIT 1
+                SELECT
+                    number,
+                    base_fee_per_gas AS "base_fee_per_gas!"
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
+                ORDER BY base_fee_per_gas DESC
+                LIMIT 1
                 "#,
             )
             .fetch_one(executor)
@@ -159,13 +168,13 @@ async fn get_base_fee_per_gas_max(
         TimeFrame::Growing(SinceBurn) => {
             let row = sqlx::query!(
                 r#"
-                    SELECT
-                        number,
-                        base_fee_per_gas AS "base_fee_per_gas!"
-                    FROM
-                        blocks
-                    ORDER BY base_fee_per_gas DESC
-                    LIMIT 1
+                SELECT
+                    number,
+                    base_fee_per_gas AS "base_fee_per_gas!"
+                FROM
+                    blocks_next
+                ORDER BY base_fee_per_gas DESC
+                LIMIT 1
                 "#,
             )
             .fetch_one(executor)
@@ -177,13 +186,20 @@ async fn get_base_fee_per_gas_max(
         TimeFrame::Limited(limited_time_frame) => {
             let row = sqlx::query!(
                 r#"
+                WITH blocks_in_time_frame AS (
                     SELECT
                         number,
-                        base_fee_per_gas AS "base_fee_per_gas!"
+                        base_fee_per_gas
                     FROM
                         blocks_next
                     WHERE
                         timestamp >= NOW() - $1::INTERVAL
+                )
+                    SELECT
+                        number,
+                        base_fee_per_gas AS "base_fee_per_gas!"
+                    FROM
+                        blocks_in_time_frame
                     ORDER BY base_fee_per_gas DESC
                     LIMIT 1
                 "#,
@@ -222,7 +238,7 @@ struct BaseFeePerGasStats {
     timestamp: DateTime<Utc>,
 }
 
-async fn get_base_fee_per_gas_stats_time_frame(
+async fn base_fee_per_gas_stats_from_time_frame(
     executor: &PgPool,
     time_frame: &TimeFrame,
 ) -> BaseFeePerGasStatsTimeFrame {
@@ -244,37 +260,42 @@ async fn get_base_fee_per_gas_stats_time_frame(
 pub async fn update_base_fee_stats(executor: &PgPool, barrier: f64, block: &ExecutionNodeBlock) {
     debug!("updating base fee over time");
 
-    debug!("barrier: {barrier}");
-
     let (m5, h1, d1, d7, d30, since_burn, since_merge) = join!(
-        get_base_fee_per_gas_stats_time_frame(
+        base_fee_per_gas_stats_from_time_frame(
             executor,
             &TimeFrame::Limited(LimitedTimeFrame::Minute5),
-        ),
-        get_base_fee_per_gas_stats_time_frame(
+        )
+        .timed("base_fee_per_gas_stats_minute5"),
+        base_fee_per_gas_stats_from_time_frame(
             executor,
-            &TimeFrame::Limited(LimitedTimeFrame::Hour1),
-        ),
-        get_base_fee_per_gas_stats_time_frame(
+            &TimeFrame::Limited(LimitedTimeFrame::Hour1)
+        )
+        .timed("base_fee_per_gas_stats_hour1"),
+        base_fee_per_gas_stats_from_time_frame(
             executor,
             &TimeFrame::Limited(LimitedTimeFrame::Day1),
-        ),
-        get_base_fee_per_gas_stats_time_frame(
+        )
+        .timed("base_fee_per_gas_stats_day1"),
+        base_fee_per_gas_stats_from_time_frame(
             executor,
             &TimeFrame::Limited(LimitedTimeFrame::Day7),
-        ),
-        get_base_fee_per_gas_stats_time_frame(
+        )
+        .timed("base_fee_per_gas_stats_day7"),
+        base_fee_per_gas_stats_from_time_frame(
             executor,
             &TimeFrame::Limited(LimitedTimeFrame::Day30),
-        ),
-        get_base_fee_per_gas_stats_time_frame(
+        )
+        .timed("base_fee_per_gas_stats_day30"),
+        base_fee_per_gas_stats_from_time_frame(
             executor,
             &TimeFrame::Growing(GrowingTimeFrame::SinceBurn)
-        ),
-        get_base_fee_per_gas_stats_time_frame(
+        )
+        .timed("base_fee_per_gas_stats_since_burn"),
+        base_fee_per_gas_stats_from_time_frame(
             executor,
             &TimeFrame::Growing(GrowingTimeFrame::SinceMerge)
         )
+        .timed("base_fee_per_gas_stats_since_merge"),
     );
 
     let base_fee_per_gas_stats = BaseFeePerGasStats {
