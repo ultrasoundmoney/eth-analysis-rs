@@ -135,13 +135,12 @@ pub async fn sync_blocks() {
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
     let mut heads_queue: HeadsQueue = VecDeque::new();
 
-    let mut progress = pit_wall::Progress::new(
-        "sync-execution-blocks",
-        estimate_blocks_remaining(&block_store, &mut execution_node)
-            .await
-            .try_into()
-            .unwrap(),
-    );
+    let blocks_remaining_on_start = estimate_blocks_remaining(&block_store, &mut execution_node)
+        .await
+        .try_into()
+        .unwrap();
+    debug!("blocks remaining on start: {}", blocks_remaining_on_start);
+    let mut progress = pit_wall::Progress::new("sync-execution-blocks", blocks_remaining_on_start);
 
     while let Some(head_block_number) = heads_stream.next().await {
         heads_queue.push_back(head_block_number);
