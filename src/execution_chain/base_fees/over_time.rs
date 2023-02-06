@@ -7,6 +7,7 @@ use tracing::warn;
 use crate::{
     caching::{self, CacheKey},
     execution_chain::BlockNumber,
+    performance::TimedExt,
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::WeiF64,
 };
@@ -34,7 +35,7 @@ struct BaseFeeOverTime {
     since_merge: Option<BaseFeeAtTime>,
 }
 
-async fn get_base_fee_over_time(
+async fn base_fee_over_time_from_time_frame(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
 ) -> Vec<BaseFeeAtTime> {
@@ -190,12 +191,18 @@ pub async fn update_base_fee_over_time(
     block_number: &BlockNumber,
 ) {
     let (m5, h1, d1, d7, d30, since_burn) = join!(
-        get_base_fee_over_time(executor, &TimeFrame::Limited(Minute5)),
-        get_base_fee_over_time(executor, &TimeFrame::Limited(Hour1)),
-        get_base_fee_over_time(executor, &TimeFrame::Limited(Day1),),
-        get_base_fee_over_time(executor, &TimeFrame::Limited(Day7),),
-        get_base_fee_over_time(executor, &TimeFrame::Limited(Day30)),
-        get_base_fee_over_time(executor, &TimeFrame::Growing(SinceBurn))
+        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Minute5))
+            .timed("base_fee_over_time_from_time_frame_minute5"),
+        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Hour1))
+            .timed("base_fee_over_time_from_time_frame_hour1"),
+        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Day1))
+            .timed("base_fee_over_time_from_time_frame_day1"),
+        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Day7))
+            .timed("base_fee_over_time_from_time_frame_day7"),
+        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Day30))
+            .timed("base_fee_over_time_from_time_frame_day30"),
+        base_fee_over_time_from_time_frame(executor, &TimeFrame::Growing(SinceBurn))
+            .timed("base_fee_over_time_from_time_frame_since_burn"),
     );
 
     let base_fee_over_time = BaseFeeOverTime {
@@ -264,7 +271,7 @@ mod tests {
         execution_chain::store_block(&mut transaction, &excluded_block, 0.0).await;
         execution_chain::store_block(&mut transaction, &included_block, 0.0).await;
 
-        let base_fees_d1 = get_base_fee_over_time(
+        let base_fees_d1 = base_fee_over_time_from_time_frame(
             &mut transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
@@ -298,7 +305,7 @@ mod tests {
         execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
 
         let base_fees_h1 =
-            get_base_fee_over_time(&mut transaction, &TimeFrame::Limited(Hour1)).await;
+            base_fee_over_time_from_time_frame(&mut transaction, &TimeFrame::Limited(Hour1)).await;
 
         assert_eq!(
             base_fees_h1,
