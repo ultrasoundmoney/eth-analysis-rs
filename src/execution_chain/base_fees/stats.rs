@@ -19,37 +19,22 @@ async fn get_base_fee_per_gas_average(
     time_frame: &TimeFrame,
 ) -> WeiF64 {
     match time_frame {
-        TimeFrame::Growing(growing_time_frame) => match growing_time_frame {
-            SinceMerge => {
-                sqlx::query(
-                    "
+        TimeFrame::Growing(growing_time_frame) => {
+                warn!(time_frame = %growing_time_frame, "getting average fee for growing time frame is slow");
+                sqlx::query!(
+                    r#"
                         SELECT
-                            SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
+                            SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS "average!"
                         FROM
-                            blocks
+                            blocks_next
                         WHERE
-                            mined_at >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
-                    ",
+                            number >= $1
+                    "#,
+                    growing_time_frame.start_block_number()
                 )
-                .map(|row: PgRow| row.get::<f64, _>("average"))
                 .fetch_one(executor)
-                .await.unwrap()
+                .await.unwrap().average
             },
-            SinceBurn => {
-                warn!("getting average fee for time frame 'since_burn' is slow, and may be incorrect depending on blocks_next backfill status");
-                sqlx::query(
-                    "
-                        SELECT
-                            SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS average
-                        FROM
-                            blocks
-                    ",
-                )
-                .map(|row: PgRow| row.get::<f64, _>("average"))
-                .fetch_one(executor)
-                .await.unwrap()
-            },
-        },
         TimeFrame::Limited(limited_time_frame) => {
             sqlx::query(
                 "
@@ -256,11 +241,7 @@ async fn get_base_fee_per_gas_stats_time_frame(
     }
 }
 
-pub async fn update_base_fee_stats(
-    executor: &PgPool,
-    barrier: f64,
-    block: &ExecutionNodeBlock,
-) -> anyhow::Result<()> {
+pub async fn update_base_fee_stats(executor: &PgPool, barrier: f64, block: &ExecutionNodeBlock) {
     debug!("updating base fee over time");
 
     debug!("barrier: {barrier}");
@@ -315,11 +296,12 @@ pub async fn update_base_fee_stats(
         CacheKey::BaseFeePerGasStats.to_db_key(),
         &serde_json::to_value(base_fee_per_gas_stats).unwrap(),
     )
-    .await?;
+    .await
+    .unwrap();
 
-    caching::publish_cache_update(executor, &CacheKey::BaseFeePerGasStats).await?;
-
-    Ok(())
+    caching::publish_cache_update(executor, &CacheKey::BaseFeePerGasStats)
+        .await
+        .unwrap();
 }
 
 #[cfg(test)]

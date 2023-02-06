@@ -4,7 +4,10 @@ use chrono::{DateTime, Duration, Utc};
 use sqlx::postgres::types::PgInterval;
 use thiserror::Error;
 
-use crate::execution_chain::{BELLATRIX_HARD_FORK_TIMESTAMP, LONDON_HARD_FORK_TIMESTAMP};
+use crate::execution_chain::{
+    BlockNumber, BELLATRIX_HARD_FORK_TIMESTAMP, LONDON_HARD_FORK_BLOCK_NUMBER,
+    LONDON_HARD_FORK_TIMESTAMP, MERGE_BLOCK_NUMBER,
+};
 
 use GrowingTimeFrame::*;
 use LimitedTimeFrame::*;
@@ -151,6 +154,13 @@ impl GrowingTimeFrame {
         }
     }
 
+    pub fn start_block_number(&self) -> BlockNumber {
+        match self {
+            SinceBurn => LONDON_HARD_FORK_BLOCK_NUMBER,
+            SinceMerge => MERGE_BLOCK_NUMBER,
+        }
+    }
+
     pub fn duration(&self) -> Duration {
         self.into()
     }
@@ -159,6 +169,16 @@ impl GrowingTimeFrame {
 impl From<&GrowingTimeFrame> for Duration {
     fn from(growing_time_frame: &GrowingTimeFrame) -> Self {
         Utc::now() - growing_time_frame.start()
+    }
+}
+
+impl Display for GrowingTimeFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use GrowingTimeFrame::*;
+        match self {
+            SinceBurn => write!(f, "since-burn"),
+            SinceMerge => write!(f, "since-merge"),
+        }
     }
 }
 
@@ -192,12 +212,9 @@ impl FromStr for TimeFrame {
 
 impl Display for TimeFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use GrowingTimeFrame::*;
         use TimeFrame::*;
-
         match self {
-            Growing(SinceBurn) => write!(f, "since-burn"),
-            Growing(SinceMerge) => write!(f, "since-merge"),
+            Growing(growing_time_frame) => write!(f, "{}", growing_time_frame),
             Limited(limited_time_frame) => write!(f, "{}", limited_time_frame),
         }
     }

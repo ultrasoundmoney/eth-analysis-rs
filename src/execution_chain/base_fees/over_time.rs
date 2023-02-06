@@ -1,9 +1,8 @@
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::execution_chain::BELLATRIX_HARD_FORK_TIMESTAMP;
 use crate::{
@@ -41,63 +40,33 @@ async fn get_base_fee_over_time(
     time_frame: &TimeFrame,
 ) -> Vec<BaseFeeAtTime> {
     match time_frame {
-        TimeFrame::Growing(SinceMerge) => {
-            debug!("getting base fee over time since merge is slow");
-            sqlx::query(
-                "
+        TimeFrame::Growing(growing_time_frame) => {
+            warn!("getting base fee over time for growing time frame is slow");
+            sqlx::query!(
+                r#"
                     SELECT
-                        DATE_TRUNC('day', mined_at) AS day_timestamp,
-                        SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS base_fee_per_gas
+                        DATE_TRUNC('day', timestamp) AS "day_timestamp!",
+                        SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS "base_fee_per_gas!"
                     FROM
-                        blocks
+                        blocks_next
                     WHERE
-                        mined_at >= $1
-                    GROUP BY day_timestamp
-                    ORDER BY day_timestamp ASC
-                ",
+                        timestamp >= $1
+                    GROUP BY "day_timestamp!"
+                    ORDER BY "day_timestamp!" ASC
+                "#,
+                growing_time_frame.start()
             )
-            .bind(*BELLATRIX_HARD_FORK_TIMESTAMP)
-            .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("day_timestamp");
-                let wei = row.get::<f64, _>("base_fee_per_gas");
-                BaseFeeAtTime {
-                    block_number: None,
-                    timestamp,
-                    wei,
-                }
-            })
             .fetch_all(executor)
             .await
             .unwrap()
-        },
-        TimeFrame::Growing(SinceBurn) => {
-            debug!("getting base fee over time since burn is slow");
-            // Getting base fees since burn is slow. ~5s as of Oct 24 2022 or 2.7M blocks.
-            // To improve performance, switch to calculating aggregates once, and storing them in a
-            // table.
-            sqlx::query(
-                "
-                    SELECT
-                        DATE_TRUNC('day', mined_at) AS day_timestamp,
-                        SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS base_fee_per_gas
-                    FROM
-                        blocks
-                    GROUP BY day_timestamp
-                    ORDER BY day_timestamp ASC
-                ",
-            )
-            .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("day_timestamp");
-                let wei = row.get::<f64, _>("base_fee_per_gas");
+            .into_iter()
+            .map(|row| {
                 BaseFeeAtTime {
                     block_number: None,
-                    timestamp,
-                    wei,
+                    timestamp: row.day_timestamp,
+                    wei: row.base_fee_per_gas,
                 }
-            })
-            .fetch_all(executor)
-            .await
-            .unwrap()
+            }).collect()
         }
         TimeFrame::Limited(ltf @ Minute5)
         | TimeFrame::Limited(ltf @ Hour1) => {
@@ -220,7 +189,7 @@ pub async fn update_base_fee_over_time(
     executor: &PgPool,
     barrier: f64,
     block_number: &BlockNumber,
-) -> Result<()> {
+) {
     let (m5, h1, d1, d7, d30, since_burn) = join!(
         get_base_fee_over_time(executor, &TimeFrame::Limited(Minute5)),
         get_base_fee_over_time(executor, &TimeFrame::Limited(Hour1)),
@@ -242,11 +211,13 @@ pub async fn update_base_fee_over_time(
         since_merge: None,
     };
 
-    caching::set_value(executor, &CacheKey::BaseFeeOverTime, base_fee_over_time).await?;
+    caching::set_value(executor, &CacheKey::BaseFeeOverTime, base_fee_over_time)
+        .await
+        .unwrap();
 
-    caching::publish_cache_update(executor, &CacheKey::BaseFeeOverTime).await?;
-
-    Ok(())
+    caching::publish_cache_update(executor, &CacheKey::BaseFeeOverTime)
+        .await
+        .unwrap();
 }
 
 #[cfg(test)]

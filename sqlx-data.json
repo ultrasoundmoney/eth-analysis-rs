@@ -652,6 +652,32 @@
     },
     "query": "\n        DELETE FROM blocks_next\n        WHERE number >= $1\n        "
   },
+  "7d12db7b734a2b163d0823ea4f4fa8b421aa8ea9d9982e61b514d6955cfc8f5d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "day_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "base_fee_per_gas!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n                    SELECT\n                        DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                        SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS \"base_fee_per_gas!\"\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= $1\n                    GROUP BY \"day_timestamp!\"\n                    ORDER BY \"day_timestamp!\" ASC\n                "
+  },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {
       "columns": [
@@ -1157,6 +1183,26 @@
       }
     },
     "query": "\n                    SELECT\n                        number,\n                        base_fee_per_gas AS \"base_fee_per_gas!\"\n                    FROM\n                        blocks\n                    ORDER BY base_fee_per_gas ASC\n                    LIMIT 1\n                "
+  },
+  "cfb69b55055d4fcc08134ed1572d876f429d5964745e2c06b3e61ecc4bc8b806": {
+    "describe": {
+      "columns": [
+        {
+          "name": "average!",
+          "ordinal": 0,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                        SELECT\n                            SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS \"average!\"\n                        FROM\n                            blocks_next\n                        WHERE\n                            number >= $1\n                    "
   },
   "d6859d536cd59537dab9586f40842bece3a71025579e0174ba0e83b2a33d5a2c": {
     "describe": {
