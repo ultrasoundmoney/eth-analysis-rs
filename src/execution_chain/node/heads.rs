@@ -149,7 +149,7 @@ pub async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Bloc
     // chain has advanced between these two calls.
     let heads_stream = stream_new_head_block_numbers();
 
-    let block_range = BlockRange::new(gte_slot, last_block_on_start.number - 1);
+    let block_range = BlockRange::new(gte_slot, last_block_on_start.number);
 
     let historic_heads_stream = stream_historic_block_numbers(block_range);
 

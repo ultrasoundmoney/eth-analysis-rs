@@ -115,9 +115,6 @@ async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = BlockNumber> 
 
 type HeadsQueue = VecDeque<BlockNumber>;
 
-// TODO: one unhandled case. Heads stream jumps forwards sometimes. This causes us to roll back one
-// block. Then correctly queue the needlessly rolled back block, the missing block, and the one we
-// were trying to sync. Check if this is because historical and live heads have a gap.
 pub async fn sync_blocks() {
     log::init_with_env();
 
