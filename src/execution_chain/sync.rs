@@ -148,6 +148,8 @@ pub async fn sync_blocks() {
                 .await
                 .expect("expect chain to never get shorter");
 
+            debug!(number = next_block.number, "syncing next block from queue");
+
             // Either we can add a block, or we need to roll back first. We can add a block when the
             // last stored block matches the one on-chain, and nothing is stored for the current block
             // number. If either condition fails, we need to roll back first, and then sync to the
@@ -162,7 +164,6 @@ pub async fn sync_blocks() {
 
             if last_matches && current_number_is_free {
                 // Add to the chain.
-                debug!(number = next_block.number, "syncing next block by hash");
                 sync_by_hash(
                     &issuance_store,
                     &mut execution_node,
@@ -172,6 +173,13 @@ pub async fn sync_blocks() {
                 .timed("sync_by_hash")
                 .await;
             } else {
+                warn!(
+                    number = next_block.number,
+                    forks_head = !current_number_is_free,
+                    parent_mismatch = !last_matches,
+                    "next block is not the next block in our copy of the chain, rolling back"
+                );
+
                 // Roll back until we're following the canonical chain again, queue all rolled
                 // back blocks.
                 let last_matching_block_number = find_last_matching_block_number(
@@ -181,14 +189,16 @@ pub async fn sync_blocks() {
                 )
                 .await;
 
-                warn!(last_matching_block_number, "rolling back to block number");
+                debug!(last_matching_block_number, "rolling back to block number");
 
                 let first_invalid_block_number = last_matching_block_number + 1;
 
+                // Roll back
                 rollback_numbers(&db_pool, &first_invalid_block_number).await;
 
+                // Requeue
                 for block_number in (first_invalid_block_number..=next_block.number).rev() {
-                    debug!(block_number, "rolling back and requeueing");
+                    debug!(block_number, "requeueing");
                     heads_queue.push_front(block_number);
                 }
             }
