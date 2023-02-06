@@ -49,6 +49,7 @@ use crate::{
     burn_sums::store::BurnSumStore,
     caching::{self, CacheKey},
     execution_chain::{BlockNumber, BlockRange, BlockStore, ExecutionNodeBlock},
+    performance::TimedExt,
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::{EthNewtype, WeiNewtype},
 };
@@ -132,6 +133,7 @@ async fn calc_new_burn_sum_record_from_scratch(
     block: &ExecutionNodeBlock,
     time_frame: &TimeFrame,
 ) -> BurnSumRecord {
+    debug!(%block.number, %block.hash, %time_frame, "calculating new burn sum record from scratch");
     let range = BlockRange::from_last_plus_time_frame(&block.number, time_frame);
     let sum = burn_sum_store.burn_sum_from_block_range(&range).await;
     BurnSumRecord {
@@ -151,6 +153,7 @@ async fn calc_new_burn_sum_record_from_last(
     block: &ExecutionNodeBlock,
     time_frame: &TimeFrame,
 ) -> BurnSumRecord {
+    debug!(%block.number, %block.hash, %time_frame, "calculating new burn sum record from last");
     let new_burn_range = BlockRange::from_last_plus_time_frame(&block.number, time_frame);
     let new_burn = burn_sum_store
         .burn_sum_from_block_range(&new_burn_range)
@@ -220,13 +223,20 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) {
     let burn_sum_store = BurnSumStore::new(db_pool);
 
     let (since_burn, since_merge, d30, d7, d1, h1, m5) = join!(
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Growing(SinceBurn)),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Growing(SinceMerge)),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day30)),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day7)),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day1)),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Hour1)),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Minute5)),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Growing(SinceBurn))
+            .timed("calc_new_burn_sum_record_since_burn"),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Growing(SinceMerge))
+            .timed("calc_new_burn_sum_record_since_merge"),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day30))
+            .timed("calc_new_burn_sum_record_day30"),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day7))
+            .timed("calc_new_burn_sum_record_day7"),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day1))
+            .timed("calc_new_burn_sum_record_day1"),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Hour1))
+            .timed("calc_new_burn_sum_record_hour1"),
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Minute5))
+            .timed("calc_new_burn_sum_record_minute5")
     );
 
     let burn_sums = [&since_burn, &since_merge, &d30, &d7, &d1, &h1, &m5];

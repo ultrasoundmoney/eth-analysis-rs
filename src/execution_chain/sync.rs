@@ -59,8 +59,12 @@ async fn sync_by_hash(
     let is_synced = execution_node.get_latest_block().await.hash == hash;
     if is_synced {
         debug!("we're synced, running on_new_head for skippables");
-        base_fees::on_new_block(db_pool, issuance_store, &block).await;
-        burn_sums::on_new_block(db_pool, &block).await;
+        base_fees::on_new_block(db_pool, issuance_store, &block)
+            .timed("base_fees_on_new_block")
+            .await;
+        burn_sums::on_new_block(db_pool, &block)
+            .timed("burn_sums_on_new_block")
+            .await;
     } else {
         debug!("not synced, skipping skippables");
     }
