@@ -1,5 +1,31 @@
 {
   "db": "PostgreSQL",
+  "00d1655f502cdb29f35562ab2c01edcc72bb5e66b0e39c6bf87443d48b3e528c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "base_fee_per_gas!",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY base_fee_per_gas DESC\n                LIMIT 1\n                "
+  },
   "046945e120820491c162a629c80a9cd3dc33508d97653b2ccb6d3b46328fd4df": {
     "describe": {
       "columns": [
@@ -632,32 +658,6 @@
     },
     "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks \n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root \n            WHERE slot < $1\n            ORDER BY slot DESC \n            LIMIT 1\n        "
   },
-  "787845cb57b12bce685ed3404e936cc2f52012b26a479f8b39a2ed745a6789d7": {
-    "describe": {
-      "columns": [
-        {
-          "name": "number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "base_fee_per_gas!",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Interval"
-        ]
-      }
-    },
-    "query": "\n                WITH blocks_in_time_frame AS (\n                    SELECT\n                        number,\n                        base_fee_per_gas\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= NOW() - $1::INTERVAL\n                )\n                    SELECT\n                        number,\n                        base_fee_per_gas AS \"base_fee_per_gas!\"\n                    FROM\n                        blocks_in_time_frame\n                    ORDER BY base_fee_per_gas DESC\n                    LIMIT 1\n                "
-  },
   "7c8ce12377837516c1b52c711729f7ac5a07f0a924ff1227b5b7374de482ce7f": {
     "describe": {
       "columns": [],
@@ -1044,32 +1044,6 @@
     },
     "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM execution_supply_deltas\n                WHERE block_hash = $1\n            ) AS \"exists!\"\n        "
   },
-  "bad053eff0a29704777404de5588c15dfc495ec0faa0d15c20d0724f4b8ca440": {
-    "describe": {
-      "columns": [
-        {
-          "name": "number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "base_fee_per_gas!",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Interval"
-        ]
-      }
-    },
-    "query": "\n                WITH blocks_in_time_frame AS (\n                    SELECT\n                        number,\n                        base_fee_per_gas\n                    FROM\n                        blocks_next\n                    WHERE\n                        timestamp >= NOW() - $1::INTERVAL\n                )\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_in_time_frame\n                ORDER BY base_fee_per_gas ASC\n                LIMIT 1\n                "
-  },
   "bd2c6af1a773d988ab106bacc9cf8e9beaea8aaa1a34b7173baccf01668223cc": {
     "describe": {
       "columns": [
@@ -1365,5 +1339,31 @@
       }
     },
     "query": "\n            INSERT INTO\n                eth_prices (timestamp, ethusd)\n            VALUES ($1, $2)\n            ON CONFLICT (timestamp) DO UPDATE SET\n                ethusd = excluded.ethusd\n        "
+  },
+  "fc6c39d3a17315fb68e2bde55201c2bf4bd65814d27afb26b7119b64de39b984": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "base_fee_per_gas!",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY base_fee_per_gas ASC\n                LIMIT 1\n                "
   }
 }
