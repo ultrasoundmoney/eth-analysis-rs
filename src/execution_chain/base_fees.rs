@@ -56,7 +56,7 @@ pub async fn on_new_block(
         last::update_last_base_fee(db_pool, block).timed("update_last_base_fee"),
         stats::update_base_fee_stats(db_pool, barrier, block).timed("update_base_fee_stats"),
         over_time::update_base_fee_over_time(db_pool, barrier, &block.number)
-            .timed("update_base_fee_over_time")
+            .timed("update_base_fee_over_time"),
     );
 }
 
