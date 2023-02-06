@@ -243,9 +243,12 @@ async fn base_fee_per_gas_stats_from_time_frame(
     time_frame: &TimeFrame,
 ) -> BaseFeePerGasStatsTimeFrame {
     let ((min_block_number, min), (max_block_number, max), average) = join!(
-        get_base_fee_per_gas_min(executor, time_frame),
-        get_base_fee_per_gas_max(executor, time_frame),
-        get_base_fee_per_gas_average(executor, time_frame),
+        get_base_fee_per_gas_min(executor, time_frame)
+            .timed(&format!("get_base_fee_per_gas_min_{time_frame}")),
+        get_base_fee_per_gas_max(executor, time_frame)
+            .timed(&format!("get_base_fee_per_gas_max_{time_frame}")),
+        get_base_fee_per_gas_average(executor, time_frame)
+            .timed(&format!("get_base_fee_per_gas_average_{time_frame}"))
     );
 
     BaseFeePerGasStatsTimeFrame {

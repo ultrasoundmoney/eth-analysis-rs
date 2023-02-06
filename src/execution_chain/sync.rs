@@ -48,10 +48,13 @@ async fn sync_by_hash(
 
     let mut connection = db_pool.acquire().await.unwrap();
     let eth_price = usd_price::get_eth_price_by_block(&mut connection, &block)
+        .timed("get_eth_price_by_block")
         .await
         .expect("eth price close to block to be available");
 
-    execution_chain::store_block(db_pool, &block, eth_price).await;
+    execution_chain::store_block(db_pool, &block, eth_price)
+        .timed("store_block")
+        .await;
 
     // Some computations can be skipped, others should be ran, and rolled back for every change in
     // the chain of blocks we've assembled. These are the ones that are skippable, and so skipped
