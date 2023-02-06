@@ -211,7 +211,7 @@ impl ExecutionNode {
         &mut self,
         number: &BlockNumber,
     ) -> Option<ExecutionNodeBlock> {
-        let hex_number = format!("0x{:x}", number);
+        let hex_number = format!("0x{number:x}");
         self.call("eth_getBlockByNumber", &json!((hex_number, false)))
             .await
             .map_or_else(

@@ -210,7 +210,7 @@ pub async fn write_blocks_from_august() -> Result<()> {
 
     debug!("loading eth prices");
 
-    let file_path = format!("blocks_from_august_{}.csv", timestamp);
+    let file_path = format!("blocks_from_august_{timestamp}.csv");
 
     write_blocks_from(EXECUTION_BLOCK_NUMBER_AUG_1ST, &file_path).await?;
 

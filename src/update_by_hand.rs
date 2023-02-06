@@ -66,12 +66,7 @@ async fn set_eth_in_defi_for_env(env: &str, eth: f64) -> Result<()> {
 
 async fn set_eth_in_defi() -> Result<()> {
     let env_options = vec!["dev", "stag", "prod"];
-    let selected_envs: Vec<String> = MultiSelect::new()
-        .items(&env_options)
-        .interact()?
-        .into_iter()
-        .map(|i| env_options[i].to_string())
-        .collect();
+    let chosen = MultiSelect::new().items(&env_options).interact()?;
 
     let eth_in_defi = Input::<f64>::new()
         .with_prompt("how much eth is currently in defi?")
@@ -79,22 +74,28 @@ async fn set_eth_in_defi() -> Result<()> {
 
     let mut handles = Vec::new();
 
-    for env in selected_envs.iter().cloned() {
+    for i in &chosen {
+        let env = env_options[*i];
         let handle = tokio::spawn(async move {
-            set_eth_in_defi_for_env(&env, eth_in_defi).await.unwrap();
+            set_eth_in_defi_for_env(env, eth_in_defi).await.unwrap();
         });
 
         handles.push(handle);
     }
 
-    for env in selected_envs.iter().cloned() {
-        set_eth_in_defi_for_env(&env, eth_in_defi).await.unwrap()
+    for i in &chosen {
+        let env = env_options[*i];
+        set_eth_in_defi_for_env(env, eth_in_defi).await.unwrap()
     }
 
     println!(
         "stored {} eth in defi for envs {}",
         eth_in_defi,
-        selected_envs.join(",")
+        chosen
+            .into_iter()
+            .map(|i| env_options[i].to_string())
+            .collect::<Vec<String>>()
+            .join(",")
     );
 
     Ok(())

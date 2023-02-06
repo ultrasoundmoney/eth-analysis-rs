@@ -29,7 +29,7 @@ impl Add for EthNewtype {
 impl Display for EthNewtype {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let EthNewtype(amount) = self;
-        write!(f, "{}", amount)
+        write!(f, "{amount}")
     }
 }
 

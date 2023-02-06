@@ -59,7 +59,7 @@ pub mod tests {
             let name = format!("testdb_{}", get_id());
 
             let mut connection = get_test_db_connection().await;
-            sqlx::query(&format!("CREATE DATABASE {}", name))
+            sqlx::query(&format!("CREATE DATABASE {name}"))
                 .execute(&mut connection)
                 .await
                 .unwrap();

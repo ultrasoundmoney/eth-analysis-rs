@@ -214,8 +214,8 @@ impl Display for TimeFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use TimeFrame::*;
         match self {
-            Growing(growing_time_frame) => write!(f, "{}", growing_time_frame),
-            Limited(limited_time_frame) => write!(f, "{}", limited_time_frame),
+            Growing(growing_time_frame) => write!(f, "{growing_time_frame}"),
+            Limited(limited_time_frame) => write!(f, "{limited_time_frame}"),
         }
     }
 }

@@ -261,7 +261,7 @@ pub async fn get_supply_over_time(
     );
 
     since_merge.push(last_supply_point.clone());
-    since_burn.push(last_supply_point.clone());
+    since_burn.push(last_supply_point);
 
     let supply_over_time = SupplyOverTime {
         block_number,

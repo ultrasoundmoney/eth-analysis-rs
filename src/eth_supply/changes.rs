@@ -91,7 +91,7 @@ async fn from_time_frame(
                 from_slot.0
             )
             .fetch_optional(executor)
-            .timed(&format!("get-supply-change-from-{}", tf))
+            .timed(&format!("get-supply-change-from-{tf}"))
             .await
             .map(|row| {
                 row.map(|row| {

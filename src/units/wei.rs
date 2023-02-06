@@ -49,7 +49,7 @@ impl Sub<WeiNewtype> for WeiNewtype {
 impl Display for WeiNewtype {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let WeiNewtype(amount) = self;
-        write!(f, "{}", amount)
+        write!(f, "{amount}")
     }
 }
 

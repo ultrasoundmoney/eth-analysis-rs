@@ -29,15 +29,15 @@ impl From<&BurnSums> for BurnRates {
             since_merge,
         } = burn_totals;
 
-        let d1 = d1.0 as f64 / LimitedTimeFrame::Day1.duration().num_minutes() as f64;
-        let d30 = d30.0 as f64 / LimitedTimeFrame::Day30.duration().num_minutes() as f64;
-        let d7 = d7.0 as f64 / LimitedTimeFrame::Day7.duration().num_minutes() as f64;
-        let h1 = h1.0 as f64 / LimitedTimeFrame::Hour1.duration().num_minutes() as f64;
-        let m5 = m5.0 as f64 / LimitedTimeFrame::Minute5.duration().num_minutes() as f64;
+        let d1 = d1.0 / LimitedTimeFrame::Day1.duration().num_minutes() as f64;
+        let d30 = d30.0 / LimitedTimeFrame::Day30.duration().num_minutes() as f64;
+        let d7 = d7.0 / LimitedTimeFrame::Day7.duration().num_minutes() as f64;
+        let h1 = h1.0 / LimitedTimeFrame::Hour1.duration().num_minutes() as f64;
+        let m5 = m5.0 / LimitedTimeFrame::Minute5.duration().num_minutes() as f64;
         let since_burn =
-            since_burn.0 as f64 / (GrowingTimeFrame::SinceBurn.duration()).num_minutes() as f64;
+            since_burn.0 / (GrowingTimeFrame::SinceBurn.duration()).num_minutes() as f64;
         let since_merge =
-            since_merge.0 as f64 / (GrowingTimeFrame::SinceMerge.duration()).num_minutes() as f64;
+            since_merge.0 / (GrowingTimeFrame::SinceMerge.duration()).num_minutes() as f64;
 
         BurnRates {
             d1,

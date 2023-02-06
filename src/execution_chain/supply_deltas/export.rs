@@ -18,7 +18,7 @@ pub async fn write_deltas() {
 
     let mut progress = pit_wall::Progress::new("write supply deltas", 15_000_000);
 
-    let file_path = format!("supply_deltas_{}.csv", timestamp);
+    let file_path = format!("supply_deltas_{timestamp}.csv");
 
     let mut csv_writer = csv::Writer::from_path(&file_path).unwrap();
 

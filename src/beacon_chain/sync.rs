@@ -260,7 +260,7 @@ pub async fn sync_slot_by_state_root(
 
     if last_on_chain_state_root == *state_root {
         debug!("sync caught up with head of chain, updating deferrable analysis");
-        update_deferrable_analysis(&db_pool).await?;
+        update_deferrable_analysis(db_pool).await?;
     } else {
         debug!("sync not yet caught up with head of chain, skipping deferrable analysis");
     }
@@ -512,10 +512,7 @@ pub async fn sync_beacon_states() -> Result<()> {
                 .get_state_root_by_slot(&slot)
                 .await?
                 .unwrap_or_else(|| {
-                    panic!(
-                        "expect state_root to exist for slot {} to sync from queue",
-                        slot
-                    )
+                    panic!("expect state_root to exist for slot {slot} to sync from queue")
                 });
             let current_slot_stored_state_root =
                 states::get_state_root_by_slot(&db_pool, &slot).await;

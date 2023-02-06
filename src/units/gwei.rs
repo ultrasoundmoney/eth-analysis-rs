@@ -127,7 +127,7 @@ impl<'de> Visitor<'de> for GweiAmountVisitor {
     {
         v.parse::<i64>().map(GweiNewtype).map_err(|error| {
             de::Error::invalid_value(
-                de::Unexpected::Str(&format!("unexpected value: {}, error: {}", v, error)),
+                de::Unexpected::Str(&format!("unexpected value: {v}, error: {error}")),
                 &"a number as string: \"118908973575220938\", which fits within u64",
             )
         })

@@ -141,7 +141,7 @@ async fn calc_new_burn_sum_record_from_scratch(
         last_included_block_hash: block.hash.clone(),
         last_included_block_number: range.end,
         sum,
-        time_frame: time_frame.clone(),
+        time_frame: *time_frame,
         timestamp: block.timestamp,
     }
 }
@@ -189,7 +189,7 @@ async fn calc_new_burn_sum_record_from_last(
         last_included_block_hash: block.hash.clone(),
         last_included_block_number: new_burn_range.end,
         sum,
-        time_frame: time_frame.clone(),
+        time_frame: *time_frame,
         timestamp: block.timestamp,
     }
 }

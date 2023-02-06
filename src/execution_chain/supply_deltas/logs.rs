@@ -30,7 +30,7 @@ pub async fn write_deltas_log() {
     let mut supply_deltas_stream =
         supply_deltas::stream_supply_deltas_from(latest_block.number, false);
 
-    let file_path = format!("supply_deltas_log_{}.csv", timestamp);
+    let file_path = format!("supply_deltas_log_{timestamp}.csv");
 
     let mut csv_writer = csv::Writer::from_path(&file_path).unwrap();
 
