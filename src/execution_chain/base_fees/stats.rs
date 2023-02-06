@@ -108,23 +108,15 @@ async fn get_base_fee_per_gas_min(
             (row.number, row.base_fee_per_gas as f64)
         }
         TimeFrame::Limited(limited_time_frame) => {
-            // Using a CTE because Postgres will ...
             let row = sqlx::query!(
                 r#"
-                WITH blocks_in_time_frame AS (
-                    SELECT
-                        number,
-                        base_fee_per_gas
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= NOW() - $1::INTERVAL
-                )
                 SELECT
                     number,
                     base_fee_per_gas AS "base_fee_per_gas!"
                 FROM
-                    blocks_in_time_frame
+                    blocks_next
+                WHERE
+                    timestamp >= NOW() - $1::INTERVAL
                 ORDER BY base_fee_per_gas ASC
                 LIMIT 1
                 "#,
@@ -186,22 +178,15 @@ async fn get_base_fee_per_gas_max(
         TimeFrame::Limited(limited_time_frame) => {
             let row = sqlx::query!(
                 r#"
-                WITH blocks_in_time_frame AS (
-                    SELECT
-                        number,
-                        base_fee_per_gas
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= NOW() - $1::INTERVAL
-                )
-                    SELECT
-                        number,
-                        base_fee_per_gas AS "base_fee_per_gas!"
-                    FROM
-                        blocks_in_time_frame
-                    ORDER BY base_fee_per_gas DESC
-                    LIMIT 1
+                SELECT
+                    number,
+                    base_fee_per_gas AS "base_fee_per_gas!"
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= NOW() - $1::INTERVAL
+                ORDER BY base_fee_per_gas DESC
+                LIMIT 1
                 "#,
                 limited_time_frame.postgres_interval(),
             )
