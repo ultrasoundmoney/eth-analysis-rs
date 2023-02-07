@@ -5,8 +5,8 @@ use sqlx::{Acquire, PgConnection, PgPool};
 use tracing::{debug, warn};
 
 use crate::{
-    beacon_chain::{self, BeaconBalancesSum, BeaconDepositsSum, Slot},
-    execution_chain::{self, BlockNumber, ExecutionBalancesSum},
+    beacon_chain::{self, Slot},
+    execution_chain::{self, BlockNumber},
     units::{GweiNewtype, WeiNewtype},
 };
 
@@ -14,15 +14,16 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SupplyParts {
-    #[deprecated = "switch to beacon_balances_sum_next"]
-    beacon_balances_sum: BeaconBalancesSum,
-    pub beacon_balances_sum_next: GweiNewtype,
-    #[deprecated = "switch to beacon_deposits_sum_next"]
-    beacon_deposits_sum: BeaconDepositsSum,
-    pub beacon_deposits_sum_next: GweiNewtype,
-    #[deprecated = "switch to execution_balances_sum_next"]
-    pub execution_balances_sum: ExecutionBalancesSum,
-    pub execution_balances_sum_next: WeiNewtype,
+    pub beacon_balances_sum: GweiNewtype,
+    #[deprecated = "switch to beacon_balances_sum"]
+    beacon_balances_sum_next: GweiNewtype,
+    pub beacon_deposits_sum: GweiNewtype,
+    #[deprecated = "switch to beacon_deposits_sum"]
+    beacon_deposits_sum_next: GweiNewtype,
+    pub block_number: BlockNumber,
+    pub execution_balances_sum: WeiNewtype,
+    #[deprecated = "switch to execution_balances_sum"]
+    execution_balances_sum_next: WeiNewtype,
     pub slot: Slot,
 }
 
@@ -35,32 +36,24 @@ impl SupplyParts {
         beacon_deposits_sum: GweiNewtype,
     ) -> Self {
         Self {
-            beacon_balances_sum: BeaconBalancesSum {
-                slot: *slot,
-                balances_sum: beacon_balances_sum,
-            },
+            beacon_balances_sum,
             beacon_balances_sum_next: beacon_balances_sum,
-            beacon_deposits_sum: BeaconDepositsSum {
-                deposits_sum: beacon_deposits_sum,
-                slot: *slot,
-            },
+            beacon_deposits_sum,
             beacon_deposits_sum_next: beacon_deposits_sum,
-            execution_balances_sum: ExecutionBalancesSum {
-                block_number: *block_number,
-                balances_sum: execution_balances_sum,
-            },
+            block_number: *block_number,
+            execution_balances_sum,
             execution_balances_sum_next: execution_balances_sum,
             slot: *slot,
         }
     }
 
     pub fn block_number(&self) -> BlockNumber {
-        self.execution_balances_sum.block_number
+        self.block_number
     }
 
     pub fn supply(&self) -> WeiNewtype {
-        self.execution_balances_sum_next + self.beacon_balances_sum_next.into()
-            - self.beacon_deposits_sum_next.into()
+        self.execution_balances_sum + self.beacon_balances_sum.into()
+            - self.beacon_deposits_sum.into()
     }
 }
 

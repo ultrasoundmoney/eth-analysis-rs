@@ -59,9 +59,9 @@ pub async fn fill_gaps() -> Result<()> {
                         &mut db_connection,
                         &Slot(slot),
                         &supply_parts.block_number(),
-                        &supply_parts.execution_balances_sum_next,
-                        &supply_parts.beacon_balances_sum_next,
-                        &supply_parts.beacon_deposits_sum_next,
+                        &supply_parts.execution_balances_sum,
+                        &supply_parts.beacon_balances_sum,
+                        &supply_parts.beacon_deposits_sum,
                     )
                     .await?;
                 }

@@ -132,9 +132,9 @@ pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> 
                 executor.acquire().await?,
                 slot,
                 &supply_parts.block_number(),
-                &supply_parts.execution_balances_sum_next,
-                &supply_parts.beacon_balances_sum_next,
-                &supply_parts.beacon_deposits_sum_next,
+                &supply_parts.execution_balances_sum,
+                &supply_parts.beacon_balances_sum,
+                &supply_parts.beacon_deposits_sum,
             )
             .await?;
         }
@@ -370,9 +370,9 @@ mod tests {
             &mut transaction,
             &slot,
             &0,
-            &supply_parts.execution_balances_sum_next,
-            &supply_parts.beacon_balances_sum_next,
-            &supply_parts.beacon_deposits_sum_next,
+            &supply_parts.execution_balances_sum,
+            &supply_parts.beacon_balances_sum,
+            &supply_parts.beacon_deposits_sum,
         )
         .await
         .unwrap();
@@ -410,9 +410,9 @@ mod tests {
             &mut transaction,
             &slot,
             &0,
-            &supply_parts.execution_balances_sum_next,
-            &supply_parts.beacon_balances_sum_next,
-            &supply_parts.beacon_deposits_sum_next,
+            &supply_parts.execution_balances_sum,
+            &supply_parts.beacon_balances_sum,
+            &supply_parts.beacon_deposits_sum,
         )
         .await
         .unwrap();
