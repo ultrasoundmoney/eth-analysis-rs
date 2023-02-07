@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Duration, Utc};
+use enum_iterator::Sequence;
 use sqlx::postgres::types::PgInterval;
 use thiserror::Error;
 
@@ -12,7 +13,7 @@ use crate::execution_chain::{
 use GrowingTimeFrame::*;
 use LimitedTimeFrame::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Sequence)]
 pub enum LimitedTimeFrame {
     Day1,
     Day30,
@@ -140,7 +141,7 @@ impl Display for LimitedTimeFrame {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Sequence)]
 pub enum GrowingTimeFrame {
     SinceBurn,
     SinceMerge,
@@ -182,7 +183,7 @@ impl Display for GrowingTimeFrame {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Sequence)]
 pub enum TimeFrame {
     Growing(GrowingTimeFrame),
     Limited(LimitedTimeFrame),

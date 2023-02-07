@@ -6,11 +6,14 @@ mod block_store_next;
 mod export_blocks;
 mod logs;
 mod node;
+pub mod routes;
 mod supply_deltas;
 mod sync;
 
 pub use balances::get_execution_balances_by_hash;
 pub use balances::ExecutionBalancesSum;
+
+pub use base_fees::routes as base_fees_routes;
 
 pub use block_range::BlockRange;
 
@@ -37,7 +40,6 @@ pub use node::TotalDifficulty;
 pub use node::ExecutionNodeBlockBuilder;
 
 pub use supply_deltas::add_delta;
-pub use supply_deltas::stream_supply_delta_chunks;
 pub use supply_deltas::stream_supply_deltas_from;
 pub use supply_deltas::summary_from_deltas_csv;
 pub use supply_deltas::sync_deltas as sync_execution_supply_deltas;

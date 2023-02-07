@@ -2,7 +2,7 @@ use futures::prelude::*;
 use serde::Deserialize;
 use tracing::{debug, info};
 
-use crate::{execution_chain, log};
+use crate::{execution_chain::supply_deltas, log};
 
 const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
 
@@ -14,7 +14,7 @@ pub async fn write_deltas() {
     info!("writing supply deltas {timestamp}");
 
     let mut supply_deltas_rx =
-        execution_chain::stream_supply_delta_chunks(0, SUPPLY_DELTA_BUFFER_SIZE, true);
+        supply_deltas::stream_supply_delta_chunks(0, SUPPLY_DELTA_BUFFER_SIZE, true);
 
     let mut progress = pit_wall::Progress::new("write supply deltas", 15_000_000);
 

@@ -17,6 +17,7 @@ chrono = { version = "0.4", features = ["serde"] }
 console = "0.15"
 csv = "1"
 dialoguer = "0.10"
+enum-iterator = "1"
 etag = "4"
 eventsource = "0.5"
 format-url = "0.6"

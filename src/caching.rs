@@ -1,19 +1,24 @@
 use std::{fmt::Display, str::FromStr};
 
 use anyhow::Result;
+use enum_iterator::Sequence;
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::{PgExecutor, PgPool};
 use thiserror::Error;
 use tracing::debug;
 
-use crate::key_value_store;
+use crate::{
+    key_value_store,
+    time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
+};
 
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Sequence)]
 pub enum CacheKey {
     BaseFeeOverTime,
     BaseFeePerGas,
     BaseFeePerGasStats,
+    BaseFeePerGasStatsTimeFrame(TimeFrame),
     BlockLag,
     BurnRates,
     BurnSums,
@@ -38,11 +43,24 @@ impl Display for CacheKey {
 }
 
 impl CacheKey {
-    pub fn to_db_key(&self) -> &'_ str {
+    pub fn to_db_key(self) -> &'static str {
+        use GrowingTimeFrame::*;
+        use LimitedTimeFrame::*;
+        use TimeFrame::*;
+
         match self {
             Self::BaseFeeOverTime => "base-fee-over-time",
             Self::BaseFeePerGas => "current-base-fee",
             Self::BaseFeePerGasStats => "base-fee-per-gas-stats",
+            Self::BaseFeePerGasStatsTimeFrame(time_frame) => match time_frame {
+                Growing(SinceBurn) => "base-fee-per-gas-stats-since-burn",
+                Growing(SinceMerge) => "base-fee-per-gas-stats-since-merge",
+                Limited(Minute5) => "base-fee-per-gas-stats-m5",
+                Limited(Hour1) => "base-fee-per-gas-stats-h1",
+                Limited(Day1) => "base-fee-per-gas-stats-d1",
+                Limited(Day7) => "base-fee-per-gas-stats-d7",
+                Limited(Day30) => "base-fee-per-gas-stats-d30",
+            },
             Self::BlockLag => "block-lag",
             Self::BurnRates => "burn-rates",
             Self::BurnSums => "burn-sums",

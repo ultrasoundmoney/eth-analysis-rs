@@ -1,6 +1,7 @@
 mod barrier;
 mod last;
 mod over_time;
+pub mod routes;
 mod stats;
 
 use chrono::{DateTime, Utc};
