@@ -99,6 +99,11 @@ pub mod tests {
             self
         }
 
+        pub fn with_timestamp(mut self, timestamp: &DateTime<Utc>) -> Self {
+            self.timestamp = *timestamp;
+            self
+        }
+
         pub fn build(&self) -> ExecutionNodeBlock {
             ExecutionNodeBlock {
                 base_fee_per_gas: self.base_fee_per_gas,

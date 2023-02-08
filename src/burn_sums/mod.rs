@@ -36,7 +36,7 @@
 
 mod store;
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, ops::Index};
 
 use chrono::{DateTime, Utc};
 use futures::join;
@@ -61,7 +61,7 @@ struct WeiUsdAmount {
 }
 
 #[derive(Debug, PartialEq, Serialize)]
-struct EthUsdAmount {
+pub struct EthUsdAmount {
     pub eth: EthNewtype,
     pub usd: UsdNewtype,
 }
@@ -75,6 +75,26 @@ pub struct BurnSums {
     pub d7: EthUsdAmount,
     pub h1: EthUsdAmount,
     pub m5: EthUsdAmount,
+}
+
+impl Index<TimeFrame> for BurnSums {
+    type Output = EthUsdAmount;
+
+    fn index(&self, time_frame: TimeFrame) -> &Self::Output {
+        use GrowingTimeFrame::*;
+        use LimitedTimeFrame::*;
+        use TimeFrame::*;
+
+        match time_frame {
+            Growing(SinceBurn) => &self.since_burn,
+            Growing(SinceMerge) => &self.since_merge,
+            Limited(Day1) => &self.d1,
+            Limited(Day30) => &self.d30,
+            Limited(Day7) => &self.d7,
+            Limited(Hour1) => &self.h1,
+            Limited(Minute5) => &self.m5,
+        }
+    }
 }
 
 #[derive(Debug)]

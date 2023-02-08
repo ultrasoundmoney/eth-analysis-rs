@@ -2,6 +2,7 @@ use std::{fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Duration, Utc};
 use enum_iterator::Sequence;
+use serde::{Serialize, Serializer};
 use sqlx::postgres::types::PgInterval;
 use thiserror::Error;
 
@@ -189,6 +190,15 @@ pub enum TimeFrame {
     Limited(LimitedTimeFrame),
 }
 
+impl TimeFrame {
+    pub fn duration(&self) -> Duration {
+        match self {
+            TimeFrame::Growing(growing_time_frame) => growing_time_frame.duration(),
+            TimeFrame::Limited(limited_time_frame) => limited_time_frame.duration(),
+        }
+    }
+}
+
 impl From<LimitedTimeFrame> for TimeFrame {
     fn from(limited_time_frame: LimitedTimeFrame) -> Self {
         TimeFrame::Limited(limited_time_frame)
@@ -221,39 +231,32 @@ impl Display for TimeFrame {
     }
 }
 
+impl Serialize for TimeFrame {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::slice::Iter;
+    use enum_iterator::all;
 
     use super::*;
 
-    static TIME_FRAMES: [TimeFrame; 7] = [
-        TimeFrame::Limited(Minute5),
-        TimeFrame::Limited(Hour1),
-        TimeFrame::Limited(Day1),
-        TimeFrame::Limited(Day7),
-        TimeFrame::Limited(Day30),
-        TimeFrame::Growing(SinceBurn),
-        TimeFrame::Growing(SinceMerge),
-    ];
-
-    impl TimeFrame {
-        pub fn iterator() -> Iter<'static, TimeFrame> {
-            TIME_FRAMES.iter()
-        }
-    }
-
     #[test]
     fn time_frame_iter_test() {
-        let time_frames = TimeFrame::iterator().collect::<Vec<&TimeFrame>>();
+        let time_frames = all::<TimeFrame>().collect::<Vec<_>>();
         let expected = vec![
-            &TimeFrame::Limited(Minute5),
-            &TimeFrame::Limited(Hour1),
-            &TimeFrame::Limited(Day1),
-            &TimeFrame::Limited(Day7),
-            &TimeFrame::Limited(Day30),
-            &TimeFrame::Growing(SinceBurn),
-            &TimeFrame::Growing(SinceMerge),
+            TimeFrame::Growing(SinceBurn),
+            TimeFrame::Growing(SinceMerge),
+            TimeFrame::Limited(Day1),
+            TimeFrame::Limited(Day30),
+            TimeFrame::Limited(Day7),
+            TimeFrame::Limited(Hour1),
+            TimeFrame::Limited(Minute5),
         ];
 
         assert_eq!(expected, time_frames);

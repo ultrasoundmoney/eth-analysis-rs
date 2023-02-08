@@ -15,16 +15,19 @@ use super::{EthNewtype, GweiNewtype, WeiNewtype};
 pub struct UsdNewtype(pub f64);
 
 impl UsdNewtype {
+    #[allow(dead_code)]
     pub fn from_eth(eth: EthNewtype, eth_price: f64) -> Self {
         let usd = eth.0 * eth_price;
         UsdNewtype(usd)
     }
 
+    #[allow(dead_code)]
     pub fn from_gwei(gwei: GweiNewtype, eth_price: f64) -> Self {
         let eth: EthNewtype = gwei.into();
         Self::from_eth(eth, eth_price)
     }
 
+    #[allow(dead_code)]
     pub fn from_wei(wei: WeiNewtype, eth_price: f64) -> Self {
         let eth: EthNewtype = wei.into();
         Self::from_eth(eth, eth_price)

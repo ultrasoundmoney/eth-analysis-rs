@@ -1,78 +1,122 @@
+use std::collections::HashMap;
+use std::ops::Deref;
+
+use enum_iterator::all;
 use serde::Serialize;
 
 use crate::burn_sums::BurnSums;
-use crate::time_frames::GrowingTimeFrame;
-use crate::time_frames::LimitedTimeFrame;
+use crate::time_frames::TimeFrame;
 
 type EthPerMinute = f64;
+type UsdPerMinute = f64;
 
 #[derive(Debug, Serialize)]
-pub struct BurnRates {
-    d1: EthPerMinute,
-    d30: EthPerMinute,
-    d7: EthPerMinute,
-    h1: EthPerMinute,
-    m5: EthPerMinute,
-    since_burn: EthPerMinute,
-    since_merge: EthPerMinute,
+pub struct EthUsdRate {
+    eth_per_minute: EthPerMinute,
+    usd_per_minute: UsdPerMinute,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(transparent)]
+pub struct BurnRates(HashMap<TimeFrame, EthUsdRate>);
+
+impl From<HashMap<TimeFrame, EthUsdRate>> for BurnRates {
+    fn from(burn_rates: HashMap<TimeFrame, EthUsdRate>) -> Self {
+        Self(burn_rates)
+    }
 }
 
 impl From<&BurnSums> for BurnRates {
     fn from(burn_totals: &BurnSums) -> Self {
-        let BurnSums {
-            d1,
-            d30,
-            d7,
-            h1,
-            m5,
-            since_burn,
-            since_merge,
-        } = burn_totals;
+        all::<TimeFrame>()
+            .map(|time_frame| {
+                let eth_per_minute =
+                    burn_totals[time_frame].eth.0 / (time_frame).duration().num_minutes() as f64;
+                let usd_per_minute =
+                    burn_totals[time_frame].usd.0 / (time_frame).duration().num_minutes() as f64;
+                (
+                    time_frame,
+                    EthUsdRate {
+                        eth_per_minute,
+                        usd_per_minute,
+                    },
+                )
+            })
+            .collect::<HashMap<TimeFrame, EthUsdRate>>()
+            .into()
+    }
+}
 
-        let d1 = d1.0 / LimitedTimeFrame::Day1.duration().num_minutes() as f64;
-        let d30 = d30.0 / LimitedTimeFrame::Day30.duration().num_minutes() as f64;
-        let d7 = d7.0 / LimitedTimeFrame::Day7.duration().num_minutes() as f64;
-        let h1 = h1.0 / LimitedTimeFrame::Hour1.duration().num_minutes() as f64;
-        let m5 = m5.0 / LimitedTimeFrame::Minute5.duration().num_minutes() as f64;
-        let since_burn =
-            since_burn.0 / (GrowingTimeFrame::SinceBurn.duration()).num_minutes() as f64;
-        let since_merge =
-            since_merge.0 / (GrowingTimeFrame::SinceMerge.duration()).num_minutes() as f64;
+impl Deref for BurnRates {
+    type Target = HashMap<TimeFrame, EthUsdRate>;
 
-        BurnRates {
-            d1,
-            d30,
-            d7,
-            h1,
-            m5,
-            since_burn,
-            since_merge,
-        }
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::units::EthNewtype;
+    use crate::{
+        burn_sums::EthUsdAmount,
+        time_frames::{GrowingTimeFrame, LimitedTimeFrame},
+        units::{EthNewtype, UsdNewtype},
+    };
 
     use super::*;
 
     #[tokio::test]
     async fn burn_rates_test() {
         let burn_totals = BurnSums {
-            d1: EthNewtype(100.0),
-            d30: EthNewtype(100.0),
-            d7: EthNewtype(100.0),
-            h1: EthNewtype(100.0),
-            m5: EthNewtype(100.0),
-            since_burn: EthNewtype(100.0),
-            since_merge: EthNewtype(100.0),
+            d1: EthUsdAmount {
+                eth: EthNewtype(100.0),
+                usd: UsdNewtype(100.0),
+            },
+            d7: EthUsdAmount {
+                eth: EthNewtype(100.0),
+                usd: UsdNewtype(100.0),
+            },
+            d30: EthUsdAmount {
+                eth: EthNewtype(100.0),
+                usd: UsdNewtype(100.0),
+            },
+            h1: EthUsdAmount {
+                eth: EthNewtype(100.0),
+                usd: UsdNewtype(100.0),
+            },
+            m5: EthUsdAmount {
+                eth: EthNewtype(100.0),
+                usd: UsdNewtype(100.0),
+            },
+            since_burn: EthUsdAmount {
+                eth: EthNewtype(100.0),
+                usd: UsdNewtype(100.0),
+            },
+            since_merge: EthUsdAmount {
+                eth: EthNewtype(100.0),
+                usd: UsdNewtype(100.0),
+            },
         };
 
         let burn_rates: BurnRates = (&burn_totals).into();
 
-        assert!(burn_rates.since_burn > 0.0 && burn_rates.since_burn < 1.0);
-        assert!(burn_rates.since_merge > 0.0 && burn_rates.since_merge < 1.0);
-        assert_eq!(burn_rates.m5, 20.0);
+        let burn_rate_since_burn = burn_rates
+            .get(&TimeFrame::Growing(GrowingTimeFrame::SinceBurn))
+            .unwrap();
+        let burn_rate_since_merge = burn_rates
+            .get(&TimeFrame::Growing(GrowingTimeFrame::SinceMerge))
+            .unwrap();
+        let burn_rate_m5 = burn_rates
+            .get(&TimeFrame::Limited(LimitedTimeFrame::Minute5))
+            .unwrap();
+
+        assert!(
+            burn_rate_since_burn.eth_per_minute > 0.0 && burn_rate_since_burn.eth_per_minute < 1.0
+        );
+        assert!(
+            burn_rate_since_merge.eth_per_minute > 0.0
+                && burn_rate_since_merge.eth_per_minute < 1.0
+        );
+        assert_eq!(burn_rate_m5.eth_per_minute, 20.0);
     }
 }
