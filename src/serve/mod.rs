@@ -61,20 +61,20 @@ pub async fn start_server() -> Result<()> {
         )
         .route(
             "/api/v2/fees/block-lag",
-            get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
-            }),
+            get(
+                |state: StateExtension| async move { cached_get(state, &CacheKey::BlockLag).await },
+            ),
         )
         .route(
             "/api/v2/fees/burn-sums",
-            get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
-            }),
+            get(
+                |state: StateExtension| async move { cached_get(state, &CacheKey::BurnSums).await },
+            ),
         )
         .route(
             "/api/v2/fees/burn-rates",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::BurnRates).await
             }),
         )
         .route(
@@ -87,74 +87,74 @@ pub async fn start_server() -> Result<()> {
         .route(
             "/api/v2/fees/effective-balance-sum",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::EffectiveBalanceSum).await
             }),
         )
         .route(
             "/api/v2/fees/eth-price-stats",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::EthPrice).await
             }),
         )
         // Deprecated, remove after frontend switches over.
         .route(
             "/api/v2/fees/eth-supply-parts",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::SupplyParts).await
             }),
         )
         .route(
             "/api/v2/fees/issuance-estimate",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::IssuanceEstimate).await
             }),
         )
         .route(
             "/api/v2/fees/supply-changes",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::SupplyChanges).await
             }),
         )
         .route(
             "/api/v2/fees/supply-dashboard-analysis",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::SupplyDashboardAnalysis).await
             }),
         )
         .route(
             "/api/v2/fees/supply-over-time",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::SupplyOverTime).await
             }),
         )
         .route(
             "/api/v2/fees/supply-parts",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::SupplyParts).await
             }),
         )
         .route(
             "/api/v2/fees/supply-projection-inputs",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::SupplyProjectionInputs).await
             }),
         )
         .route(
             "/api/v2/fees/supply-since-merge",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::SupplySinceMerge).await
             }),
         )
         .route(
             "/api/v2/fees/total-difficulty-progress",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::TotalDifficultyProgress).await
             }),
         )
         .route(
             "/api/v2/fees/validator-rewards",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::BaseFeeOverTime).await
+                cached_get(state, &CacheKey::ValidatorRewards).await
             }),
         )
         .route(
