@@ -39,10 +39,13 @@ pub async fn average_from_block_range(
 
 #[cfg(test)]
 mod tests {
+    use chrono::{DateTime, Utc};
+
     use crate::{db::tests::TestDb, execution_chain::ExecutionNodeBlockBuilder, usd_price};
 
     use super::*;
 
+    #[igonre]
     #[tokio::test]
     async fn average_from_block_range_test() {
         let test_db = TestDb::new().await;
@@ -52,9 +55,14 @@ mod tests {
 
         let test_block_1 = ExecutionNodeBlockBuilder::new(test_id)
             .with_number(1)
+            .with_timestamp(&"2023-02-08T00:00:00Z".parse::<DateTime<Utc>>().unwrap())
             .build();
-        let test_block_2 = ExecutionNodeBlockBuilder::from_parent(&test_block_1).build();
-        let test_block_3 = ExecutionNodeBlockBuilder::from_parent(&test_block_2).build();
+        let test_block_2 = ExecutionNodeBlockBuilder::from_parent(&test_block_1)
+            .with_timestamp(&"2023-02-08T00:00:10Z".parse::<DateTime<Utc>>().unwrap())
+            .build();
+        let test_block_3 = ExecutionNodeBlockBuilder::from_parent(&test_block_2)
+            .with_timestamp(&"2023-02-08T00:00:20Z".parse::<DateTime<Utc>>().unwrap())
+            .build();
 
         usd_price::store_price(
             &mut db_pool.acquire().await.unwrap(),

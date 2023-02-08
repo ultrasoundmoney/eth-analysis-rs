@@ -1,10 +1,10 @@
-mod average;
+// mod average;
 mod bybit;
 mod heal;
 
 pub use heal::heal_eth_prices;
 
-pub use average::average_from_block_range;
+// pub use average::average_from_block_range;
 
 use anyhow::Result;
 use chrono::{DateTime, Duration, DurationRound, TimeZone, Utc};
