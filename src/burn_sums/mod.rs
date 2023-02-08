@@ -51,18 +51,30 @@ use crate::{
     execution_chain::{BlockNumber, BlockRange, BlockStore, ExecutionNodeBlock},
     performance::TimedExt,
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
-    units::{EthNewtype, WeiNewtype},
+    units::{EthNewtype, UsdNewtype, WeiNewtype},
 };
+
+#[derive(Debug, PartialEq)]
+struct WeiUsdAmount {
+    wei: WeiNewtype,
+    usd: UsdNewtype,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+struct EthUsdAmount {
+    pub eth: EthNewtype,
+    pub usd: UsdNewtype,
+}
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct BurnSums {
-    pub since_merge: EthNewtype,
-    pub since_burn: EthNewtype,
-    pub d1: EthNewtype,
-    pub d30: EthNewtype,
-    pub d7: EthNewtype,
-    pub h1: EthNewtype,
-    pub m5: EthNewtype,
+    pub since_merge: EthUsdAmount,
+    pub since_burn: EthUsdAmount,
+    pub d1: EthUsdAmount,
+    pub d30: EthUsdAmount,
+    pub d7: EthUsdAmount,
+    pub h1: EthUsdAmount,
+    pub m5: EthUsdAmount,
 }
 
 #[derive(Debug)]
@@ -70,7 +82,8 @@ pub struct BurnSumRecord {
     last_included_block_hash: String,
     first_included_block_number: BlockNumber,
     last_included_block_number: BlockNumber,
-    sum: WeiNewtype,
+    sum_wei: WeiNewtype,
+    sum_usd: UsdNewtype,
     time_frame: TimeFrame,
     timestamp: DateTime<Utc>,
 }
@@ -85,7 +98,7 @@ async fn expired_burn_from(
     last_burn_sum: &BurnSumRecord,
     block: &ExecutionNodeBlock,
     limited_time_frame: &LimitedTimeFrame,
-) -> Option<(BlockNumber, WeiNewtype)> {
+) -> Option<(BlockNumber, WeiNewtype, UsdNewtype)> {
     // The first included block for the next sum may have jumped forward zero or
     // more blocks. Meaning zero or more blocks are now considered expired but
     // still included for this limited time frame sum.
@@ -117,13 +130,17 @@ async fn expired_burn_from(
                 first_included_block_number - 1,
             );
 
-            let expired_included_burn = burn_sum_store
+            let (expired_included_burn_wei, expired_included_burn_usd) = burn_sum_store
                 .burn_sum_from_block_range(&expired_block_range)
                 .await;
 
-            debug!(%expired_block_range, %expired_included_burn, %limited_time_frame, "subtracting expired burn");
+            debug!(%expired_block_range, %expired_included_burn_wei, %expired_included_burn_usd, %limited_time_frame, "subtracting expired burn");
 
-            Some((first_included_block_number, expired_included_burn))
+            Some((
+                first_included_block_number,
+                expired_included_burn_wei,
+                expired_included_burn_usd,
+            ))
         }
     }
 }
@@ -135,12 +152,13 @@ async fn calc_new_burn_sum_record_from_scratch(
 ) -> BurnSumRecord {
     debug!(%block.number, %block.hash, %time_frame, "calculating new burn sum record from scratch");
     let range = BlockRange::from_last_plus_time_frame(&block.number, time_frame);
-    let sum = burn_sum_store.burn_sum_from_block_range(&range).await;
+    let (sum_wei, sum_usd) = burn_sum_store.burn_sum_from_block_range(&range).await;
     BurnSumRecord {
         first_included_block_number: range.start,
         last_included_block_hash: block.hash.clone(),
         last_included_block_number: range.end,
-        sum,
+        sum_wei,
+        sum_usd,
         time_frame: *time_frame,
         timestamp: block.timestamp,
     }
@@ -156,7 +174,7 @@ async fn calc_new_burn_sum_record_from_last(
     debug!(%block.number, %block.hash, %time_frame, "calculating new burn sum record from last");
     let new_burn_range =
         BlockRange::new(last_burn_sum.last_included_block_number + 1, block.number);
-    let new_burn = burn_sum_store
+    let (new_burn_wei, new_burn_usd) = burn_sum_store
         .burn_sum_from_block_range(&new_burn_range)
         .await;
 
@@ -174,13 +192,21 @@ async fn calc_new_burn_sum_record_from_last(
         TimeFrame::Growing(_) => None,
     };
 
-    let sum = match expired_burn_sum.map(|(_, sum)| sum) {
-        Some(expired_burn_sum) => new_burn - expired_burn_sum + last_burn_sum.sum,
-        None => new_burn + last_burn_sum.sum,
+    let (sum_wei, sum_usd) = match expired_burn_sum {
+        Some((_, expired_burn_sum_wei, expired_burn_sum_usd)) => {
+            let sum_wei = new_burn_wei - expired_burn_sum_wei + last_burn_sum.sum_wei;
+            let sum_usd = new_burn_usd - expired_burn_sum_usd + last_burn_sum.sum_usd;
+            (sum_wei, sum_usd)
+        }
+        None => {
+            let sum_wei = new_burn_wei + last_burn_sum.sum_wei;
+            let sum_usd = new_burn_usd + last_burn_sum.sum_usd;
+            (sum_wei, sum_usd)
+        }
     };
 
     let first_included_block_number = expired_burn_sum
-        .map(|(first_included_block_number, _)| first_included_block_number)
+        .map(|(first_included_block_number, _, _)| first_included_block_number)
         // If there is no expired burn, the first included did not change.
         .unwrap_or(last_burn_sum.first_included_block_number);
 
@@ -188,7 +214,8 @@ async fn calc_new_burn_sum_record_from_last(
         first_included_block_number,
         last_included_block_hash: block.hash.clone(),
         last_included_block_number: new_burn_range.end,
-        sum,
+        sum_wei,
+        sum_usd,
         time_frame: *time_frame,
         timestamp: block.timestamp,
     }
@@ -247,13 +274,34 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) {
     burn_sum_store.delete_old_sums(block.number).await;
 
     let burn_sums = BurnSums {
-        since_burn: since_burn.sum.into(),
-        since_merge: since_merge.sum.into(),
-        d30: d30.sum.into(),
-        d7: d7.sum.into(),
-        d1: d1.sum.into(),
-        h1: h1.sum.into(),
-        m5: m5.sum.into(),
+        since_burn: EthUsdAmount {
+            eth: since_burn.sum_wei.into(),
+            usd: since_burn.sum_usd,
+        },
+        since_merge: EthUsdAmount {
+            eth: since_merge.sum_wei.into(),
+            usd: since_merge.sum_usd,
+        },
+        d30: EthUsdAmount {
+            eth: d30.sum_wei.into(),
+            usd: d30.sum_usd,
+        },
+        d7: EthUsdAmount {
+            eth: d7.sum_wei.into(),
+            usd: d7.sum_usd,
+        },
+        d1: EthUsdAmount {
+            eth: d1.sum_wei.into(),
+            usd: d1.sum_usd,
+        },
+        h1: EthUsdAmount {
+            eth: h1.sum_wei.into(),
+            usd: h1.sum_usd,
+        },
+        m5: EthUsdAmount {
+            eth: m5.sum_wei.into(),
+            usd: m5.sum_usd,
+        },
     };
 
     debug!("calculated new burn sums");

@@ -4,7 +4,7 @@ use tracing::debug;
 use crate::{
     execution_chain::{BlockNumber, BlockRange},
     time_frames::TimeFrame,
-    units::WeiNewtype,
+    units::{UsdNewtype, WeiNewtype},
 };
 
 use super::BurnSumRecord;
@@ -20,11 +20,17 @@ impl<'a> BurnSumStore<'a> {
         Self { db_pool }
     }
 
-    pub async fn burn_sum_from_block_range(&self, block_range: &BlockRange) -> WeiNewtype {
-        sqlx::query!(
+    pub async fn burn_sum_from_block_range(
+        &self,
+        block_range: &BlockRange,
+    ) -> (WeiNewtype, UsdNewtype) {
+        let row = sqlx::query!(
             r#"
             SELECT
-                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS "burn_sum!"
+                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT
+                    AS "burn_sum_wei!",
+                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78) / 1e18 * eth_price)
+                    AS "burn_sum_usd!"
             FROM
                 blocks_next
             WHERE
@@ -35,10 +41,12 @@ impl<'a> BurnSumStore<'a> {
         )
         .fetch_one(self.db_pool)
         .await
-        .unwrap()
-        .burn_sum
-        .parse()
-        .unwrap()
+        .unwrap();
+
+        let wei = row.burn_sum_wei.parse().unwrap();
+        let usd = row.burn_sum_usd.into();
+
+        (wei, usd)
     }
 
     pub async fn delete_old_sums(&self, last_block: BlockNumber) {
@@ -67,7 +75,8 @@ impl<'a> BurnSumStore<'a> {
                 last_included_block_number,
                 last_included_block_hash,
                 timestamp,
-                sum::TEXT AS "sum!"
+                sum_usd,
+                sum_wei::TEXT AS "sum_wei!"
             FROM burn_sums
             WHERE time_frame = $1
             ORDER BY last_included_block_number DESC
@@ -83,7 +92,8 @@ impl<'a> BurnSumStore<'a> {
             first_included_block_number: row.first_included_block_number,
             last_included_block_hash: row.last_included_block_hash,
             last_included_block_number: row.last_included_block_number,
-            sum: row.sum.parse().unwrap(),
+            sum_usd: row.sum_usd.into(),
+            sum_wei: row.sum_wei.parse().unwrap(),
             time_frame: *time_frame,
             timestamp: row.timestamp,
         })
@@ -98,14 +108,16 @@ impl<'a> BurnSumStore<'a> {
                 last_included_block_number,
                 last_included_block_hash,
                 timestamp,
-                sum
+                sum_usd,
+                sum_wei
             ) VALUES (
                 $1,
                 $2,
                 $3,
                 $4,
                 $5,
-                $6::NUMERIC
+                $6,
+                $7::NUMERIC
             )
             ",
             burn_sum.time_frame.to_string(),
@@ -113,7 +125,8 @@ impl<'a> BurnSumStore<'a> {
             burn_sum.last_included_block_number,
             burn_sum.last_included_block_hash,
             burn_sum.timestamp,
-            Into::<String>::into(burn_sum.sum) as String
+            burn_sum.sum_usd.0,
+            Into::<String>::into(burn_sum.sum_wei) as String
         )
         .execute(self.db_pool)
         .await
@@ -163,23 +176,24 @@ mod tests {
         let test_id = "burn_sum_from_time_frame";
 
         let block_1 = ExecutionNodeBlockBuilder::new(test_id)
-            .with_burn(100)
+            .with_burn(WeiNewtype::from_eth(1))
             .build();
         let block_2 = ExecutionNodeBlockBuilder::from_parent(&block_1)
-            .with_burn(200)
+            .with_burn(WeiNewtype::from_eth(2))
             .build();
 
-        block_store::store_block(pool, &block_1, 0.0).await;
-        block_store::store_block(pool, &block_2, 0.0).await;
+        block_store::store_block(pool, &block_1, 1.0).await;
+        block_store::store_block(pool, &block_2, 2.0).await;
 
-        let burn_sum = burn_sum_store
+        let (burn_sum_wei, burn_sum_usd) = burn_sum_store
             .burn_sum_from_block_range(&BlockRange {
                 start: block_1.number,
                 end: block_2.number,
             })
             .await;
 
-        assert_eq!(burn_sum, WeiNewtype::from(300));
+        assert_eq!(burn_sum_wei, WeiNewtype::from_eth(3));
+        assert_eq!(burn_sum_usd, UsdNewtype(5.0));
 
         test_db.cleanup().await;
     }

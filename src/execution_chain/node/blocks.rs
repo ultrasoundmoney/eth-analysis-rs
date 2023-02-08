@@ -40,7 +40,7 @@ pub struct ExecutionNodeBlock {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::time_frames::GrowingTimeFrame::*;
+    use crate::{time_frames::GrowingTimeFrame::*, units::WeiNewtype};
 
     use super::*;
 
@@ -86,9 +86,9 @@ pub mod tests {
             self
         }
 
-        pub fn with_burn(mut self, burn: u64) -> Self {
+        pub fn with_burn(mut self, burn: WeiNewtype) -> Self {
             self.gas_used = 10;
-            self.base_fee_per_gas = burn / 10;
+            self.base_fee_per_gas = (burn.0 / self.gas_used as i128) as u64;
             self
         }
 
