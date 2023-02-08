@@ -30,10 +30,9 @@ impl From<&BurnSums> for BurnRates {
     fn from(burn_totals: &BurnSums) -> Self {
         all::<TimeFrame>()
             .map(|time_frame| {
-                let eth_per_minute =
-                    burn_totals[time_frame].eth.0 / (time_frame).duration().num_minutes() as f64;
-                let usd_per_minute =
-                    burn_totals[time_frame].usd.0 / (time_frame).duration().num_minutes() as f64;
+                let minutes = (time_frame).duration().num_minutes() as f64;
+                let eth_per_minute = burn_totals[time_frame].eth.0 / minutes;
+                let usd_per_minute = burn_totals[time_frame].usd.0 / minutes;
                 (
                     time_frame,
                     EthUsdRate {
