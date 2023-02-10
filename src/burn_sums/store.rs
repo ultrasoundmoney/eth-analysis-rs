@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 use tracing::debug;
 
@@ -99,7 +100,23 @@ impl<'a> BurnSumStore<'a> {
         })
     }
 
-    async fn store_burn_sum(&self, burn_sum: &BurnSumRecord) {
+    pub async fn store_burn_sums(&self, burn_sum: &[BurnSumRecord]) {
+        let mut v1: Vec<String> = Vec::new();
+        let mut v2: Vec<BlockNumber> = Vec::new();
+        let mut v3: Vec<BlockNumber> = Vec::new();
+        let mut v4: Vec<String> = Vec::new();
+        let mut v5: Vec<DateTime<Utc>> = Vec::new();
+        let mut v6: Vec<f64> = Vec::new();
+        let mut v7: Vec<String> = Vec::new();
+        burn_sum.iter().for_each(|burn_sum| {
+            v1.push(burn_sum.time_frame.to_string());
+            v2.push(burn_sum.first_included_block_number);
+            v3.push(burn_sum.last_included_block_number);
+            v4.push(burn_sum.last_included_block_hash.to_owned());
+            v5.push(burn_sum.timestamp);
+            v6.push(burn_sum.sum_usd.0);
+            v7.push(Into::<String>::into(burn_sum.sum_wei) as String);
+        });
         sqlx::query!(
             "
             INSERT INTO burn_sums (
@@ -110,33 +127,28 @@ impl<'a> BurnSumStore<'a> {
                 timestamp,
                 sum_usd,
                 sum_wei
-            ) VALUES (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                $6,
-                $7::NUMERIC
+            )
+            SELECT * FROM UNNEST (
+                $1::text[],
+                $2::int[],
+                $3::int[],
+                $4::text[],
+                $5::timestamptz[],
+                $6::float8[],
+                $7::numeric[]
             )
             ",
-            burn_sum.time_frame.to_string(),
-            burn_sum.first_included_block_number,
-            burn_sum.last_included_block_number,
-            burn_sum.last_included_block_hash,
-            burn_sum.timestamp,
-            burn_sum.sum_usd.0,
-            Into::<String>::into(burn_sum.sum_wei) as String
+            &v1,
+            &v2,
+            &v3,
+            &v4,
+            &v5,
+            &v6,
+            &v7 as &[String]
         )
         .execute(self.db_pool)
         .await
         .unwrap();
-    }
-
-    pub async fn store_burn_sums(&self, burn_sums: [&BurnSumRecord; 7]) {
-        for burn_sum in burn_sums {
-            self.store_burn_sum(burn_sum).await;
-        }
     }
 
     pub async fn delete_new_sums_tx(
