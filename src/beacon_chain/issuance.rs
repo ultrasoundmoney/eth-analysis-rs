@@ -135,23 +135,23 @@ pub trait IssuanceStore {
 }
 
 pub struct IssuanceStorePostgres<'a> {
-    pool: &'a PgPool,
+    db_pool: &'a PgPool,
 }
 
-impl IssuanceStorePostgres<'_> {
-    pub fn new(db_pool: &'_ PgPool) -> Self {
-        Self { pool: db_pool }
+impl<'a> IssuanceStorePostgres<'a> {
+    pub fn new(db_pool: &'a PgPool) -> Self {
+        Self { db_pool }
     }
 }
 
 #[async_trait]
 impl IssuanceStore for &IssuanceStorePostgres<'_> {
     async fn current_issuance(&self) -> GweiNewtype {
-        get_current_issuance(self.pool).await
+        get_current_issuance(self.db_pool).await
     }
 
     async fn day7_ago_issuance(&self) -> GweiNewtype {
-        get_day7_ago_issuance(self.pool).await
+        get_day7_ago_issuance(self.db_pool).await
     }
 }
 
