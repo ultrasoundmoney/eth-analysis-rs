@@ -329,6 +329,17 @@ pub async fn update_base_fee_stats(executor: &PgPool, barrier: f64, block: &Exec
     base_fee_per_gas_stats.insert(TimeFrame::Limited(LimitedTimeFrame::Hour1), h1.clone());
     base_fee_per_gas_stats.insert(TimeFrame::Limited(LimitedTimeFrame::Minute5), m5.clone());
 
+    // Update the cache for each time frame, stats pair.
+    for (time_frame, stats) in base_fee_per_gas_stats.iter() {
+        caching::update_and_publish(
+            executor,
+            &CacheKey::BaseFeePerGasStatsTimeFrame(*time_frame),
+            stats,
+        )
+        .await
+        .unwrap();
+    }
+
     let base_fee_per_gas_stats_envelope = BaseFeePerGasStatsEnvelope {
         all: Some(since_burn.clone()),
         barrier,
