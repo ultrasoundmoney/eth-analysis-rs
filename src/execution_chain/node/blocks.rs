@@ -58,7 +58,7 @@ pub mod tests {
             let hash = format!("0x{test_id}_block_hash");
 
             Self {
-                timestamp: SinceMerge.start(),
+                timestamp: SinceMerge.start_date_time(),
                 number: 0,
                 hash,
                 parent_hash: "0x0".to_string(),

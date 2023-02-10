@@ -7,8 +7,8 @@ use sqlx::postgres::types::PgInterval;
 use thiserror::Error;
 
 use crate::execution_chain::{
-    BlockNumber, BELLATRIX_HARD_FORK_TIMESTAMP, LONDON_HARD_FORK_BLOCK_NUMBER,
-    LONDON_HARD_FORK_TIMESTAMP, MERGE_BLOCK_NUMBER,
+    BlockNumber, LONDON_HARD_FORK_BLOCK_NUMBER, LONDON_HARD_FORK_TIMESTAMP, MERGE_BLOCK_NUMBER,
+    MERGE_HARD_FORK_TIMESTAMP,
 };
 
 use GrowingTimeFrame::*;
@@ -149,10 +149,10 @@ pub enum GrowingTimeFrame {
 }
 
 impl GrowingTimeFrame {
-    pub fn start(&self) -> DateTime<Utc> {
+    pub fn start_date_time(&self) -> DateTime<Utc> {
         match self {
             SinceBurn => *LONDON_HARD_FORK_TIMESTAMP,
-            SinceMerge => *BELLATRIX_HARD_FORK_TIMESTAMP,
+            SinceMerge => *MERGE_HARD_FORK_TIMESTAMP,
         }
     }
 
@@ -170,7 +170,7 @@ impl GrowingTimeFrame {
 
 impl From<&GrowingTimeFrame> for Duration {
     fn from(growing_time_frame: &GrowingTimeFrame) -> Self {
-        Utc::now() - growing_time_frame.start()
+        Utc::now() - growing_time_frame.start_date_time()
     }
 }
 

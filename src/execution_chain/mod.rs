@@ -64,6 +64,6 @@ pub const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
 lazy_static! {
     pub static ref LONDON_HARD_FORK_TIMESTAMP: DateTime<Utc> =
         Utc.timestamp_opt(1628166822, 0).unwrap();
-    pub static ref BELLATRIX_HARD_FORK_TIMESTAMP: DateTime<Utc> =
-        "2022-09-15T06:42:42Z".parse::<DateTime<Utc>>().unwrap();
+    pub static ref MERGE_HARD_FORK_TIMESTAMP: DateTime<Utc> =
+        "2022-09-15T06:42:59Z".parse::<DateTime<Utc>>().unwrap();
 }

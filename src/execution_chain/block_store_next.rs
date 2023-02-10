@@ -147,30 +147,10 @@ impl<'a> BlockStore<'a> {
         .unwrap()
         .map(|row| row.hash)
     }
-
-    pub async fn timestamp_from_number(&self, block_number: &BlockNumber) -> DateTime<Utc> {
-        sqlx::query!(
-            r#"
-            SELECT
-                timestamp
-            FROM
-                blocks_next
-            WHERE
-                number = $1
-            "#,
-            block_number
-        )
-        .fetch_one(self.db_pool)
-        .await
-        .unwrap()
-        .timestamp
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::SubsecRound;
-
     use crate::{db::tests::TestDb, execution_chain::ExecutionNodeBlockBuilder};
 
     use super::*;
@@ -252,31 +232,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(hash, test_block.hash);
-
-        test_db.cleanup().await;
-    }
-
-    #[tokio::test]
-    async fn timestamp_from_number_test() {
-        let test_db = TestDb::new().await;
-        let test_id = "timestamp_from_number";
-        let block_store = BlockStore::new(test_db.pool());
-
-        let test_block = ExecutionNodeBlockBuilder::new(test_id)
-            .with_number(8275)
-            .with_timestamp(
-                &"2022-01-01T00:00:00Z"
-                    .parse::<DateTime<Utc>>()
-                    .unwrap()
-                    .round_subsecs(0),
-            )
-            .build();
-
-        block_store.add(&test_block, 0.0).await;
-
-        let timestamp = block_store.timestamp_from_number(&test_block.number).await;
-
-        assert_eq!(timestamp, test_block.timestamp);
 
         test_db.cleanup().await;
     }
