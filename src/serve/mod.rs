@@ -65,7 +65,7 @@ pub async fn start_server() -> Result<()> {
                 cached_get(state, &CacheKey::BaseFeePerGas).await
             }),
         )
-        .route("api/v2/fees/base-fee-per-gas-barrier", 
+        .route("/api/v2/fees/base-fee-per-gas-barrier", 
             get(|state: StateExtension| async move {
                 cached_get_with_custom_duration(state, &CacheKey::BaseFeePerGasBarrier, &FOUR_SECONDS, &ONE_DAY).await
             }),
