@@ -1,31 +1,5 @@
 {
   "db": "PostgreSQL",
-  "00d1655f502cdb29f35562ab2c01edcc72bb5e66b0e39c6bf87443d48b3e528c": {
-    "describe": {
-      "columns": [
-        {
-          "name": "number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "base_fee_per_gas!",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Interval"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY base_fee_per_gas DESC\n                LIMIT 1\n                "
-  },
   "046945e120820491c162a629c80a9cd3dc33508d97653b2ccb6d3b46328fd4df": {
     "describe": {
       "columns": [
@@ -134,6 +108,24 @@
     },
     "query": "\n            DELETE FROM\n                eth_supply\n            WHERE\n                deposits_slot >= $1\n                OR balances_slot >= $1\n        "
   },
+  "26022725182b69f2b8a9695711836592df07efb3a1561c046294646ab178b5e7": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "TextArray",
+          "Int4Array",
+          "Int4Array",
+          "TextArray",
+          "TimestamptzArray",
+          "Float8Array",
+          "NumericArray"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO burn_sums (\n                time_frame,\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum_usd,\n                sum_wei\n            )\n            SELECT * FROM UNNEST (\n                $1::text[],\n                $2::int[],\n                $3::int[],\n                $4::text[],\n                $5::timestamptz[],\n                $6::float8[],\n                $7::numeric[]\n            )\n            "
+  },
   "262e7c58ea23ae1e7b2694ff084a5594b35d80df367844abb6fc0ad7b56ac0a9": {
     "describe": {
       "columns": [],
@@ -151,7 +143,25 @@
     },
     "query": "\n            INSERT INTO beacon_blocks (\n                block_hash,\n                block_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                parent_root,\n                state_root\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6\n            )\n        "
   },
-  "26eb9e314d67da952fc32ba344bb88bb9f4e613e403d4247baf6a87f782fd535": {
+  "28409ca2bee68e0969632f7278e521cae6fb20ec9247d24680b29ac9b727aaa2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n                SELECT slot FROM beacon_states\n                ORDER BY slot ASC\n            "
+  },
+  "290d9e93fbfdf99bba0541e4bfcef8b938a0b9a7717c4a08185717b716e47f88": {
     "describe": {
       "columns": [
         {
@@ -173,25 +183,7 @@
         "Left": []
       }
     },
-    "query": "\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ\n                ORDER BY base_fee_per_gas DESC\n                LIMIT 1\n                "
-  },
-  "28409ca2bee68e0969632f7278e521cae6fb20ec9247d24680b29ac9b727aaa2": {
-    "describe": {
-      "columns": [
-        {
-          "name": "slot",
-          "ordinal": 0,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n                SELECT slot FROM beacon_states\n                ORDER BY slot ASC\n            "
+    "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            ORDER BY base_fee_per_gas ASC\n            LIMIT 1\n            "
   },
   "2953654cbf712f2a858ed77d3cb5c4b8110fa09720510ee46758971a36b4a980": {
     "describe": {
@@ -212,30 +204,6 @@
       }
     },
     "query": "\n            SELECT\n                number\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= $1\n            ORDER BY\n                timestamp ASC\n            LIMIT 1\n            "
-  },
-  "2bd4b2af2d5740a964e72e80ee6a1ff02a11ca1b859421d81717d175928642eb": {
-    "describe": {
-      "columns": [
-        {
-          "name": "number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "base_fee_per_gas!",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                ORDER BY base_fee_per_gas ASC\n                LIMIT 1\n                "
   },
   "2f09abb216302c7104189e963ee218ac6fa64fe9c07a13633830397efb726258": {
     "describe": {
@@ -349,6 +317,56 @@
     },
     "query": "\n            SELECT\n                AVG(ethusd) AS \"average!\"\n            FROM\n                eth_prices\n            WHERE timestamp >= NOW() - '24 hours'::INTERVAL\n        "
   },
+  "38ec7400dc9786404908540972937958a5a62e686512e0607550a9434ec2995f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "base_fee_per_gas!",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= NOW() - $1::INTERVAL\n            ORDER BY base_fee_per_gas ASC\n            LIMIT 1\n            "
+  },
+  "39c4e81b03c50cf4e0b568dde7feab19e44cd115b44c9a298f3fc02cbfb1d292": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "base_fee_per_gas!",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ\n            ORDER BY base_fee_per_gas ASC\n            LIMIT 1\n            "
+  },
   "3d161e6a7b26b1759ada2a5102c9fa5e4fdf75b0fe094850e4502cf6e38c9760": {
     "describe": {
       "columns": [],
@@ -360,6 +378,32 @@
       }
     },
     "query": "\n            DELETE FROM beacon_validators_balance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
+  },
+  "3e71ae5b218c205c14cad0ce43a9e5fc08eb0c7d0c5d0bd9fe1629d67f83dfe9": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "base_fee_per_gas!",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= $1\n            ORDER BY base_fee_per_gas DESC\n            LIMIT 1\n            "
   },
   "440e3270c27b7133ca07349f03510777f0218e8acefd1f2ffad9d8528e7db2de": {
     "describe": {
@@ -373,27 +417,6 @@
       }
     },
     "query": "\n            UPDATE\n                beacon_blocks\n            SET\n                block_hash = $1\n            WHERE\n                block_root = $2\n        "
-  },
-  "4ed4aa6611435d6b03f29552e19bfac78d851b2c4e3b66423a69b041e74a3b90": {
-    "describe": {
-      "columns": [
-        {
-          "name": "burn_sum!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4",
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT AS \"burn_sum!\"\n            FROM\n                blocks_next\n            WHERE\n                number >= $1 AND number <= $2\n            "
   },
   "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
     "describe": {
@@ -549,6 +572,56 @@
       }
     },
     "query": "\n            SELECT\n                deposit_sum_aggregated\n            FROM\n                beacon_blocks\n            WHERE\n                block_root = $1\n        "
+  },
+  "635c841223a110075c5e88878f1d20c80532255799f6fe926259dbaa88fbf881": {
+    "describe": {
+      "columns": [
+        {
+          "name": "first_included_block_number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_included_block_number",
+          "ordinal": 1,
+          "type_info": "Int4"
+        },
+        {
+          "name": "last_included_block_hash",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "timestamp",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "sum_usd",
+          "ordinal": 4,
+          "type_info": "Float8"
+        },
+        {
+          "name": "sum_wei!",
+          "ordinal": 5,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum_usd,\n                sum_wei::TEXT AS \"sum_wei!\"\n            FROM burn_sums\n            WHERE time_frame = $1\n            ORDER BY last_included_block_number DESC\n            LIMIT 1\n            "
   },
   "65b6a62649270388952eb823c8d7b1f686d73d744f7a2262ebe6ac380ec1cc04": {
     "describe": {
@@ -980,50 +1053,6 @@
     },
     "query": "\n            UPDATE\n                beacon_states\n            SET\n                effective_balance_sum = $1\n            WHERE\n                state_root = $2\n        "
   },
-  "b8d789d4f75514adc212197b3810b6c022f3b01a7fdc6572a1707de84b488662": {
-    "describe": {
-      "columns": [
-        {
-          "name": "first_included_block_number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "last_included_block_number",
-          "ordinal": 1,
-          "type_info": "Int4"
-        },
-        {
-          "name": "last_included_block_hash",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "timestamp",
-          "ordinal": 3,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "sum!",
-          "ordinal": 4,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum::TEXT AS \"sum!\"\n            FROM burn_sums\n            WHERE time_frame = $1\n            ORDER BY last_included_block_number DESC\n            LIMIT 1\n            "
-  },
   "b963875714b300b2b0cc7694f8e77ad6f77203de4ad1e6b394a7c64ac380ea5c": {
     "describe": {
       "columns": [
@@ -1043,30 +1072,6 @@
       }
     },
     "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM execution_supply_deltas\n                WHERE block_hash = $1\n            ) AS \"exists!\"\n        "
-  },
-  "bd2c6af1a773d988ab106bacc9cf8e9beaea8aaa1a34b7173baccf01668223cc": {
-    "describe": {
-      "columns": [
-        {
-          "name": "number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "base_fee_per_gas!",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ\n                ORDER BY base_fee_per_gas ASC\n                LIMIT 1\n                "
   },
   "bfc3d6da794a828526867dd2547eff7d22a929fa98544723e52c97c3ec53f92a": {
     "describe": {
@@ -1154,22 +1159,32 @@
     },
     "query": "\n            SELECT\n                gwei\n            FROM\n                beacon_validators_balance\n            WHERE\n                beacon_validators_balance.state_root = $1\n        "
   },
-  "d6859d536cd59537dab9586f40842bece3a71025579e0174ba0e83b2a33d5a2c": {
+  "d67dfd2fde9ed1d9dffcb31fd7a327fe7c42c43b1363401a8370b7c883a502ab": {
     "describe": {
-      "columns": [],
-      "nullable": [],
+      "columns": [
+        {
+          "name": "burn_sum_wei!",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "burn_sum_usd!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null,
+        null
+      ],
       "parameters": {
         "Left": [
-          "Text",
           "Int4",
-          "Int4",
-          "Text",
-          "Timestamptz",
-          "Numeric"
+          "Int4"
         ]
       }
     },
-    "query": "\n            INSERT INTO burn_sums (\n                time_frame,\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum\n            ) VALUES (\n                $1,\n                $2,\n                $3,\n                $4,\n                $5,\n                $6::NUMERIC\n            )\n            "
+    "query": "\n            SELECT\n                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT\n                    AS \"burn_sum_wei!\",\n                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78) / 1e18 * eth_price)\n                    AS \"burn_sum_usd!\"\n            FROM\n                blocks_next\n            WHERE\n                number >= $1 AND number <= $2\n            "
   },
   "dfe5b46d9937450ab56cdfe76cf2b7b1bd2665cf76748b67e13b27cac5b47fa0": {
     "describe": {
@@ -1188,30 +1203,6 @@
       }
     },
     "query": "\n        WITH\n          issuance_distances AS (\n            SELECT\n              gwei,\n              timestamp,\n              ABS(\n                EXTRACT(\n                  epoch\n                  FROM\n                    (timestamp - (NOW() - '7 days':: INTERVAL))\n                )\n              ) AS distance_seconds\n            FROM\n              beacon_issuance\n            ORDER BY\n              distance_seconds ASC\n          )\n        SELECT gwei\n        FROM issuance_distances \n        WHERE distance_seconds <= 86400\n        LIMIT 1\n        "
-  },
-  "e386362c8b552d03d7adb0de8a3fa15549bc658175eac1a5700aafef75c609ea": {
-    "describe": {
-      "columns": [
-        {
-          "name": "number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "base_fee_per_gas!",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                ORDER BY base_fee_per_gas DESC\n                LIMIT 1\n                "
   },
   "e629b9d9f49fb724cd7c02288f174d62ff4e87620277aff0248d88c15f90fe2d": {
     "describe": {
@@ -1244,6 +1235,32 @@
       }
     },
     "query": "\n        DELETE FROM beacon_issuance\n        WHERE state_root IN (\n            SELECT state_root FROM beacon_states\n            WHERE slot >= $1\n        )\n        "
+  },
+  "ea004ca78abb79441aa0fb5ac65a2b1eb632476ce14df0333c73806451b0f656": {
+    "describe": {
+      "columns": [
+        {
+          "name": "number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "base_fee_per_gas!",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= NOW() - $1::INTERVAL\n            ORDER BY base_fee_per_gas DESC\n            LIMIT 1\n            "
   },
   "f19d62204ffdb70367e90b6f5ca7fe64efe01776f90d3c8a86e8594b765c142b": {
     "describe": {
@@ -1339,31 +1356,5 @@
       }
     },
     "query": "\n            INSERT INTO\n                eth_prices (timestamp, ethusd)\n            VALUES ($1, $2)\n            ON CONFLICT (timestamp) DO UPDATE SET\n                ethusd = excluded.ethusd\n        "
-  },
-  "fc6c39d3a17315fb68e2bde55201c2bf4bd65814d27afb26b7119b64de39b984": {
-    "describe": {
-      "columns": [
-        {
-          "name": "number",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "base_fee_per_gas!",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Interval"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                    number,\n                    base_fee_per_gas AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY base_fee_per_gas ASC\n                LIMIT 1\n                "
   }
 }
