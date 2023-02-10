@@ -36,21 +36,22 @@
 
 mod store;
 
-use std::{cmp::Ordering, ops::Index};
+use std::{cmp::Ordering, collections::HashMap, ops::Index};
 
 use chrono::{DateTime, Utc};
-use futures::join;
+use enum_iterator::all;
+use futures::future::join_all;
 use serde::Serialize;
 use sqlx::{PgConnection, PgPool};
 use tracing::debug;
 
 use crate::{
-    burn_rates::BurnRates,
+    burn_rates::BurnRatesEnvelope,
     burn_sums::store::BurnSumStore,
     caching::{self, CacheKey},
     execution_chain::{BlockNumber, BlockRange, BlockStore, ExecutionNodeBlock},
     performance::TimedExt,
-    time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
+    time_frames::{LimitedTimeFrame, TimeFrame},
     units::{EthNewtype, UsdNewtype, WeiNewtype},
 };
 
@@ -66,44 +67,43 @@ pub struct EthUsdAmount {
     pub usd: UsdNewtype,
 }
 
+pub type BurnSums = HashMap<TimeFrame, EthUsdAmount>;
+
+fn burn_sums_from_vec(records: &[BurnSumRecord]) -> BurnSums {
+    records
+        .iter()
+        .map(|record| {
+            let time_frame = record.time_frame;
+            let eth = record.sum_wei.into();
+            let usd = record.sum_usd;
+            let eth_usd_amount = EthUsdAmount { eth, usd };
+            (time_frame, eth_usd_amount)
+        })
+        .collect()
+}
+
 #[derive(Debug, PartialEq, Serialize)]
-pub struct BurnSums {
-    pub since_merge: EthUsdAmount,
-    pub since_burn: EthUsdAmount,
-    pub d1: EthUsdAmount,
-    pub d30: EthUsdAmount,
-    pub d7: EthUsdAmount,
-    pub h1: EthUsdAmount,
-    pub m5: EthUsdAmount,
+pub struct BurnSumsEnvelope {
+    pub block_number: BlockNumber,
+    pub burn_sums: BurnSums,
+    pub timestamp: DateTime<Utc>,
 }
 
 impl Index<TimeFrame> for BurnSums {
     type Output = EthUsdAmount;
 
     fn index(&self, time_frame: TimeFrame) -> &Self::Output {
-        use GrowingTimeFrame::*;
-        use LimitedTimeFrame::*;
-        use TimeFrame::*;
-
-        match time_frame {
-            Growing(SinceBurn) => &self.since_burn,
-            Growing(SinceMerge) => &self.since_merge,
-            Limited(Day1) => &self.d1,
-            Limited(Day30) => &self.d30,
-            Limited(Day7) => &self.d7,
-            Limited(Hour1) => &self.h1,
-            Limited(Minute5) => &self.m5,
-        }
+        self.get(&time_frame).expect("time frame not found")
     }
 }
 
 #[derive(Debug)]
 pub struct BurnSumRecord {
-    last_included_block_hash: String,
     first_included_block_number: BlockNumber,
+    last_included_block_hash: String,
     last_included_block_number: BlockNumber,
-    sum_wei: WeiNewtype,
     sum_usd: UsdNewtype,
+    sum_wei: WeiNewtype,
     time_frame: TimeFrame,
     timestamp: DateTime<Utc>,
 }
@@ -245,96 +245,55 @@ async fn calc_new_burn_sum_record(
     block_store: &BlockStore<'_>,
     burn_sum_store: &BurnSumStore<'_>,
     block: &ExecutionNodeBlock,
-    time_frame: &TimeFrame,
+    time_frame: TimeFrame,
 ) -> BurnSumRecord {
-    match burn_sum_store.last_burn_sum(time_frame).await {
+    match burn_sum_store.last_burn_sum(&time_frame).await {
         Some(last_burn_sum) => {
             calc_new_burn_sum_record_from_last(
                 block_store,
                 burn_sum_store,
                 &last_burn_sum,
                 block,
-                time_frame,
+                &time_frame,
             )
             .await
         }
-        None => calc_new_burn_sum_record_from_scratch(burn_sum_store, block, time_frame).await,
+        None => calc_new_burn_sum_record_from_scratch(burn_sum_store, block, &time_frame).await,
     }
 }
 
 pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) {
-    use GrowingTimeFrame::*;
-    use LimitedTimeFrame::*;
-    use TimeFrame::*;
-
     let block_store = BlockStore::new(db_pool);
     let burn_sum_store = BurnSumStore::new(db_pool);
 
-    let (since_burn, since_merge, d30, d7, d1, h1, m5) = join!(
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Growing(SinceBurn))
-            .timed("calc_new_burn_sum_record_since_burn"),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Growing(SinceMerge))
-            .timed("calc_new_burn_sum_record_since_merge"),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day30))
-            .timed("calc_new_burn_sum_record_day30"),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day7))
-            .timed("calc_new_burn_sum_record_day7"),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Day1))
-            .timed("calc_new_burn_sum_record_day1"),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Hour1))
-            .timed("calc_new_burn_sum_record_hour1"),
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, &Limited(Minute5))
-            .timed("calc_new_burn_sum_record_minute5")
-    );
+    let futures = all::<TimeFrame>().map(|time_frame| {
+        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, time_frame)
+            .timed(&format!("calc_new_burn_sum_record_{time_frame}"))
+    });
+    let burn_sum_records = join_all(futures).await;
 
-    let burn_sums = [&since_burn, &since_merge, &d30, &d7, &d1, &h1, &m5];
-    burn_sum_store.store_burn_sums(burn_sums).await;
+    burn_sum_store.store_burn_sums(&burn_sum_records).await;
 
     // Drop old sums.
     burn_sum_store.delete_old_sums(block.number).await;
 
-    let burn_sums = BurnSums {
-        since_burn: EthUsdAmount {
-            eth: since_burn.sum_wei.into(),
-            usd: since_burn.sum_usd,
-        },
-        since_merge: EthUsdAmount {
-            eth: since_merge.sum_wei.into(),
-            usd: since_merge.sum_usd,
-        },
-        d30: EthUsdAmount {
-            eth: d30.sum_wei.into(),
-            usd: d30.sum_usd,
-        },
-        d7: EthUsdAmount {
-            eth: d7.sum_wei.into(),
-            usd: d7.sum_usd,
-        },
-        d1: EthUsdAmount {
-            eth: d1.sum_wei.into(),
-            usd: d1.sum_usd,
-        },
-        h1: EthUsdAmount {
-            eth: h1.sum_wei.into(),
-            usd: h1.sum_usd,
-        },
-        m5: EthUsdAmount {
-            eth: m5.sum_wei.into(),
-            usd: m5.sum_usd,
-        },
+    let burn_sums_envelope = BurnSumsEnvelope {
+        block_number: block.number,
+        burn_sums: burn_sums_from_vec(&burn_sum_records),
+        timestamp: block.timestamp,
     };
 
     debug!("calculated new burn sums");
 
-    let burn_rates: BurnRates = (&burn_sums).into();
+    let burn_rates_envelope: BurnRatesEnvelope = (&burn_sums_envelope).into();
 
     debug!("calculated new burn rates");
 
-    caching::update_and_publish(db_pool, &CacheKey::BurnSums, burn_sums)
+    caching::update_and_publish(db_pool, &CacheKey::BurnSums, burn_sums_envelope)
         .await
         .unwrap();
 
-    caching::update_and_publish(db_pool, &CacheKey::BurnRates, burn_rates)
+    caching::update_and_publish(db_pool, &CacheKey::BurnRates, burn_rates_envelope)
         .await
         .unwrap();
 }
