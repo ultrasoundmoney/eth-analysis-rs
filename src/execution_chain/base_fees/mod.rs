@@ -8,12 +8,9 @@ use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
 use sqlx::PgPool;
-use tracing::debug;
 
 use crate::{
-    beacon_chain::{self, IssuanceStore},
-    performance::TimedExt,
-    time_frames::LimitedTimeFrame,
+    beacon_chain::IssuanceStore, performance::TimedExt, time_frames::LimitedTimeFrame,
     units::GweiNewtype,
 };
 
@@ -45,18 +42,14 @@ pub async fn on_new_block(
     issuance_store: impl IssuanceStore,
     block: &ExecutionNodeBlock,
 ) {
-    let issuance = beacon_chain::get_last_week_issuance(issuance_store)
-        .timed("get_last_week_issuance")
-        .await;
-    debug!("issuance: {issuance}");
-
-    let barrier = barrier::barrier_from_issuance(issuance);
-    debug!("barrier: {barrier}");
+    let ultra_sound_barrier = barrier::get_barrier(issuance_store).await;
 
     join!(
+        barrier::on_new_barrier(db_pool, ultra_sound_barrier),
         last::update_last_base_fee(db_pool, block).timed("update_last_base_fee"),
-        stats::update_base_fee_stats(db_pool, barrier, block).timed("update_base_fee_stats"),
-        over_time::update_base_fee_over_time(db_pool, barrier, &block.number)
+        stats::update_base_fee_stats(db_pool, ultra_sound_barrier, block)
+            .timed("update_base_fee_stats"),
+        over_time::update_base_fee_over_time(db_pool, ultra_sound_barrier, &block.number)
             .timed("update_base_fee_over_time"),
     );
 }

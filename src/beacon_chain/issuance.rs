@@ -128,39 +128,39 @@ pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype
     .unwrap()
 }
 
-pub async fn get_last_week_issuance(issuance_store: impl IssuanceStore) -> GweiNewtype {
-    let (current_issuance, day7_ago_issuance) = join!(
-        issuance_store.get_current_issuance(),
-        issuance_store.get_day7_ago_issuance()
-    );
-    current_issuance - day7_ago_issuance
-}
-
 #[async_trait]
 pub trait IssuanceStore {
-    async fn get_current_issuance(&self) -> GweiNewtype;
-    async fn get_day7_ago_issuance(&self) -> GweiNewtype;
+    async fn current_issuance(&self) -> GweiNewtype;
+    async fn day7_ago_issuance(&self) -> GweiNewtype;
 }
 
 pub struct IssuanceStorePostgres<'a> {
     pool: &'a PgPool,
 }
 
-impl<'a> IssuanceStorePostgres<'a> {
-    pub fn new(pool: &'a PgPool) -> Self {
-        Self { pool }
+impl IssuanceStorePostgres<'_> {
+    pub fn new(db_pool: &'_ PgPool) -> Self {
+        Self { pool: db_pool }
     }
 }
 
 #[async_trait]
 impl IssuanceStore for &IssuanceStorePostgres<'_> {
-    async fn get_current_issuance(&self) -> GweiNewtype {
+    async fn current_issuance(&self) -> GweiNewtype {
         get_current_issuance(self.pool).await
     }
 
-    async fn get_day7_ago_issuance(&self) -> GweiNewtype {
+    async fn day7_ago_issuance(&self) -> GweiNewtype {
         get_day7_ago_issuance(self.pool).await
     }
+}
+
+pub async fn get_last_week_issuance(issuance_store: impl IssuanceStore) -> GweiNewtype {
+    let (current_issuance, day7_ago_issuance) = join!(
+        issuance_store.current_issuance(),
+        issuance_store.day7_ago_issuance()
+    );
+    current_issuance - day7_ago_issuance
 }
 
 const SLOTS_PER_MINUTE: u64 = 5;
@@ -379,11 +379,11 @@ mod tests {
 
         #[async_trait]
         impl IssuanceStore for IssuanceStoreTest {
-            async fn get_current_issuance(&self) -> GweiNewtype {
+            async fn current_issuance(&self) -> GweiNewtype {
                 GweiNewtype(100)
             }
 
-            async fn get_day7_ago_issuance(&self) -> GweiNewtype {
+            async fn day7_ago_issuance(&self) -> GweiNewtype {
                 GweiNewtype(50)
             }
         }

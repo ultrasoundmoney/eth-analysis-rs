@@ -5,7 +5,9 @@ pub use caching::cached_get;
 
 use anyhow::Result;
 use axum::{middleware, routing::get, Extension, Router};
+use chrono::Duration;
 use futures::{try_join, TryFutureExt};
+use lazy_static::lazy_static;
 use reqwest::StatusCode;
 use sqlx::{Connection, PgPool};
 use std::sync::Arc;
@@ -13,9 +15,17 @@ use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tracing::{debug, error, info};
 
-use crate::{caching::CacheKey, db, env, execution_chain, log};
+use crate::{
+    caching::CacheKey, db, env, execution_chain, log,
+    serve::caching::cached_get_with_custom_duration,
+};
 
 use self::caching::Cache;
+
+lazy_static! {
+    static ref FOUR_SECONDS: Duration = Duration::seconds(4);
+    static ref ONE_DAY: Duration = Duration::days(1);
+}
 
 pub type StateExtension = Extension<Arc<State>>;
 
@@ -53,6 +63,11 @@ pub async fn start_server() -> Result<()> {
             "/api/v2/fees/base-fee-per-gas",
             get(|state: StateExtension| async move {
                 cached_get(state, &CacheKey::BaseFeePerGas).await
+            }),
+        )
+        .route("api/v2/fees/base-fee-per-gas-barrier", 
+            get(|state: StateExtension| async move {
+                cached_get_with_custom_duration(state, &CacheKey::BaseFeePerGasBarrier, &FOUR_SECONDS, &ONE_DAY).await
             }),
         )
         .route(

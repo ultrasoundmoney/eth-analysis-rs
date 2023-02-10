@@ -3,8 +3,10 @@ use axum::{
     response::IntoResponse,
     Extension, Json,
 };
+use chrono::Duration;
 use enum_iterator::all;
 use futures::{Stream, TryStreamExt};
+use lazy_static::lazy_static;
 use reqwest::{header, StatusCode};
 use serde_json::Value;
 use sqlx::PgPool;
@@ -43,12 +45,12 @@ impl Cache {
     }
 }
 
-async fn cached_get_with_cache_duration(
+pub async fn cached_get_with_custom_duration(
     Extension(state): StateExtension,
     analysis_cache_key: &CacheKey,
-    max_age: Option<u32>,
+    max_age: &Duration,
     // s_max_age: Option<u32>,
-    stale_while_revalidate: Option<u32>,
+    stale_while_revalidate: &Duration,
 ) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
 
@@ -57,9 +59,9 @@ async fn cached_get_with_cache_duration(
         HeaderValue::from_str(&format!(
             // "public, max-age={}, s-maxage={}, stale-while-revalidate={}",
             "public, max-age={}, stale-while-revalidate={}",
-            max_age.unwrap_or(6),
+            max_age.num_seconds(),
             // s_max_age.unwrap_or(4),
-            stale_while_revalidate.unwrap_or(120)
+            stale_while_revalidate.num_seconds()
         ))
         .unwrap(),
     );
@@ -70,8 +72,13 @@ async fn cached_get_with_cache_duration(
     }
 }
 
+lazy_static! {
+    static ref SIX_SECONDS: Duration = Duration::seconds(6);
+    static ref TWO_MINUTES: Duration = Duration::seconds(120);
+}
+
 pub async fn cached_get(state: StateExtension, analysis_cache_key: &CacheKey) -> impl IntoResponse {
-    cached_get_with_cache_duration(state, analysis_cache_key, None, None).await
+    cached_get_with_custom_duration(state, analysis_cache_key, &SIX_SECONDS, &TWO_MINUTES).await
 }
 
 async fn process_notifications(

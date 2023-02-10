@@ -17,6 +17,7 @@ use crate::{
 pub enum CacheKey {
     BaseFeeOverTime,
     BaseFeePerGas,
+    BaseFeePerGasBarrier,
     BaseFeePerGasStats,
     BaseFeePerGasStatsTimeFrame(TimeFrame),
     BlockLag,
@@ -51,6 +52,7 @@ impl CacheKey {
         match self {
             Self::BaseFeeOverTime => "base-fee-over-time",
             Self::BaseFeePerGas => "current-base-fee",
+            Self::BaseFeePerGasBarrier => "base-fee-per-gas-barrier",
             Self::BaseFeePerGasStats => "base-fee-per-gas-stats",
             Self::BaseFeePerGasStatsTimeFrame(time_frame) => match time_frame {
                 Growing(SinceBurn) => "base-fee-per-gas-stats-since-burn",
