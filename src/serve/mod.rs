@@ -2,6 +2,7 @@ mod caching;
 mod etag_middleware;
 
 pub use caching::cached_get;
+pub use caching::cached_get_with_custom_duration;
 
 use anyhow::Result;
 use axum::{middleware, routing::get, Extension, Router};
@@ -15,10 +16,7 @@ use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tracing::{debug, error, info};
 
-use crate::{
-    caching::CacheKey, db, env, execution_chain, log,
-    serve::caching::cached_get_with_custom_duration,
-};
+use crate::{caching::CacheKey, db, env, execution_chain, log};
 
 use self::caching::Cache;
 
