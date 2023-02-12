@@ -54,7 +54,7 @@ async fn base_fee_over_time_from_time_frame(
                     GROUP BY "day_timestamp!"
                     ORDER BY "day_timestamp!" ASC
                 "#,
-                growing_time_frame.start_date_time()
+                growing_time_frame.start_timestamp()
             )
             .fetch_all(executor)
             .await

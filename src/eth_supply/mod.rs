@@ -22,7 +22,9 @@ pub use parts::SupplyPartsStorePostgres;
 
 pub use store::get_last_stored_supply_slot;
 pub use store::get_supply_exists_by_slot;
+pub use store::last_eth_supply;
 pub use store::rollback_supply_from_slot;
 pub use store::rollback_supply_slot;
 pub use store::store;
+
 pub use sync::sync_eth_supply;

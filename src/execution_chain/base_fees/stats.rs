@@ -140,7 +140,7 @@ async fn base_fee_per_gas_max(
             ORDER BY base_fee_per_gas DESC
             LIMIT 1
             "#,
-            growing_time_frame.start_date_time()
+            growing_time_frame.start_timestamp()
         )
         .fetch_one(executor)
         .await

@@ -46,7 +46,6 @@ use sqlx::{PgConnection, PgPool};
 use tracing::debug;
 
 use crate::{
-    burn_rates::BurnRatesEnvelope,
     burn_sums::store::BurnSumStore,
     caching::{self, CacheKey},
     execution_chain::{BlockNumber, BlockRange, BlockStore, ExecutionNodeBlock},
@@ -61,10 +60,21 @@ struct WeiUsdAmount {
     usd: UsdNewtype,
 }
 
-#[derive(Debug, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct EthUsdAmount {
     pub eth: EthNewtype,
     pub usd: UsdNewtype,
+}
+
+impl EthUsdAmount {
+    pub fn yearly_rate_from_time_frame(&self, time_frame: TimeFrame) -> EthUsdAmount {
+        let eth = self.eth.0 / time_frame.years_f64();
+        let usd = self.usd.0 / time_frame.years_f64();
+        EthUsdAmount {
+            eth: EthNewtype(eth),
+            usd: UsdNewtype(usd),
+        }
+    }
 }
 
 pub type BurnSums = HashMap<TimeFrame, EthUsdAmount>;
@@ -262,7 +272,7 @@ async fn calc_new_burn_sum_record(
     }
 }
 
-pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) {
+pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> BurnSumsEnvelope {
     let block_store = BlockStore::new(db_pool);
     let burn_sum_store = BurnSumStore::new(db_pool);
 
@@ -285,15 +295,9 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) {
 
     debug!("calculated new burn sums");
 
-    let burn_rates_envelope: BurnRatesEnvelope = (&burn_sums_envelope).into();
-
-    debug!("calculated new burn rates");
-
-    caching::update_and_publish(db_pool, &CacheKey::BurnSums, burn_sums_envelope)
+    caching::update_and_publish(db_pool, &CacheKey::BurnSums, &burn_sums_envelope)
         .await
         .unwrap();
 
-    caching::update_and_publish(db_pool, &CacheKey::BurnRates, burn_rates_envelope)
-        .await
-        .unwrap();
+    burn_sums_envelope
 }

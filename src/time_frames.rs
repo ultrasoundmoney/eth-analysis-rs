@@ -7,8 +7,8 @@ use sqlx::postgres::types::PgInterval;
 use thiserror::Error;
 
 use crate::execution_chain::{
-    BlockNumber, LONDON_HARD_FORK_BLOCK_NUMBER, LONDON_HARD_FORK_TIMESTAMP, MERGE_BLOCK_NUMBER,
-    MERGE_HARD_FORK_TIMESTAMP,
+    BlockNumber, ExecutionNodeBlock, LONDON_HARD_FORK_BLOCK_NUMBER, LONDON_HARD_FORK_TIMESTAMP,
+    MERGE_BLOCK_NUMBER, MERGE_HARD_FORK_TIMESTAMP,
 };
 
 use GrowingTimeFrame::*;
@@ -149,7 +149,7 @@ pub enum GrowingTimeFrame {
 }
 
 impl GrowingTimeFrame {
-    pub fn start_date_time(&self) -> DateTime<Utc> {
+    pub fn start_timestamp(&self) -> DateTime<Utc> {
         match self {
             SinceBurn => *LONDON_HARD_FORK_TIMESTAMP,
             SinceMerge => *MERGE_HARD_FORK_TIMESTAMP,
@@ -170,7 +170,7 @@ impl GrowingTimeFrame {
 
 impl From<&GrowingTimeFrame> for Duration {
     fn from(growing_time_frame: &GrowingTimeFrame) -> Self {
-        Utc::now() - growing_time_frame.start_date_time()
+        Utc::now() - growing_time_frame.start_timestamp()
     }
 }
 
@@ -190,11 +190,29 @@ pub enum TimeFrame {
     Limited(LimitedTimeFrame),
 }
 
+const MINUTES_PER_HOUR: f64 = 60.0;
+const HOURS_PER_DAY: f64 = 24.0;
+const DAYS_PER_YEAR: f64 = 365.25;
+
 impl TimeFrame {
     pub fn duration(&self) -> Duration {
         match self {
             TimeFrame::Growing(growing_time_frame) => growing_time_frame.duration(),
             TimeFrame::Limited(limited_time_frame) => limited_time_frame.duration(),
+        }
+    }
+
+    pub fn years_f64(&self) -> f64 {
+        // Duration units are rounded. The smallest is 5 minutes, therefore num_minutes().
+        self.duration().num_minutes() as f64 / MINUTES_PER_HOUR / HOURS_PER_DAY / DAYS_PER_YEAR
+    }
+
+    pub fn start_timestamp(&self, block: &ExecutionNodeBlock) -> DateTime<Utc> {
+        match self {
+            TimeFrame::Growing(growing_time_frame) => growing_time_frame.start_timestamp(),
+            TimeFrame::Limited(limited_time_frame) => {
+                block.timestamp - limited_time_frame.duration()
+            }
         }
     }
 }

@@ -1,4 +1,7 @@
-use std::{fmt::Display, ops::Add};
+use std::{
+    fmt::Display,
+    ops::{Add, Sub},
+};
 
 use serde::Serialize;
 
@@ -22,6 +25,16 @@ impl Add for EthNewtype {
     fn add(self, EthNewtype(rhs): Self) -> Self::Output {
         let EthNewtype(lhs) = self;
         let result = lhs + rhs;
+        EthNewtype(result)
+    }
+}
+
+impl Sub for EthNewtype {
+    type Output = Self;
+
+    fn sub(self, EthNewtype(rhs): Self) -> Self::Output {
+        let EthNewtype(lhs) = self;
+        let result = lhs - rhs;
         EthNewtype(result)
     }
 }
