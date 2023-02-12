@@ -88,7 +88,15 @@ impl IdPool {
     }
 }
 
-type NodeMessageRx = SplitStream<WebSocketStream<TokioAdapter<TcpStream>>>;
+type NodeMessageRx = SplitStream<
+    WebSocketStream<
+        async_tungstenite::stream::Stream<
+            TokioAdapter<TcpStream>,
+            TokioAdapter<tokio_native_tls::TlsStream<tokio::net::TcpStream>>,
+        >,
+    >,
+>;
+
 type MessageHandlersShared =
     Arc<Mutex<HashMap<u16, oneshot::Sender<Result<serde_json::Value, RpcError>>>>>;
 type IdPoolShared = Arc<Mutex<IdPool>>;
@@ -140,7 +148,15 @@ async fn handle_messages(
 pub struct ExecutionNode {
     id_pool: Arc<Mutex<IdPool>>,
     message_handlers: MessageHandlersShared,
-    message_sink: SplitSink<WebSocketStream<TokioAdapter<TcpStream>>, Message>,
+    message_sink: SplitSink<
+        WebSocketStream<
+            async_tungstenite::stream::Stream<
+                TokioAdapter<TcpStream>,
+                TokioAdapter<tokio_native_tls::TlsStream<tokio::net::TcpStream>>,
+            >,
+        >,
+        Message,
+    >,
 }
 
 impl ExecutionNode {
