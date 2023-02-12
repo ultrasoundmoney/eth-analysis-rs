@@ -1,24 +1,32 @@
 {
   "db": "PostgreSQL",
-  "046945e120820491c162a629c80a9cd3dc33508d97653b2ccb6d3b46328fd4df": {
+  "06c50965d3a750843791d18ae9ea1ecc02ecbd93cb424898375d0465362e09ed": {
     "describe": {
       "columns": [
         {
-          "name": "balances_slot",
+          "name": "gwei!",
           "ordinal": 0,
-          "type_info": "Int4"
+          "type_info": "Text"
+        },
+        {
+          "name": "usd!",
+          "ordinal": 1,
+          "type_info": "Float8"
         }
       ],
       "nullable": [
-        false
+        null,
+        null
       ],
       "parameters": {
         "Left": [
-          "Int4"
+          "Interval",
+          "Timestamptz",
+          "Float8"
         ]
       }
     },
-    "query": "\n            SELECT\n                balances_slot\n            FROM\n                eth_supply\n            WHERE\n                balances_slot = $1\n        "
+    "query": "\n                SELECT\n                    SUM(gwei)::TEXT AS \"gwei!\",\n                    SUM(gwei::FLOAT8 / 1e9 * $3) AS \"usd!\"\n                FROM beacon_issuance\n                WHERE timestamp >= NOW() - $1::INTERVAL\n                AND timestamp <= $2\n                "
   },
   "0a008d415e6395b49f8168f50baeb5ccb61602fb739683a6ec0fbf98dbc3a490": {
     "describe": {
@@ -45,6 +53,42 @@
       }
     },
     "query": "\n            SELECT\n                block_root,\n                slot AS \"slot!\"\n            FROM\n                beacon_blocks\n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot >= $1\n        "
+  },
+  "0a2508d2c3fbce38482cdb84e0e3bd6983a0a50d3e2036b9e8237a89d4ecdd14": {
+    "describe": {
+      "columns": [
+        {
+          "name": "supply!",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            supply::TEXT AS \"supply!\"\n        FROM\n            eth_supply\n        ORDER BY\n            timestamp DESC\n        LIMIT 1\n        "
+  },
+  "0c32c06017ce791e3d195e4b3ef5e00ccae7a682e2efec6024e10b017dd3a97f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            beacon_states.slot\n        FROM\n            beacon_states\n        JOIN beacon_blocks ON\n            beacon_states.state_root = beacon_blocks.state_root\n        JOIN execution_supply ON\n            beacon_blocks.block_hash = execution_supply.block_hash\n        WHERE\n            execution_supply.block_hash IS NOT NULL\n        ORDER BY beacon_states.slot DESC\n        LIMIT 1\n        "
   },
   "100d831ec3a9d8ea9545ca0bcaae004558fc96771fe31a755ae04625d38b0000": {
     "describe": {
@@ -84,6 +128,22 @@
     },
     "query": "\n            SELECT\n                MAX(block_number)\n            FROM\n                execution_supply_deltas\n        "
   },
+  "14fe911032ff0992a50fde6b869cd3fd54e19f6e28cbcc21182a9bfa0869c52a": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Int4",
+          "Int4",
+          "Int4",
+          "Numeric"
+        ]
+      }
+    },
+    "query": "\n        INSERT INTO eth_supply (\n            timestamp,\n            block_number,\n            deposits_slot,\n            balances_slot,\n            supply\n        )\n        VALUES ($1, $2, $3, $4, $5::NUMERIC)\n        "
+  },
   "1d1cbed2bd2dfa388a1b9851e9c772e23c8256c278762aadda6413f26a06341e": {
     "describe": {
       "columns": [],
@@ -95,18 +155,6 @@
       }
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot = $1\n        "
-  },
-  "1e90cd678867494569610cd2020e4f46e5c47427b53f6868f62c4a72d0deeb71": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            DELETE FROM\n                eth_supply\n            WHERE\n                deposits_slot >= $1\n                OR balances_slot >= $1\n        "
   },
   "26022725182b69f2b8a9695711836592df07efb3a1561c046294646ab178b5e7": {
     "describe": {
@@ -299,6 +347,18 @@
     },
     "query": "\n            SELECT\n                effective_balance_sum\n            FROM\n                beacon_states\n            WHERE\n                state_root = $1\n        "
   },
+  "376e760f404471d87aac22f443ea64ace718725a92af4474a7c8391ad17d4baa": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        DELETE FROM\n            eth_supply\n        WHERE\n            deposits_slot >= $1\n            OR balances_slot >= $1\n        "
+  },
   "3865039902e07965678afa4d85af5b180147403b8ce5a9a9f397c581043c76fb": {
     "describe": {
       "columns": [
@@ -366,6 +426,26 @@
       }
     },
     "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ\n            ORDER BY base_fee_per_gas ASC\n            LIMIT 1\n            "
+  },
+  "3aed21a5e1ed297fedd5953b77216cbd3554f52859a5d4bf435b132c91ad89ed": {
+    "describe": {
+      "columns": [
+        {
+          "name": "balances_slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            balances_slot\n        FROM\n            eth_supply\n        WHERE\n            balances_slot = $1\n        "
   },
   "3d161e6a7b26b1759ada2a5102c9fa5e4fdf75b0fe094850e4502cf6e38c9760": {
     "describe": {
@@ -437,18 +517,6 @@
       }
     },
     "query": "\n            SELECT\n                state_root\n            FROM\n                beacon_states\n            WHERE\n                slot = $1\n        "
-  },
-  "50a8d86ede499906daa6f8900b1c617e40adb8f8db31607d59dd80f38c7879f2": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            DELETE FROM\n                eth_supply\n            WHERE\n                deposits_slot = $1\n                OR balances_slot = $1\n        "
   },
   "51ef5e66cebfc87b3dc99d2122dfb2c23dca5a446a4d0d560d947247a167968d": {
     "describe": {
@@ -535,7 +603,7 @@
     },
     "query": "\n            SELECT\n                COUNT(*) AS \"count!\"\n            FROM\n                beacon_states\n            LEFT JOIN beacon_validators_balance ON\n                beacon_states.state_root = beacon_validators_balance.state_root\n            WHERE\n                slot >= $1\n            AND\n                beacon_validators_balance.state_root IS NULL\n        "
   },
-  "61740107d0249a5ce47197e447b82e7cf0fb27c6e4ca3f5336513fec101a898c": {
+  "5c0ebd75feae47d74c50bc83c80a9f61c6d3a8304cfca8a04a4d0ad66340f863": {
     "describe": {
       "columns": [
         {
@@ -551,7 +619,7 @@
         "Left": []
       }
     },
-    "query": "\n            SELECT\n                MAX(balances_slot)\n            FROM\n                eth_supply\n        "
+    "query": "\n        SELECT\n            MAX(balances_slot)\n        FROM\n            eth_supply\n        "
   },
   "622a4e700745a450c178d411239781e6319ad98f430c62e6b99685af6962f4d4": {
     "describe": {
@@ -648,6 +716,34 @@
       }
     },
     "query": "\n                SELECT\n                    balances_slot,\n                    supply::TEXT AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    balances_slot = $1\n                "
+  },
+  "6d81b8d52ea0b5de8223d10a543e3044680ba9f928cafad57bc07b68b39d8b4d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei!",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "usd!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Timestamptz",
+          "Float8"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    SUM(gwei)::TEXT AS \"gwei!\",\n                    SUM(gwei::FLOAT8 / 1e9 * $3) AS \"usd!\"\n                FROM beacon_issuance\n                WHERE timestamp >= $1\n                AND timestamp <= $2\n                "
   },
   "6e5840a62473818a418e10adb6ba3c8808a9f057e7194a4910096fdaf503d699": {
     "describe": {
@@ -879,24 +975,6 @@
       }
     },
     "query": "\n        SELECT\n            gwei\n        FROM\n            beacon_issuance\n        ORDER BY\n            timestamp DESC\n        LIMIT 1\n        "
-  },
-  "98198e4a1b074e7bcecc21a84f8cffa036865925ff1e10d0be5a84d4fb9be589": {
-    "describe": {
-      "columns": [
-        {
-          "name": "slot",
-          "ordinal": 0,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT\n                beacon_states.slot\n            FROM\n                beacon_states\n            JOIN beacon_blocks ON\n                beacon_states.state_root = beacon_blocks.state_root\n            JOIN execution_supply ON\n                beacon_blocks.block_hash = execution_supply.block_hash\n            WHERE\n                execution_supply.block_hash IS NOT NULL\n            ORDER BY beacon_states.slot DESC\n            LIMIT 1\n        "
   },
   "99161f8c9a73c0713c2fefb04cbc70c933371910f7956d459404391a11cb0eb6": {
     "describe": {
@@ -1186,6 +1264,38 @@
     },
     "query": "\n            SELECT\n                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT\n                    AS \"burn_sum_wei!\",\n                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78) / 1e18 * eth_price)\n                    AS \"burn_sum_usd!\"\n            FROM\n                blocks_next\n            WHERE\n                number >= $1 AND number <= $2\n            "
   },
+  "d701446dc558dca2ce46c95c23a0683bbfcea6ebe25201968f7b59e15b484cc5": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT\n                timestamp\n            FROM\n                blocks_next\n            WHERE\n                number = $1\n            "
+  },
+  "d8bcd292eb9c526f02d2b1d71b1e551f9620403943400697940e01d3360958aa": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        DELETE FROM\n            eth_supply\n        WHERE\n            deposits_slot = $1\n            OR balances_slot = $1\n        "
+  },
   "dfe5b46d9937450ab56cdfe76cf2b7b1bd2665cf76748b67e13b27cac5b47fa0": {
     "describe": {
       "columns": [
@@ -1224,6 +1334,27 @@
     },
     "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM blocks_next\n                WHERE hash = $1\n            ) AS \"exists!\"\n            "
   },
+  "e72dace2ddc6508e5631f8a1940a3116f7175f60005cdd8357e8063831ee2919": {
+    "describe": {
+      "columns": [
+        {
+          "name": "avg!",
+          "ordinal": 0,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": " SELECT AVG(ethusd) AS \"avg!\" FROM eth_prices WHERE timestamp >= $1 AND timestamp <= $2 "
+  },
   "e81d51231c91dc84d5279e155932ec43cd1157cbcab70a0c9a82aff946c3e85f": {
     "describe": {
       "columns": [],
@@ -1261,22 +1392,6 @@
       }
     },
     "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= NOW() - $1::INTERVAL\n            ORDER BY base_fee_per_gas DESC\n            LIMIT 1\n            "
-  },
-  "f19d62204ffdb70367e90b6f5ca7fe64efe01776f90d3c8a86e8594b765c142b": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Int4",
-          "Int4",
-          "Int4",
-          "Numeric"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO eth_supply (\n                timestamp,\n                block_number,\n                deposits_slot,\n                balances_slot,\n                supply\n            )\n            VALUES ($1, $2, $3, $4, $5::NUMERIC)\n        "
   },
   "f2d4faaff81c4ee97a6c7a092754714db1f274e232614fcd628713f8f2d31bc3": {
     "describe": {
