@@ -1,6 +1,8 @@
 use std::{
     fmt,
+    num::ParseIntError,
     ops::{Add, Div, Sub},
+    str::FromStr,
 };
 
 use serde::{de, de::Visitor, Deserialize, Serialize};
@@ -154,6 +156,14 @@ impl<'de> Deserialize<'de> for GweiNewtype {
         D: serde::Deserializer<'de>,
     {
         deserializer.deserialize_any(GweiAmountVisitor)
+    }
+}
+
+impl FromStr for GweiNewtype {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<i64>().map(GweiNewtype)
     }
 }
 

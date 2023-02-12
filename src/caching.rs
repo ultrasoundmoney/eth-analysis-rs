@@ -25,6 +25,7 @@ pub enum CacheKey {
     BurnSums,
     EffectiveBalanceSum,
     EthPrice,
+    GaugeRates,
     SupplyParts,
     IssuanceBreakdown,
     IssuanceEstimate,
@@ -68,12 +69,13 @@ impl CacheKey {
             Self::BurnSums => "burn-sums",
             Self::EffectiveBalanceSum => "effective-balance-sum",
             Self::EthPrice => "eth-price",
-            Self::SupplyParts => "supply-parts",
+            Self::GaugeRates => "gauge-rates",
             Self::IssuanceBreakdown => "issuance-breakdown",
             Self::IssuanceEstimate => "issuance-estimate",
             Self::SupplyChanges => "supply-changes",
             Self::SupplyDashboardAnalysis => "supply-dashboard-analysis",
             Self::SupplyOverTime => "supply-over-time",
+            Self::SupplyParts => "supply-parts",
             Self::SupplyProjectionInputs => "supply-projection-inputs",
             Self::SupplySinceMerge => "supply-since-merge",
             Self::TotalDifficultyProgress => "total-difficulty-progress",
@@ -94,14 +96,18 @@ impl FromStr for CacheKey {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "base-fee-over-time" => Ok(Self::BaseFeeOverTime),
+            "current-base-fee" => Ok(Self::BaseFeePerGas),
+            "base-fee-per-gas" => Ok(Self::BaseFeePerGas),
+            "base-fee-per-gas-barrier" => Ok(Self::BaseFeePerGasBarrier),
             "base-fee-per-gas-stats" => Ok(Self::BaseFeePerGasStats),
             "block-lag" => Ok(Self::BlockLag),
             "burn-rates" => Ok(Self::BurnRates),
             "burn-sums" => Ok(Self::BurnSums),
-            "current-base-fee" => Ok(Self::BaseFeePerGas),
             "effective-balance-sum" => Ok(Self::EffectiveBalanceSum),
             "eth-price" => Ok(Self::EthPrice),
+            "gauge-rates" => Ok(Self::GaugeRates),
             "issuance-breakdown" => Ok(Self::IssuanceBreakdown),
+            "issuance-estimate" => Ok(Self::IssuanceEstimate),
             "supply-changes" => Ok(Self::SupplyChanges),
             "supply-dashboard-analysis" => Ok(Self::SupplyDashboardAnalysis),
             "supply-over-time" => Ok(Self::SupplyOverTime),
@@ -110,6 +116,19 @@ impl FromStr for CacheKey {
             "supply-since-merge" => Ok(Self::SupplySinceMerge),
             "total-difficulty-progress" => Ok(Self::TotalDifficultyProgress),
             "validator-rewards" => Ok(Self::ValidatorRewards),
+            unknown_key if unknown_key.starts_with("base-fee-per-gas-stats-") => unknown_key
+                .split("-")
+                .skip(4)
+                .next()
+                .expect(
+                    "expect keys which start with 'base-fee-per-gas-stats-' to have a time frame",
+                )
+                .to_string()
+                .parse::<TimeFrame>()
+                .map_or(
+                    Err(ParseCacheKeyError::UnknownCacheKey(unknown_key.to_string())),
+                    |key| Ok(Self::BaseFeePerGasStatsTimeFrame(key)),
+                ),
             unknown_key => Err(ParseCacheKeyError::UnknownCacheKey(unknown_key.to_string())),
         }
     }

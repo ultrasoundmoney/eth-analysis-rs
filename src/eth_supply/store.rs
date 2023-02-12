@@ -163,6 +163,27 @@ pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Res
     Ok(row.map(|row| Slot(row.slot)))
 }
 
+pub async fn last_eth_supply(executor: impl PgExecutor<'_>) -> WeiNewtype {
+    sqlx::query!(
+        r#"
+        SELECT
+            supply::TEXT AS "supply!"
+        FROM
+            eth_supply
+        ORDER BY
+            timestamp DESC
+        LIMIT 1
+        "#,
+    )
+    .fetch_one(executor)
+    .await
+    .unwrap()
+    .supply
+    .parse::<WeiNewtype>()
+    .unwrap()
+    .into()
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{SubsecRound, Utc};

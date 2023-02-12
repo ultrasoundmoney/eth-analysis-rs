@@ -2,8 +2,11 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use sqlx::PgPool;
+use tracing::debug;
 
 use crate::burn_sums::BurnSumsEnvelope;
+use crate::caching::{self, CacheKey};
 use crate::execution_chain::BlockNumber;
 use crate::time_frames::TimeFrame;
 
@@ -55,4 +58,14 @@ impl From<&BurnSumsEnvelope> for BurnRatesEnvelope {
             timestamp: *timestamp,
         }
     }
+}
+
+pub async fn on_new_block(db_pool: &PgPool, burn_sums_envelope: &BurnSumsEnvelope) {
+    debug!("calculating new burn rates");
+
+    let burn_rates_envelope: BurnRatesEnvelope = burn_sums_envelope.into();
+
+    caching::update_and_publish(db_pool, &CacheKey::BurnRates, burn_rates_envelope)
+        .await
+        .unwrap();
 }

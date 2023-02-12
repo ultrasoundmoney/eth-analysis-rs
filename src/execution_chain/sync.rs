@@ -13,10 +13,11 @@ use tracing::{debug, info, warn};
 
 use crate::{
     beacon_chain::{IssuanceStore, IssuanceStorePostgres},
-    burn_sums, db,
+    burn_rates, burn_sums, db, eth_supply,
     execution_chain::{self, base_fees, BlockStore, ExecutionNode},
-    log,
+    gauges, log,
     performance::TimedExt,
+    units::EthNewtype,
     usd_price,
 };
 
@@ -65,8 +66,16 @@ async fn sync_by_hash(
         base_fees::on_new_block(db_pool, issuance_store, &block)
             .timed("base_fees_on_new_block")
             .await;
-        burn_sums::on_new_block(db_pool, &block)
+        let burn_sums_envelope = burn_sums::on_new_block(db_pool, &block)
             .timed("burn_sums_on_new_block")
+            .await;
+        let eth_supply: EthNewtype = eth_supply::last_eth_supply(db_pool)
+            .timed("last_eth_supply")
+            .await
+            .into();
+        burn_rates::on_new_block(db_pool, &burn_sums_envelope).await;
+        gauges::on_new_block(db_pool, &block, &burn_sums_envelope, &eth_supply)
+            .timed("gauges_on_new_block")
             .await;
     } else {
         debug!("not synced, skipping skippables");

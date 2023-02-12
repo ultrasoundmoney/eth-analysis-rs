@@ -8,6 +8,7 @@ mod env;
 mod eth_supply;
 mod etherscan;
 mod execution_chain;
+mod gauges;
 mod glassnode;
 mod issuance_breakdown;
 mod json_codecs;

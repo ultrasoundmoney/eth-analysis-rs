@@ -147,6 +147,24 @@ impl<'a> BlockStore<'a> {
         .unwrap()
         .map(|row| row.hash)
     }
+
+    pub async fn timestamp_from_number(&self, block_number: &BlockNumber) -> DateTime<Utc> {
+        sqlx::query!(
+            r#"
+            SELECT
+                timestamp
+            FROM
+                blocks_next
+            WHERE
+                number = $1
+            "#,
+            block_number
+        )
+        .fetch_one(self.db_pool)
+        .await
+        .unwrap()
+        .timestamp
+    }
 }
 
 #[cfg(test)]

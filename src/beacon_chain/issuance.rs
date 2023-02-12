@@ -5,6 +5,8 @@
 //! upwards.
 //! As an experiment this module exposes a Store trait and a Postgres implementation of it. Using
 //! this interface with transactions is an unsolved problem.
+use std::ops::Sub;
+
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
@@ -13,9 +15,13 @@ use sqlx::{PgExecutor, PgPool};
 use tracing::info;
 
 use crate::{
+    burn_sums::EthUsdAmount,
     caching::{self, CacheKey},
     db,
-    units::GweiNewtype,
+    execution_chain::{ExecutionNodeBlock, LONDON_HARD_FORK_TIMESTAMP, MERGE_HARD_FORK_TIMESTAMP},
+    time_frames::{GrowingTimeFrame, TimeFrame},
+    units::{EthNewtype, GweiNewtype, UsdNewtype},
+    usd_price,
 };
 
 use super::Slot;
@@ -208,13 +214,118 @@ pub async fn update_issuance_estimate() {
     info!("updated issuance estimate");
 }
 
+pub async fn estimated_issuance_from_time_frame(
+    db_pool: &PgPool,
+    time_frame: &TimeFrame,
+    block: &ExecutionNodeBlock,
+) -> EthUsdAmount {
+    use GrowingTimeFrame::*;
+    use TimeFrame::*;
+
+    match time_frame {
+        Growing(SinceBurn) => {
+            // Since there is no issuance before the Merge we don't have data for it. We estimate.
+            let days_since_merge = Utc::now().sub(*MERGE_HARD_FORK_TIMESTAMP).num_days();
+            let days_since_burn = Utc::now().sub(*LONDON_HARD_FORK_TIMESTAMP).num_days();
+            let extrapolation_factor = days_since_burn as f64 / days_since_merge as f64;
+
+            let usd_price_average = usd_price::average_from_time_range(
+                db_pool,
+                time_frame.start_timestamp(block),
+                block.timestamp,
+            )
+            .await;
+
+            let row = sqlx::query!(
+                r#"
+                SELECT
+                    SUM(gwei)::TEXT AS "gwei!",
+                    SUM(gwei::FLOAT8 / 1e9 * $3) AS "usd!"
+                FROM beacon_issuance
+                WHERE timestamp >= $1
+                AND timestamp <= $2
+                "#,
+                *MERGE_HARD_FORK_TIMESTAMP,
+                block.timestamp,
+                usd_price_average.0
+            )
+            .fetch_one(db_pool)
+            .await
+            .unwrap();
+
+            let eth: EthNewtype = row.gwei.parse::<GweiNewtype>().unwrap().into();
+            let usd = row.usd;
+            let eth_estimated = EthNewtype(eth.0 as f64 * extrapolation_factor);
+            let usd_estimated = UsdNewtype(row.usd * extrapolation_factor);
+
+            EthUsdAmount {
+                eth: eth_estimated,
+                usd: usd_estimated,
+            }
+        }
+        Growing(SinceMerge) => {
+            let usd_price = 1000.0;
+
+            let row = sqlx::query!(
+                r#"
+                SELECT
+                    SUM(gwei)::TEXT AS "gwei!",
+                    SUM(gwei::FLOAT8 / 1e9 * $3) AS "usd!"
+                FROM beacon_issuance
+                WHERE timestamp >= $1
+                AND timestamp <= $2
+                "#,
+                *MERGE_HARD_FORK_TIMESTAMP,
+                block.timestamp,
+                usd_price
+            )
+            .fetch_one(db_pool)
+            .await
+            .unwrap();
+
+            let eth: EthNewtype = row.gwei.parse::<GweiNewtype>().unwrap().into();
+            let usd = UsdNewtype(row.usd);
+
+            EthUsdAmount { eth, usd }
+        }
+        Limited(limited_time_frame) => {
+            let usd_price = 1000.0;
+
+            let row = sqlx::query!(
+                r#"
+                SELECT
+                    SUM(gwei)::TEXT AS "gwei!",
+                    SUM(gwei::FLOAT8 / 1e9 * $3) AS "usd!"
+                FROM beacon_issuance
+                WHERE timestamp >= NOW() - $1::INTERVAL
+                AND timestamp <= $2
+                "#,
+                limited_time_frame.postgres_interval(),
+                block.timestamp,
+                usd_price
+            )
+            .fetch_one(db_pool)
+            .await
+            .unwrap();
+
+            let eth: EthNewtype = row.gwei.parse::<GweiNewtype>().unwrap().into();
+            let usd = UsdNewtype(row.usd);
+
+            EthUsdAmount { eth, usd }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, DurationRound, TimeZone, Utc};
     use sqlx::Acquire;
 
     use super::*;
-    use crate::{beacon_chain::states::store_state, db, supply_projection::GweiInTime};
+    use crate::{
+        beacon_chain::states::store_state, db, execution_chain::ExecutionNodeBlockBuilder,
+        supply_projection::GweiInTime,
+    };
 
     pub async fn get_issuance_by_start_of_day(pool: impl PgExecutor<'_>) -> Vec<GweiInTime> {
         sqlx::query!(
@@ -393,5 +504,34 @@ mod tests {
         let issuance = get_last_week_issuance(issuance_store).await;
 
         assert_eq!(issuance, GweiNewtype(50));
+    }
+
+    #[tokio::test]
+    async fn estimated_issuance_from_time_frame_test() {
+        let test_db = db::tests::TestDb::new().await;
+        let db_pool = test_db.pool();
+
+        let test_id = "estimated_issuance_from_time_frame";
+
+        let block = ExecutionNodeBlockBuilder::new(test_id).build();
+
+        store_state(db_pool, test_id, &Slot(3599)).await;
+
+        store_issuance(db_pool, test_id, &Slot(3599), &GweiNewtype(100)).await;
+
+        let issuance = estimated_issuance_from_time_frame(
+            db_pool,
+            &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
+            &block,
+        )
+        .await;
+
+        assert_eq!(
+            issuance,
+            EthUsdAmount {
+                eth: EthNewtype(100.0),
+                usd: UsdNewtype(100.0)
+            }
+        );
     }
 }
