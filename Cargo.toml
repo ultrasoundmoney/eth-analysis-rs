@@ -10,7 +10,7 @@ publish = false
 axum = "0.6"
 anyhow = "1"
 async-trait = "0.1"
-async-tungstenite = { version = "0.19", features = ["tokio-runtime"] }
+async-tungstenite = { version = "0.19", features = ["tokio-native-tls"] }
 bytes = "1"
 cached = "0.42"
 chrono = { version = "0.4", features = ["serde"] }
@@ -52,6 +52,7 @@ tracing-subscriber = { version = "0.3", features = [
   "json",
   "std",
 ] }
+tokio-native-tls = "0.3.0"
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3

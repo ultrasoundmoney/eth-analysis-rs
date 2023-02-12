@@ -92,8 +92,10 @@ dependencies = [
  "futures-io",
  "futures-util",
  "log",
+ "native-tls",
  "pin-project-lite 0.2.9",
  "tokio 1.25.0",
+ "tokio-native-tls",
  "tungstenite",
 ]
 
@@ -684,6 +686,7 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio 1.25.0",
+ "tokio-native-tls",
  "tower",
  "tower-http",
  "tracing",
@@ -2549,6 +2552,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
+ "native-tls",
  "rand",
  "sha1",
  "thiserror",
