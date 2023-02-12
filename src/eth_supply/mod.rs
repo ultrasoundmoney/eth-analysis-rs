@@ -2,6 +2,7 @@ mod changes;
 mod gaps;
 mod over_time;
 mod parts;
+mod store;
 mod sync;
 #[cfg(test)]
 mod test;
@@ -19,9 +20,9 @@ pub use parts::SupplyParts;
 pub use parts::SupplyPartsStore;
 pub use parts::SupplyPartsStorePostgres;
 
-pub use sync::get_last_stored_supply_slot;
-pub use sync::get_supply_exists_by_slot;
-pub use sync::rollback_supply_from_slot;
-pub use sync::rollback_supply_slot;
-pub use sync::store;
+pub use store::get_last_stored_supply_slot;
+pub use store::get_supply_exists_by_slot;
+pub use store::rollback_supply_from_slot;
+pub use store::rollback_supply_slot;
+pub use store::store;
 pub use sync::sync_eth_supply;
