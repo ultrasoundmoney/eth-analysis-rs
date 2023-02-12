@@ -265,32 +265,6 @@
     },
     "query": "\n            DELETE FROM burn_sums\n            WHERE last_included_block_number < $1\n            "
   },
-  "321e5d1396c1c0f4826c368eda58e7969a7747412b0d1135dc28f2295ff0eded": {
-    "describe": {
-      "columns": [
-        {
-          "name": "timestamp",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "ethusd!",
-          "ordinal": 1,
-          "type_info": "Float8"
-        }
-      ],
-      "nullable": [
-        false,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n              timestamp,\n              ethusd AS \"ethusd!\"\n            FROM eth_prices\n            ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))\n            LIMIT 1\n        "
-  },
   "33d31f5bc0c8dde9581f22d69b2fb82986e574cb7272a8dda02fb3543e133647": {
     "describe": {
       "columns": [],
@@ -358,24 +332,6 @@
       }
     },
     "query": "\n        DELETE FROM\n            eth_supply\n        WHERE\n            deposits_slot >= $1\n            OR balances_slot >= $1\n        "
-  },
-  "3865039902e07965678afa4d85af5b180147403b8ce5a9a9f397c581043c76fb": {
-    "describe": {
-      "columns": [
-        {
-          "name": "average!",
-          "ordinal": 0,
-          "type_info": "Float8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT\n                AVG(ethusd) AS \"average!\"\n            FROM\n                eth_prices\n            WHERE timestamp >= NOW() - '24 hours'::INTERVAL\n        "
   },
   "38ec7400dc9786404908540972937958a5a62e686512e0607550a9434ec2995f": {
     "describe": {
@@ -459,6 +415,32 @@
     },
     "query": "\n            DELETE FROM beacon_validators_balance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
+  "3d2eeee2f4479ee8f9cc9095b81a9e9d9415c301f2645283bd689df2839351f1": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "ethusd!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n          timestamp,\n          ethusd AS \"ethusd!\"\n        FROM eth_prices\n        ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))\n        LIMIT 1\n        "
+  },
   "3e71ae5b218c205c14cad0ce43a9e5fc08eb0c7d0c5d0bd9fe1629d67f83dfe9": {
     "describe": {
       "columns": [
@@ -484,6 +466,26 @@
       }
     },
     "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= $1\n            ORDER BY base_fee_per_gas DESC\n            LIMIT 1\n            "
+  },
+  "3ff645cf6e4b82d95459bf21e0333d81613edaacdb538048edf35d7d5e5b8b56": {
+    "describe": {
+      "columns": [
+        {
+          "name": "ethusd",
+          "ordinal": 0,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n        SELECT ethusd\n        FROM eth_prices\n        WHERE timestamp = $1\n        "
   },
   "440e3270c27b7133ca07349f03510777f0218e8acefd1f2ffad9d8528e7db2de": {
     "describe": {
@@ -1459,7 +1461,7 @@
     },
     "query": "\n            SELECT\n                base_fee_per_gas,\n                difficulty,\n                eth_price,\n                gas_used,\n                hash,\n                number,\n                parent_hash,\n                timestamp,\n                total_difficulty::TEXT AS \"total_difficulty!\"\n            FROM\n                blocks_next\n            ORDER BY\n                number DESC\n            LIMIT 1\n            "
   },
-  "f5e56d04d5d91fd87a0a3e17fa8791f193773d0e663ca6282ae7dd70b00abc4e": {
+  "f4ab8e1dab3c4469c4b504f83fc6964b68765780627742269670e2dea8f09a36": {
     "describe": {
       "columns": [],
       "nullable": [],
@@ -1470,6 +1472,24 @@
         ]
       }
     },
-    "query": "\n            INSERT INTO\n                eth_prices (timestamp, ethusd)\n            VALUES ($1, $2)\n            ON CONFLICT (timestamp) DO UPDATE SET\n                ethusd = excluded.ethusd\n        "
+    "query": "\n        INSERT INTO\n            eth_prices (timestamp, ethusd)\n        VALUES ($1, $2)\n        ON CONFLICT (timestamp) DO UPDATE SET\n            ethusd = excluded.ethusd\n        "
+  },
+  "fb8a334d72f27895aca5a22d08edcbfe971a4739d4922eda48098e8e641040a4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "average!",
+          "ordinal": 0,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            AVG(ethusd) AS \"average!\"\n        FROM\n            eth_prices\n        WHERE timestamp >= NOW() - '24 hours'::INTERVAL\n        "
   }
 }

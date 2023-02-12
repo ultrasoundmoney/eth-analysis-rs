@@ -45,12 +45,12 @@ pub struct EthPriceStats {
 async fn get_most_recent_price(executor: &mut PgConnection) -> sqlx::Result<EthPrice> {
     sqlx::query_as::<Postgres, EthPrice>(
         "
-            SELECT
-                timestamp, ethusd
-            FROM
-                eth_prices
-            ORDER BY timestamp DESC
-            LIMIT 1
+        SELECT
+            timestamp, ethusd
+        FROM
+            eth_prices
+        ORDER BY timestamp DESC
+        LIMIT 1
         ",
     )
     .fetch_one(executor)
@@ -60,11 +60,11 @@ async fn get_most_recent_price(executor: &mut PgConnection) -> sqlx::Result<EthP
 async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd: f64) {
     sqlx::query!(
         "
-            INSERT INTO
-                eth_prices (timestamp, ethusd)
-            VALUES ($1, $2)
-            ON CONFLICT (timestamp) DO UPDATE SET
-                ethusd = excluded.ethusd
+        INSERT INTO
+            eth_prices (timestamp, ethusd)
+        VALUES ($1, $2)
+        ON CONFLICT (timestamp) DO UPDATE SET
+            ethusd = excluded.ethusd
         ",
         timestamp,
         usd
@@ -78,11 +78,11 @@ async fn store_price(executor: &mut PgConnection, timestamp: DateTime<Utc>, usd:
 async fn get_h24_average(executor: &mut PgConnection) -> f64 {
     sqlx::query!(
         r#"
-            SELECT
-                AVG(ethusd) AS "average!"
-            FROM
-                eth_prices
-            WHERE timestamp >= NOW() - '24 hours'::INTERVAL
+        SELECT
+            AVG(ethusd) AS "average!"
+        FROM
+            eth_prices
+        WHERE timestamp >= NOW() - '24 hours'::INTERVAL
         "#,
     )
     .fetch_one(executor)
@@ -94,27 +94,27 @@ async fn get_h24_average(executor: &mut PgConnection) -> f64 {
 async fn get_price_h24_ago(executor: &mut PgConnection, age_limit: Duration) -> Option<EthPrice> {
     sqlx::query_as::<Postgres, EthPrice>(
         "
-            WITH
-              eth_price_distances AS (
-                SELECT
-                  ethusd,
-                  timestamp,
-                  ABS(
-                    EXTRACT(
-                      epoch
-                      FROM
-                        (timestamp - (NOW() - '24 hours':: INTERVAL))
-                    )
-                  ) AS distance_seconds
-                FROM
-                  eth_prices
-                ORDER BY
-                  distance_seconds ASC
-              )
-            SELECT ethusd, timestamp
-            FROM eth_price_distances
-            WHERE distance_seconds <= 600
-            LIMIT 1
+        WITH
+          eth_price_distances AS (
+            SELECT
+              ethusd,
+              timestamp,
+              ABS(
+                EXTRACT(
+                  epoch
+                  FROM
+                    (timestamp - (NOW() - '24 hours':: INTERVAL))
+                )
+              ) AS distance_seconds
+            FROM
+              eth_prices
+            ORDER BY
+              distance_seconds ASC
+          )
+        SELECT ethusd, timestamp
+        FROM eth_price_distances
+        WHERE distance_seconds <= 600
+        LIMIT 1
         ",
     )
     .bind(age_limit.num_seconds())
@@ -208,12 +208,12 @@ const RESYNC_ETH_PRICES_KEY: &str = "resync-eth-prices";
 async fn get_last_synced_minute(executor: &mut PgConnection) -> Option<u32> {
     sqlx::query(
         "
-            SELECT
-                value
-            FROM
-                key_value_store
-            WHERE
-                key = $1
+        SELECT
+            value
+        FROM
+            key_value_store
+        WHERE
+            key = $1
         ",
     )
     .bind(RESYNC_ETH_PRICES_KEY)
@@ -229,11 +229,11 @@ async fn get_last_synced_minute(executor: &mut PgConnection) -> Option<u32> {
 async fn set_last_synced_minute(executor: &mut PgConnection, minute: u32) {
     sqlx::query(
         "
-            INSERT INTO
-                key_value_store (key, value)
-            VALUES ($1, $2)
-            ON CONFLICT (key) DO UPDATE SET
-                value = excluded.value
+        INSERT INTO
+            key_value_store (key, value)
+        VALUES ($1, $2)
+        ON CONFLICT (key) DO UPDATE SET
+            value = excluded.value
         ",
     )
     .bind(RESYNC_ETH_PRICES_KEY)
@@ -329,18 +329,36 @@ pub enum GetEthPriceError {
     PriceTooOld,
 }
 
-pub async fn get_eth_price_by_block(
+pub async fn get_eth_price_by_minute(
+    executor: &mut PgConnection,
+    timestamp: DateTime<Utc>,
+) -> Option<f64> {
+    sqlx::query!(
+        r#"
+        SELECT ethusd
+        FROM eth_prices
+        WHERE timestamp = $1
+        "#,
+        timestamp,
+    )
+    .fetch_optional(executor)
+    .await
+    .unwrap()
+    .map(|row| row.ethusd)
+}
+
+pub async fn get_closest_price_by_block(
     executor: &mut PgConnection,
     block: &ExecutionNodeBlock,
 ) -> Result<f64, GetEthPriceError> {
     let row = sqlx::query!(
         r#"
-            SELECT
-              timestamp,
-              ethusd AS "ethusd!"
-            FROM eth_prices
-            ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))
-            LIMIT 1
+        SELECT
+          timestamp,
+          ethusd AS "ethusd!"
+        FROM eth_prices
+        ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))
+        LIMIT 1
         "#,
         block.timestamp,
     )
@@ -352,6 +370,27 @@ pub async fn get_eth_price_by_block(
         Ok(row.ethusd)
     } else {
         Err(GetEthPriceError::PriceTooOld)
+    }
+}
+
+// We'll often have a price for the closest round minute. This is much faster to lookup. If we
+// don't we can fall back to the slower to fetch closest price.
+pub async fn get_eth_price_by_block(
+    executor: &mut PgConnection,
+    block: &ExecutionNodeBlock,
+) -> Result<f64, GetEthPriceError> {
+    let price = get_eth_price_by_minute(
+        executor,
+        block
+            .timestamp
+            .duration_trunc(Duration::minutes(1))
+            .unwrap(),
+    )
+    .await;
+
+    match price {
+        Some(price) => Ok(price),
+        None => get_closest_price_by_block(executor, block).await,
     }
 }
 

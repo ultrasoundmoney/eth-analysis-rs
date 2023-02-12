@@ -1,0 +1,4 @@
+ALTER TABLE eth_prices
+ALTER COLUMN ethusd
+SET
+  NULL;
