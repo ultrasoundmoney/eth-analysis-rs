@@ -254,8 +254,7 @@ pub async fn estimated_issuance_from_time_frame(
             .unwrap();
 
             let eth: EthNewtype = row.gwei.parse::<GweiNewtype>().unwrap().into();
-            let usd = row.usd;
-            let eth_estimated = EthNewtype(eth.0 as f64 * extrapolation_factor);
+            let eth_estimated = EthNewtype(eth.0 * extrapolation_factor);
             let usd_estimated = UsdNewtype(row.usd * extrapolation_factor);
 
             EthUsdAmount {
