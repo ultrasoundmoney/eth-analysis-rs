@@ -1,26 +1,5 @@
 {
   "db": "PostgreSQL",
-  "06c6aa52f665589a07ed919f9600eec6958fff00d4a19e24a1ced7980a938f8a": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Interval",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n                SELECT gwei::TEXT AS \"gwei!\"\n                FROM beacon_issuance\n                WHERE timestamp >= NOW() - $1::INTERVAL\n                AND timestamp <= $2\n                ORDER BY timestamp ASC\n                LIMIT 1\n                "
-  },
   "0a008d415e6395b49f8168f50baeb5ccb61602fb739683a6ec0fbf98dbc3a490": {
     "describe": {
       "columns": [
@@ -1242,6 +1221,26 @@
       }
     },
     "query": "\n            SELECT\n                gwei\n            FROM\n                beacon_validators_balance\n            WHERE\n                beacon_validators_balance.state_root = $1\n        "
+  },
+  "cf1180963d6c58dda37e2468b2919a37bbc799980be97478ba727f91f9cd4077": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n            SELECT gwei AS \"gwei!\"\n            FROM beacon_issuance\n            WHERE timestamp >= $1\n            ORDER BY timestamp ASC\n            LIMIT 1\n             "
   },
   "d67dfd2fde9ed1d9dffcb31fd7a327fe7c42c43b1363401a8370b7c883a502ab": {
     "describe": {
