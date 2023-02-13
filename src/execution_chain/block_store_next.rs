@@ -190,7 +190,7 @@ mod tests {
     async fn number_exists_test() {
         let test_db = TestDb::new().await;
         let test_id = "block_number_exists";
-        let block_store = BlockStore::new(test_db.pool());
+        let block_store = BlockStore::new(&test_db.pool);
 
         let test_number = 1351;
         let test_block = ExecutionNodeBlockBuilder::new(test_id)
@@ -210,7 +210,7 @@ mod tests {
     async fn hash_exists_test() {
         let test_db = TestDb::new().await;
         let test_id = "block_hash_exists";
-        let block_store = BlockStore::new(test_db.pool());
+        let block_store = BlockStore::new(&test_db.pool);
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
@@ -229,7 +229,7 @@ mod tests {
     async fn last_test() {
         let test_db = TestDb::new().await;
         let test_id = "last";
-        let block_store = BlockStore::new(test_db.pool());
+        let block_store = BlockStore::new(&test_db.pool);
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
@@ -246,7 +246,7 @@ mod tests {
     async fn hash_from_number_test() {
         let test_db = TestDb::new().await;
         let test_id = "hash_from_number";
-        let block_store = BlockStore::new(test_db.pool());
+        let block_store = BlockStore::new(&test_db.pool);
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
@@ -271,7 +271,7 @@ mod tests {
     async fn time_range_from_block_range_test() {
         let test_db = TestDb::new().await;
         let test_id = "hash_from_number";
-        let block_store = BlockStore::new(test_db.pool());
+        let block_store = BlockStore::new(&test_db.pool);
 
         let test_block_1 = ExecutionNodeBlockBuilder::new(test_id).build();
         let test_block_2 = ExecutionNodeBlockBuilder::new(test_id)

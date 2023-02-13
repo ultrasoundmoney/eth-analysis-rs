@@ -45,7 +45,7 @@ pub mod tests {
     }
 
     pub struct TestDb {
-        pool: PgPool,
+        pub pool: PgPool,
         name: String,
     }
 
@@ -73,10 +73,6 @@ pub mod tests {
             sqlx::migrate!("./migrations").run(&pool).await.unwrap();
 
             Self { pool, name }
-        }
-
-        pub fn pool(&self) -> &PgPool {
-            &self.pool
         }
 
         pub async fn cleanup(&self) {

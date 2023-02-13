@@ -509,18 +509,17 @@ mod tests {
     #[tokio::test]
     async fn estimated_issuance_from_time_frame_test() {
         let test_db = db::tests::TestDb::new().await;
-        let db_pool = test_db.pool();
 
         let test_id = "estimated_issuance_from_time_frame";
 
         let block = ExecutionNodeBlockBuilder::new(test_id).build();
 
-        store_state(db_pool, test_id, &Slot(3599)).await;
+        store_state(&test_db.pool, test_id, &Slot(3599)).await;
 
-        store_issuance(db_pool, test_id, &Slot(3599), &GweiNewtype(100)).await;
+        store_issuance(&test_db.pool, test_id, &Slot(3599), &GweiNewtype(100)).await;
 
         let issuance = estimated_issuance_from_time_frame(
-            db_pool,
+            &test_db.pool,
             &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
             &block,
         )

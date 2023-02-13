@@ -182,7 +182,7 @@ mod tests {
     #[tokio::test]
     async fn burn_sum_from_block_range_test() {
         let test_db = TestDb::new().await;
-        let pool = test_db.pool();
+        let pool = &test_db.pool;
         let burn_sum_store = BurnSumStore::new(pool);
 
         let test_id = "burn_sum_from_time_frame";
