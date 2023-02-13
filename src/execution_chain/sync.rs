@@ -63,18 +63,20 @@ async fn sync_by_hash(
     if is_synced {
         debug!("we're synced, running on_new_head for skippables");
         base_fees::on_new_block(db_pool, issuance_store, &block)
-            .timed("base_fees_on_new_block")
+            .timed("base_fees::on_new_block")
             .await;
         let burn_sums_envelope = burn_sums::on_new_block(db_pool, &block)
-            .timed("burn_sums_on_new_block")
+            .timed("burn_sums::on_new_block")
             .await;
         let eth_supply: EthNewtype = eth_supply::last_eth_supply(db_pool)
             .timed("last_eth_supply")
             .await
             .into();
-        burn_rates::on_new_block(db_pool, &burn_sums_envelope).await;
+        burn_rates::on_new_block(db_pool, &burn_sums_envelope)
+            .timed("burn_rates::on_new_block")
+            .await;
         gauges::on_new_block(db_pool, &block, &burn_sums_envelope, &eth_supply)
-            .timed("gauges_on_new_block")
+            .timed("gauges::on_new_block")
             .await;
     } else {
         debug!("not synced, skipping skippables");
