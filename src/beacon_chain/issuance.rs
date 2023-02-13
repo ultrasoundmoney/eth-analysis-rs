@@ -17,7 +17,7 @@ use tracing::info;
 use crate::{
     caching::{self, CacheKey},
     db,
-    execution_chain::{ExecutionNodeBlock, LONDON_HARD_FORK_TIMESTAMP, MERGE_HARD_FORK_TIMESTAMP},
+    execution_chain::{ExecutionNodeBlock, MERGE_HARD_FORK_TIMESTAMP},
     time_frames::{GrowingTimeFrame, TimeFrame},
     units::{EthNewtype, GweiNewtype},
 };
@@ -211,6 +211,8 @@ pub async fn update_issuance_estimate() {
     info!("updated issuance estimate");
 }
 
+const DAYS_PER_YEAR: f64 = 365.25;
+
 // It'd be nice to have a precise estimate of the USD issuance, but we don't have usd prices per
 // slot yet. We use an average usd price over the time frame instead.
 pub async fn estimated_issuance_from_time_frame(
@@ -223,17 +225,15 @@ pub async fn estimated_issuance_from_time_frame(
     use TimeFrame::*;
 
     match time_frame {
-        Growing(SinceBurn) => {
-            // Since there is no issuance before the Merge we don't have data for it. We estimate.
-            let days_since_merge = Utc::now().sub(*MERGE_HARD_FORK_TIMESTAMP).num_days();
-            let days_since_burn = Utc::now().sub(*LONDON_HARD_FORK_TIMESTAMP).num_days();
-            let extrapolation_factor = days_since_burn as f64 / days_since_merge as f64;
-
+        // Since there is no issuance before the Merge we don't have data for it. We estimate.
+        // Right now we simply use the same issuance as since-merge.
+        Growing(SinceBurn) | Growing(SinceMerge) => {
             let issuance_since_merge: EthNewtype = issuance_store.current_issuance().await.into();
-
-            EthNewtype(issuance_since_merge.0 * extrapolation_factor)
+            let days_since_merge = Utc::now().sub(*MERGE_HARD_FORK_TIMESTAMP).num_hours() as f64
+                / HOURS_PER_DAY as f64;
+            let issuance_per_day = issuance_since_merge.0 / days_since_merge;
+            EthNewtype(issuance_per_day * DAYS_PER_YEAR)
         }
-        Growing(SinceMerge) => issuance_store.current_issuance().await.into(),
         Limited(limited_time_frame) => {
             let issuance_since_merge = issuance_store.current_issuance().await;
             let issuance_since_time_frame = sqlx::query!(
