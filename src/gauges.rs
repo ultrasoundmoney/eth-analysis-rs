@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use enum_iterator::all;
+use futures::join;
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -46,22 +47,21 @@ pub async fn on_new_block(
             .unwrap()
             .yearly_rate_from_time_frame(time_frame);
 
-        let usd_price_average = usd_price::average_from_time_range(
-            db_pool,
-            time_frame.start_timestamp(block),
-            block.timestamp,
-        )
-        .timed(&format!("usd_price::average_from_time_range_{time_frame}"))
-        .await;
+        let (issuance_rate_yearly_eth, usd_price_average) = join!(
+            beacon_chain::estimated_issuance_from_time_frame(db_pool, &time_frame, block,)
+                .timed(&format!("estimated_issuance_from_time_frame_{time_frame}")),
+            usd_price::average_from_time_range(
+                db_pool,
+                time_frame.start_timestamp(block),
+                block.timestamp,
+            )
+            .timed(&format!("usd_price::average_from_time_range_{time_frame}"))
+        );
 
-        let issuance_rate_yearly = beacon_chain::estimated_issuance_from_time_frame(
-            db_pool,
-            &time_frame,
-            block,
-            &usd_price_average,
-        )
-        .timed(&format!("estimated_issuance_from_time_frame_{time_frame}"))
-        .await;
+        let issuance_rate_yearly = EthUsdAmount {
+            eth: issuance_rate_yearly_eth,
+            usd: UsdNewtype(issuance_rate_yearly_eth.0 * usd_price_average.0),
+        };
 
         let issuance_rate_yearly_pow = EthUsdAmount {
             eth: EthNewtype(PROOF_OF_WORK_YEARLY_ISSUANCE_ESTIMATE),

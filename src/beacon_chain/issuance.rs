@@ -15,12 +15,11 @@ use sqlx::{PgExecutor, PgPool};
 use tracing::info;
 
 use crate::{
-    burn_sums::EthUsdAmount,
     caching::{self, CacheKey},
     db,
     execution_chain::{ExecutionNodeBlock, LONDON_HARD_FORK_TIMESTAMP, MERGE_HARD_FORK_TIMESTAMP},
     time_frames::{GrowingTimeFrame, TimeFrame},
-    units::{EthNewtype, GweiNewtype, UsdNewtype},
+    units::{EthNewtype, GweiNewtype},
 };
 
 use super::Slot;
@@ -219,8 +218,7 @@ pub async fn estimated_issuance_from_time_frame(
     db_pool: &PgPool,
     time_frame: &TimeFrame,
     block: &ExecutionNodeBlock,
-    usd_price: &UsdNewtype,
-) -> EthUsdAmount {
+) -> EthNewtype {
     use GrowingTimeFrame::*;
     use TimeFrame::*;
 
@@ -231,78 +229,61 @@ pub async fn estimated_issuance_from_time_frame(
             let days_since_burn = Utc::now().sub(*LONDON_HARD_FORK_TIMESTAMP).num_days();
             let extrapolation_factor = days_since_burn as f64 / days_since_merge as f64;
 
-            let row = sqlx::query!(
+            let gwei = sqlx::query!(
                 r#"
-                SELECT
-                    SUM(gwei)::TEXT AS "gwei!",
-                    SUM(gwei::FLOAT8 / 1e9 * $3) AS "usd!"
+                SELECT SUM(gwei)::TEXT AS "gwei!"
                 FROM beacon_issuance
                 WHERE timestamp >= $1
                 AND timestamp <= $2
                 "#,
                 *MERGE_HARD_FORK_TIMESTAMP,
                 block.timestamp,
-                usd_price.0
             )
             .fetch_one(db_pool)
             .await
+            .unwrap()
+            .gwei
+            .parse::<GweiNewtype>()
             .unwrap();
 
-            let eth: EthNewtype = row.gwei.parse::<GweiNewtype>().unwrap().into();
-            let eth_estimated = EthNewtype(eth.0 * extrapolation_factor);
-            let usd_estimated = UsdNewtype(row.usd * extrapolation_factor);
+            let eth: EthNewtype = gwei.into();
 
-            EthUsdAmount {
-                eth: eth_estimated,
-                usd: usd_estimated,
-            }
+            EthNewtype(eth.0 * extrapolation_factor)
         }
-        Growing(SinceMerge) => {
-            let row = sqlx::query!(
-                r#"
-                SELECT
-                    SUM(gwei)::TEXT AS "gwei!",
-                    SUM(gwei::FLOAT8 / 1e9 * $3) AS "usd!"
-                FROM beacon_issuance
-                WHERE timestamp >= $1
-                AND timestamp <= $2
-                "#,
-                *MERGE_HARD_FORK_TIMESTAMP,
-                block.timestamp,
-                usd_price.0
-            )
-            .fetch_one(db_pool)
-            .await
-            .unwrap();
-
-            let eth: EthNewtype = row.gwei.parse::<GweiNewtype>().unwrap().into();
-            let usd = UsdNewtype(row.usd);
-
-            EthUsdAmount { eth, usd }
-        }
-        Limited(limited_time_frame) => {
-            let row = sqlx::query!(
-                r#"
-                SELECT
-                    SUM(gwei)::TEXT AS "gwei!",
-                    SUM(gwei::FLOAT8 / 1e9 * $3) AS "usd!"
-                FROM beacon_issuance
-                WHERE timestamp >= NOW() - $1::INTERVAL
-                AND timestamp <= $2
-                "#,
-                limited_time_frame.postgres_interval(),
-                block.timestamp,
-                usd_price.0
-            )
-            .fetch_one(db_pool)
-            .await
-            .unwrap();
-
-            let eth: EthNewtype = row.gwei.parse::<GweiNewtype>().unwrap().into();
-            let usd = UsdNewtype(row.usd);
-
-            EthUsdAmount { eth, usd }
-        }
+        Growing(SinceMerge) => sqlx::query!(
+            r#"
+            SELECT SUM(gwei)::TEXT AS "gwei!"
+            FROM beacon_issuance
+            WHERE timestamp >= $1
+            AND timestamp <= $2
+            "#,
+            *MERGE_HARD_FORK_TIMESTAMP,
+            block.timestamp,
+        )
+        .fetch_one(db_pool)
+        .await
+        .unwrap()
+        .gwei
+        .parse::<GweiNewtype>()
+        .unwrap()
+        .into(),
+        Limited(limited_time_frame) => sqlx::query!(
+            r#"
+            SELECT SUM(gwei)::TEXT AS "gwei!"
+            FROM beacon_issuance
+            WHERE timestamp >= NOW() - $1::INTERVAL
+            AND timestamp <= $2
+            "#,
+            limited_time_frame.postgres_interval(),
+            block.timestamp,
+        )
+        .fetch_one(db_pool)
+        .await
+        .unwrap()
+        .gwei
+        .parse::<GweiNewtype>()
+        .unwrap()
+        .into(),
     }
 }
 
@@ -512,16 +493,9 @@ mod tests {
             &test_db.pool,
             &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
             &block,
-            &UsdNewtype(1.0),
         )
         .await;
 
-        assert_eq!(
-            issuance,
-            EthUsdAmount {
-                eth: EthNewtype(100.0),
-                usd: UsdNewtype(100.0)
-            }
-        );
+        assert_eq!(issuance, GweiNewtype(100).into());
     }
 }
