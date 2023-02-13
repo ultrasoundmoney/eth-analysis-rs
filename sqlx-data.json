@@ -1,32 +1,25 @@
 {
   "db": "PostgreSQL",
-  "06c50965d3a750843791d18ae9ea1ecc02ecbd93cb424898375d0465362e09ed": {
+  "09d6bd00a1bb1234870f20e0c3128c6960b1843c04334bc802312280c0838da1": {
     "describe": {
       "columns": [
         {
           "name": "gwei!",
           "ordinal": 0,
           "type_info": "Text"
-        },
-        {
-          "name": "usd!",
-          "ordinal": 1,
-          "type_info": "Float8"
         }
       ],
       "nullable": [
-        null,
         null
       ],
       "parameters": {
         "Left": [
           "Interval",
-          "Timestamptz",
-          "Float8"
+          "Timestamptz"
         ]
       }
     },
-    "query": "\n                SELECT\n                    SUM(gwei)::TEXT AS \"gwei!\",\n                    SUM(gwei::FLOAT8 / 1e9 * $3) AS \"usd!\"\n                FROM beacon_issuance\n                WHERE timestamp >= NOW() - $1::INTERVAL\n                AND timestamp <= $2\n                "
+    "query": "\n            SELECT SUM(gwei)::TEXT AS \"gwei!\"\n            FROM beacon_issuance\n            WHERE timestamp >= NOW() - $1::INTERVAL\n            AND timestamp <= $2\n            "
   },
   "0a008d415e6395b49f8168f50baeb5ccb61602fb739683a6ec0fbf98dbc3a490": {
     "describe": {
@@ -89,6 +82,27 @@
       }
     },
     "query": "\n        SELECT\n            beacon_states.slot\n        FROM\n            beacon_states\n        JOIN beacon_blocks ON\n            beacon_states.state_root = beacon_blocks.state_root\n        JOIN execution_supply ON\n            beacon_blocks.block_hash = execution_supply.block_hash\n        WHERE\n            execution_supply.block_hash IS NOT NULL\n        ORDER BY beacon_states.slot DESC\n        LIMIT 1\n        "
+  },
+  "0cea56a62232ccd57b9575209d73251b3f3a139dc65b5b470fe858dd981f3455": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei!",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n            SELECT SUM(gwei)::TEXT AS \"gwei!\"\n            FROM beacon_issuance\n            WHERE timestamp >= $1\n            AND timestamp <= $2\n            "
   },
   "100d831ec3a9d8ea9545ca0bcaae004558fc96771fe31a755ae04625d38b0000": {
     "describe": {
@@ -719,34 +733,6 @@
     },
     "query": "\n                SELECT\n                    balances_slot,\n                    supply::TEXT AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    balances_slot = $1\n                "
   },
-  "6d81b8d52ea0b5de8223d10a543e3044680ba9f928cafad57bc07b68b39d8b4d": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei!",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "usd!",
-          "ordinal": 1,
-          "type_info": "Float8"
-        }
-      ],
-      "nullable": [
-        null,
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Timestamptz",
-          "Float8"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                    SUM(gwei)::TEXT AS \"gwei!\",\n                    SUM(gwei::FLOAT8 / 1e9 * $3) AS \"usd!\"\n                FROM beacon_issuance\n                WHERE timestamp >= $1\n                AND timestamp <= $2\n                "
-  },
   "6e5840a62473818a418e10adb6ba3c8808a9f057e7194a4910096fdaf503d699": {
     "describe": {
       "columns": [],
@@ -995,6 +981,27 @@
       }
     },
     "query": "\n            SELECT SUM(tips) / 1e9 AS \"tips_since_london!\" FROM blocks\n        "
+  },
+  "996025d86e6246c8ed862343f55c300bbb77fe63c78ce79067b93ca7542a193d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei!",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n                SELECT SUM(gwei)::TEXT AS \"gwei!\"\n                FROM beacon_issuance\n                WHERE timestamp >= $1\n                AND timestamp <= $2\n                "
   },
   "9fe1898bf75da6ae6fb79379cd1b6e86493b46ea7cd4d4371783819a01194581": {
     "describe": {
