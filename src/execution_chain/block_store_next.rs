@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use futures::join;
 use sqlx::PgPool;
 
 use crate::execution_chain::{BlockNumber, BlockRange, ExecutionNodeBlock};
@@ -148,6 +149,7 @@ impl<'a> BlockStore<'a> {
         .map(|row| row.hash)
     }
 
+    #[allow(dead_code)]
     pub async fn timestamp_from_number(&self, block_number: &BlockNumber) -> DateTime<Utc> {
         sqlx::query!(
             r#"
@@ -164,6 +166,17 @@ impl<'a> BlockStore<'a> {
         .await
         .unwrap()
         .timestamp
+    }
+
+    #[allow(dead_code)]
+    pub async fn time_range_from_block_range(
+        &self,
+        block_range: &BlockRange,
+    ) -> (DateTime<Utc>, DateTime<Utc>) {
+        join!(
+            self.timestamp_from_number(&block_range.start),
+            self.timestamp_from_number(&block_range.end)
+        )
     }
 }
 
@@ -250,6 +263,33 @@ mod tests {
             .unwrap();
 
         assert_eq!(hash, test_block.hash);
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn time_range_from_block_range_test() {
+        let test_db = TestDb::new().await;
+        let test_id = "hash_from_number";
+        let block_store = BlockStore::new(test_db.pool());
+
+        let test_block_1 = ExecutionNodeBlockBuilder::new(test_id).build();
+        let test_block_2 = ExecutionNodeBlockBuilder::new(test_id)
+            .with_parent(&test_block_1)
+            .build();
+
+        block_store.add(&test_block_1, 0.0).await;
+        block_store.add(&test_block_2, 0.0).await;
+
+        let block_range = BlockRange {
+            start: test_block_1.number,
+            end: test_block_2.number,
+        };
+
+        let (start_time, end_time) = block_store.time_range_from_block_range(&block_range).await;
+
+        assert_eq!(start_time, test_block_1.timestamp);
+        assert_eq!(end_time, test_block_2.timestamp);
 
         test_db.cleanup().await;
     }
