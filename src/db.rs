@@ -19,8 +19,7 @@ pub async fn get_db_pool(name: &str) -> PgPool {
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::atomic::AtomicUsize;
-
+    use nanoid::nanoid;
     use sqlx::postgres::PgPoolOptions;
 
     use super::*;
@@ -49,14 +48,9 @@ pub mod tests {
         name: String,
     }
 
-    static DB_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
-    fn get_id() -> usize {
-        DB_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    }
-
     impl TestDb {
         pub async fn new() -> Self {
-            let name = format!("testdb_{}", get_id());
+            let name = format!("testdb_{}", nanoid!(10));
 
             let mut connection = get_test_db_connection().await;
             sqlx::query(&format!("CREATE DATABASE {name}"))
