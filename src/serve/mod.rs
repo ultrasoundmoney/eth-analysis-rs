@@ -91,6 +91,12 @@ pub async fn start_server() -> Result<()> {
             }),
         )
         .route(
+            "/api/v2/fees/gauge-rates",
+            get(|state: StateExtension| async move {
+                cached_get(state, &CacheKey::GaugeRates).await
+            }),
+        )
+        .route(
             "/api/v2/fees/healthz",
             get(|state: StateExtension| async move {
                 let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
