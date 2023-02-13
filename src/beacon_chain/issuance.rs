@@ -5,8 +5,6 @@
 //! upwards.
 //! As an experiment this module exposes a Store trait and a Postgres implementation of it. Using
 //! this interface with transactions is an unsolved problem.
-use std::ops::Sub;
-
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
@@ -17,9 +15,9 @@ use tracing::info;
 use crate::{
     caching::{self, CacheKey},
     db,
-    execution_chain::{ExecutionNodeBlock, MERGE_HARD_FORK_TIMESTAMP},
-    time_frames::{GrowingTimeFrame, TimeFrame},
-    units::{EthNewtype, GweiNewtype},
+    execution_chain::ExecutionNodeBlock,
+    time_frames::TimeFrame,
+    units::GweiNewtype,
 };
 
 use super::Slot;
@@ -135,6 +133,12 @@ pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype
 pub trait IssuanceStore {
     async fn current_issuance(&self) -> GweiNewtype;
     async fn day7_ago_issuance(&self) -> GweiNewtype;
+    async fn issuance_at_timestamp(&self, timestamp: DateTime<Utc>) -> GweiNewtype;
+    async fn issuance_from_time_frame(
+        &self,
+        block: &ExecutionNodeBlock,
+        time_frame: &TimeFrame,
+    ) -> GweiNewtype;
 }
 
 pub struct IssuanceStorePostgres<'a> {
@@ -155,6 +159,36 @@ impl IssuanceStore for &IssuanceStorePostgres<'_> {
 
     async fn day7_ago_issuance(&self) -> GweiNewtype {
         get_day7_ago_issuance(self.db_pool).await
+    }
+
+    async fn issuance_at_timestamp(&self, timestamp: DateTime<Utc>) -> GweiNewtype {
+        sqlx::query!(
+            "
+            SELECT gwei AS \"gwei!\"
+            FROM beacon_issuance
+            WHERE timestamp >= $1
+            ORDER BY timestamp ASC
+            LIMIT 1
+             ",
+            timestamp
+        )
+        .fetch_one(self.db_pool)
+        .await
+        .unwrap()
+        .gwei
+        .into()
+    }
+
+    async fn issuance_from_time_frame(
+        &self,
+        block: &ExecutionNodeBlock,
+        time_frame: &TimeFrame,
+    ) -> GweiNewtype {
+        let (issuance_time_frame_ago, current_issuance) = join!(
+            self.issuance_at_timestamp(block.timestamp - time_frame.duration()),
+            self.current_issuance()
+        );
+        current_issuance - issuance_time_frame_ago
     }
 }
 
@@ -209,55 +243,6 @@ pub async fn update_issuance_estimate() {
         .unwrap();
 
     info!("updated issuance estimate");
-}
-
-const DAYS_PER_YEAR: f64 = 365.25;
-
-// It'd be nice to have a precise estimate of the USD issuance, but we don't have usd prices per
-// slot yet. We use an average usd price over the time frame instead.
-pub async fn estimated_issuance_from_time_frame(
-    db_pool: &PgPool,
-    issuance_store: impl IssuanceStore,
-    time_frame: &TimeFrame,
-    block: &ExecutionNodeBlock,
-) -> EthNewtype {
-    use GrowingTimeFrame::*;
-    use TimeFrame::*;
-
-    match time_frame {
-        // Since there is no issuance before the Merge we don't have data for it. We estimate.
-        // Right now we simply use the same issuance as since-merge.
-        Growing(SinceBurn) | Growing(SinceMerge) => {
-            let issuance_since_merge: EthNewtype = issuance_store.current_issuance().await.into();
-            let days_since_merge = Utc::now().sub(*MERGE_HARD_FORK_TIMESTAMP).num_hours() as f64
-                / HOURS_PER_DAY as f64;
-            let issuance_per_day = issuance_since_merge.0 / days_since_merge;
-            EthNewtype(issuance_per_day * DAYS_PER_YEAR)
-        }
-        Limited(limited_time_frame) => {
-            let issuance_since_merge = issuance_store.current_issuance().await;
-            let issuance_since_time_frame = sqlx::query!(
-                r#"
-                SELECT gwei::TEXT AS "gwei!"
-                FROM beacon_issuance
-                WHERE timestamp >= NOW() - $1::INTERVAL
-                AND timestamp <= $2
-                ORDER BY timestamp ASC
-                LIMIT 1
-                "#,
-                limited_time_frame.postgres_interval(),
-                block.timestamp,
-            )
-            .fetch_one(db_pool)
-            .await
-            .unwrap()
-            .gwei
-            .parse::<GweiNewtype>()
-            .unwrap();
-
-            (issuance_since_merge - issuance_since_time_frame).into()
-        }
-    }
 }
 
 #[cfg(test)]
@@ -440,6 +425,18 @@ mod tests {
 
         async fn day7_ago_issuance(&self) -> GweiNewtype {
             GweiNewtype(50)
+        }
+
+        async fn issuance_at_timestamp(&self, timestamp: DateTime<Utc>) -> GweiNewtype {
+            GweiNewtype(100)
+        }
+
+        async fn issuance_from_time_frame(
+            &self,
+            block: &ExecutionNodeBlock,
+            time_frame: &TimeFrame,
+        ) -> GweiNewtype {
+            GweiNewtype(100)
         }
     }
 
