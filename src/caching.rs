@@ -117,9 +117,8 @@ impl FromStr for CacheKey {
             "total-difficulty-progress" => Ok(Self::TotalDifficultyProgress),
             "validator-rewards" => Ok(Self::ValidatorRewards),
             unknown_key if unknown_key.starts_with("base-fee-per-gas-stats-") => unknown_key
-                .split("-")
-                .skip(4)
-                .next()
+                .split('-')
+                .nth(4)
                 .expect(
                     "expect keys which start with 'base-fee-per-gas-stats-' to have a time frame",
                 )
