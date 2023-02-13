@@ -29,10 +29,7 @@ pub async fn average_from_time_range(
 mod tests {
     use chrono::{DateTime, Utc};
 
-    use crate::{
-        db::tests::TestDb,
-        execution_chain::{BlockStore, ExecutionNodeBlockBuilder},
-    };
+    use crate::{db::tests::TestDb, execution_chain::ExecutionNodeBlockBuilder};
 
     use super::super::store;
 
@@ -42,7 +39,6 @@ mod tests {
     async fn average_from_time_range_test() {
         let test_db = TestDb::new().await;
         let test_id = "average_from_block_range_test";
-        let block_store = BlockStore::new(&test_db.pool);
 
         let test_block_1 = ExecutionNodeBlockBuilder::new(test_id)
             .with_number(1)
