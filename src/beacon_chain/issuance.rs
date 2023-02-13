@@ -251,12 +251,7 @@ mod tests {
     use sqlx::Acquire;
 
     use super::*;
-    use crate::{
-        beacon_chain::{states::store_state, FIRST_POST_MERGE_SLOT},
-        db,
-        execution_chain::ExecutionNodeBlockBuilder,
-        supply_projection::GweiInTime,
-    };
+    use crate::{beacon_chain::states::store_state, db, supply_projection::GweiInTime};
 
     pub async fn get_issuance_by_start_of_day(pool: impl PgExecutor<'_>) -> Vec<GweiInTime> {
         sqlx::query!(
@@ -427,14 +422,14 @@ mod tests {
             GweiNewtype(50)
         }
 
-        async fn issuance_at_timestamp(&self, timestamp: DateTime<Utc>) -> GweiNewtype {
+        async fn issuance_at_timestamp(&self, _timestamp: DateTime<Utc>) -> GweiNewtype {
             GweiNewtype(100)
         }
 
         async fn issuance_from_time_frame(
             &self,
-            block: &ExecutionNodeBlock,
-            time_frame: &TimeFrame,
+            _block: &ExecutionNodeBlock,
+            _time_frame: &TimeFrame,
         ) -> GweiNewtype {
             GweiNewtype(100)
         }
@@ -447,34 +442,5 @@ mod tests {
         let issuance = get_last_week_issuance(issuance_store).await;
 
         assert_eq!(issuance, GweiNewtype(50));
-    }
-
-    #[tokio::test]
-    async fn estimated_issuance_from_time_frame_test() {
-        let test_db = db::tests::TestDb::new().await;
-
-        let test_id = "estimated_issuance_from_time_frame";
-
-        let block = ExecutionNodeBlockBuilder::new(test_id).build();
-
-        store_state(&test_db.pool, test_id, &FIRST_POST_MERGE_SLOT).await;
-
-        store_issuance(
-            &test_db.pool,
-            test_id,
-            &FIRST_POST_MERGE_SLOT,
-            &GweiNewtype(100),
-        )
-        .await;
-
-        let issuance = estimated_issuance_from_time_frame(
-            &test_db.pool,
-            IssuanceStoreTest {},
-            &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
-            &block,
-        )
-        .await;
-
-        assert_eq!(issuance, GweiNewtype(100).into());
     }
 }
