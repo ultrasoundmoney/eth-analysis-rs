@@ -270,7 +270,7 @@ mod tests {
     #[tokio::test]
     async fn time_range_from_block_range_test() {
         let test_db = TestDb::new().await;
-        let test_id = "hash_from_number";
+        let test_id = "time_range_from_block_range";
         let block_store = BlockStore::new(&test_db.pool);
 
         let test_block_1 = ExecutionNodeBlockBuilder::new(test_id).build();
