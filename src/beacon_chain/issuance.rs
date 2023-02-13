@@ -21,7 +21,6 @@ use crate::{
     execution_chain::{ExecutionNodeBlock, LONDON_HARD_FORK_TIMESTAMP, MERGE_HARD_FORK_TIMESTAMP},
     time_frames::{GrowingTimeFrame, TimeFrame},
     units::{EthNewtype, GweiNewtype, UsdNewtype},
-    usd_price,
 };
 
 use super::Slot;
@@ -214,10 +213,13 @@ pub async fn update_issuance_estimate() {
     info!("updated issuance estimate");
 }
 
+// It'd be nice to have a precise estimate of the USD issuance, but we don't have usd prices per
+// slot yet. We use an average usd price over the time frame instead.
 pub async fn estimated_issuance_from_time_frame(
     db_pool: &PgPool,
     time_frame: &TimeFrame,
     block: &ExecutionNodeBlock,
+    usd_price: &UsdNewtype,
 ) -> EthUsdAmount {
     use GrowingTimeFrame::*;
     use TimeFrame::*;
@@ -228,13 +230,6 @@ pub async fn estimated_issuance_from_time_frame(
             let days_since_merge = Utc::now().sub(*MERGE_HARD_FORK_TIMESTAMP).num_days();
             let days_since_burn = Utc::now().sub(*LONDON_HARD_FORK_TIMESTAMP).num_days();
             let extrapolation_factor = days_since_burn as f64 / days_since_merge as f64;
-
-            let usd_price_average = usd_price::average_from_time_range(
-                db_pool,
-                time_frame.start_timestamp(block),
-                block.timestamp,
-            )
-            .await;
 
             let row = sqlx::query!(
                 r#"
@@ -247,7 +242,7 @@ pub async fn estimated_issuance_from_time_frame(
                 "#,
                 *MERGE_HARD_FORK_TIMESTAMP,
                 block.timestamp,
-                usd_price_average.0
+                usd_price.0
             )
             .fetch_one(db_pool)
             .await
@@ -263,13 +258,6 @@ pub async fn estimated_issuance_from_time_frame(
             }
         }
         Growing(SinceMerge) => {
-            let usd_price_average = usd_price::average_from_time_range(
-                db_pool,
-                time_frame.start_timestamp(block),
-                block.timestamp,
-            )
-            .await;
-
             let row = sqlx::query!(
                 r#"
                 SELECT
@@ -281,7 +269,7 @@ pub async fn estimated_issuance_from_time_frame(
                 "#,
                 *MERGE_HARD_FORK_TIMESTAMP,
                 block.timestamp,
-                usd_price_average.0
+                usd_price.0
             )
             .fetch_one(db_pool)
             .await
@@ -293,13 +281,6 @@ pub async fn estimated_issuance_from_time_frame(
             EthUsdAmount { eth, usd }
         }
         Limited(limited_time_frame) => {
-            let usd_price_average = usd_price::average_from_time_range(
-                db_pool,
-                time_frame.start_timestamp(block),
-                block.timestamp,
-            )
-            .await;
-
             let row = sqlx::query!(
                 r#"
                 SELECT
@@ -311,7 +292,7 @@ pub async fn estimated_issuance_from_time_frame(
                 "#,
                 limited_time_frame.postgres_interval(),
                 block.timestamp,
-                usd_price_average.0
+                usd_price.0
             )
             .fetch_one(db_pool)
             .await
@@ -531,6 +512,7 @@ mod tests {
             &test_db.pool,
             &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
             &block,
+            &UsdNewtype(1.0),
         )
         .await;
 

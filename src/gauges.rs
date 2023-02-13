@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use enum_iterator::all;
-use futures::join;
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -10,6 +9,7 @@ use crate::{
     burn_sums::{BurnSumsEnvelope, EthUsdAmount},
     caching::{self, CacheKey},
     execution_chain::ExecutionNodeBlock,
+    performance::TimedExt,
     time_frames::TimeFrame,
     units::{EthNewtype, UsdNewtype},
     usd_price,
@@ -45,24 +45,36 @@ pub async fn on_new_block(
             .get(&time_frame)
             .unwrap()
             .yearly_rate_from_time_frame(time_frame);
-        let (issuance_rate_yearly, average_eth_price) = join!(
-            beacon_chain::estimated_issuance_from_time_frame(db_pool, &time_frame, block),
-            usd_price::average_from_time_range(
-                db_pool,
-                time_frame.start_timestamp(block),
-                block.timestamp,
-            )
-        );
+
+        let usd_price_average = usd_price::average_from_time_range(
+            db_pool,
+            time_frame.start_timestamp(block),
+            block.timestamp,
+        )
+        .timed(&format!("usd_price::average_from_time_range_{time_frame}"))
+        .await;
+
+        let issuance_rate_yearly = beacon_chain::estimated_issuance_from_time_frame(
+            db_pool,
+            &time_frame,
+            block,
+            &usd_price_average,
+        )
+        .timed(&format!("estimated_issuance_from_time_frame_{time_frame}"))
+        .await;
+
         let issuance_rate_yearly_pow = EthUsdAmount {
             eth: EthNewtype(PROOF_OF_WORK_YEARLY_ISSUANCE_ESTIMATE),
-            usd: UsdNewtype(PROOF_OF_WORK_YEARLY_ISSUANCE_ESTIMATE * average_eth_price.0),
+            usd: UsdNewtype(PROOF_OF_WORK_YEARLY_ISSUANCE_ESTIMATE * usd_price_average.0),
         };
+
         let supply_growth_rate_yearly = {
             let eth_burn = burn_rate_yearly.eth;
             let eth_issuance = issuance_rate_yearly.eth;
             let yearly_delta = eth_issuance - eth_burn;
             yearly_delta.0 / eth_supply.0
         };
+
         let supply_growth_rate_yearly_pow = {
             let eth_burn = burn_rate_yearly.eth;
             let eth_issuance = issuance_rate_yearly_pow.eth;
