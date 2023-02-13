@@ -294,7 +294,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        beacon_chain::states::store_state, db, execution_chain::ExecutionNodeBlockBuilder,
+        beacon_chain::{states::store_state, FIRST_POST_MERGE_SLOT},
+        db,
+        execution_chain::ExecutionNodeBlockBuilder,
         supply_projection::GweiInTime,
     };
 
@@ -485,9 +487,15 @@ mod tests {
 
         let block = ExecutionNodeBlockBuilder::new(test_id).build();
 
-        store_state(&test_db.pool, test_id, &Slot(3599)).await;
+        store_state(&test_db.pool, test_id, &FIRST_POST_MERGE_SLOT).await;
 
-        store_issuance(&test_db.pool, test_id, &Slot(3599), &GweiNewtype(100)).await;
+        store_issuance(
+            &test_db.pool,
+            test_id,
+            &FIRST_POST_MERGE_SLOT,
+            &GweiNewtype(100),
+        )
+        .await;
 
         let issuance = estimated_issuance_from_time_frame(
             &test_db.pool,
