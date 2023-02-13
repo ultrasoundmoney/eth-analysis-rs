@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::Result;
 use async_tungstenite::{
+    stream::Stream,
     tokio::{connect_async, TokioAdapter},
     tungstenite::Message,
     WebSocketStream,
@@ -22,6 +23,7 @@ use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::net::TcpStream;
+use tokio_native_tls::TlsStream;
 
 use crate::env;
 
@@ -145,18 +147,15 @@ async fn handle_messages(
     Ok(())
 }
 
+type SplitMessageSink = SplitSink<
+    WebSocketStream<Stream<TokioAdapter<TcpStream>, TokioAdapter<TlsStream<TcpStream>>>>,
+    Message,
+>;
+
 pub struct ExecutionNode {
     id_pool: Arc<Mutex<IdPool>>,
     message_handlers: MessageHandlersShared,
-    message_sink: SplitSink<
-        WebSocketStream<
-            async_tungstenite::stream::Stream<
-                TokioAdapter<TcpStream>,
-                TokioAdapter<tokio_native_tls::TlsStream<tokio::net::TcpStream>>,
-            >,
-        >,
-        Message,
-    >,
+    message_sink: SplitMessageSink,
 }
 
 impl ExecutionNode {
