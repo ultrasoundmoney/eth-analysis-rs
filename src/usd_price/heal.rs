@@ -4,12 +4,9 @@ use chrono::{Duration, DurationRound, TimeZone, Utc};
 use sqlx::{Connection, PgConnection, Postgres};
 use tracing::{debug, info};
 
-use crate::{
-    db,
-    execution_chain::LONDON_HARD_FORK_TIMESTAMP,
-    log,
-    usd_price::{self, bybit, EthPriceTimestamp},
-};
+use crate::{db, execution_chain::LONDON_HARD_FORK_TIMESTAMP, log};
+
+use super::{bybit, store, EthPriceTimestamp};
 
 pub async fn heal_eth_prices() {
     log::init_with_env();
@@ -78,7 +75,7 @@ pub async fn heal_eth_prices() {
                 }
                 Some(usd) => {
                     debug!("found a price on Bybit, adding it to the DB");
-                    usd_price::store_price(&mut connection, timestamp_date_time, usd).await;
+                    store::store_price(&mut connection, timestamp_date_time, usd).await;
                 }
             }
         }

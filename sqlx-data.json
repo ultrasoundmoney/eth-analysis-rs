@@ -1153,6 +1153,27 @@
     },
     "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM execution_supply_deltas\n                WHERE block_hash = $1\n            ) AS \"exists!\"\n        "
   },
+  "bc35fa09cdf78573003fac61d33a9eb721a75ec9a0f57e7992e2688dde4fabbb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "avg!",
+          "ordinal": 0,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n        SELECT AVG(ethusd) AS \"avg!\"\n        FROM eth_prices\n        WHERE timestamp >= $1\n        AND timestamp <= $2\n        "
+  },
   "bfc3d6da794a828526867dd2547eff7d22a929fa98544723e52c97c3ec53f92a": {
     "describe": {
       "columns": [],
@@ -1335,27 +1356,6 @@
       }
     },
     "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM blocks_next\n                WHERE hash = $1\n            ) AS \"exists!\"\n            "
-  },
-  "e72dace2ddc6508e5631f8a1940a3116f7175f60005cdd8357e8063831ee2919": {
-    "describe": {
-      "columns": [
-        {
-          "name": "avg!",
-          "ordinal": 0,
-          "type_info": "Float8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": " SELECT AVG(ethusd) AS \"avg!\" FROM eth_prices WHERE timestamp >= $1 AND timestamp <= $2 "
   },
   "e81d51231c91dc84d5279e155932ec43cd1157cbcab70a0c9a82aff946c3e85f": {
     "describe": {

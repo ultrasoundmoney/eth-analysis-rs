@@ -47,8 +47,7 @@ async fn sync_by_hash(
         // block_root the block may have disappeared. Right now we panic, we could do better.
         .expect("block not to disappear between deciding to add it and adding it");
 
-    let mut connection = db_pool.acquire().await.unwrap();
-    let eth_price = usd_price::get_eth_price_by_block(&mut connection, &block)
+    let eth_price = usd_price::get_eth_price_by_block(db_pool, &block)
         .timed("get_eth_price_by_block")
         .await
         .expect("eth price close to block to be available");
