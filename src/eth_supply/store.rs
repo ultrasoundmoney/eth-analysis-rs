@@ -181,7 +181,6 @@ pub async fn last_eth_supply(executor: impl PgExecutor<'_>) -> WeiNewtype {
     .supply
     .parse::<WeiNewtype>()
     .unwrap()
-    .into()
 }
 
 #[cfg(test)]
