@@ -24,6 +24,10 @@ pub mod tests {
 
     use super::*;
 
+    const ALPHABET: [char; 16] = [
+        '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f',
+    ];
+
     pub async fn get_test_db_connection() -> sqlx::PgConnection {
         use sqlx::Connection;
 
@@ -50,7 +54,7 @@ pub mod tests {
 
     impl TestDb {
         pub async fn new() -> Self {
-            let name = format!("testdb_{}", nanoid!(10));
+            let name = format!("testdb_{}", nanoid!(10, &ALPHABET));
 
             let mut connection = get_test_db_connection().await;
             sqlx::query(&format!("CREATE DATABASE {name}"))
