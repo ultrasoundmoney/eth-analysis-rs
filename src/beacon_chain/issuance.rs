@@ -255,7 +255,7 @@ pub async fn estimated_issuance_from_time_frame(
             .parse::<GweiNewtype>()
             .unwrap();
 
-            (issuance_since_time_frame - issuance_since_merge).into()
+            (issuance_since_merge - issuance_since_time_frame).into()
         }
     }
 }
