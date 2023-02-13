@@ -1,6 +1,6 @@
 {
   "db": "PostgreSQL",
-  "09d6bd00a1bb1234870f20e0c3128c6960b1843c04334bc802312280c0838da1": {
+  "06c6aa52f665589a07ed919f9600eec6958fff00d4a19e24a1ced7980a938f8a": {
     "describe": {
       "columns": [
         {
@@ -19,7 +19,7 @@
         ]
       }
     },
-    "query": "\n            SELECT SUM(gwei)::TEXT AS \"gwei!\"\n            FROM beacon_issuance\n            WHERE timestamp >= NOW() - $1::INTERVAL\n            AND timestamp <= $2\n            "
+    "query": "\n                SELECT gwei::TEXT AS \"gwei!\"\n                FROM beacon_issuance\n                WHERE timestamp >= NOW() - $1::INTERVAL\n                AND timestamp <= $2\n                ORDER BY timestamp ASC\n                LIMIT 1\n                "
   },
   "0a008d415e6395b49f8168f50baeb5ccb61602fb739683a6ec0fbf98dbc3a490": {
     "describe": {
@@ -82,27 +82,6 @@
       }
     },
     "query": "\n        SELECT\n            beacon_states.slot\n        FROM\n            beacon_states\n        JOIN beacon_blocks ON\n            beacon_states.state_root = beacon_blocks.state_root\n        JOIN execution_supply ON\n            beacon_blocks.block_hash = execution_supply.block_hash\n        WHERE\n            execution_supply.block_hash IS NOT NULL\n        ORDER BY beacon_states.slot DESC\n        LIMIT 1\n        "
-  },
-  "0cea56a62232ccd57b9575209d73251b3f3a139dc65b5b470fe858dd981f3455": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n            SELECT SUM(gwei)::TEXT AS \"gwei!\"\n            FROM beacon_issuance\n            WHERE timestamp >= $1\n            AND timestamp <= $2\n            "
   },
   "100d831ec3a9d8ea9545ca0bcaae004558fc96771fe31a755ae04625d38b0000": {
     "describe": {
@@ -982,27 +961,6 @@
     },
     "query": "\n            SELECT SUM(tips) / 1e9 AS \"tips_since_london!\" FROM blocks\n        "
   },
-  "996025d86e6246c8ed862343f55c300bbb77fe63c78ce79067b93ca7542a193d": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei!",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Timestamptz"
-        ]
-      }
-    },
-    "query": "\n                SELECT SUM(gwei)::TEXT AS \"gwei!\"\n                FROM beacon_issuance\n                WHERE timestamp >= $1\n                AND timestamp <= $2\n                "
-  },
   "9fe1898bf75da6ae6fb79379cd1b6e86493b46ea7cd4d4371783819a01194581": {
     "describe": {
       "columns": [],
@@ -1032,6 +990,24 @@
       }
     },
     "query": "\n        SELECT\n            number\n        FROM\n            blocks_next\n        ORDER BY number DESC\n        LIMIT 1\n        "
+  },
+  "a25ad8d5a3b7d3cb2870f2bd7d12bc79c781b0756a6efd0f142fdf35bdbb7f85": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        WITH issuance_distances AS (\n            SELECT\n              gwei,\n              timestamp,\n              ABS(\n                EXTRACT(\n                  epoch\n                  FROM\n                    (timestamp - (NOW() - '7 days':: INTERVAL))\n                )\n              ) AS distance_seconds\n            FROM\n              beacon_issuance\n            ORDER BY\n              distance_seconds ASC\n        )\n        SELECT gwei\n        FROM issuance_distances \n        WHERE distance_seconds <= 86400\n        LIMIT 1\n        "
   },
   "a262647098b76d069f84fcabe8c4affa833727791f3a15c47b8b41e2f3fb5ea2": {
     "describe": {
@@ -1325,24 +1301,6 @@
       }
     },
     "query": "\n        DELETE FROM\n            eth_supply\n        WHERE\n            deposits_slot = $1\n            OR balances_slot = $1\n        "
-  },
-  "dfe5b46d9937450ab56cdfe76cf2b7b1bd2665cf76748b67e13b27cac5b47fa0": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n        WITH\n          issuance_distances AS (\n            SELECT\n              gwei,\n              timestamp,\n              ABS(\n                EXTRACT(\n                  epoch\n                  FROM\n                    (timestamp - (NOW() - '7 days':: INTERVAL))\n                )\n              ) AS distance_seconds\n            FROM\n              beacon_issuance\n            ORDER BY\n              distance_seconds ASC\n          )\n        SELECT gwei\n        FROM issuance_distances \n        WHERE distance_seconds <= 86400\n        LIMIT 1\n        "
   },
   "e629b9d9f49fb724cd7c02288f174d62ff4e87620277aff0248d88c15f90fe2d": {
     "describe": {

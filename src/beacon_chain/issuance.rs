@@ -103,8 +103,7 @@ pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
 pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
     sqlx::query!(
         "
-        WITH
-          issuance_distances AS (
+        WITH issuance_distances AS (
             SELECT
               gwei,
               timestamp,
@@ -119,7 +118,7 @@ pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype
               beacon_issuance
             ORDER BY
               distance_seconds ASC
-          )
+        )
         SELECT gwei
         FROM issuance_distances 
         WHERE distance_seconds <= 86400
@@ -216,6 +215,7 @@ pub async fn update_issuance_estimate() {
 // slot yet. We use an average usd price over the time frame instead.
 pub async fn estimated_issuance_from_time_frame(
     db_pool: &PgPool,
+    issuance_store: impl IssuanceStore,
     time_frame: &TimeFrame,
     block: &ExecutionNodeBlock,
 ) -> EthNewtype {
@@ -229,14 +229,23 @@ pub async fn estimated_issuance_from_time_frame(
             let days_since_burn = Utc::now().sub(*LONDON_HARD_FORK_TIMESTAMP).num_days();
             let extrapolation_factor = days_since_burn as f64 / days_since_merge as f64;
 
-            let gwei = sqlx::query!(
+            let issuance_since_merge: EthNewtype = issuance_store.current_issuance().await.into();
+
+            EthNewtype(issuance_since_merge.0 * extrapolation_factor)
+        }
+        Growing(SinceMerge) => issuance_store.current_issuance().await.into(),
+        Limited(limited_time_frame) => {
+            let issuance_since_merge = issuance_store.current_issuance().await;
+            let issuance_since_time_frame = sqlx::query!(
                 r#"
-                SELECT SUM(gwei)::TEXT AS "gwei!"
+                SELECT gwei::TEXT AS "gwei!"
                 FROM beacon_issuance
-                WHERE timestamp >= $1
+                WHERE timestamp >= NOW() - $1::INTERVAL
                 AND timestamp <= $2
+                ORDER BY timestamp ASC
+                LIMIT 1
                 "#,
-                *MERGE_HARD_FORK_TIMESTAMP,
+                limited_time_frame.postgres_interval(),
                 block.timestamp,
             )
             .fetch_one(db_pool)
@@ -246,44 +255,8 @@ pub async fn estimated_issuance_from_time_frame(
             .parse::<GweiNewtype>()
             .unwrap();
 
-            let eth: EthNewtype = gwei.into();
-
-            EthNewtype(eth.0 * extrapolation_factor)
+            (issuance_since_time_frame - issuance_since_merge).into()
         }
-        Growing(SinceMerge) => sqlx::query!(
-            r#"
-            SELECT SUM(gwei)::TEXT AS "gwei!"
-            FROM beacon_issuance
-            WHERE timestamp >= $1
-            AND timestamp <= $2
-            "#,
-            *MERGE_HARD_FORK_TIMESTAMP,
-            block.timestamp,
-        )
-        .fetch_one(db_pool)
-        .await
-        .unwrap()
-        .gwei
-        .parse::<GweiNewtype>()
-        .unwrap()
-        .into(),
-        Limited(limited_time_frame) => sqlx::query!(
-            r#"
-            SELECT SUM(gwei)::TEXT AS "gwei!"
-            FROM beacon_issuance
-            WHERE timestamp >= NOW() - $1::INTERVAL
-            AND timestamp <= $2
-            "#,
-            limited_time_frame.postgres_interval(),
-            block.timestamp,
-        )
-        .fetch_one(db_pool)
-        .await
-        .unwrap()
-        .gwei
-        .parse::<GweiNewtype>()
-        .unwrap()
-        .into(),
     }
 }
 
@@ -457,21 +430,21 @@ mod tests {
         assert_eq!(day7_ago_issuance, GweiNewtype(100));
     }
 
-    #[tokio::test]
-    async fn get_last_week_issuance_test() {
-        struct IssuanceStoreTest {}
+    struct IssuanceStoreTest {}
 
-        #[async_trait]
-        impl IssuanceStore for IssuanceStoreTest {
-            async fn current_issuance(&self) -> GweiNewtype {
-                GweiNewtype(100)
-            }
-
-            async fn day7_ago_issuance(&self) -> GweiNewtype {
-                GweiNewtype(50)
-            }
+    #[async_trait]
+    impl IssuanceStore for IssuanceStoreTest {
+        async fn current_issuance(&self) -> GweiNewtype {
+            GweiNewtype(100)
         }
 
+        async fn day7_ago_issuance(&self) -> GweiNewtype {
+            GweiNewtype(50)
+        }
+    }
+
+    #[tokio::test]
+    async fn get_last_week_issuance_test() {
         let issuance_store = IssuanceStoreTest {};
 
         let issuance = get_last_week_issuance(issuance_store).await;
@@ -499,6 +472,7 @@ mod tests {
 
         let issuance = estimated_issuance_from_time_frame(
             &test_db.pool,
+            IssuanceStoreTest {},
             &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
             &block,
         )

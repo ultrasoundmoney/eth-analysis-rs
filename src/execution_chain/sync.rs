@@ -35,7 +35,7 @@ async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber)
 }
 
 async fn sync_by_hash(
-    issuance_store: impl IssuanceStore,
+    issuance_store: impl IssuanceStore + Copy,
     execution_node: &mut ExecutionNode,
     db_pool: &PgPool,
     hash: &str,
@@ -75,9 +75,15 @@ async fn sync_by_hash(
         burn_rates::on_new_block(db_pool, &burn_sums_envelope)
             .timed("burn_rates::on_new_block")
             .await;
-        gauges::on_new_block(db_pool, &block, &burn_sums_envelope, &eth_supply)
-            .timed("gauges::on_new_block")
-            .await;
+        gauges::on_new_block(
+            db_pool,
+            issuance_store,
+            &block,
+            &burn_sums_envelope,
+            &eth_supply,
+        )
+        .timed("gauges::on_new_block")
+        .await;
     } else {
         debug!("not synced, skipping skippables");
     }

@@ -6,7 +6,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 
 use crate::{
-    beacon_chain,
+    beacon_chain::{self, IssuanceStore},
     burn_sums::{BurnSumsEnvelope, EthUsdAmount},
     caching::{self, CacheKey},
     execution_chain::ExecutionNodeBlock,
@@ -34,6 +34,7 @@ pub type GaugeRates = HashMap<TimeFrame, GaugeRatesTimeFrame>;
 
 pub async fn on_new_block(
     db_pool: &PgPool,
+    issuance_store: impl IssuanceStore + Copy,
     block: &ExecutionNodeBlock,
     burn_sums_envelope: &BurnSumsEnvelope,
     eth_supply: &EthNewtype,
@@ -48,8 +49,13 @@ pub async fn on_new_block(
             .yearly_rate_from_time_frame(time_frame);
 
         let (issuance_rate_yearly_eth, usd_price_average) = join!(
-            beacon_chain::estimated_issuance_from_time_frame(db_pool, &time_frame, block,)
-                .timed(&format!("estimated_issuance_from_time_frame_{time_frame}")),
+            beacon_chain::estimated_issuance_from_time_frame(
+                db_pool,
+                issuance_store,
+                &time_frame,
+                block,
+            )
+            .timed(&format!("estimated_issuance_from_time_frame_{time_frame}")),
             usd_price::average_from_time_range(
                 db_pool,
                 time_frame.start_timestamp(block),
