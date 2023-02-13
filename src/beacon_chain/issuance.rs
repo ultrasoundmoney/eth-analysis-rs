@@ -263,7 +263,12 @@ pub async fn estimated_issuance_from_time_frame(
             }
         }
         Growing(SinceMerge) => {
-            let usd_price = 1000.0;
+            let usd_price_average = usd_price::average_from_time_range(
+                db_pool,
+                time_frame.start_timestamp(block),
+                block.timestamp,
+            )
+            .await;
 
             let row = sqlx::query!(
                 r#"
@@ -276,7 +281,7 @@ pub async fn estimated_issuance_from_time_frame(
                 "#,
                 *MERGE_HARD_FORK_TIMESTAMP,
                 block.timestamp,
-                usd_price
+                usd_price_average.0
             )
             .fetch_one(db_pool)
             .await
@@ -288,7 +293,12 @@ pub async fn estimated_issuance_from_time_frame(
             EthUsdAmount { eth, usd }
         }
         Limited(limited_time_frame) => {
-            let usd_price = 1000.0;
+            let usd_price_average = usd_price::average_from_time_range(
+                db_pool,
+                time_frame.start_timestamp(block),
+                block.timestamp,
+            )
+            .await;
 
             let row = sqlx::query!(
                 r#"
@@ -301,7 +311,7 @@ pub async fn estimated_issuance_from_time_frame(
                 "#,
                 limited_time_frame.postgres_interval(),
                 block.timestamp,
-                usd_price
+                usd_price_average.0
             )
             .fetch_one(db_pool)
             .await
