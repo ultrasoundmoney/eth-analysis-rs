@@ -96,6 +96,11 @@ pub mod tests {
             self.parent_hash = parent.hash.to_string();
             self.number = parent.number + 1;
             self.timestamp = parent.timestamp + chrono::Duration::seconds(12);
+            self.hash = format!(
+                "{parent_hash}_{number}",
+                parent_hash = self.parent_hash,
+                number = self.number
+            );
             self
         }
 
