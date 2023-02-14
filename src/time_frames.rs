@@ -178,8 +178,8 @@ impl Display for GrowingTimeFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use GrowingTimeFrame::*;
         match self {
-            SinceBurn => write!(f, "since-burn"),
-            SinceMerge => write!(f, "since-merge"),
+            SinceBurn => write!(f, "since_burn"),
+            SinceMerge => write!(f, "since_merge"),
         }
     }
 }
@@ -232,8 +232,8 @@ impl FromStr for TimeFrame {
 
         match s {
             "all" => Ok(Growing(SinceBurn)),
-            "since-burn" => Ok(Growing(SinceBurn)),
-            "since-merge" => Ok(Growing(SinceMerge)),
+            "since_burn" => Ok(Growing(SinceBurn)),
+            "since_merge" => Ok(Growing(SinceMerge)),
             unknown_time_frame => unknown_time_frame.parse().map(Limited),
         }
     }

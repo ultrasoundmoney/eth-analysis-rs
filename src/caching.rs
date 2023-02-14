@@ -56,8 +56,8 @@ impl CacheKey {
             Self::BaseFeePerGasBarrier => "base-fee-per-gas-barrier",
             Self::BaseFeePerGasStats => "base-fee-per-gas-stats",
             Self::BaseFeePerGasStatsTimeFrame(time_frame) => match time_frame {
-                Growing(SinceBurn) => "base-fee-per-gas-stats-since-burn",
-                Growing(SinceMerge) => "base-fee-per-gas-stats-since-merge",
+                Growing(SinceBurn) => "base-fee-per-gas-stats-since_burn",
+                Growing(SinceMerge) => "base-fee-per-gas-stats-since_merge",
                 Limited(Minute5) => "base-fee-per-gas-stats-m5",
                 Limited(Hour1) => "base-fee-per-gas-stats-h1",
                 Limited(Day1) => "base-fee-per-gas-stats-d1",
