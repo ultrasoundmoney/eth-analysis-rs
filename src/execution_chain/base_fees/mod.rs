@@ -45,7 +45,7 @@ pub async fn on_new_block(
     let barrier = barrier::get_barrier(issuance_store).await;
 
     join!(
-        barrier::on_new_barrier(db_pool, barrier),
+        barrier::on_new_barrier(db_pool, barrier, block),
         last::update_last_base_fee(db_pool, block).timed("update_last_base_fee"),
         stats::update_base_fee_stats(db_pool, barrier, block).timed("update_base_fee_stats"),
         over_time::update_base_fee_over_time(db_pool, barrier, &block.number)

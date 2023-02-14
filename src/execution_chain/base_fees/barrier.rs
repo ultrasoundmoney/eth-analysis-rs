@@ -1,9 +1,12 @@
+use chrono::{DateTime, Utc};
+use serde::Serialize;
 use sqlx::PgPool;
 use tracing::debug;
 
 use crate::{
     beacon_chain::{self, IssuanceStore},
     caching::{self, CacheKey},
+    execution_chain::{BlockNumber, ExecutionNodeBlock},
     performance::TimedExt,
     units::GweiNewtype,
 };
@@ -11,6 +14,13 @@ use crate::{
 /// Is the base fee per gas price in Gwei/gas at which burn is outpacing issuance. This is only true
 /// when blocks are half full, at 15M gas, which is true on average due to EIP-1559.
 pub type Barrier = f64;
+
+#[derive(Debug, Serialize)]
+pub struct BarrierStats {
+    barrier: Barrier,
+    block_number: BlockNumber,
+    timestamp: DateTime<Utc>,
+}
 
 const APPROXIMATE_GAS_USED_PER_BLOCK: u32 = 15_000_000u32;
 const APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK: i32 = 50400;
@@ -36,14 +46,15 @@ pub async fn get_barrier(issuance_store: impl IssuanceStore) -> Barrier {
 
 // Because other modules need the ultra sound barrier as an input, we calculate it first, then
 // update the cache.
-pub async fn on_new_barrier(db_pool: &PgPool, base_fee_per_gas_barrier: Barrier) {
-    caching::update_and_publish(
-        db_pool,
-        &CacheKey::BaseFeePerGasBarrier,
-        base_fee_per_gas_barrier,
-    )
-    .await
-    .unwrap();
+pub async fn on_new_barrier(db_pool: &PgPool, barrier: Barrier, block: &ExecutionNodeBlock) {
+    let barrier_stats = BarrierStats {
+        barrier,
+        block_number: block.number,
+        timestamp: block.timestamp,
+    };
+    caching::update_and_publish(db_pool, &CacheKey::BaseFeePerGasBarrier, barrier_stats)
+        .await
+        .unwrap();
 }
 
 #[cfg(test)]
