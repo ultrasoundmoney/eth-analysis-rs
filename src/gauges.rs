@@ -6,6 +6,7 @@
 /// toggle which sets the rate to an estimate of only the pow issuance.
 use std::collections::HashMap;
 
+use chrono::{DateTime, Utc};
 use enum_iterator::all;
 use futures::join;
 use serde::Serialize;
@@ -15,7 +16,7 @@ use crate::{
     beacon_chain::IssuanceStore,
     burn_sums::{BurnSumsEnvelope, EthUsdAmount},
     caching::{self, CacheKey},
-    execution_chain::ExecutionNodeBlock,
+    execution_chain::{BlockNumber, ExecutionNodeBlock},
     performance::TimedExt,
     time_frames::TimeFrame,
     units::{EthNewtype, UsdNewtype},
@@ -32,11 +33,13 @@ const MINUTES_PER_YEAR: f64 = MINUTES_PER_HOUR * HOURS_PER_DAY * DAYS_PER_YEAR;
 
 #[derive(Debug, Serialize)]
 pub struct GaugeRatesTimeFrame {
+    block_number: BlockNumber,
     burn_rate_yearly: EthUsdAmount,
     issuance_rate_yearly: EthUsdAmount,
     issuance_rate_yearly_pow: EthUsdAmount,
     supply_growth_rate_yearly: f64,
     supply_growth_rate_yearly_pow: f64,
+    timestamp: DateTime<Utc>,
 }
 
 pub type GaugeRates = HashMap<TimeFrame, GaugeRatesTimeFrame>;
@@ -73,7 +76,7 @@ pub async fn on_new_block(
         let year_time_frame_fraction =
             MINUTES_PER_YEAR / time_frame.duration().num_minutes() as f64;
         let issuance_rate_yearly_eth =
-            EthNewtype(issuance_time_frame_eth.0 as f64 * year_time_frame_fraction);
+            EthNewtype(issuance_time_frame_eth.0 * year_time_frame_fraction);
         let issuance_rate_yearly = EthUsdAmount {
             eth: issuance_rate_yearly_eth,
             // It'd be nice to have a precise estimate of the USD issuance, but we don't have usd prices per
@@ -103,11 +106,13 @@ pub async fn on_new_block(
         gauge_rates.insert(
             time_frame,
             GaugeRatesTimeFrame {
+                block_number: block.number,
                 burn_rate_yearly,
                 issuance_rate_yearly,
                 issuance_rate_yearly_pow,
                 supply_growth_rate_yearly,
                 supply_growth_rate_yearly_pow,
+                timestamp: block.timestamp,
             },
         );
     }
