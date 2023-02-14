@@ -2,8 +2,10 @@ use std::collections::HashMap;
 
 use axum::{extract::Query, response::IntoResponse};
 use chrono::Duration;
+use enum_iterator::all;
 use lazy_static::lazy_static;
 use reqwest::StatusCode;
+use tracing::warn;
 
 use crate::{
     caching::CacheKey,
@@ -11,85 +13,56 @@ use crate::{
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
 };
 
+struct CachePair {
+    max_age: Duration,
+    stale_while_revalidate: Duration,
+}
+
 lazy_static! {
-    static ref FOUR_SECONDS: Duration = Duration::seconds(4);
-    static ref TWO_MINUTES: Duration = Duration::minutes(2);
-    static ref FIVE_MINUTES: Duration = Duration::minutes(5);
-    static ref FIFTEEN_MINUTES: Duration = Duration::minutes(15);
-    static ref THIRTY_MINUTES: Duration = Duration::minutes(30);
-    static ref ONE_HOUR: Duration = Duration::hours(1);
-    static ref ONE_DAY: Duration = Duration::days(1);
-    static ref TWO_DAYS: Duration = Duration::days(2);
-    static ref FOURTEEN_DAYS: Duration = Duration::days(14);
+    static ref CACHE_DURATION_MAP: HashMap<TimeFrame, CachePair> = {
+        use GrowingTimeFrame::*;
+        use LimitedTimeFrame::*;
+        use TimeFrame::*;
+
+        HashMap::from_iter(all::<TimeFrame>().map(|time_frame| {
+            let (max_age, stale_while_revalidate) = match time_frame {
+                Limited(Minute5) => (Duration::seconds(4), Duration::minutes(2)),
+                Limited(Hour1) => (Duration::seconds(4), Duration::minutes(15)),
+                Limited(Day1) => (Duration::minutes(5), Duration::hours(1)),
+                Limited(Day7) => (Duration::minutes(5), Duration::days(1)),
+                Limited(Day30) => (Duration::minutes(30), Duration::days(2)),
+                Growing(SinceBurn) => (Duration::hours(1), Duration::days(14)),
+                Growing(SinceMerge) => (Duration::hours(1), Duration::days(14)),
+            };
+            (
+                time_frame,
+                CachePair {
+                    max_age,
+                    stale_while_revalidate,
+                },
+            )
+        }))
+    };
 }
 
 pub async fn base_fee_per_gas_stats(
     state: StateExtension,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    use GrowingTimeFrame::*;
-    use LimitedTimeFrame::*;
-    use TimeFrame::*;
-
     match params.get("time_frame") {
-        Some(time_frame) => match time_frame.as_str() {
-            "m5" => serve::cached_get_with_custom_duration(
+        Some(time_frame_param) => match time_frame_param.parse::<TimeFrame>() {
+            Ok(time_frame) => serve::cached_get_with_custom_duration(
                 state,
-                &CacheKey::BaseFeePerGasStatsTimeFrame(Limited(Minute5)),
-                &FOUR_SECONDS,
-                &TWO_MINUTES,
+                &CacheKey::BaseFeePerGasStatsTimeFrame(time_frame),
+                &CACHE_DURATION_MAP[&time_frame].max_age,
+                &CACHE_DURATION_MAP[&time_frame].stale_while_revalidate,
             )
             .await
             .into_response(),
-            "h1" => serve::cached_get_with_custom_duration(
-                state,
-                &CacheKey::BaseFeePerGasStatsTimeFrame(Limited(Hour1)),
-                &FOUR_SECONDS,
-                &FIFTEEN_MINUTES,
-            )
-            .await
-            .into_response(),
-            "d1" => serve::cached_get_with_custom_duration(
-                state,
-                &CacheKey::BaseFeePerGasStatsTimeFrame(Limited(Day1)),
-                &FIVE_MINUTES,
-                &ONE_HOUR,
-            )
-            .await
-            .into_response(),
-            "d7" => serve::cached_get_with_custom_duration(
-                state,
-                &CacheKey::BaseFeePerGasStatsTimeFrame(Limited(Day7)),
-                &FIVE_MINUTES,
-                &ONE_DAY,
-            )
-            .await
-            .into_response(),
-            "d30" => serve::cached_get_with_custom_duration(
-                state,
-                &CacheKey::BaseFeePerGasStatsTimeFrame(Limited(Day30)),
-                &THIRTY_MINUTES,
-                &TWO_DAYS,
-            )
-            .await
-            .into_response(),
-            "since_burn" => serve::cached_get_with_custom_duration(
-                state,
-                &CacheKey::BaseFeePerGasStatsTimeFrame(Growing(SinceBurn)),
-                &ONE_HOUR,
-                &FOURTEEN_DAYS,
-            )
-            .await
-            .into_response(),
-            "since_merge" => serve::cached_get_with_custom_duration(
-                state,
-                &CacheKey::BaseFeePerGasStatsTimeFrame(Growing(SinceMerge)),
-                &ONE_HOUR,
-                &FOURTEEN_DAYS,
-            )
-            .await
-            .into_response(),
-            _ => StatusCode::BAD_REQUEST.into_response(),
+            Err(_) => {
+                warn!("Invalid time_frame parameter: {}", time_frame_param);
+                StatusCode::BAD_REQUEST.into_response()
+            }
         },
         None => serve::cached_get(state, &CacheKey::BaseFeePerGasStats)
             .await
