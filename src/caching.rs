@@ -118,7 +118,7 @@ impl FromStr for CacheKey {
             "validator-rewards" => Ok(Self::ValidatorRewards),
             unknown_key if unknown_key.starts_with("base-fee-per-gas-stats-") => unknown_key
                 .split('-')
-                .nth(4)
+                .nth(5)
                 .expect(
                     "expect keys which start with 'base-fee-per-gas-stats-' to have a time frame",
                 )
@@ -273,5 +273,19 @@ mod tests {
         assert_eq!(caching_value, test_json);
 
         Ok(())
+    }
+
+    #[test]
+    fn parse_base_fees_time_frame_test() {
+        assert_eq!(
+            "base-fee-per-gas-stats-d1".parse::<CacheKey>().unwrap(),
+            CacheKey::BaseFeePerGasStatsTimeFrame(TimeFrame::Limited(LimitedTimeFrame::Day1))
+        );
+        assert_eq!(
+            "base-fee-per-gas-stats-since_merge"
+                .parse::<CacheKey>()
+                .unwrap(),
+            CacheKey::BaseFeePerGasStatsTimeFrame(TimeFrame::Growing(GrowingTimeFrame::SinceMerge))
+        );
     }
 }
