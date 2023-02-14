@@ -10,7 +10,6 @@ use tracing::{debug, warn};
 use crate::{
     caching::{self, CacheKey},
     execution_chain::{BlockNumber, ExecutionNodeBlock},
-    key_value_store,
     performance::TimedExt,
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::WeiF64,
@@ -278,62 +277,32 @@ pub async fn update_base_fee_stats(
     barrier: Barrier,
     block: &ExecutionNodeBlock,
 ) {
+    use GrowingTimeFrame::*;
+    use LimitedTimeFrame::*;
+    use TimeFrame::*;
+
     debug!("updating base fee over time");
 
     let (since_burn, since_merge, d30, d7, d1, h1, m5) = join!(
-        BaseFeePerGasStats::from_time_frame_cached(
-            executor,
-            &TimeFrame::Growing(GrowingTimeFrame::SinceBurn),
-            block,
-        ),
-        BaseFeePerGasStats::from_time_frame_cached(
-            executor,
-            &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
-            block,
-        ),
-        BaseFeePerGasStats::from_time_frame_cached(
-            executor,
-            &TimeFrame::Limited(LimitedTimeFrame::Day30),
-            block,
-        ),
-        BaseFeePerGasStats::from_time_frame_cached(
-            executor,
-            &TimeFrame::Limited(LimitedTimeFrame::Day7),
-            block,
-        ),
-        BaseFeePerGasStats::from_time_frame_cached(
-            executor,
-            &TimeFrame::Limited(LimitedTimeFrame::Day1),
-            block,
-        ),
-        BaseFeePerGasStats::from_time_frame_cached(
-            executor,
-            &TimeFrame::Limited(LimitedTimeFrame::Hour1),
-            block,
-        ),
-        BaseFeePerGasStats::from_time_frame_cached(
-            executor,
-            &TimeFrame::Limited(LimitedTimeFrame::Minute5),
-            block,
-        ),
+        BaseFeePerGasStats::from_time_frame_cached(executor, &Growing(SinceBurn), block,),
+        BaseFeePerGasStats::from_time_frame_cached(executor, &Growing(SinceMerge), block,),
+        BaseFeePerGasStats::from_time_frame_cached(executor, &Limited(Day30), block,),
+        BaseFeePerGasStats::from_time_frame_cached(executor, &Limited(Day7), block,),
+        BaseFeePerGasStats::from_time_frame_cached(executor, &Limited(Day1), block,),
+        BaseFeePerGasStats::from_time_frame_cached(executor, &Limited(Hour1), block,),
+        BaseFeePerGasStats::from_time_frame_cached(executor, &Limited(Minute5), block,),
     );
 
     // TODO: after the frontend converts to using the hashmap, remove the individual time frame
     // calls above and simply iterate through all time frames, then collect the Vec into a HashMap.
     let mut base_fee_per_gas_stats = HashMap::new();
-    base_fee_per_gas_stats.insert(
-        TimeFrame::Growing(GrowingTimeFrame::SinceBurn),
-        since_burn.clone(),
-    );
-    base_fee_per_gas_stats.insert(
-        TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
-        since_merge.clone(),
-    );
-    base_fee_per_gas_stats.insert(TimeFrame::Limited(LimitedTimeFrame::Day30), d30.clone());
-    base_fee_per_gas_stats.insert(TimeFrame::Limited(LimitedTimeFrame::Day7), d7.clone());
-    base_fee_per_gas_stats.insert(TimeFrame::Limited(LimitedTimeFrame::Day1), d1.clone());
-    base_fee_per_gas_stats.insert(TimeFrame::Limited(LimitedTimeFrame::Hour1), h1.clone());
-    base_fee_per_gas_stats.insert(TimeFrame::Limited(LimitedTimeFrame::Minute5), m5.clone());
+    base_fee_per_gas_stats.insert(Growing(SinceBurn), since_burn.clone());
+    base_fee_per_gas_stats.insert(Growing(SinceMerge), since_merge.clone());
+    base_fee_per_gas_stats.insert(Limited(Day30), d30.clone());
+    base_fee_per_gas_stats.insert(Limited(Day7), d7.clone());
+    base_fee_per_gas_stats.insert(Limited(Day1), d1.clone());
+    base_fee_per_gas_stats.insert(Limited(Hour1), h1.clone());
+    base_fee_per_gas_stats.insert(Limited(Minute5), m5.clone());
 
     // Update the cache for each time frame, stats pair.
     for (time_frame, stats) in base_fee_per_gas_stats.iter() {
@@ -361,17 +330,13 @@ pub async fn update_base_fee_stats(
         timestamp: block.timestamp,
     };
 
-    key_value_store::set_value(
+    caching::update_and_publish(
         executor,
-        CacheKey::BaseFeePerGasStats.to_db_key(),
-        &serde_json::to_value(base_fee_per_gas_stats_envelope).unwrap(),
+        &CacheKey::BaseFeePerGasStats,
+        &base_fee_per_gas_stats_envelope,
     )
     .await
     .unwrap();
-
-    caching::publish_cache_update(executor, &CacheKey::BaseFeePerGasStats)
-        .await
-        .unwrap();
 }
 
 #[cfg(test)]
