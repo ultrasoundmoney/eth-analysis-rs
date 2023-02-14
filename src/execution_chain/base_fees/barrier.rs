@@ -8,8 +8,8 @@ use crate::{
     units::GweiNewtype,
 };
 
-/// Is the base fee per gas price at which burn is outpacing issuance. This is only true when
-/// blocks are half full, at 15M gas, which is true on average due to EIP-1559.
+/// Is the base fee per gas price in Gwei/gas at which burn is outpacing issuance. This is only true
+/// when blocks are half full, at 15M gas, which is true on average due to EIP-1559.
 pub type Barrier = f64;
 
 const APPROXIMATE_GAS_USED_PER_BLOCK: u32 = 15_000_000u32;

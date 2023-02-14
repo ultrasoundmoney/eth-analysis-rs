@@ -18,6 +18,8 @@ use crate::{
 
 use GrowingTimeFrame::*;
 
+use super::barrier::Barrier;
+
 async fn base_fee_per_gas_average(executor: impl PgExecutor<'_>, time_frame: &TimeFrame) -> WeiF64 {
     match time_frame {
         TimeFrame::Growing(growing_time_frame) => {
@@ -258,7 +260,7 @@ impl BaseFeePerGasStats {
 #[derive(Serialize)]
 struct BaseFeePerGasStatsEnvelope {
     all: Option<BaseFeePerGasStats>,
-    barrier: WeiF64,
+    barrier: Barrier,
     base_fee_per_gas_stats: HashMap<TimeFrame, BaseFeePerGasStats>,
     block_number: BlockNumber,
     d1: BaseFeePerGasStats,
@@ -271,7 +273,11 @@ struct BaseFeePerGasStatsEnvelope {
     timestamp: DateTime<Utc>,
 }
 
-pub async fn update_base_fee_stats(executor: &PgPool, barrier: f64, block: &ExecutionNodeBlock) {
+pub async fn update_base_fee_stats(
+    executor: &PgPool,
+    barrier: Barrier,
+    block: &ExecutionNodeBlock,
+) {
     debug!("updating base fee over time");
 
     let (since_burn, since_merge, d30, d7, d1, h1, m5) = join!(
