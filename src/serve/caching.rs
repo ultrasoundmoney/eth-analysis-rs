@@ -9,7 +9,7 @@ use futures::{Stream, TryStreamExt};
 use lazy_static::lazy_static;
 use reqwest::{header, StatusCode};
 use serde_json::Value;
-use sqlx::PgPool;
+use sqlx::{postgres::PgNotification, PgPool};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -82,16 +82,14 @@ pub async fn cached_get(state: StateExtension, analysis_cache_key: &CacheKey) ->
 }
 
 async fn process_notifications(
-    mut notification_stream: impl Stream<Item = Result<sqlx::postgres::PgNotification, sqlx::Error>>
-        + Unpin,
+    mut notification_stream: impl Stream<Item = Result<PgNotification, sqlx::Error>> + Unpin,
     state: Arc<State>,
     db_pool: &PgPool,
 ) {
     while let Some(notification) = notification_stream.try_next().await.unwrap() {
         let payload = notification.payload();
-        let cache_key = payload.parse::<CacheKey>();
 
-        match cache_key {
+        match payload.parse::<CacheKey>() {
             Err(ParseCacheKeyError::UnknownCacheKey(cache_key)) => {
                 trace!(
                     %cache_key,

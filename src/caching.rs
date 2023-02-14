@@ -38,24 +38,19 @@ pub enum CacheKey {
     ValidatorRewards,
 }
 
-impl Display for CacheKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_db_key())
-    }
-}
-
 impl CacheKey {
     pub fn to_db_key(self) -> &'static str {
+        use CacheKey::*;
         use GrowingTimeFrame::*;
         use LimitedTimeFrame::*;
         use TimeFrame::*;
 
         match self {
-            Self::BaseFeeOverTime => "base-fee-over-time",
-            Self::BaseFeePerGas => "current-base-fee",
-            Self::BaseFeePerGasBarrier => "base-fee-per-gas-barrier",
-            Self::BaseFeePerGasStats => "base-fee-per-gas-stats",
-            Self::BaseFeePerGasStatsTimeFrame(time_frame) => match time_frame {
+            BaseFeeOverTime => "base-fee-over-time",
+            BaseFeePerGas => "current-base-fee",
+            BaseFeePerGasBarrier => "base-fee-per-gas-barrier",
+            BaseFeePerGasStats => "base-fee-per-gas-stats",
+            BaseFeePerGasStatsTimeFrame(time_frame) => match time_frame {
                 Growing(SinceBurn) => "base-fee-per-gas-stats-since_burn",
                 Growing(SinceMerge) => "base-fee-per-gas-stats-since_merge",
                 Limited(Minute5) => "base-fee-per-gas-stats-m5",
@@ -64,23 +59,29 @@ impl CacheKey {
                 Limited(Day7) => "base-fee-per-gas-stats-d7",
                 Limited(Day30) => "base-fee-per-gas-stats-d30",
             },
-            Self::BlockLag => "block-lag",
-            Self::BurnRates => "burn-rates",
-            Self::BurnSums => "burn-sums",
-            Self::EffectiveBalanceSum => "effective-balance-sum",
-            Self::EthPrice => "eth-price",
-            Self::GaugeRates => "gauge-rates",
-            Self::IssuanceBreakdown => "issuance-breakdown",
-            Self::IssuanceEstimate => "issuance-estimate",
-            Self::SupplyChanges => "supply-changes",
-            Self::SupplyDashboardAnalysis => "supply-dashboard-analysis",
-            Self::SupplyOverTime => "supply-over-time",
-            Self::SupplyParts => "supply-parts",
-            Self::SupplyProjectionInputs => "supply-projection-inputs",
-            Self::SupplySinceMerge => "supply-since-merge",
-            Self::TotalDifficultyProgress => "total-difficulty-progress",
-            Self::ValidatorRewards => "validator-rewards",
+            BlockLag => "block-lag",
+            BurnRates => "burn-rates",
+            BurnSums => "burn-sums",
+            EffectiveBalanceSum => "effective-balance-sum",
+            EthPrice => "eth-price",
+            GaugeRates => "gauge-rates",
+            IssuanceBreakdown => "issuance-breakdown",
+            IssuanceEstimate => "issuance-estimate",
+            SupplyChanges => "supply-changes",
+            SupplyDashboardAnalysis => "supply-dashboard-analysis",
+            SupplyOverTime => "supply-over-time",
+            SupplyParts => "supply-parts",
+            SupplyProjectionInputs => "supply-projection-inputs",
+            SupplySinceMerge => "supply-since-merge",
+            TotalDifficultyProgress => "total-difficulty-progress",
+            ValidatorRewards => "validator-rewards",
         }
+    }
+}
+
+impl Display for CacheKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_db_key())
     }
 }
 
