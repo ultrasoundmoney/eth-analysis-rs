@@ -4,7 +4,6 @@ mod etag_middleware;
 pub use caching::cached_get;
 pub use caching::cached_get_with_custom_duration;
 
-use anyhow::Result;
 use axum::{middleware, routing::get, Extension, Router};
 use chrono::Duration;
 use futures::{try_join, TryFutureExt};
@@ -23,6 +22,7 @@ use self::caching::Cache;
 lazy_static! {
     static ref FOUR_SECONDS: Duration = Duration::seconds(4);
     static ref ONE_DAY: Duration = Duration::days(1);
+    static ref ONE_MINUTE: Duration = Duration::minutes(1);
 }
 
 pub type StateExtension = Extension<Arc<State>>;
@@ -32,12 +32,14 @@ pub struct State {
     pub db_pool: PgPool,
 }
 
-pub async fn start_server() -> Result<()> {
+pub async fn start_server() {
     log::init_with_env();
 
-    let db_pool = PgPool::connect(&db::get_db_url_with_name("eth-analysis-serve")).await?;
+    let db_pool = PgPool::connect(&db::get_db_url_with_name("eth-analysis-serve"))
+        .await
+        .unwrap();
 
-    sqlx::migrate!().run(&db_pool).await?;
+    sqlx::migrate!().run(&db_pool).await.unwrap();
 
     debug!("warming cache");
 
@@ -65,7 +67,7 @@ pub async fn start_server() -> Result<()> {
         )
         .route("/api/v2/fees/base-fee-per-gas-barrier", 
             get(|state: StateExtension| async move {
-                cached_get_with_custom_duration(state, &CacheKey::BaseFeePerGasBarrier, &FOUR_SECONDS, &ONE_DAY).await
+                cached_get_with_custom_duration(state, &CacheKey::BaseFeePerGasBarrier, &ONE_MINUTE, &ONE_DAY).await
             }),
         )
         .route(
@@ -193,7 +195,7 @@ pub async fn start_server() -> Result<()> {
     let port = env::get_env_var("PORT").unwrap_or_else(|| "3002".to_string());
 
     info!(port, "server listening");
-    let socket_addr = format!("0.0.0.0:{port}").parse()?;
+    let socket_addr = format!("0.0.0.0:{port}").parse().unwrap();
     let server_thread = axum::Server::bind(&socket_addr).serve(app.into_make_service());
 
     try_join!(
@@ -201,6 +203,4 @@ pub async fn start_server() -> Result<()> {
         server_thread.map_err(|err| error!("{}", err))
     )
     .unwrap();
-
-    Ok(())
 }
