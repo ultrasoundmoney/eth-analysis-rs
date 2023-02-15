@@ -24,28 +24,24 @@ struct SupplyAtTime {
 }
 
 async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> SupplyAtTime {
-    sqlx::query(
+    sqlx::query!(
         "
-            SELECT
-                timestamp,
-                supply::FLOAT8 / 1e18 AS supply
-            FROM
-                eth_supply
-            ORDER BY timestamp DESC
-            LIMIT 1
+        SELECT
+            timestamp,
+            supply::FLOAT8 / 1e18 AS \"supply!\"
+        FROM
+            eth_supply
+        ORDER BY timestamp DESC
+        LIMIT 1
         ",
     )
-    .map(|row: PgRow| {
-        let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-        let supply = row.get::<f64, _>("supply");
-        SupplyAtTime {
-            slot: None,
-            timestamp,
-            supply,
-        }
-    })
     .fetch_one(executor)
     .await
+    .map(|row| SupplyAtTime {
+        slot: None,
+        timestamp: row.timestamp,
+        supply: row.supply,
+    })
     .unwrap()
 }
 
@@ -57,15 +53,15 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::Growing(SinceBurn) => {
             sqlx::query(
                 "
-                    -- We select only one row per day, using ORDER BY to make sure it's the first.
-                    -- The column we output is rounded to whole days for convenience.
-                    SELECT
-                        DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
-                        supply::FLOAT8 / 1e18 AS supply
-                    FROM
-                        eth_supply
-                    ORDER BY
-                        DATE_TRUNC('day', timestamp), timestamp ASC
+                -- We select only one row per day, using ORDER BY to make sure it's the first.
+                -- The column we output is rounded to whole days for convenience.
+                SELECT
+                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
+                    supply::FLOAT8 / 1e18 AS supply
+                FROM
+                    eth_supply
+                ORDER BY
+                    DATE_TRUNC('day', timestamp), timestamp ASC
                 ",
             )
             .map(|row: PgRow| {
@@ -84,15 +80,15 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::Growing(SinceMerge) => {
             sqlx::query(
                 "
-                    SELECT
-                        DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
-                        supply::FLOAT8 / 1e18 AS supply
-                    FROM
-                        eth_supply
-                    WHERE
-                        timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
-                    ORDER BY
-                        DATE_TRUNC('day', timestamp), timestamp ASC
+                SELECT
+                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
+                    supply::FLOAT8 / 1e18 AS supply
+                FROM
+                    eth_supply
+                WHERE
+                    timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
+                ORDER BY
+                    DATE_TRUNC('day', timestamp), timestamp ASC
                 ",
             )
             .map(|row: PgRow| {
@@ -112,16 +108,16 @@ async fn get_supply_over_time_time_frame(
         | TimeFrame::Limited(ltf @ Hour1) => {
             sqlx::query(
                 "
-                    SELECT
-                        timestamp,
-                        supply::FLOAT8 / 1e18 AS supply,
-                        balances_slot
-                    FROM
-                        eth_supply
-                    WHERE
-                        timestamp >= NOW() - $1
-                    ORDER BY
-                        timestamp ASC
+                SELECT
+                    timestamp,
+                    supply::FLOAT8 / 1e18 AS supply,
+                    balances_slot
+                FROM
+                    eth_supply
+                WHERE
+                    timestamp >= NOW() - $1
+                ORDER BY
+                    timestamp ASC
                 ",
             )
             .bind(ltf.postgres_interval())
@@ -144,15 +140,15 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::Limited(ltf @ Day1) => {
             sqlx::query(
                 "
-                    SELECT
-                        DISTINCT ON (DATE_TRUNC('minute', timestamp)) DATE_TRUNC('minute', timestamp) AS minute_timestamp,
-                        supply::FLOAT8 / 1e18 AS supply
-                    FROM
-                        eth_supply
-                    WHERE
-                        timestamp >= NOW() - $1
-                    ORDER BY
-                        DATE_TRUNC('minute', timestamp), timestamp ASC
+                SELECT
+                    DISTINCT ON (DATE_TRUNC('minute', timestamp)) DATE_TRUNC('minute', timestamp) AS minute_timestamp,
+                    supply::FLOAT8 / 1e18 AS supply
+                FROM
+                    eth_supply
+                WHERE
+                    timestamp >= NOW() - $1
+                ORDER BY
+                    DATE_TRUNC('minute', timestamp), timestamp ASC
                 ",
             )
             .bind(ltf.postgres_interval())
@@ -172,15 +168,15 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::Limited(ltf @ Day7) => {
             sqlx::query(
                 "
-                    SELECT
-                        DISTINCT ON (DATE_BIN('5 minutes', timestamp, '2022-01-01')) DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
-                        supply::FLOAT8 / 1e18 AS supply
-                    FROM
-                        eth_supply
-                    WHERE
-                        timestamp >= NOW() - $1
-                    ORDER BY
-                        DATE_BIN('5 minutes', timestamp, '2022-01-01'), timestamp ASC
+                SELECT
+                    DISTINCT ON (DATE_BIN('5 minutes', timestamp, '2022-01-01')) DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
+                    supply::FLOAT8 / 1e18 AS supply
+                FROM
+                    eth_supply
+                WHERE
+                    timestamp >= NOW() - $1
+                ORDER BY
+                    DATE_BIN('5 minutes', timestamp, '2022-01-01'), timestamp ASC
                 ",
             )
             .bind(ltf.postgres_interval())
@@ -200,15 +196,15 @@ async fn get_supply_over_time_time_frame(
         TimeFrame::Limited(ltf @ Day30) => {
             sqlx::query(
                 "
-                    SELECT
-                        DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS hour_timestamp,
-                        supply::FLOAT8 / 1e18 AS supply
-                    FROM
-                        eth_supply
-                    WHERE
-                        timestamp >= NOW() - $1
-                    ORDER BY
-                        DATE_TRUNC('hour', timestamp), timestamp ASC
+                SELECT
+                    DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS hour_timestamp,
+                    supply::FLOAT8 / 1e18 AS supply
+                FROM
+                    eth_supply
+                WHERE
+                    timestamp >= NOW() - $1
+                ORDER BY
+                    DATE_TRUNC('hour', timestamp), timestamp ASC
                 ",
             )
             .bind(ltf.postgres_interval())
