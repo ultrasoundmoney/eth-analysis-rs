@@ -267,10 +267,13 @@ async fn since_burn_combined(db_pool: &PgPool) -> Vec<SupplyAtTime> {
     let eth_supply_ours =
         from_time_frame(db_pool, &TimeFrame::Growing(GrowingTimeFrame::SinceBurn)).await;
 
+    dbg!(eth_supply_glassnode.len());
+    dbg!(eth_supply_ours.len());
+
     eth_supply_glassnode
-        .into_iter()
-        .chain(eth_supply_ours.into_iter())
-        .collect()
+    // .into_iter()
+    // .chain(eth_supply_ours.into_iter())
+    // .collect()
 }
 
 #[derive(Clone, Serialize)]
@@ -337,10 +340,6 @@ mod tests {
 
     use super::*;
 
-    #[ignore]
-    #[tokio::test]
-    async fn selects_within_time_frame_test() {}
-
     #[tokio::test]
     async fn supply_over_time_m5_test() {
         let mut connection = db::tests::get_test_db_connection().await;
@@ -365,5 +364,30 @@ mod tests {
         let since_merge = from_time_frame(&mut transaction, &TimeFrame::Limited(Minute5)).await;
 
         assert_eq!(since_merge, vec![test_supply_at_time]);
+    }
+
+    #[tokio::test]
+    async fn daily_supply_glassnode_test() {
+        let mut connection = db::tests::get_test_db_connection().await;
+        let mut transaction = connection.begin().await.unwrap();
+
+        let test_supply_at_time = SupplyAtTime {
+            timestamp: *ETH_SUPPLY_FIRST_TIMESTAMP_DAY - Duration::days(1),
+            supply: EthNewtype(10.0),
+            slot: None,
+        };
+
+        sqlx::query!(
+            "INSERT INTO daily_supply_glassnode (timestamp, supply) VALUES ($1, $2)",
+            test_supply_at_time.timestamp,
+            test_supply_at_time.supply.0
+        )
+        .execute(&mut transaction)
+        .await
+        .unwrap();
+
+        let since_burn = get_daily_glassnode_supply(&mut transaction).await;
+
+        assert_eq!(since_burn, vec![test_supply_at_time]);
     }
 }
