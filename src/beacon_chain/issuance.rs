@@ -1,10 +1,11 @@
 //! Tracks issuance on the beacon chain.
 //!
-//! As an experiment this module does not return Result wherever callers don't need it but simply
-//! unwraps. If we don't want to recover from failure anyway, what is the point in communicating it
-//! upwards.
 //! As an experiment this module exposes a Store trait and a Postgres implementation of it. Using
 //! this interface with transactions is an unsolved problem.
+//!
+//! This module looks up issuance by time, regardless of the block it's done for. It'd be healthy
+//! to change this to looking up by slots and blocks, or alternatively time relative to the current
+//! block.
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
