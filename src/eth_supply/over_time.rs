@@ -267,13 +267,14 @@ async fn since_burn_combined(db_pool: &PgPool) -> Vec<SupplyAtTime> {
     let eth_supply_ours =
         from_time_frame(db_pool, &TimeFrame::Growing(GrowingTimeFrame::SinceBurn)).await;
 
-    dbg!(eth_supply_glassnode.len());
-    dbg!(eth_supply_ours.len());
+    let eth_supply: Vec<SupplyAtTime> = eth_supply_glassnode
+        .into_iter()
+        .chain(eth_supply_ours.into_iter())
+        .collect();
 
-    eth_supply_glassnode
-    // .into_iter()
-    // .chain(eth_supply_ours.into_iter())
-    // .collect()
+    dbg!(eth_supply.len());
+
+    eth_supply
 }
 
 #[derive(Clone, Serialize)]
