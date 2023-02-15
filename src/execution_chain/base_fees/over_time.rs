@@ -1,3 +1,4 @@
+use cached::proc_macro::cached;
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
@@ -32,10 +33,15 @@ struct BaseFeeOverTime {
     h1: Vec<BaseFeeAtTime>,
     m5: Vec<BaseFeeAtTime>,
     since_burn: Vec<BaseFeeAtTime>,
-    since_merge: Option<BaseFeeAtTime>,
+    since_merge: Vec<BaseFeeAtTime>,
 }
 
-async fn base_fee_over_time_from_time_frame(
+#[cached(key = "String", convert = r#"{time_frame.to_string()}"#, time = 3600)]
+async fn from_time_frame_cached_1h(db_pool: &PgPool, time_frame: &TimeFrame) -> Vec<BaseFeeAtTime> {
+    from_time_frame(db_pool, time_frame).await
+}
+
+async fn from_time_frame(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
 ) -> Vec<BaseFeeAtTime> {
@@ -44,15 +50,15 @@ async fn base_fee_over_time_from_time_frame(
             warn!(time_frame = %growing_time_frame, "getting base fee over time for growing time frame is slow");
             sqlx::query!(
                 r#"
-                    SELECT
-                        DATE_TRUNC('day', timestamp) AS "day_timestamp!",
-                        SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS "base_fee_per_gas!"
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= $1
-                    GROUP BY "day_timestamp!"
-                    ORDER BY "day_timestamp!" ASC
+                SELECT
+                    DATE_TRUNC('day', timestamp) AS "day_timestamp!",
+                    SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS "base_fee_per_gas!"
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= $1
+                GROUP BY "day_timestamp!"
+                ORDER BY "day_timestamp!" ASC
                 "#,
                 growing_time_frame.start_timestamp()
             )
@@ -72,15 +78,15 @@ async fn base_fee_over_time_from_time_frame(
         | TimeFrame::Limited(ltf @ Hour1) => {
             sqlx::query(
                 "
-                    SELECT
-                        timestamp,
-                        base_fee_per_gas::FLOAT8,
-                        number
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= NOW() - $1
-                    ORDER BY number ASC
+                SELECT
+                    timestamp,
+                    base_fee_per_gas::FLOAT8,
+                    number
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= NOW() - $1
+                ORDER BY number ASC
                 ",
             )
             .bind(ltf.postgres_interval())
@@ -101,15 +107,15 @@ async fn base_fee_over_time_from_time_frame(
         TimeFrame::Limited(ltf @ Day1) => {
             sqlx::query(
                 "
-                    SELECT
-                        DATE_TRUNC('minute', timestamp) AS minute_timestamp,
-                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= NOW() - $1
-                    GROUP BY minute_timestamp
-                    ORDER BY minute_timestamp ASC
+                SELECT
+                    DATE_TRUNC('minute', timestamp) AS minute_timestamp,
+                    SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= NOW() - $1
+                GROUP BY minute_timestamp
+                ORDER BY minute_timestamp ASC
                 ",
             )
             .bind(ltf.postgres_interval())
@@ -129,15 +135,15 @@ async fn base_fee_over_time_from_time_frame(
         TimeFrame::Limited(ltf @ Day7) => {
             sqlx::query(
                 "
-                    SELECT
-                        DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
-                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= NOW() - $1
-                    GROUP BY five_minute_timestamp
-                    ORDER BY five_minute_timestamp ASC
+                SELECT
+                    DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
+                    SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= NOW() - $1
+                GROUP BY five_minute_timestamp
+                ORDER BY five_minute_timestamp ASC
                 ",
             )
             .bind(ltf.postgres_interval())
@@ -157,15 +163,15 @@ async fn base_fee_over_time_from_time_frame(
         TimeFrame::Limited(ltf @ Day30) => {
             sqlx::query(
                 "
-                    SELECT
-                        DATE_TRUNC('hour', timestamp) AS hour_timestamp,
-                        SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
-                    FROM
-                        blocks_next
-                    WHERE
-                        timestamp >= NOW() - $1
-                    GROUP BY hour_timestamp
-                    ORDER BY hour_timestamp ASC
+                SELECT
+                    DATE_TRUNC('hour', timestamp) AS hour_timestamp,
+                    SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
+                FROM
+                    blocks_next
+                WHERE
+                    timestamp >= NOW() - $1
+                GROUP BY hour_timestamp
+                ORDER BY hour_timestamp ASC
                 ",
             )
             .bind(ltf.postgres_interval())
@@ -190,18 +196,20 @@ pub async fn update_base_fee_over_time(
     barrier: f64,
     block_number: &BlockNumber,
 ) {
-    let (m5, h1, d1, d7, d30, since_burn) = join!(
-        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Minute5))
+    let (m5, h1, d1, d7, d30, since_merge, since_burn) = join!(
+        from_time_frame(executor, &TimeFrame::Limited(Minute5))
             .timed("base_fee_over_time_from_time_frame_minute5"),
-        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Hour1))
+        from_time_frame(executor, &TimeFrame::Limited(Hour1))
             .timed("base_fee_over_time_from_time_frame_hour1"),
-        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Day1))
+        from_time_frame(executor, &TimeFrame::Limited(Day1))
             .timed("base_fee_over_time_from_time_frame_day1"),
-        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Day7))
+        from_time_frame(executor, &TimeFrame::Limited(Day7))
             .timed("base_fee_over_time_from_time_frame_day7"),
-        base_fee_over_time_from_time_frame(executor, &TimeFrame::Limited(Day30))
+        from_time_frame(executor, &TimeFrame::Limited(Day30))
             .timed("base_fee_over_time_from_time_frame_day30"),
-        base_fee_over_time_from_time_frame(executor, &TimeFrame::Growing(SinceBurn))
+        from_time_frame_cached_1h(executor, &TimeFrame::Growing(SinceMerge))
+            .timed("base_fee_over_time_from_time_frame_since_merge"),
+        from_time_frame_cached_1h(executor, &TimeFrame::Growing(SinceBurn))
             .timed("base_fee_over_time_from_time_frame_since_burn"),
     );
 
@@ -214,7 +222,7 @@ pub async fn update_base_fee_over_time(
         h1,
         m5,
         since_burn,
-        since_merge: None,
+        since_merge,
     };
 
     caching::set_value(executor, &CacheKey::BaseFeeOverTime, base_fee_over_time)
@@ -271,7 +279,7 @@ mod tests {
         execution_chain::store_block(&mut transaction, &excluded_block, 0.0).await;
         execution_chain::store_block(&mut transaction, &included_block, 0.0).await;
 
-        let base_fees_d1 = base_fee_over_time_from_time_frame(
+        let base_fees_d1 = from_time_frame(
             &mut transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
@@ -304,8 +312,7 @@ mod tests {
         execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
         execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
 
-        let base_fees_h1 =
-            base_fee_over_time_from_time_frame(&mut transaction, &TimeFrame::Limited(Hour1)).await;
+        let base_fees_h1 = from_time_frame(&mut transaction, &TimeFrame::Limited(Hour1)).await;
 
         assert_eq!(
             base_fees_h1,
