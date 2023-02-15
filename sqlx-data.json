@@ -472,6 +472,32 @@
     },
     "query": "\n            UPDATE\n                beacon_blocks\n            SET\n                block_hash = $1\n            WHERE\n                block_root = $2\n        "
   },
+  "4e14d0c252de8aa55a6b99a9c432c75982cf7ec4783339d19473729ccc310a02": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            timestamp,\n            supply\n        FROM daily_supply_glassnode\n        WHERE timestamp < $1\n        ORDER BY timestamp ASC\n        "
+  },
   "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
     "describe": {
       "columns": [
@@ -1011,6 +1037,30 @@
       }
     },
     "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks\n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot = $1\n        "
+  },
+  "a3d5a3dc158b75b9ef06af433f5120fbdde7754553522ce31fa2fb18ce3e7234": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            timestamp,\n            supply::FLOAT8 / 1e18 AS \"supply!\"\n        FROM\n            eth_supply\n        ORDER BY timestamp DESC\n        LIMIT 1\n        "
   },
   "abf3b6b71ceb87bf2f711262eb4ddd7e5bb839a465da07a902d5332f221f32d6": {
     "describe": {

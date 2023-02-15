@@ -17,5 +17,3 @@ pub use usd::UsdNewtype;
 pub const GWEI_PER_ETH_F64: f64 = 1_000_000_000_f64;
 
 pub const WEI_PER_ETH: i128 = 1_000_000_000_000_000_000;
-
-pub type EthF64 = f64;

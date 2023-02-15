@@ -1,12 +1,14 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use cached::proc_macro::once;
+use chrono::{DateTime, Duration, DurationRound, Utc};
 use futures::join;
+use lazy_static::lazy_static;
 use serde::Serialize;
 use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, PgPool, Row};
 use tracing::debug;
 
-use crate::units::EthF64;
+use crate::units::EthNewtype;
 use crate::{
     beacon_chain::Slot,
     execution_chain::BlockNumber,
@@ -16,10 +18,18 @@ use crate::{
 use GrowingTimeFrame::*;
 use LimitedTimeFrame::*;
 
+lazy_static! {
+    static ref ETH_SUPPLY_FIRST_TIMESTAMP_DAY: DateTime<Utc> = "2022-09-09T21:36:23Z"
+        .parse::<DateTime<Utc>>()
+        .unwrap()
+        .duration_trunc(Duration::days(1))
+        .unwrap();
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 struct SupplyAtTime {
     slot: Option<Slot>,
-    supply: EthF64,
+    supply: EthNewtype,
     timestamp: DateTime<Utc>,
 }
 
@@ -40,12 +50,37 @@ async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> SupplyAtTime {
     .map(|row| SupplyAtTime {
         slot: None,
         timestamp: row.timestamp,
-        supply: row.supply,
+        supply: EthNewtype(row.supply),
     })
     .unwrap()
 }
 
-async fn get_supply_over_time_time_frame(
+#[once]
+async fn get_daily_glassnode_supply(executor: impl PgExecutor<'_>) -> Vec<SupplyAtTime> {
+    sqlx::query!(
+        "
+        SELECT
+            timestamp,
+            supply
+        FROM daily_supply_glassnode
+        WHERE timestamp < $1
+        ORDER BY timestamp ASC
+        ",
+        *ETH_SUPPLY_FIRST_TIMESTAMP_DAY
+    )
+    .fetch_all(executor)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| SupplyAtTime {
+        slot: None,
+        timestamp: row.timestamp,
+        supply: EthNewtype(row.supply),
+    })
+    .collect()
+}
+
+async fn from_time_frame(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
 ) -> Vec<SupplyAtTime> {
@@ -70,7 +105,7 @@ async fn get_supply_over_time_time_frame(
                 SupplyAtTime {
                     slot: None,
                     timestamp,
-                    supply,
+                    supply: EthNewtype(supply),
                 }
             })
             .fetch_all(executor)
@@ -97,7 +132,7 @@ async fn get_supply_over_time_time_frame(
                 SupplyAtTime {
                     slot: None,
                     timestamp,
-                    supply,
+                    supply: EthNewtype(supply),
                 }
             })
             .fetch_all(executor)
@@ -130,7 +165,7 @@ async fn get_supply_over_time_time_frame(
                 SupplyAtTime {
                     slot: Some(slot),
                     timestamp,
-                    supply,
+                    supply: EthNewtype(supply),
                 }
             })
             .fetch_all(executor)
@@ -158,7 +193,7 @@ async fn get_supply_over_time_time_frame(
                 SupplyAtTime {
                     slot: None,
                     timestamp,
-                    supply,
+                    supply: EthNewtype(supply),
                 }
             })
             .fetch_all(executor)
@@ -186,7 +221,7 @@ async fn get_supply_over_time_time_frame(
                 SupplyAtTime {
                     slot: None,
                     timestamp,
-                    supply,
+                    supply: EthNewtype(supply),
                 }
             })
             .fetch_all(executor)
@@ -214,7 +249,7 @@ async fn get_supply_over_time_time_frame(
                 SupplyAtTime {
                     slot: None,
                     timestamp,
-                    supply,
+                    supply: EthNewtype(supply),
                 }
             })
             .fetch_all(executor)
@@ -222,6 +257,20 @@ async fn get_supply_over_time_time_frame(
             .unwrap()
         }
     }
+}
+
+async fn since_burn_combined(db_pool: &PgPool) -> Vec<SupplyAtTime> {
+    // Glassnode data goes way back, but we only rely on it temporarily until our own table reaches
+    // back to genesis. Currently, it reaches back to ETH_SUPPLY_FIRST_TIMESTAMP_DAY. Everything up
+    // to there is from Glassnode.
+    let eth_supply_glassnode = get_daily_glassnode_supply(db_pool).await;
+    let eth_supply_ours =
+        from_time_frame(db_pool, &TimeFrame::Growing(GrowingTimeFrame::SinceBurn)).await;
+
+    eth_supply_glassnode
+        .into_iter()
+        .chain(eth_supply_ours.into_iter())
+        .collect()
 }
 
 #[derive(Clone, Serialize)]
@@ -245,17 +294,21 @@ pub async fn get_supply_over_time(
 ) -> Result<SupplyOverTime> {
     debug!("updating supply over time");
 
-    let (d1, d30, d7, h1, m5, mut since_merge, mut since_burn, last_supply_point) = join!(
-        get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day1)),
-        get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day30)),
-        get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Day7)),
-        get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Hour1)),
-        get_supply_over_time_time_frame(executor, &TimeFrame::Limited(Minute5)),
-        get_supply_over_time_time_frame(executor, &TimeFrame::Growing(SinceMerge)),
-        get_supply_over_time_time_frame(executor, &TimeFrame::Growing(SinceBurn)),
+    let (d1, mut d30, mut d7, h1, m5, mut since_merge, mut since_burn, last_supply_point) = join!(
+        from_time_frame(executor, &TimeFrame::Limited(Day1)),
+        from_time_frame(executor, &TimeFrame::Limited(Day30)),
+        from_time_frame(executor, &TimeFrame::Limited(Day7)),
+        from_time_frame(executor, &TimeFrame::Limited(Hour1)),
+        from_time_frame(executor, &TimeFrame::Limited(Minute5)),
+        from_time_frame(executor, &TimeFrame::Growing(SinceMerge)),
+        since_burn_combined(executor),
         get_last_supply_point(executor)
     );
 
+    // We like showing the latest data point we have, regardless of the time frame. We add said
+    // point to the time frames that use a higher than every-minute granularity.
+    d7.push(last_supply_point.clone());
+    d30.push(last_supply_point.clone());
     since_merge.push(last_supply_point.clone());
     since_burn.push(last_supply_point);
 
@@ -301,7 +354,7 @@ mod tests {
 
         let test_supply_at_time = SupplyAtTime {
             timestamp: reverse_timestamp,
-            supply: 10.0,
+            supply: EthNewtype(10.0),
             slot: Some(test_slot),
         };
 
@@ -309,8 +362,7 @@ mod tests {
             .await
             .unwrap();
 
-        let since_merge =
-            get_supply_over_time_time_frame(&mut transaction, &TimeFrame::Limited(Minute5)).await;
+        let since_merge = from_time_frame(&mut transaction, &TimeFrame::Limited(Minute5)).await;
 
         assert_eq!(since_merge, vec![test_supply_at_time]);
     }
