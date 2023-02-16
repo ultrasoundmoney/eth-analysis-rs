@@ -472,7 +472,7 @@
     },
     "query": "\n            UPDATE\n                beacon_blocks\n            SET\n                block_hash = $1\n            WHERE\n                block_root = $2\n        "
   },
-  "4e14d0c252de8aa55a6b99a9c432c75982cf7ec4783339d19473729ccc310a02": {
+  "49360b2160a50eaf2d3e27daa2fc138d995b6a42ff3a2de4d3f59b727d36e985": {
     "describe": {
       "columns": [
         {
@@ -492,11 +492,12 @@
       ],
       "parameters": {
         "Left": [
+          "Timestamptz",
           "Timestamptz"
         ]
       }
     },
-    "query": "\n        SELECT\n            timestamp,\n            supply\n        FROM daily_supply_glassnode\n        WHERE timestamp < $1\n        ORDER BY timestamp ASC\n        "
+    "query": "\n        SELECT\n            timestamp,\n            supply\n        FROM daily_supply_glassnode\n        WHERE timestamp < $1\n        AND timestamp >= $2\n        ORDER BY timestamp ASC\n        "
   },
   "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
     "describe": {
