@@ -8,6 +8,7 @@ use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, PgPool, Row};
 use tracing::debug;
 
+use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
 use crate::units::EthNewtype;
 use crate::{
     beacon_chain::Slot,
@@ -56,7 +57,7 @@ async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> SupplyAtTime {
 }
 
 #[once]
-async fn get_daily_glassnode_supply(executor: impl PgExecutor<'_>) -> Vec<SupplyAtTime> {
+async fn get_early_supply_since_burn(executor: impl PgExecutor<'_>) -> Vec<SupplyAtTime> {
     sqlx::query!(
         "
         SELECT
@@ -64,9 +65,11 @@ async fn get_daily_glassnode_supply(executor: impl PgExecutor<'_>) -> Vec<Supply
             supply
         FROM daily_supply_glassnode
         WHERE timestamp < $1
+        AND timestamp >= $2
         ORDER BY timestamp ASC
         ",
-        *ETH_SUPPLY_FIRST_TIMESTAMP_DAY
+        *ETH_SUPPLY_FIRST_TIMESTAMP_DAY,
+        *LONDON_HARD_FORK_TIMESTAMP
     )
     .fetch_all(executor)
     .await
@@ -259,11 +262,12 @@ async fn from_time_frame(
     }
 }
 
-async fn since_burn_combined(db_pool: &PgPool) -> Vec<SupplyAtTime> {
-    // Glassnode data goes way back, but we only rely on it temporarily until our own table reaches
-    // back to genesis. Currently, it reaches back to ETH_SUPPLY_FIRST_TIMESTAMP_DAY. Everything up
-    // to there is from Glassnode.
-    let eth_supply_glassnode = get_daily_glassnode_supply(db_pool).await;
+async fn get_supply_since_burn(db_pool: &PgPool) -> Vec<SupplyAtTime> {
+    // We're in the process of collecting slot by slot ETH supply data. This is a slow process.
+    // Until we are done, we use Glassnode's data to fill in the gap temporarily until our own
+    // table reaches back to genesis. Currently, it reaches back to ETH_SUPPLY_FIRST_TIMESTAMP_DAY.
+    // Everything up to there is from Glassnode.
+    let eth_supply_glassnode = get_early_supply_since_burn(db_pool).await;
     let eth_supply_ours =
         from_time_frame(db_pool, &TimeFrame::Growing(GrowingTimeFrame::SinceBurn)).await;
 
@@ -271,8 +275,6 @@ async fn since_burn_combined(db_pool: &PgPool) -> Vec<SupplyAtTime> {
         .into_iter()
         .chain(eth_supply_ours.into_iter())
         .collect();
-
-    dbg!(eth_supply.len());
 
     eth_supply
 }
@@ -305,7 +307,7 @@ pub async fn get_supply_over_time(
         from_time_frame(executor, &TimeFrame::Limited(Hour1)),
         from_time_frame(executor, &TimeFrame::Limited(Minute5)),
         from_time_frame(executor, &TimeFrame::Growing(SinceMerge)),
-        since_burn_combined(executor),
+        get_supply_since_burn(executor),
         get_last_supply_point(executor)
     );
 
@@ -387,7 +389,7 @@ mod tests {
         .await
         .unwrap();
 
-        let since_burn = get_daily_glassnode_supply(&mut transaction).await;
+        let since_burn = get_early_supply_since_burn(&mut transaction).await;
 
         assert_eq!(since_burn, vec![test_supply_at_time]);
     }
