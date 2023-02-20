@@ -1,38 +1,6 @@
 //! # Burn Totals
-//! This module sums total burn. Limited, and growing time frames.
-//!
-//! ## Growing time frames
-//! Get the last valid sum. If one exists, continue, otherwise, start from zero. Continue with
-//! addition.
-//!
-//! ### GetLastValidSum
-//! Check the hash of the last sum exists in the blocks table. If it does, return the sum, if it
-//! does not, iterate backwards through the sums, dropping as we go, until one is found with a hash in the blocks
-//! table. If none is found, report none exists.
-//!
-//! ### Addition
-//! Gather the burn of each block after the last valid sum. Sum them iteratively and remember the
-//! last one hundred sums calculated. Add them to the sums table.
-//!
-//! ## Limited time frames
-//! Get the last valid sum. If one exists, continue, otherwise, start from zero. Continue with
-//! expiration, then addition.
-//!
-//! ### GetLastValidSum
-//! Check the hash of the last sum exists in the blocks table. If it does, return the sum, if it
-//! does not, iterate backwards through the in-frame blocks, dropping as we go, whilst subtracting from the sum, until one is found with a hash in the blocks
-//! table. If none is found, report none exists.
-//!
-//! ### Expiration
-//! Iterate forward through the in-frame blocks, dropping as we go, whilst subtracting from the
-//! sum, until one is found which is timestamped after NOW - TIME_FRAME_INTERVAL.
-//!
-//! ### Addition
-//! Gather the burn of each block after the last valid sum. Remember each in-frame block, and
-//! update the sum.
-//!
-//! ## Table schema
-//! time_frame,block_number,block_hash,timestamp,burn,sum
+//! This module sums total burn. Limited, and growing time frames. Records are mere burn sums with
+//! some metadata. Not "highest" or "lowest" out of all.
 
 mod store;
 
