@@ -11,10 +11,7 @@ use tracing::warn;
 use crate::{
     beacon_chain::Slot,
     caching::{self, CacheKey},
-    eth_supply::{
-        self, SupplyChangesStore, SupplyOverTime, SupplyParts, SupplyPartsStore,
-        SupplyPartsStorePostgres,
-    },
+    eth_supply::{self, SupplyChangesStore, SupplyOverTime, SupplyParts, SupplyPartsStore},
     performance::TimedExt,
 };
 
@@ -41,10 +38,10 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
         }
     };
 
-    let supply_parts_store = SupplyPartsStorePostgres::new(db_pool);
+    let supply_parts_store = SupplyPartsStore::new(db_pool);
 
     let supply_parts = {
-        let supply_parts = supply_parts_store.get(&limit_slot).await?;
+        let supply_parts = supply_parts_store.get(&limit_slot).await;
         match supply_parts {
             Some(supply_parts) => supply_parts,
             None => {

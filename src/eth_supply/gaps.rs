@@ -6,11 +6,10 @@
 
 use anyhow::Result;
 use pit_wall::Progress;
-use sqlx::{Connection, PgConnection};
 use tracing::warn;
 use tracing::{debug, info};
 
-use crate::eth_supply;
+use crate::eth_supply::{self, SupplyPartsStore};
 use crate::{
     beacon_chain::{self, Slot},
     db, log,
@@ -24,10 +23,9 @@ pub async fn fill_gaps() -> Result<()> {
 
     info!("syncing gaps in eth supply");
 
-    let mut db_connection =
-        PgConnection::connect(&db::get_db_url_with_name("sync-eth-supply-gaps")).await?;
+    let db_pool = db::get_db_pool("sync-eth-supply-gaps").await;
 
-    let last_slot = beacon_chain::get_last_state(&mut db_connection)
+    let last_slot = beacon_chain::get_last_state(&db_pool)
         .await
         .expect("a beacon state should be stored before trying to fill any gaps")
         .slot;
@@ -41,23 +39,23 @@ pub async fn fill_gaps() -> Result<()> {
     let work_todo = last_slot.0 - FIRST_STORED_ETH_SUPPLY_SLOT.0;
     let mut progress = Progress::new("sync-eth-supply-gas", work_todo.try_into().unwrap());
 
-    for slot in FIRST_STORED_ETH_SUPPLY_SLOT.0..=last_slot.0 {
-        let stored_eth_supply =
-            eth_supply::get_supply_exists_by_slot(&mut db_connection, &Slot(slot)).await?;
-        if !stored_eth_supply {
-            info!(slot, "missing eth_supply, filling gap");
+    let supply_parts_store = SupplyPartsStore::new(&db_pool);
 
-            let supply_parts =
-                eth_supply::get_supply_parts(&mut db_connection, &Slot(slot)).await?;
+    for slot in (FIRST_STORED_ETH_SUPPLY_SLOT.0..=last_slot.0).map(Slot) {
+        let stored_eth_supply = eth_supply::get_supply_exists_by_slot(&db_pool, &slot).await?;
+        if !stored_eth_supply {
+            info!(%slot, "missing eth_supply, filling gap");
+
+            let supply_parts = supply_parts_store.get(&slot).await;
 
             match supply_parts {
                 None => {
-                    warn!(slot, "eth supply parts unavailable for slot");
+                    warn!(%slot, "eth supply parts unavailable for slot");
                 }
                 Some(supply_parts) => {
                     eth_supply::store(
-                        &mut db_connection,
-                        &Slot(slot),
+                        &db_pool,
+                        &slot,
                         &supply_parts.block_number(),
                         &supply_parts.execution_balances_sum,
                         &supply_parts.beacon_balances_sum,
@@ -69,11 +67,11 @@ pub async fn fill_gaps() -> Result<()> {
 
             info!("{}", progress.get_progress_string());
         } else {
-            debug!(slot, "slot looks fine");
+            debug!(%slot, "slot looks fine");
         }
 
         progress.inc_work_done();
-        if slot % 100 == 0 {
+        if slot.0 % 100 == 0 {
             info!("{}", progress.get_progress_string());
         }
     }

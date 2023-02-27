@@ -15,10 +15,8 @@ pub use gaps::fill_gaps as fill_eth_supply_gaps;
 pub use over_time::get_supply_over_time;
 pub use over_time::SupplyOverTime;
 
-pub use parts::get_supply_parts;
 pub use parts::SupplyParts;
 pub use parts::SupplyPartsStore;
-pub use parts::SupplyPartsStorePostgres;
 
 pub use store::get_last_stored_supply_slot;
 pub use store::get_supply_exists_by_slot;

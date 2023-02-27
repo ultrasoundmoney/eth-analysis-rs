@@ -246,7 +246,7 @@ pub async fn sync_slot_by_state_root(
             .await;
         }
 
-        eth_supply::sync_eth_supply(&mut transaction, slot).await?;
+        eth_supply::sync_eth_supply(&mut transaction, slot).await;
     }
 
     transaction.commit().await?;

@@ -8,7 +8,7 @@ use crate::units::{GweiNewtype, WeiNewtype};
 
 use crate::execution_chain::BlockNumber;
 
-use super::get_supply_parts;
+use super::SupplyPartsStore;
 
 pub async fn rollback_supply_from_slot(
     executor: &mut PgConnection,
@@ -117,8 +117,9 @@ pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Resul
     Ok(slot.map(Slot))
 }
 
-pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
-    let supply_parts = get_supply_parts(executor, slot).await?;
+pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: &Slot) {
+    let supply_parts =
+        SupplyPartsStore::get_with_transaction(executor_acq.acquire().await.unwrap(), slot).await;
 
     match supply_parts {
         None => {
@@ -126,18 +127,17 @@ pub async fn store_supply_for_slot(executor: &mut PgConnection, slot: &Slot) -> 
         }
         Some(supply_parts) => {
             store(
-                executor.acquire().await?,
+                executor_acq.acquire().await.unwrap(),
                 slot,
                 &supply_parts.block_number(),
                 &supply_parts.execution_balances_sum,
                 &supply_parts.beacon_balances_sum,
                 &supply_parts.beacon_deposits_sum,
             )
-            .await?;
+            .await
+            .unwrap();
         }
     };
-
-    Ok(())
 }
 
 pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
@@ -214,8 +214,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_supply_parts_test() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+        let test_db = db::tests::TestDb::new().await;
+        let supply_parts_store = SupplyPartsStore::new(&test_db.pool);
 
         let test_id = "get_supply_parts";
         let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
@@ -225,17 +225,17 @@ mod tests {
 
         let execution_test_block = make_test_block();
 
-        execution_chain::store_block(&mut transaction, &execution_test_block, 0.0).await;
+        execution_chain::store_block(&test_db.pool, &execution_test_block, 0.0).await;
 
         beacon_chain::store_state(
-            &mut transaction,
+            &test_db.pool,
             &test_header.state_root(),
             &test_header.slot(),
         )
         .await;
 
         beacon_chain::store_block(
-            &mut transaction,
+            &test_db.pool,
             &test_block,
             &GweiNewtype(0),
             &GweiNewtype(5),
@@ -244,7 +244,7 @@ mod tests {
         .await;
 
         beacon_chain::store_validators_balance(
-            &mut transaction,
+            &test_db.pool,
             &test_header.state_root(),
             &test_header.slot(),
             &GweiNewtype(20),
@@ -262,20 +262,22 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(
+            &mut test_db.pool.acquire().await.unwrap(),
+            &supply_delta_test,
+        )
+        .await;
 
         let execution_balances_sum = execution_chain::get_execution_balances_by_hash(
-            &mut transaction,
+            &test_db.pool,
             test_block.block_hash().unwrap(),
         )
         .await
         .unwrap();
-        let beacon_deposits_sum = beacon_chain::get_deposits_sum_by_state_root(
-            &mut transaction,
-            &test_header.state_root(),
-        )
-        .await
-        .unwrap();
+        let beacon_deposits_sum =
+            beacon_chain::get_deposits_sum_by_state_root(&test_db.pool, &test_header.state_root())
+                .await
+                .unwrap();
 
         let supply_parts_test = SupplyParts::new(
             &Slot(0),
@@ -285,10 +287,7 @@ mod tests {
             beacon_deposits_sum,
         );
 
-        let supply_parts = get_supply_parts(&mut transaction, &test_header.slot())
-            .await
-            .unwrap()
-            .unwrap();
+        let supply_parts = supply_parts_store.get(&test_header.slot()).await.unwrap();
 
         assert_eq!(supply_parts, supply_parts_test);
     }
