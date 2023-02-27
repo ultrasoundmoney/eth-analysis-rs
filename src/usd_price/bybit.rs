@@ -140,23 +140,17 @@ mod tests {
 
     use super::*;
 
-    fn utc_from_str_unsafe(rfc3339_str: &str) -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339(rfc3339_str)
-            .unwrap()
-            .with_timezone(&Utc)
-    }
-
     #[tokio::test]
     async fn get_closest_price_by_minute_test() {
-        let existing_plus_two = utc_from_str_unsafe("2021-10-22T07:37:00Z");
+        let existing_plus_two = "2021-10-22T07:37:00Z".parse::<DateTime<Utc>>().unwrap();
         let usd = get_closest_price_by_minute(existing_plus_two, Duration::minutes(2)).await;
         assert_eq!(usd, Some(4134.16));
     }
 
     #[tokio::test]
     async fn includes_end_timestamp_test() {
-        let start = utc_from_str_unsafe("2022-10-01T00:00:00Z");
-        let end = utc_from_str_unsafe("2022-10-01T00:00:00Z");
+        let start = "2022-10-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        let end = "2022-10-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
         let result = get_eth_candles(start, end).await.unwrap();
         assert_eq!(result[0].timestamp, start);
     }
@@ -164,51 +158,60 @@ mod tests {
     #[test]
     fn find_closest_before_test() {
         let price_1 = EthPrice {
-            timestamp: utc_from_str_unsafe("2021-01-01T00:01:00Z"),
+            timestamp: "2021-01-01T00:01:00Z".parse::<DateTime<Utc>>().unwrap(),
             usd: 0.0,
         };
         let price_2 = EthPrice {
-            timestamp: utc_from_str_unsafe("2021-01-01T00:04:00Z"),
+            timestamp: "2021-01-01T00:04:00Z".parse::<DateTime<Utc>>().unwrap(),
             usd: 1.0,
         };
 
         let prices = vec![price_1, price_2];
 
-        let closest = find_closest_price(&prices, utc_from_str_unsafe("2021-01-01T00:02:00Z"));
+        let closest = find_closest_price(
+            &prices,
+            "2021-01-01T00:02:00Z".parse::<DateTime<Utc>>().unwrap(),
+        );
         assert_eq!(*closest, prices[0]);
     }
 
     #[test]
     fn find_closest_after_test() {
         let price_1 = EthPrice {
-            timestamp: utc_from_str_unsafe("2021-01-01T00:01:00Z"),
+            timestamp: "2021-01-01T00:01:00Z".parse::<DateTime<Utc>>().unwrap(),
             usd: 0.0,
         };
         let price_2 = EthPrice {
-            timestamp: utc_from_str_unsafe("2021-01-01T00:04:00Z"),
+            timestamp: "2021-01-01T00:04:00Z".parse::<DateTime<Utc>>().unwrap(),
             usd: 1.0,
         };
 
         let prices = vec![price_1, price_2];
 
-        let closest = find_closest_price(&prices, utc_from_str_unsafe("2021-01-01T00:03:00Z"));
+        let closest = find_closest_price(
+            &prices,
+            "2021-01-01T00:03:00Z".parse::<DateTime<Utc>>().unwrap(),
+        );
         assert_eq!(*closest, prices[1]);
     }
 
     #[test]
     fn find_with_equal_distance_test() {
         let price_1 = EthPrice {
-            timestamp: utc_from_str_unsafe("2021-01-01T00:01:00Z"),
+            timestamp: "2021-01-01T00:01:00Z".parse::<DateTime<Utc>>().unwrap(),
             usd: 0.0,
         };
         let price_2 = EthPrice {
-            timestamp: utc_from_str_unsafe("2021-01-01T00:05:00Z"),
+            timestamp: "2021-01-01T00:05:00Z".parse::<DateTime<Utc>>().unwrap(),
             usd: 1.0,
         };
 
         let prices = vec![price_1, price_2];
 
-        let closest = find_closest_price(&prices, utc_from_str_unsafe("2021-01-01T00:03:00Z"));
+        let closest = find_closest_price(
+            &prices,
+            "2021-01-01T00:03:00Z".parse::<DateTime<Utc>>().unwrap(),
+        );
         assert_eq!(*closest, prices[0]);
     }
 
