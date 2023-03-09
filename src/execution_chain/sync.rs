@@ -83,7 +83,8 @@ async fn sync_by_hash(
             &eth_supply,
         )
         .timed("gauges::on_new_block")
-        .await;
+        .await
+        .unwrap_or_else(|err| warn!("gauges::on_new_block failed: {}", err))
     } else {
         debug!("not synced, skipping skippables");
     }

@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
 use sqlx::{PgExecutor, PgPool};
+use thiserror::Error;
 use tracing::info;
 
 use crate::{
@@ -130,16 +131,25 @@ pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype
     .unwrap()
 }
 
+#[derive(Error, Debug)]
+pub enum IssuanceUnavailableError {
+    #[error("Issuance unavailable for timestamp {0}")]
+    Timestamp(DateTime<Utc>),
+}
+
 #[async_trait]
 pub trait IssuanceStore {
     async fn current_issuance(&self) -> GweiNewtype;
     async fn day7_ago_issuance(&self) -> GweiNewtype;
-    async fn issuance_at_timestamp(&self, timestamp: DateTime<Utc>) -> GweiNewtype;
+    async fn issuance_at_timestamp(
+        &self,
+        timestamp: DateTime<Utc>,
+    ) -> Result<GweiNewtype, IssuanceUnavailableError>;
     async fn issuance_from_time_frame(
         &self,
         block: &ExecutionNodeBlock,
         time_frame: &TimeFrame,
-    ) -> GweiNewtype;
+    ) -> Result<GweiNewtype, IssuanceUnavailableError>;
 }
 
 pub struct IssuanceStorePostgres<'a> {
@@ -162,7 +172,10 @@ impl IssuanceStore for &IssuanceStorePostgres<'_> {
         get_day7_ago_issuance(self.db_pool).await
     }
 
-    async fn issuance_at_timestamp(&self, timestamp: DateTime<Utc>) -> GweiNewtype {
+    async fn issuance_at_timestamp(
+        &self,
+        timestamp: DateTime<Utc>,
+    ) -> Result<GweiNewtype, IssuanceUnavailableError> {
         sqlx::query!(
             "
             SELECT gwei AS \"gwei!\"
@@ -173,23 +186,26 @@ impl IssuanceStore for &IssuanceStorePostgres<'_> {
              ",
             timestamp
         )
-        .fetch_one(self.db_pool)
+        .fetch_optional(self.db_pool)
         .await
         .unwrap()
-        .gwei
-        .into()
+        .map_or_else(
+            || Err(IssuanceUnavailableError::Timestamp(timestamp)),
+            |row| Ok(GweiNewtype(row.gwei)),
+        )
     }
 
     async fn issuance_from_time_frame(
         &self,
         block: &ExecutionNodeBlock,
         time_frame: &TimeFrame,
-    ) -> GweiNewtype {
+    ) -> Result<GweiNewtype, IssuanceUnavailableError> {
         let (issuance_time_frame_ago, current_issuance) = join!(
             self.issuance_at_timestamp(block.timestamp - time_frame.duration()),
             self.current_issuance()
         );
-        current_issuance - issuance_time_frame_ago
+        issuance_time_frame_ago
+            .map(|issuance_time_frame_ago| current_issuance - issuance_time_frame_ago)
     }
 }
 
@@ -423,16 +439,19 @@ mod tests {
             GweiNewtype(50)
         }
 
-        async fn issuance_at_timestamp(&self, _timestamp: DateTime<Utc>) -> GweiNewtype {
-            GweiNewtype(100)
+        async fn issuance_at_timestamp(
+            &self,
+            _timestamp: DateTime<Utc>,
+        ) -> Result<GweiNewtype, IssuanceUnavailableError> {
+            Ok(GweiNewtype(100))
         }
 
         async fn issuance_from_time_frame(
             &self,
             _block: &ExecutionNodeBlock,
             _time_frame: &TimeFrame,
-        ) -> GweiNewtype {
-            GweiNewtype(100)
+        ) -> Result<GweiNewtype, IssuanceUnavailableError> {
+            Ok(GweiNewtype(100))
         }
     }
 

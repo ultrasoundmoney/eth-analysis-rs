@@ -6,6 +6,7 @@
 /// toggle which sets the rate to an estimate of only the pow issuance.
 use std::collections::HashMap;
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use enum_iterator::all;
 use futures::join;
@@ -50,7 +51,7 @@ pub async fn on_new_block(
     block: &ExecutionNodeBlock,
     burn_sums_envelope: &BurnSumsEnvelope,
     eth_supply: &EthNewtype,
-) {
+) -> Result<()> {
     let mut gauge_rates: GaugeRates = HashMap::new();
 
     for time_frame in all::<TimeFrame>() {
@@ -72,7 +73,7 @@ pub async fn on_new_block(
             .timed(&format!("usd_price::average_from_time_range_{time_frame}"))
         );
 
-        let issuance_time_frame_eth: EthNewtype = issuance_time_frame.into();
+        let issuance_time_frame_eth: EthNewtype = issuance_time_frame?.into();
         let year_time_frame_fraction =
             MINUTES_PER_YEAR / time_frame.duration().num_minutes() as f64;
         let issuance_rate_yearly_eth =
@@ -120,4 +121,6 @@ pub async fn on_new_block(
     caching::update_and_publish(db_pool, &CacheKey::GaugeRates, gauge_rates)
         .await
         .unwrap();
+
+    Ok(())
 }
