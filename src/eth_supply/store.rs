@@ -8,6 +8,7 @@ use crate::units::{GweiNewtype, WeiNewtype};
 
 use crate::execution_chain::BlockNumber;
 
+use super::parts::SupplyPartsError;
 use super::SupplyPartsStore;
 
 pub async fn rollback_supply_from_slot(
@@ -122,10 +123,10 @@ pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: &Slot)
         SupplyPartsStore::get_with_transaction(executor_acq.acquire().await.unwrap(), slot).await;
 
     match supply_parts {
-        None => {
+        Err(SupplyPartsError::NoValidatorBalancesAvailable(_)) => {
             debug!(%slot, "supply parts unavailable skipping");
         }
-        Some(supply_parts) => {
+        Ok(supply_parts) => {
             store(
                 executor_acq.acquire().await.unwrap(),
                 slot,

@@ -31,7 +31,7 @@ pub async fn store_validators_balance(
 
     sqlx::query!(
         "
-            INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
+        INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)
         ",
         slot.date_time(),
         state_root,
@@ -67,13 +67,13 @@ pub async fn get_validator_balances_by_start_of_day(
 ) -> Vec<GweiInTime> {
     sqlx::query!(
         r#"
-            SELECT
-                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS "day_timestamp!",
-                gwei
-            FROM
-                beacon_validators_balance
-            ORDER BY
-                DATE_TRUNC('day', timestamp), timestamp ASC
+        SELECT
+            DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS "day_timestamp!",
+            gwei
+        FROM
+            beacon_validators_balance
+        ORDER BY
+            DATE_TRUNC('day', timestamp), timestamp ASC
         "#
     )
     .fetch_all(executor)
@@ -93,11 +93,11 @@ pub async fn get_validator_balances_by_start_of_day(
 pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
     sqlx::query!(
         "
-            DELETE FROM beacon_validators_balance
-            WHERE state_root IN (
-                SELECT state_root FROM beacon_states
-                WHERE slot >= $1
-            )
+        DELETE FROM beacon_validators_balance
+        WHERE state_root IN (
+            SELECT state_root FROM beacon_states
+            WHERE slot >= $1
+        )
         ",
         greater_than_or_equal.0
     )
@@ -109,11 +109,11 @@ pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_o
 pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
     sqlx::query!(
         "
-            DELETE FROM beacon_validators_balance
-            WHERE state_root IN (
-                SELECT state_root FROM beacon_states
-                WHERE slot = $1
-            )
+        DELETE FROM beacon_validators_balance
+        WHERE state_root IN (
+            SELECT state_root FROM beacon_states
+            WHERE slot = $1
+        )
         ",
         slot.0
     )
@@ -135,12 +135,12 @@ pub async fn get_balances_by_state_root(
 ) -> Option<GweiNewtype> {
     sqlx::query!(
         "
-            SELECT
-                gwei
-            FROM
-                beacon_validators_balance
-            WHERE
-                beacon_validators_balance.state_root = $1
+        SELECT
+            gwei
+        FROM
+            beacon_validators_balance
+        WHERE
+            beacon_validators_balance.state_root = $1
         ",
         state_root
     )

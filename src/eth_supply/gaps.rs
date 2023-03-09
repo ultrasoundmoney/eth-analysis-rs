@@ -9,7 +9,7 @@ use pit_wall::Progress;
 use tracing::warn;
 use tracing::{debug, info};
 
-use crate::eth_supply::{self, SupplyPartsStore};
+use crate::eth_supply::{self, SupplyPartsError, SupplyPartsStore};
 use crate::{
     beacon_chain::{self, Slot},
     db, log,
@@ -49,10 +49,10 @@ pub async fn fill_gaps() -> Result<()> {
             let supply_parts = supply_parts_store.get(&slot).await;
 
             match supply_parts {
-                None => {
+                Err(SupplyPartsError::NoValidatorBalancesAvailable(_)) => {
                     warn!(%slot, "eth supply parts unavailable for slot");
                 }
-                Some(supply_parts) => {
+                Ok(supply_parts) => {
                     eth_supply::store(
                         &db_pool,
                         &slot,

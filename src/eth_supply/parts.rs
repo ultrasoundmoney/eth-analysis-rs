@@ -1,5 +1,6 @@
 use serde::Serialize;
 use sqlx::{Acquire, PgConnection, PgPool};
+use thiserror::Error;
 use tracing::debug;
 
 use crate::{
@@ -55,7 +56,16 @@ impl SupplyParts {
     }
 }
 
-async fn get_supply_parts(executor_acq: &mut PgConnection, slot: &Slot) -> Option<SupplyParts> {
+#[derive(Debug, Error)]
+pub enum SupplyPartsError {
+    #[error("no validator balances available for slot {0}")]
+    NoValidatorBalancesAvailable(Slot),
+}
+
+async fn get_supply_parts(
+    executor_acq: &mut PgConnection,
+    slot: &Slot,
+) -> Result<SupplyParts, SupplyPartsError> {
     let state_root =
         beacon_chain::get_state_root_by_slot(executor_acq.acquire().await.unwrap(), slot)
             .await
@@ -86,7 +96,7 @@ async fn get_supply_parts(executor_acq: &mut PgConnection, slot: &Slot) -> Optio
         &state_root,
     )
     .await
-    .expect("can only calculate eth supply parts for slots with known validator balances");
+    .ok_or_else(|| SupplyPartsError::NoValidatorBalancesAvailable(*slot))?;
 
     debug!(
         %slot,
@@ -117,7 +127,7 @@ async fn get_supply_parts(executor_acq: &mut PgConnection, slot: &Slot) -> Optio
         beacon_deposits_sum,
     );
 
-    Some(supply_parts)
+    Ok(supply_parts)
 }
 
 pub struct SupplyPartsStore<'a> {
@@ -130,14 +140,14 @@ impl<'a> SupplyPartsStore<'a> {
     }
 
     /// Retrieves the three components that make up the eth supply for a given slot.
-    pub async fn get(&self, slot: &Slot) -> Option<SupplyParts> {
+    pub async fn get(&self, slot: &Slot) -> Result<SupplyParts, SupplyPartsError> {
         get_supply_parts(&mut self.db_pool.acquire().await.unwrap(), slot).await
     }
 
     pub async fn get_with_transaction(
         transaction: &mut PgConnection,
         slot: &Slot,
-    ) -> Option<SupplyParts> {
+    ) -> Result<SupplyParts, SupplyPartsError> {
         get_supply_parts(transaction, slot).await
     }
 }

@@ -17,18 +17,18 @@ async fn backfill_balances(db_pool: &PgPool, work_todo: u64, daily_only: bool) -
 
     let mut rows = sqlx::query!(
         r#"
-            SELECT
-                beacon_states.state_root,
-                beacon_states.slot
-            FROM
-                beacon_states
-            LEFT JOIN beacon_validators_balance ON
-                beacon_states.state_root = beacon_validators_balance.state_root
-            WHERE
-                slot >= $1
-            AND
-                beacon_validators_balance.state_root IS NULL
-            ORDER BY slot DESC
+        SELECT
+            beacon_states.state_root,
+            beacon_states.slot
+        FROM
+            beacon_states
+        LEFT JOIN beacon_validators_balance ON
+            beacon_states.state_root = beacon_validators_balance.state_root
+        WHERE
+            slot >= $1
+        AND
+            beacon_validators_balance.state_root IS NULL
+        ORDER BY slot DESC
         "#,
         FIRST_POST_LONDON_SLOT.0,
     )
@@ -81,16 +81,16 @@ pub async fn backfill_balances_to_london() -> Result<()> {
 
     let work_todo = sqlx::query!(
         r#"
-            SELECT
-                COUNT(*) AS "count!"
-            FROM
-                beacon_states
-            LEFT JOIN beacon_validators_balance ON
-                beacon_states.state_root = beacon_validators_balance.state_root
-            WHERE
-                slot >= $1
-            AND
-                beacon_validators_balance.state_root IS NULL
+        SELECT
+            COUNT(*) AS "count!"
+        FROM
+            beacon_states
+        LEFT JOIN beacon_validators_balance ON
+            beacon_states.state_root = beacon_validators_balance.state_root
+        WHERE
+            slot >= $1
+        AND
+            beacon_validators_balance.state_root IS NULL
         "#,
         FIRST_POST_LONDON_SLOT.0
     )
