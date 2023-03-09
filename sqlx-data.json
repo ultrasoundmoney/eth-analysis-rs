@@ -128,6 +128,18 @@
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot = $1\n        "
   },
+  "1fa92738082529c0bac77c40e91b937054b3f20bd17d5daa721943b5c4d08b5e": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        DELETE FROM beacon_validators_balance\n        WHERE state_root IN (\n            SELECT state_root FROM beacon_states\n            WHERE slot >= $1\n        )\n        "
+  },
   "26022725182b69f2b8a9695711836592df07efb3a1561c046294646ab178b5e7": {
     "describe": {
       "columns": [],
@@ -249,30 +261,6 @@
     },
     "query": "\n        DELETE FROM beacon_issuance\n        WHERE state_root IN (\n            SELECT state_root FROM beacon_states\n            WHERE slot = $1\n        )\n        "
   },
-  "36ceca3d7486bb5eafb2a8146c181adf99b6f2162bb27d273d537c036d3ae65d": {
-    "describe": {
-      "columns": [
-        {
-          "name": "day_timestamp!",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "gwei",
-          "ordinal": 1,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        null,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT\n                DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                gwei\n            FROM\n                beacon_validators_balance\n            ORDER BY\n                DATE_TRUNC('day', timestamp), timestamp ASC\n        "
-  },
   "373699992ba24383ca449966a910ff1caae73a250224e03a01bb463cc9ec5966": {
     "describe": {
       "columns": [
@@ -331,6 +319,20 @@
     },
     "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= NOW() - $1::INTERVAL\n            ORDER BY base_fee_per_gas ASC\n            LIMIT 1\n            "
   },
+  "39782012967f4e32a1cda1a226ed802dffebfb8b111ae3a12d1f3469608da4b7": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Text",
+          "Int8"
+        ]
+      }
+    },
+    "query": "\n        INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
+  },
   "39c4e81b03c50cf4e0b568dde7feab19e44cd115b44c9a298f3fc02cbfb1d292": {
     "describe": {
       "columns": [
@@ -374,18 +376,6 @@
       }
     },
     "query": "\n        SELECT\n            balances_slot\n        FROM\n            eth_supply\n        WHERE\n            balances_slot = $1\n        "
-  },
-  "3d161e6a7b26b1759ada2a5102c9fa5e4fdf75b0fe094850e4502cf6e38c9760": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            DELETE FROM beacon_validators_balance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot >= $1\n            )\n        "
   },
   "3d2eeee2f4479ee8f9cc9095b81a9e9d9415c301f2645283bd689df2839351f1": {
     "describe": {
@@ -571,6 +561,18 @@
       }
     },
     "query": "\n            INSERT INTO\n                beacon_states\n                (state_root, slot)\n            VALUES\n                ($1, $2)\n        "
+  },
+  "54b14a11d3f218965976264262ac71197336e770c4732d2cd361225e03772673": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        DELETE FROM beacon_validators_balance\n        WHERE state_root IN (\n            SELECT state_root FROM beacon_states\n            WHERE slot = $1\n        )\n        "
   },
   "5561d31bc1555e9049cfab19024d1e6f53a5a1de4686317066c1806cf9ea4e3b": {
     "describe": {
@@ -800,6 +802,26 @@
     },
     "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks \n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root \n            WHERE slot < $1\n            ORDER BY slot DESC \n            LIMIT 1\n        "
   },
+  "7c862e1e38d41362c623695a6975a3068074fc4cb27c09aa4f077fde6ed91533": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            gwei\n        FROM\n            beacon_validators_balance\n        WHERE\n            beacon_validators_balance.state_root = $1\n        "
+  },
   "7c8ce12377837516c1b52c711729f7ac5a07f0a924ff1227b5b7374de482ce7f": {
     "describe": {
       "columns": [],
@@ -940,18 +962,6 @@
       }
     },
     "query": "\n            SELECT SUM(tips) / 1e9 AS \"tips_since_london!\" FROM blocks\n        "
-  },
-  "9fe1898bf75da6ae6fb79379cd1b6e86493b46ea7cd4d4371783819a01194581": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            DELETE FROM beacon_validators_balance\n            WHERE state_root IN (\n                SELECT state_root FROM beacon_states\n                WHERE slot = $1\n            )\n        "
   },
   "a071befc1dabc8df4310891a11943b3d9e337870cc85e36fe30151a3a02937c0": {
     "describe": {
@@ -1227,19 +1237,29 @@
     },
     "query": "INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)"
   },
-  "c49edba8e1bcb02e70d7d19ded33b9c77e5ceb140c06e04108dcf3a1c4893c6f": {
+  "c32f56e69bb255a91820cc0bd0c28a1cecc3b95d01a300cc11fda80ead4cd677": {
     "describe": {
-      "columns": [],
-      "nullable": [],
+      "columns": [
+        {
+          "name": "day_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "gwei",
+          "ordinal": 1,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null,
+        false
+      ],
       "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Text",
-          "Int8"
-        ]
+        "Left": []
       }
     },
-    "query": "\n            INSERT INTO beacon_validators_balance (timestamp, state_root, gwei) VALUES ($1, $2, $3)\n        "
+    "query": "\n        SELECT\n            DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n            gwei\n        FROM\n            beacon_validators_balance\n        ORDER BY\n            DATE_TRUNC('day', timestamp), timestamp ASC\n        "
   },
   "c4f33536e0cf242082981afb66afbea9ee8c06cd39c61fa2c617d0ed2fb03caf": {
     "describe": {
@@ -1252,26 +1272,6 @@
       }
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
-  },
-  "c501cc1c1abf6bd7b5195866067f0e20d92e3a4b06012f106e4109a601b661e4": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                gwei\n            FROM\n                beacon_validators_balance\n            WHERE\n                beacon_validators_balance.state_root = $1\n        "
   },
   "cf1180963d6c58dda37e2468b2919a37bbc799980be97478ba727f91f9cd4077": {
     "describe": {
