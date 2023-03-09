@@ -519,6 +519,26 @@
     },
     "query": "\n            SELECT\n                state_root\n            FROM\n                beacon_states\n            WHERE\n                slot = $1\n        "
   },
+  "4faf5f18f446d8614f80c6771957263fa497640ca2f6332b25d02fec90b61fe2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            COUNT(*) AS \"count!\"\n        FROM\n            beacon_states\n        LEFT JOIN beacon_validators_balance ON\n            beacon_states.state_root = beacon_validators_balance.state_root\n        WHERE\n            slot >= $1\n        AND\n            beacon_validators_balance.state_root IS NULL\n        "
+  },
   "51ef5e66cebfc87b3dc99d2122dfb2c23dca5a446a4d0d560d947247a167968d": {
     "describe": {
       "columns": [
@@ -583,26 +603,6 @@
       }
     },
     "query": "\n            SELECT\n                hash\n            FROM\n                blocks_next\n            WHERE\n                number = $1\n            "
-  },
-  "59eb5a8cc7847ed0ac216b3f6293810cb7b17c02e576ff7b99120f42d3273019": {
-    "describe": {
-      "columns": [
-        {
-          "name": "count!",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                COUNT(*) AS \"count!\"\n            FROM\n                beacon_states\n            LEFT JOIN beacon_validators_balance ON\n                beacon_states.state_root = beacon_validators_balance.state_root\n            WHERE\n                slot >= $1\n            AND\n                beacon_validators_balance.state_root IS NULL\n        "
   },
   "5c0ebd75feae47d74c50bc83c80a9f61c6d3a8304cfca8a04a4d0ad66340f863": {
     "describe": {
@@ -1063,6 +1063,32 @@
     },
     "query": "\n        SELECT\n            timestamp,\n            supply::FLOAT8 / 1e18 AS \"supply!\"\n        FROM\n            eth_supply\n        ORDER BY timestamp DESC\n        LIMIT 1\n        "
   },
+  "a6b279224781f0cd9677718f9387480aaf0e98ee921a91ed63ef52eb6f6493b5": {
+    "describe": {
+      "columns": [
+        {
+          "name": "state_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "slot",
+          "ordinal": 1,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            beacon_states.state_root,\n            beacon_states.slot\n        FROM\n            beacon_states\n        LEFT JOIN beacon_validators_balance ON\n            beacon_states.state_root = beacon_validators_balance.state_root\n        WHERE\n            slot >= $1\n        AND\n            beacon_validators_balance.state_root IS NULL\n        ORDER BY slot DESC\n        "
+  },
   "abf3b6b71ceb87bf2f711262eb4ddd7e5bb839a465da07a902d5332f221f32d6": {
     "describe": {
       "columns": [
@@ -1200,32 +1226,6 @@
       }
     },
     "query": "INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)"
-  },
-  "c1747961c9ded53f24ca4c6d49bcbe93333b84c17f859471628d9e15800928b4": {
-    "describe": {
-      "columns": [
-        {
-          "name": "state_root",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "slot",
-          "ordinal": 1,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot\n            FROM\n                beacon_states\n            LEFT JOIN beacon_validators_balance ON\n                beacon_states.state_root = beacon_validators_balance.state_root\n            WHERE\n                slot >= $1\n            AND\n                beacon_validators_balance.state_root IS NULL\n            ORDER BY slot DESC\n        "
   },
   "c49edba8e1bcb02e70d7d19ded33b9c77e5ceb140c06e04108dcf3a1c4893c6f": {
     "describe": {
