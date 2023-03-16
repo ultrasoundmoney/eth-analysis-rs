@@ -53,8 +53,7 @@ async fn get_eth_candles(
         .format_url();
 
     reqwest::get(url)
-        .await
-        .unwrap()
+        .await?
         .json::<BybitPriceResponse>()
         .await
         .map(|body| {
@@ -124,7 +123,7 @@ pub async fn get_closest_price_by_minute(
     let start = target_minute_rounded - max_distance;
     let end = target_minute_rounded + max_distance;
 
-    let candles = get_eth_candles(start, end).await.unwrap();
+    let candles = get_eth_candles(start, end).await.unwrap_or(Vec::new());
 
     if candles.is_empty() {
         None
