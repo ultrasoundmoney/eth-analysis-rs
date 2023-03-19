@@ -58,6 +58,7 @@ impl From<HeadsMessage> for Message {
             HeadsMessage::Subscribe => {
                 let msg = json!({
                     "id": 0,
+                    "jsonrpc": "2.0",
                     "method": "eth_subscribe",
                     "params": ["newHeads"]
                 });
@@ -67,6 +68,7 @@ impl From<HeadsMessage> for Message {
             HeadsMessage::Unsubscribe(id) => {
                 let msg = json!({
                     "id": 0,
+                    "jsonrpc": "2.0",
                     "method": "eth_unsubscribe",
                     "params": [id]
                 });

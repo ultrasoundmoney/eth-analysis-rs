@@ -111,6 +111,7 @@ pub struct SupplyDeltaMessageV2 {
 fn make_supply_delta_subscribe_message_v2(greater_than_or_equal_to: &BlockNumber) -> String {
     let msg = json!({
         "id": 0,
+        "jsonrpc": "2.0",
         "method": "eth_subscribe",
         "params": ["supplyDelta", greater_than_or_equal_to]
     });
@@ -121,6 +122,7 @@ fn make_supply_delta_subscribe_message_v2(greater_than_or_equal_to: &BlockNumber
 fn make_supply_delta_subscribe_message_v1(greater_than_or_equal_to: &BlockNumber) -> String {
     let msg = json!({
         "id": 0,
+        "jsonrpc": "2.0",
         "method": "eth_subscribe",
         "params": ["issuance", greater_than_or_equal_to]
     });
