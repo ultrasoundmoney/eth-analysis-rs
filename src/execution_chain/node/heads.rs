@@ -1,9 +1,9 @@
 use async_tungstenite::{tokio as tungstenite, tungstenite::Message};
 use chrono::{DateTime, Utc};
-use futures::{channel::mpsc, SinkExt, Stream, StreamExt};
+use futures::{channel::mpsc, SinkExt, Stream, StreamExt, TryStreamExt};
 use serde::Deserialize;
 use serde_json::json;
-use tracing::debug;
+use tracing::{debug, error};
 
 use super::{blocks::ExecutionNodeBlock, decoders::*, ExecutionNode, EXECUTION_URL};
 use crate::execution_chain::{node::BlockNumber, BlockRange};
@@ -79,6 +79,29 @@ impl From<HeadsMessage> for Message {
     }
 }
 
+#[derive(Deserialize)]
+struct SubscriptionError {
+    code: i32,
+    message: String,
+}
+
+// deserializing successfully is all that matters
+#[allow(dead_code)]
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum SubscriptionResponse {
+    SuccessMessage {
+        id: i32,
+        jsonrpc: String,
+        result: String,
+    },
+    ErrorMessage {
+        error: SubscriptionError,
+        id: i32,
+        jsonrpc: String,
+    },
+}
+
 pub fn stream_new_heads() -> impl Stream<Item = Head> {
     let (mut new_heads_tx, new_heads_rx) = mpsc::unbounded();
 
@@ -88,23 +111,33 @@ pub fn stream_new_heads() -> impl Stream<Item = Head> {
 
         ws.send(HeadsMessage::Subscribe.into()).await.unwrap();
 
-        loop {
-            if (ws.next().await).is_some() {
-                tracing::debug!("got subscription confirmation message");
-                break;
+        // We expect a subscription confirmation message first.
+        while let Some(message) = ws.try_next().await.unwrap() {
+            let message_text = message.to_text().unwrap();
+            let message: SubscriptionResponse = serde_json::from_str(message_text).unwrap();
+            match message {
+                SubscriptionResponse::SuccessMessage { .. } => {
+                    tracing::debug!("got subscription confirmation message");
+                    break;
+                }
+                SubscriptionResponse::ErrorMessage { error, .. } => {
+                    panic!(
+                        "subscription error, code: {}, message: {}",
+                        error.code, error.message
+                    )
+                }
             }
         }
 
-        while let Some(message_result) = ws.next().await {
-            let message = message_result.unwrap();
-
-            // We get ping messages too. Do nothing with those.
+        while let Some(message) = ws.try_next().await.unwrap() {
+            // Waiting for the next message to arrive can take many seconds, during this waiting we
+            // may receive a ping message.
             if message.is_ping() {
                 continue;
             }
 
-            let message_text = message.into_text().unwrap();
-            let new_head_message: NewHeadMessage = serde_json::from_str(&message_text).unwrap();
+            let message_text = message.to_text().unwrap();
+            let new_head_message: NewHeadMessage = serde_json::from_str(message_text).unwrap();
             let new_head = new_head_message.into();
             new_heads_tx.send(new_head).await.unwrap();
         }
