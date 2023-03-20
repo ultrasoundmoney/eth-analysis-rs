@@ -96,7 +96,7 @@ async fn get_supply_parts(
         &state_root,
     )
     .await
-    .ok_or_else(|| SupplyPartsError::NoValidatorBalancesAvailable(*slot))?;
+    .ok_or(SupplyPartsError::NoValidatorBalancesAvailable(*slot))?;
 
     debug!(
         %slot,
