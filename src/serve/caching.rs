@@ -109,6 +109,7 @@ async fn process_notifications(
                         "got a message to update our served cache, but DB had no value to give"
                     );
                 }
+                state.health.set_cache_updated();
             }
         }
     }

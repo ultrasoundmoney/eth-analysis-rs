@@ -1,6 +1,8 @@
 mod caching;
 mod etag_middleware;
+mod health;
 
+use axum::response::IntoResponse;
 pub use caching::cached_get;
 pub use caching::cached_get_with_custom_duration;
 
@@ -8,13 +10,14 @@ use axum::{middleware, routing::get, Extension, Router};
 use chrono::Duration;
 use futures::{try_join, TryFutureExt};
 use lazy_static::lazy_static;
-use reqwest::StatusCode;
-use sqlx::{Connection, PgPool};
+use sqlx::PgPool;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tracing::{debug, error, info};
 
+use crate::health::HealthCheckable;
+use crate::serve::health::ServeHealth;
 use crate::{caching::CacheKey, db, env, execution_chain, log};
 
 use self::caching::Cache;
@@ -30,10 +33,13 @@ pub type StateExtension = Extension<Arc<State>>;
 pub struct State {
     pub cache: Cache,
     pub db_pool: PgPool,
+    pub health: ServeHealth,
 }
 
 pub async fn start_server() {
     log::init_with_env();
+
+    let started_on = chrono::Utc::now();
 
     let db_pool = PgPool::connect(&db::get_db_url_with_name("eth-analysis-serve"))
         .await
@@ -47,7 +53,13 @@ pub async fn start_server() {
 
     info!("cache ready");
 
-    let shared_state = Arc::new(State { cache, db_pool });
+    let health = ServeHealth::new(started_on);
+
+    let shared_state = Arc::new(State {
+        cache,
+        db_pool,
+        health,
+    });
 
     let update_cache_thread =
         caching::update_cache_from_notifications(shared_state.clone(), &shared_state.db_pool).await;
@@ -101,8 +113,7 @@ pub async fn start_server() {
         .route(
             "/api/v2/fees/healthz",
             get(|state: StateExtension| async move {
-                let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
-                StatusCode::OK
+                state.health.health_status().into_response()
             }),
         )
         .route(
@@ -181,8 +192,7 @@ pub async fn start_server() {
         .route(
             "/healthz",
             get(|state: StateExtension| async move {
-                let _ = &state.db_pool.acquire().await.unwrap().ping().await.unwrap();
-                StatusCode::OK
+                state.health.health_status().into_response()
             }),
         )
         .layer(
