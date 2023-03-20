@@ -10,6 +10,7 @@ mod etherscan;
 mod execution_chain;
 mod gauges;
 mod glassnode;
+mod health;
 mod issuance_breakdown;
 mod json_codecs;
 mod key_value_store;
