@@ -9,7 +9,6 @@ mod sync;
 mod test;
 
 pub use changes::SupplyChanges;
-pub use changes::SupplyChangesStore;
 
 pub use export::export_thousandth_epoch_supply;
 
