@@ -42,13 +42,13 @@ impl From<&Vec<SupplyAtTime>> for SupplyChange {
         SupplyChange {
             change: change.into(),
             from_slot: Slot::from_date_time(&first.timestamp)
-                .expect("expect supply over time data points to relate to slots"),
-            from_timestamp: first.timestamp,
+                .unwrap_or_else(|| Slot::from_date_time_rounded_down(&first.timestamp)),
             from_supply: first.supply.into(),
+            from_timestamp: first.timestamp,
             to_slot: Slot::from_date_time(&last.timestamp)
-                .expect("expect supply over time data points to relate to slots"),
-            to_timestamp: last.timestamp,
+                .unwrap_or_else(|| Slot::from_date_time_rounded_down(&last.timestamp)),
             to_supply: last.supply.into(),
+            to_timestamp: last.timestamp,
         }
     }
 }
