@@ -1410,6 +1410,36 @@
     },
     "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= NOW() - $1::INTERVAL\n            ORDER BY base_fee_per_gas DESC\n            LIMIT 1\n            "
   },
+  "ed26cd65f0605acd6eb54c5804008c84b11f26c952a35ee6eb6d5c92dac55efa": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        },
+        {
+          "name": "timestamp",
+          "ordinal": 2,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        null,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        WITH numbered_rows AS (\n            SELECT\n                ROW_NUMBER() OVER (ORDER BY timestamp) AS row_number,\n                balances_slot AS slot,\n                supply::FLOAT8 / 1e18 AS supply,\n                timestamp\n            FROM eth_supply\n        )\n        SELECT \n          slot,\n          supply AS \"supply!\",\n          timestamp\n        FROM numbered_rows\n        WHERE row_number % 32000 = 1\n        "
+  },
   "f2d4faaff81c4ee97a6c7a092754714db1f274e232614fcd628713f8f2d31bc3": {
     "describe": {
       "columns": [

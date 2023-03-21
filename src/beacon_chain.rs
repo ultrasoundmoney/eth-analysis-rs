@@ -68,7 +68,7 @@ pub const FIRST_POST_LONDON_SLOT: Slot = Slot(1778566);
 
 lazy_static! {
     static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");
-    static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp_opt(1606824023, 0).unwrap();
+    pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp_opt(1606824023, 0).unwrap();
 }
 
 #[cfg(test)]

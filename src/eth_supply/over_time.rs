@@ -28,10 +28,10 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
-struct SupplyAtTime {
-    slot: Option<Slot>,
-    supply: EthNewtype,
-    timestamp: DateTime<Utc>,
+pub struct SupplyAtTime {
+    pub slot: Option<Slot>,
+    pub supply: EthNewtype,
+    pub timestamp: DateTime<Utc>,
 }
 
 async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> SupplyAtTime {

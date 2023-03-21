@@ -1,4 +1,5 @@
 mod changes;
+mod export;
 mod gaps;
 mod over_time;
 mod parts;
@@ -9,6 +10,8 @@ mod test;
 
 pub use changes::SupplyChanges;
 pub use changes::SupplyChangesStore;
+
+pub use export::export_thousandth_epoch_supply;
 
 pub use gaps::fill_gaps as fill_eth_supply_gaps;
 
