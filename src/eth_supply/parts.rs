@@ -49,11 +49,6 @@ impl SupplyParts {
     pub fn block_number(&self) -> BlockNumber {
         self.block_number
     }
-
-    pub fn supply(&self) -> WeiNewtype {
-        self.execution_balances_sum + self.beacon_balances_sum.into()
-            - self.beacon_deposits_sum.into()
-    }
 }
 
 #[derive(Debug, Error)]
