@@ -11,7 +11,7 @@ use crate::{
     units::WeiNewtype,
 };
 
-use super::SupplyParts;
+use super::{over_time::SupplyAtTime, SupplyOverTime, SupplyParts};
 
 use GrowingTimeFrame::*;
 use LimitedTimeFrame::*;
@@ -57,6 +57,46 @@ pub struct SupplyChanges {
     since_merge: Option<SupplyChange>,
     slot: Slot,
     timestamp: DateTime<Utc>,
+}
+
+impl From<Vec<SupplyAtTime>> for SupplyChange {
+    fn from(supply_at_time: Vec<SupplyAtTime>) -> Self {
+        let first = supply_at_time
+            .first()
+            .expect("expect at least one supply in d1");
+        let last = supply_at_time
+            .last()
+            .expect("expect at least one supply in d1");
+        let change = last.supply - first.supply;
+
+        SupplyChange {
+            change: change.into(),
+            from_slot: Slot::from_date_time(&first.timestamp)
+                .expect("expect supply over time data points to relate to slots"),
+            from_timestamp: first.timestamp,
+            from_supply: first.supply.into(),
+            to_slot: Slot::from_date_time(&last.timestamp)
+                .expect("expect supply over time data points to relate to slots"),
+            to_timestamp: last.timestamp,
+            to_supply: last.supply.into(),
+        }
+    }
+}
+
+impl From<SupplyOverTime> for SupplyChanges {
+    fn from(supply_over_time: SupplyOverTime) -> Self {
+        Self {
+            d1: Some(supply_over_time.d1.into()),
+            d30: Some(supply_over_time.d30.into()),
+            d7: Some(supply_over_time.d7.into()),
+            h1: Some(supply_over_time.h1.into()),
+            m5: Some(supply_over_time.m5.into()),
+            since_burn: Some(supply_over_time.since_burn.into()),
+            since_merge: Some(supply_over_time.since_merge.into()),
+            slot: supply_over_time.slot,
+            timestamp: supply_over_time.timestamp,
+        }
+    }
 }
 
 // This number was recorded before we has a rigorous definition of how to combine the execution and

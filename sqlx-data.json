@@ -140,6 +140,32 @@
     },
     "query": "\n        DELETE FROM beacon_validators_balance\n        WHERE state_root IN (\n            SELECT state_root FROM beacon_states\n            WHERE slot >= $1\n        )\n        "
   },
+  "224362632b86d95f0e331e0391d148632baacc826c2ba532d7b55fc51c562fa2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "hour_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS \"hour_timestamp!\",\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY\n                    DATE_TRUNC('hour', timestamp), timestamp ASC\n                "
+  },
   "26022725182b69f2b8a9695711836592df07efb3a1561c046294646ab178b5e7": {
     "describe": {
       "columns": [],
@@ -248,6 +274,30 @@
       }
     },
     "query": "\n            DELETE FROM burn_sums\n            WHERE last_included_block_number < $1\n            "
+  },
+  "31185ac31b749332808469a232a9c7e5a12964142a1328f0a7d26d9fb2ad0bb1": {
+    "describe": {
+      "columns": [
+        {
+          "name": "day_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null,
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n                -- We select only one row per day, using ORDER BY to make sure it's the first.\n                -- The column we output is rounded to whole days for convenience.\n                SELECT\n                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                ORDER BY\n                    DATE_TRUNC('day', timestamp), timestamp ASC\n                "
   },
   "33d31f5bc0c8dde9581f22d69b2fb82986e574cb7272a8dda02fb3543e133647": {
     "describe": {
@@ -488,6 +538,36 @@
       }
     },
     "query": "\n        SELECT\n            timestamp,\n            supply\n        FROM daily_supply_glassnode\n        WHERE timestamp < $1\n        AND timestamp >= $2\n        ORDER BY timestamp ASC\n        "
+  },
+  "4a3049cbebaa17d316efd4b611b53e94011d93795accae2089fac214a7173883": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "balances_slot",
+          "ordinal": 1,
+          "type_info": "Int4"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 2,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            timestamp,\n            balances_slot,\n            supply::FLOAT8 / 1e18 AS \"supply!\"\n        FROM\n            eth_supply\n        ORDER BY timestamp DESC\n        LIMIT 1\n        "
   },
   "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
     "describe": {
@@ -834,6 +914,64 @@
     },
     "query": "\n        DELETE FROM blocks_next\n        WHERE number >= $1\n        "
   },
+  "8149cd906b47bfd529bfd84f9e88f396316bb87bacefa0ecb74fdea6fd316f7b": {
+    "describe": {
+      "columns": [
+        {
+          "name": "minute_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    DISTINCT ON (DATE_TRUNC('minute', timestamp)) DATE_TRUNC('minute', timestamp) AS \"minute_timestamp!\",\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY\n                    DATE_TRUNC('minute', timestamp), timestamp ASC\n                "
+  },
+  "8346f71adaa4540db918bbbcf0d40efbe93c92d2b8d73e2662bd000f13af2de9": {
+    "describe": {
+      "columns": [
+        {
+          "name": "five_minute_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "balances_slot",
+          "ordinal": 1,
+          "type_info": "Int4"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 2,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    DISTINCT ON (DATE_BIN('5 minutes', timestamp, '2022-01-01')) DATE_BIN('5 minutes', timestamp, '2022-01-01') AS \"five_minute_timestamp!\",\n                    balances_slot AS balances_slot,\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY\n                    DATE_BIN('5 minutes', timestamp, '2022-01-01'), timestamp ASC\n                "
+  },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {
       "columns": [
@@ -963,6 +1101,32 @@
     },
     "query": "\n            SELECT SUM(tips) / 1e9 AS \"tips_since_london!\" FROM blocks\n        "
   },
+  "9cbd141c5fe47fb5806c00c1fb2e87c21ee0ba939097ffea77eac019c5be164a": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    timestamp,\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY\n                    timestamp ASC\n                "
+  },
   "a071befc1dabc8df4310891a11943b3d9e337870cc85e36fe30151a3a02937c0": {
     "describe": {
       "columns": [
@@ -1048,30 +1212,6 @@
       }
     },
     "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks\n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot = $1\n        "
-  },
-  "a3d5a3dc158b75b9ef06af433f5120fbdde7754553522ce31fa2fb18ce3e7234": {
-    "describe": {
-      "columns": [
-        {
-          "name": "timestamp",
-          "ordinal": 0,
-          "type_info": "Timestamptz"
-        },
-        {
-          "name": "supply!",
-          "ordinal": 1,
-          "type_info": "Float8"
-        }
-      ],
-      "nullable": [
-        false,
-        null
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n        SELECT\n            timestamp,\n            supply::FLOAT8 / 1e18 AS \"supply!\"\n        FROM\n            eth_supply\n        ORDER BY timestamp DESC\n        LIMIT 1\n        "
   },
   "a6b279224781f0cd9677718f9387480aaf0e98ee921a91ed63ef52eb6f6493b5": {
     "describe": {
@@ -1272,6 +1412,32 @@
       }
     },
     "query": "\n            DELETE FROM beacon_states\n            WHERE slot >= $1\n        "
+  },
+  "c74b396270ebb343f2ae36d7047276ba9eecda764cacc180e9f965136ebb5514": {
+    "describe": {
+      "columns": [
+        {
+          "name": "day_timestamp!",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply!",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        null,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= $1\n                ORDER BY\n                    DATE_TRUNC('day', timestamp), timestamp ASC\n                "
   },
   "cf1180963d6c58dda37e2468b2919a37bbc799980be97478ba727f91f9cd4077": {
     "describe": {

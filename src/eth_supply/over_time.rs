@@ -4,16 +4,16 @@ use chrono::{DateTime, Duration, DurationRound, Utc};
 use futures::join;
 use lazy_static::lazy_static;
 use serde::Serialize;
-use sqlx::postgres::PgRow;
-use sqlx::{PgExecutor, PgPool, Row};
+use sqlx::postgres::types::PgInterval;
+use sqlx::{PgExecutor, PgPool};
 use tracing::debug;
 
-use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
-use crate::units::EthNewtype;
 use crate::{
     beacon_chain::Slot,
-    execution_chain::BlockNumber,
+    eth_time,
+    execution_chain::{self, BlockNumber},
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
+    units::EthNewtype,
 };
 
 use GrowingTimeFrame::*;
@@ -29,7 +29,6 @@ lazy_static! {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SupplyAtTime {
-    pub slot: Option<Slot>,
     pub supply: EthNewtype,
     pub timestamp: DateTime<Utc>,
 }
@@ -39,6 +38,7 @@ async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> SupplyAtTime {
         "
         SELECT
             timestamp,
+            balances_slot,
             supply::FLOAT8 / 1e18 AS \"supply!\"
         FROM
             eth_supply
@@ -49,9 +49,8 @@ async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> SupplyAtTime {
     .fetch_one(executor)
     .await
     .map(|row| SupplyAtTime {
-        slot: None,
-        timestamp: row.timestamp,
         supply: EthNewtype(row.supply),
+        timestamp: row.timestamp,
     })
     .unwrap()
 }
@@ -69,14 +68,13 @@ async fn get_early_supply_since_burn(executor: impl PgExecutor<'_>) -> Vec<Suppl
         ORDER BY timestamp ASC
         ",
         *ETH_SUPPLY_FIRST_TIMESTAMP_DAY,
-        *LONDON_HARD_FORK_TIMESTAMP
+        *execution_chain::LONDON_HARD_FORK_TIMESTAMP
     )
     .fetch_all(executor)
     .await
     .unwrap()
     .into_iter()
     .map(|row| SupplyAtTime {
-        slot: None,
         timestamp: row.timestamp,
         supply: EthNewtype(row.supply),
     })
@@ -89,175 +87,167 @@ async fn from_time_frame(
 ) -> Vec<SupplyAtTime> {
     match time_frame {
         TimeFrame::Growing(SinceBurn) => {
-            sqlx::query(
+            sqlx::query!(
                 "
                 -- We select only one row per day, using ORDER BY to make sure it's the first.
                 -- The column we output is rounded to whole days for convenience.
                 SELECT
-                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
-                    supply::FLOAT8 / 1e18 AS supply
+                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",
+                    supply::FLOAT8 / 1e18 AS \"supply!\"
                 FROM
                     eth_supply
                 ORDER BY
                     DATE_TRUNC('day', timestamp), timestamp ASC
                 ",
             )
-            .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("day_timestamp");
-                let supply = row.get::<f64, _>("supply");
-                SupplyAtTime {
-                    slot: None,
-                    timestamp,
-                    supply: EthNewtype(supply),
-                }
-            })
             .fetch_all(executor)
             .await
             .unwrap()
+            .into_iter()
+            .map(|row| {
+                SupplyAtTime {
+                    timestamp: row.day_timestamp,
+                    supply: EthNewtype(row.supply),
+                }
+            })
+            .collect()
         },
         TimeFrame::Growing(SinceMerge) => {
-            sqlx::query(
+            sqlx::query!(
                 "
                 SELECT
-                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS day_timestamp,
-                    supply::FLOAT8 / 1e18 AS supply
+                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",
+                    supply::FLOAT8 / 1e18 AS \"supply!\"
                 FROM
                     eth_supply
                 WHERE
-                    timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
+                    timestamp >= $1
                 ORDER BY
                     DATE_TRUNC('day', timestamp), timestamp ASC
                 ",
+                *eth_time::MERGE_HARD_FORK_TIMESTAMP
             )
-            .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("day_timestamp");
-                let supply = row.get::<f64, _>("supply");
-                SupplyAtTime {
-                    slot: None,
-                    timestamp,
-                    supply: EthNewtype(supply),
-                }
-            })
             .fetch_all(executor)
             .await
             .unwrap()
+            .into_iter()
+            .map(|row| {
+                SupplyAtTime {
+                    timestamp: row.day_timestamp,
+                    supply: EthNewtype(row.supply),
+                }
+            })
+            .collect()
         }
         TimeFrame::Limited(ltf @ Minute5)
         | TimeFrame::Limited(ltf @ Hour1) => {
-            sqlx::query(
+            sqlx::query!(
                 "
                 SELECT
                     timestamp,
-                    supply::FLOAT8 / 1e18 AS supply,
-                    balances_slot
+                    supply::FLOAT8 / 1e18 AS \"supply!\"
                 FROM
                     eth_supply
                 WHERE
-                    timestamp >= NOW() - $1
+                    timestamp >= NOW() - $1::INTERVAL
                 ORDER BY
                     timestamp ASC
                 ",
+                Into::<PgInterval>::into(ltf)
             )
-            .bind(ltf.postgres_interval())
-            .map(|row: PgRow| {
-                let slot: Slot = row
-                    .get::<i32, _>("balances_slot")
-                    .try_into().unwrap();
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
-                let supply = row.get::<f64, _>("supply");
-                SupplyAtTime {
-                    slot: Some(slot),
-                    timestamp,
-                    supply: EthNewtype(supply),
-                }
-            })
             .fetch_all(executor)
             .await
             .unwrap()
+            .into_iter()
+            .map(|row| {
+                SupplyAtTime {
+                    timestamp: row.timestamp,
+                    supply: EthNewtype(row.supply),
+                }
+            })
+            .collect()
         }
         TimeFrame::Limited(ltf @ Day1) => {
-            sqlx::query(
+            sqlx::query!(
                 "
                 SELECT
-                    DISTINCT ON (DATE_TRUNC('minute', timestamp)) DATE_TRUNC('minute', timestamp) AS minute_timestamp,
-                    supply::FLOAT8 / 1e18 AS supply
+                    DISTINCT ON (DATE_TRUNC('minute', timestamp)) DATE_TRUNC('minute', timestamp) AS \"minute_timestamp!\",
+                    supply::FLOAT8 / 1e18 AS \"supply!\"
                 FROM
                     eth_supply
                 WHERE
-                    timestamp >= NOW() - $1
+                    timestamp >= NOW() - $1::INTERVAL
                 ORDER BY
                     DATE_TRUNC('minute', timestamp), timestamp ASC
                 ",
+                Into::<PgInterval>::into(ltf)
             )
-            .bind(ltf.postgres_interval())
-            .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("minute_timestamp");
-                let supply = row.get::<f64, _>("supply");
-                SupplyAtTime {
-                    slot: None,
-                    timestamp,
-                    supply: EthNewtype(supply),
-                }
-            })
             .fetch_all(executor)
             .await
             .unwrap()
+                .into_iter()
+            .map(|row| {
+                SupplyAtTime {
+                    timestamp: row.minute_timestamp,
+                    supply: EthNewtype(row.supply),
+                }
+            })
+            .collect()
         }
         TimeFrame::Limited(ltf @ Day7) => {
-            sqlx::query(
+            sqlx::query!(
                 "
                 SELECT
-                    DISTINCT ON (DATE_BIN('5 minutes', timestamp, '2022-01-01')) DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
-                    supply::FLOAT8 / 1e18 AS supply
+                    DISTINCT ON (DATE_BIN('5 minutes', timestamp, '2022-01-01')) DATE_BIN('5 minutes', timestamp, '2022-01-01') AS \"five_minute_timestamp!\",
+                    balances_slot AS balances_slot,
+                    supply::FLOAT8 / 1e18 AS \"supply!\"
                 FROM
                     eth_supply
                 WHERE
-                    timestamp >= NOW() - $1
+                    timestamp >= NOW() - $1::INTERVAL
                 ORDER BY
                     DATE_BIN('5 minutes', timestamp, '2022-01-01'), timestamp ASC
                 ",
+                ltf.postgres_interval()
             )
-            .bind(ltf.postgres_interval())
-            .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("five_minute_timestamp");
-                let supply = row.get::<f64, _>("supply");
-                SupplyAtTime {
-                    slot: None,
-                    timestamp,
-                    supply: EthNewtype(supply),
-                }
-            })
             .fetch_all(executor)
             .await
             .unwrap()
+                .into_iter()
+                .map(|row| {
+                    SupplyAtTime {
+                        timestamp: row.five_minute_timestamp,
+                        supply: EthNewtype(row.supply),
+                    }
+                })
+                .collect()
         }
         TimeFrame::Limited(ltf @ Day30) => {
-            sqlx::query(
+            sqlx::query!(
                 "
                 SELECT
-                    DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS hour_timestamp,
-                    supply::FLOAT8 / 1e18 AS supply
+                    DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS \"hour_timestamp!\",
+                    supply::FLOAT8 / 1e18 AS \"supply!\"
                 FROM
                     eth_supply
                 WHERE
-                    timestamp >= NOW() - $1
+                    timestamp >= NOW() - $1::INTERVAL
                 ORDER BY
                     DATE_TRUNC('hour', timestamp), timestamp ASC
                 ",
+                Into::<PgInterval>::into(ltf)
             )
-            .bind(ltf.postgres_interval())
-            .map(|row: PgRow| {
-                let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("hour_timestamp");
-                let supply = row.get::<f64, _>("supply");
+            .fetch_all(executor)
+                .await
+                .unwrap()
+            .into_iter()
+                .map(|row| {
                 SupplyAtTime {
-                    slot: None,
-                    timestamp,
-                    supply: EthNewtype(supply),
+                    timestamp: row.hour_timestamp,
+                    supply: EthNewtype(row.supply),
                 }
             })
-            .fetch_all(executor)
-            .await
-            .unwrap()
+            .collect()
         }
     }
 }
@@ -282,15 +272,15 @@ async fn get_supply_since_burn(db_pool: &PgPool) -> Vec<SupplyAtTime> {
 #[derive(Clone, Serialize)]
 pub struct SupplyOverTime {
     block_number: BlockNumber,
-    d1: Vec<SupplyAtTime>,
-    d30: Vec<SupplyAtTime>,
-    d7: Vec<SupplyAtTime>,
-    h1: Vec<SupplyAtTime>,
-    m5: Vec<SupplyAtTime>,
-    since_burn: Vec<SupplyAtTime>,
-    since_merge: Vec<SupplyAtTime>,
-    slot: Slot,
-    timestamp: DateTime<Utc>,
+    pub d1: Vec<SupplyAtTime>,
+    pub d30: Vec<SupplyAtTime>,
+    pub d7: Vec<SupplyAtTime>,
+    pub h1: Vec<SupplyAtTime>,
+    pub m5: Vec<SupplyAtTime>,
+    pub since_burn: Vec<SupplyAtTime>,
+    pub since_merge: Vec<SupplyAtTime>,
+    pub slot: Slot,
+    pub timestamp: DateTime<Utc>,
 }
 
 pub async fn get_supply_over_time(
@@ -357,7 +347,6 @@ mod tests {
         let test_supply_at_time = SupplyAtTime {
             timestamp: reverse_timestamp,
             supply: EthNewtype(10.0),
-            slot: Some(test_slot),
         };
 
         store_test_eth_supply(&mut transaction, &test_slot, EthNewtype(10.0))
@@ -377,7 +366,6 @@ mod tests {
         let test_supply_at_time = SupplyAtTime {
             timestamp: *ETH_SUPPLY_FIRST_TIMESTAMP_DAY - Duration::days(1),
             supply: EthNewtype(10.0),
-            slot: None,
         };
 
         sqlx::query!(
