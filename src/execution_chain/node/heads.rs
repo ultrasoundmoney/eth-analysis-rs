@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use futures::{channel::mpsc, SinkExt, Stream, StreamExt, TryStreamExt};
 use serde::Deserialize;
 use serde_json::json;
-use tracing::{debug, error};
+use tracing::debug;
 
 use super::{blocks::ExecutionNodeBlock, decoders::*, ExecutionNode, EXECUTION_URL};
 use crate::execution_chain::{node::BlockNumber, BlockRange};
