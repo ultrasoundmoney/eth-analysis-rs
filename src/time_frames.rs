@@ -73,16 +73,6 @@ impl LimitedTimeFrame {
         }
     }
 
-    pub fn to_db_key(self) -> &'static str {
-        match self {
-            Day1 => "d1",
-            Day30 => "d1",
-            Day7 => "d7",
-            Hour1 => "h1",
-            Minute5 => "m5",
-        }
-    }
-
     pub fn duration(&self) -> Duration {
         self.into()
     }
