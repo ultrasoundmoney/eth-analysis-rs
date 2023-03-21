@@ -95,7 +95,7 @@ impl From<&GweiNewtype> for WeiNewtype {
 
 impl From<EthNewtype> for WeiNewtype {
     fn from(EthNewtype(amount): EthNewtype) -> Self {
-        (amount as i128 * EthNewtype::WEI_PER_ETH).into()
+        WeiNewtype((amount * EthNewtype::WEI_PER_ETH as f64) as i128)
     }
 }
 
