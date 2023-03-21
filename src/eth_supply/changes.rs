@@ -16,24 +16,6 @@ pub struct SupplyChange {
     change: WeiNewtype,
 }
 
-impl SupplyChange {
-    fn new(from_slot: Slot, from_supply: WeiNewtype, to_slot: Slot, to_supply: WeiNewtype) -> Self {
-        let change = to_supply - from_supply;
-        let from_timestamp = from_slot.date_time();
-        let to_timestamp = to_slot.date_time();
-
-        Self {
-            from_slot,
-            from_timestamp,
-            from_supply,
-            to_slot,
-            to_timestamp,
-            to_supply,
-            change,
-        }
-    }
-}
-
 #[derive(Debug, Serialize)]
 pub struct SupplyChanges {
     d1: Option<SupplyChange>,
