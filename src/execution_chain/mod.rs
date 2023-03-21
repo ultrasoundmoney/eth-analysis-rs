@@ -26,6 +26,7 @@ pub use block_store_next::BlockStore;
 pub use export_blocks::write_blocks_from_august;
 pub use export_blocks::write_blocks_from_london;
 
+use lazy_static::lazy_static;
 pub use logs::write_heads_log as write_execution_heads_log;
 
 pub use node::stream_heads_from;
@@ -50,9 +51,7 @@ pub use supply_deltas::SupplyDelta;
 pub use sync::sync_blocks as sync_execution_blocks;
 
 use chrono::DateTime;
-use chrono::TimeZone;
 use chrono::Utc;
-use lazy_static::lazy_static;
 
 pub const LONDON_HARD_FORK_BLOCK_HASH: &str =
     "0x9b83c12c69edb74f6c8dd5d052765c1adf940e320bd1291696e6fa07829eee71";
@@ -63,7 +62,7 @@ pub const TOTAL_TERMINAL_DIFFICULTY: u128 = 58750000000000000000000;
 
 lazy_static! {
     pub static ref LONDON_HARD_FORK_TIMESTAMP: DateTime<Utc> =
-        Utc.timestamp_opt(1628166822, 0).unwrap();
-    pub static ref MERGE_HARD_FORK_TIMESTAMP: DateTime<Utc> =
-        "2022-09-15T06:42:59Z".parse::<DateTime<Utc>>().unwrap();
+        "2021-08-05T12:33:42Z".parse::<DateTime<Utc>>().unwrap();
+    pub static ref PARIS_HARD_FORK_TIMESTAMP: DateTime<Utc> =
+        "2022-09-15T06:42:59".parse::<DateTime<Utc>>().unwrap();
 }

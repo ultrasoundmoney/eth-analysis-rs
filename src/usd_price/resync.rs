@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use sqlx::{postgres::PgRow, Connection, PgConnection, Row};
 use tracing::{debug, info};
 
-use crate::{db, execution_chain::LONDON_HARD_FORK_TIMESTAMP, log};
+use crate::{db, execution_chain, log};
 
 use super::{bybit, store};
 
@@ -63,11 +63,11 @@ pub async fn resync_all() {
 
     debug!("walking through all minutes since London hardfork");
 
-    let duration_since_london =
-        Utc::now().duration_round(Duration::minutes(1)).unwrap() - *LONDON_HARD_FORK_TIMESTAMP;
+    let duration_since_london = Utc::now().duration_round(Duration::minutes(1)).unwrap()
+        - *execution_chain::LONDON_HARD_FORK_TIMESTAMP;
     let minutes_since_london: u32 = duration_since_london.num_minutes().try_into().unwrap();
 
-    let london_minute_timestamp: u32 = LONDON_HARD_FORK_TIMESTAMP
+    let london_minute_timestamp: u32 = execution_chain::LONDON_HARD_FORK_TIMESTAMP
         .duration_round(Duration::minutes(1))
         .unwrap()
         .timestamp()

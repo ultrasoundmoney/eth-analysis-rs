@@ -6,6 +6,7 @@ mod data_integrity;
 mod db;
 mod env;
 mod eth_supply;
+mod eth_time;
 mod etherscan;
 mod execution_chain;
 mod gauges;

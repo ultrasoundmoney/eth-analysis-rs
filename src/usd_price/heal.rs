@@ -4,7 +4,7 @@ use chrono::{Duration, DurationRound, TimeZone, Utc};
 use sqlx::{Connection, PgConnection, Postgres};
 use tracing::{debug, info};
 
-use crate::{db, execution_chain::LONDON_HARD_FORK_TIMESTAMP, log};
+use crate::{db, execution_chain, log};
 
 use super::{bybit, store, EthPriceTimestamp};
 
@@ -47,11 +47,11 @@ pub async fn heal_eth_prices() {
 
     debug!("walking through all minutes since London hardfork to look for missing minutes");
 
-    let duration_since_london =
-        Utc::now().duration_round(Duration::minutes(1)).unwrap() - *LONDON_HARD_FORK_TIMESTAMP;
+    let duration_since_london = Utc::now().duration_round(Duration::minutes(1)).unwrap()
+        - *execution_chain::LONDON_HARD_FORK_TIMESTAMP;
     let minutes_since_london = duration_since_london.num_minutes();
 
-    let london_minute_timestamp = LONDON_HARD_FORK_TIMESTAMP
+    let london_minute_timestamp = execution_chain::LONDON_HARD_FORK_TIMESTAMP
         .duration_round(Duration::minutes(1))
         .unwrap()
         .timestamp();
