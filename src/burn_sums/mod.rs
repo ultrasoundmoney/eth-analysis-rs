@@ -49,7 +49,14 @@ impl EthUsdAmount {
     }
 }
 
-pub type BurnSums = HashMap<TimeFrame, EthUsdAmount>;
+#[derive(Debug, PartialEq, Serialize)]
+pub struct BurnSum {
+    pub block_number: BlockNumber,
+    pub sum: EthUsdAmount,
+    pub timestamp: DateTime<Utc>,
+}
+
+pub type BurnSums = HashMap<TimeFrame, BurnSum>;
 
 fn burn_sums_from_vec(records: &[BurnSumRecord]) -> BurnSums {
     records
@@ -59,23 +66,22 @@ fn burn_sums_from_vec(records: &[BurnSumRecord]) -> BurnSums {
             let eth = record.sum_wei.into();
             let usd = record.sum_usd;
             let eth_usd_amount = EthUsdAmount { eth, usd };
-            (time_frame, eth_usd_amount)
+            let burn_sum = BurnSum {
+                block_number: record.last_included_block_number,
+                sum: eth_usd_amount,
+                timestamp: record.timestamp,
+            };
+            (time_frame, burn_sum)
         })
         .collect()
 }
 
-#[derive(Debug, PartialEq, Serialize)]
-pub struct BurnSumsEnvelope {
-    pub block_number: BlockNumber,
-    pub burn_sums: BurnSums,
-    pub timestamp: DateTime<Utc>,
-}
-
 impl Index<TimeFrame> for BurnSums {
-    type Output = EthUsdAmount;
+    type Output = BurnSum;
 
     fn index(&self, time_frame: TimeFrame) -> &Self::Output {
-        self.get(&time_frame).expect("time frame not found")
+        self.get(&time_frame)
+            .expect("expect all time frames to exist for burn_sums_per_time_frame")
     }
 }
 
@@ -250,7 +256,7 @@ async fn burn_sum_from_block(
     }
 }
 
-pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> BurnSumsEnvelope {
+pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> BurnSums {
     let block_store = BlockStorePostgres::new(db_pool);
     let burn_sum_store = BurnSumStorePostgres::new(db_pool);
 
@@ -265,17 +271,13 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> BurnS
     // Drop old sums.
     burn_sum_store.delete_old_sums(block.number).await;
 
-    let burn_sums_envelope = BurnSumsEnvelope {
-        block_number: block.number,
-        burn_sums: burn_sums_from_vec(&burn_sum_records),
-        timestamp: block.timestamp,
-    };
+    let burn_sums = burn_sums_from_vec(&burn_sum_records);
 
     debug!("calculated new burn sums");
 
-    caching::update_and_publish(db_pool, &CacheKey::BurnSums, &burn_sums_envelope)
+    caching::update_and_publish(db_pool, &CacheKey::BurnSums, &burn_sums)
         .await
         .unwrap();
 
-    burn_sums_envelope
+    burn_sums
 }

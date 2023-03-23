@@ -5,7 +5,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 use tracing::debug;
 
-use crate::burn_sums::BurnSumsEnvelope;
+use crate::burn_sums::{BurnSum, BurnSums};
 use crate::caching::{self, CacheKey};
 use crate::execution_chain::BlockNumber;
 use crate::time_frames::TimeFrame;
@@ -19,53 +19,40 @@ pub struct EthUsdRate {
     usd_per_minute: UsdPerMinute,
 }
 
-pub type BurnRates = HashMap<TimeFrame, EthUsdRate>;
-
 #[derive(Debug, Serialize)]
-pub struct BurnRatesEnvelope {
+pub struct BurnRate {
     block_number: BlockNumber,
-    burn_rates: BurnRates,
+    rate: EthUsdRate,
     timestamp: DateTime<Utc>,
 }
 
-impl From<&BurnSumsEnvelope> for BurnRatesEnvelope {
-    fn from(burn_sums_envelope: &BurnSumsEnvelope) -> Self {
-        let BurnSumsEnvelope {
-            block_number,
-            burn_sums,
-            timestamp,
-        } = burn_sums_envelope;
+pub type BurnRates = HashMap<TimeFrame, BurnRate>;
 
-        let burn_rates = burn_sums
-            .iter()
-            .map(|(time_frame, eth_usd_amount)| {
-                let minutes = time_frame.duration().num_minutes() as f64;
-                let eth_per_minute = eth_usd_amount.eth.0 / minutes;
-                let usd_per_minute = eth_usd_amount.usd.0 / minutes;
-                (
-                    *time_frame,
-                    EthUsdRate {
-                        eth_per_minute,
-                        usd_per_minute,
-                    },
-                )
-            })
-            .collect();
-
-        BurnRatesEnvelope {
-            block_number: *block_number,
-            burn_rates,
-            timestamp: *timestamp,
+impl From<(&TimeFrame, &BurnSum)> for BurnRate {
+    fn from((time_frame, burn_sum): (&TimeFrame, &BurnSum)) -> Self {
+        let minutes = time_frame.duration().num_minutes() as f64;
+        let eth_per_minute = burn_sum.sum.eth.0 / minutes;
+        let usd_per_minute = burn_sum.sum.usd.0 / minutes;
+        BurnRate {
+            block_number: burn_sum.block_number,
+            rate: EthUsdRate {
+                eth_per_minute,
+                usd_per_minute,
+            },
+            timestamp: burn_sum.timestamp,
         }
     }
 }
 
-pub async fn on_new_block(db_pool: &PgPool, burn_sums_envelope: &BurnSumsEnvelope) {
+pub async fn on_new_block(db_pool: &PgPool, burn_sums: &BurnSums) {
     debug!("calculating new burn rates");
 
-    let burn_rates_envelope: BurnRatesEnvelope = burn_sums_envelope.into();
+    let burn_rates: BurnRates = burn_sums
+        .iter()
+        .map(|(tf, bs)| -> (TimeFrame, BurnRate) { (*tf, (tf, bs).into()) })
+        .collect();
 
-    caching::update_and_publish(db_pool, &CacheKey::BurnRates, burn_rates_envelope)
+    caching::update_and_publish(db_pool, &CacheKey::BurnRates, burn_rates)
         .await
         .unwrap();
 }

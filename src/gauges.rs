@@ -15,7 +15,7 @@ use sqlx::PgPool;
 
 use crate::{
     beacon_chain::IssuanceStore,
-    burn_sums::{BurnSumsEnvelope, EthUsdAmount},
+    burn_sums::{BurnSums, EthUsdAmount},
     caching::{self, CacheKey},
     execution_chain::{BlockNumber, ExecutionNodeBlock},
     performance::TimedExt,
@@ -49,16 +49,16 @@ pub async fn on_new_block(
     db_pool: &PgPool,
     issuance_store: impl IssuanceStore + Copy,
     block: &ExecutionNodeBlock,
-    burn_sums_envelope: &BurnSumsEnvelope,
+    burn_sums: &BurnSums,
     eth_supply: &EthNewtype,
 ) -> Result<()> {
     let mut gauge_rates: GaugeRates = HashMap::new();
 
     for time_frame in all::<TimeFrame>() {
-        let burn_rate_yearly = burn_sums_envelope
-            .burn_sums
+        let burn_rate_yearly = burn_sums
             .get(&time_frame)
             .unwrap()
+            .sum
             .yearly_rate_from_time_frame(time_frame);
 
         let (issuance_time_frame, usd_price_average) = join!(
