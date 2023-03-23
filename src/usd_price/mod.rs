@@ -119,30 +119,30 @@ pub async fn record_eth_price() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use chrono::SubsecRound;
+    use test_context::test_context;
+
+    use crate::db::tests::TestDb;
 
     use super::*;
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn update_eth_price_with_most_recent_test() {
-        let test_db = db::tests::TestDb::new().await;
-        let db_pool = test_db.pool.clone();
+    async fn update_eth_price_with_most_recent_test(test_db: &TestDb) {
         let test_price = EthPrice {
             timestamp: Utc::now().trunc_subsecs(0) - Duration::minutes(10),
             usd: 0.0,
         };
 
-        store::store_price(&db_pool, Utc::now() - Duration::hours(24), 0.0).await;
+        store::store_price(&test_db.pool, Utc::now() - Duration::hours(24), 0.0).await;
 
         let mut last_price = test_price.clone();
 
-        update_eth_price_with_most_recent(&db_pool, &mut last_price)
+        update_eth_price_with_most_recent(&test_db.pool, &mut last_price)
             .await
             .unwrap();
 
-        let eth_price = store::get_most_recent_price(&db_pool).await.unwrap();
+        let eth_price = store::get_most_recent_price(&test_db.pool).await.unwrap();
 
         assert_ne!(eth_price, test_price);
-
-        test_db.cleanup().await;
     }
 }

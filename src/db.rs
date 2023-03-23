@@ -19,8 +19,10 @@ pub async fn get_db_pool(name: &str) -> PgPool {
 
 #[cfg(test)]
 pub mod tests {
+    use async_trait::async_trait;
     use nanoid::nanoid;
     use sqlx::postgres::PgPoolOptions;
+    use test_context::AsyncTestContext;
 
     use super::*;
 
@@ -52,6 +54,22 @@ pub mod tests {
         name: String,
     }
 
+    #[async_trait]
+    impl AsyncTestContext for TestDb {
+        async fn setup() -> TestDb {
+            TestDb::new().await
+        }
+
+        async fn teardown(self) {
+            self.pool.close().await;
+            let mut connection = get_test_db_connection().await;
+            sqlx::query(&format!("DROP DATABASE {}", self.name))
+                .execute(&mut connection)
+                .await
+                .unwrap();
+        }
+    }
+
     impl TestDb {
         pub async fn new() -> Self {
             let name = format!("testdb_{}", nanoid!(10, &ALPHABET));
@@ -71,15 +89,6 @@ pub mod tests {
             sqlx::migrate!("./migrations").run(&pool).await.unwrap();
 
             Self { pool, name }
-        }
-
-        pub async fn cleanup(&self) {
-            self.pool.close().await;
-            let mut connection = get_test_db_connection().await;
-            sqlx::query(&format!("DROP DATABASE {}", self.name))
-                .execute(&mut connection)
-                .await
-                .unwrap();
         }
     }
 }

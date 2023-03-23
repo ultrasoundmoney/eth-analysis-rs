@@ -189,6 +189,8 @@ impl BurnSumStore for BurnSumStorePostgres<'_> {
 
 #[cfg(test)]
 mod tests {
+    use test_context::test_context;
+
     use crate::{
         db::tests::TestDb,
         execution_chain::{block_store, ExecutionNodeBlockBuilder},
@@ -196,9 +198,9 @@ mod tests {
 
     use super::*;
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn burn_sum_from_block_range_test() {
-        let test_db = TestDb::new().await;
+    async fn burn_sum_from_block_range_test(test_db: &TestDb) {
         let pool = &test_db.pool;
         let burn_sum_store = BurnSumStorePostgres::new(pool);
 
@@ -223,7 +225,5 @@ mod tests {
 
         assert_eq!(burn_sum_wei, WeiNewtype::from_eth(3));
         assert_eq!(burn_sum_usd, UsdNewtype(5.0));
-
-        test_db.cleanup().await;
     }
 }

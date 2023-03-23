@@ -204,13 +204,15 @@ impl Clone for BlockStorePostgres<'_> {
 
 #[cfg(test)]
 mod tests {
+    use test_context::test_context;
+
     use crate::{db::tests::TestDb, execution_chain::ExecutionNodeBlockBuilder};
 
     use super::*;
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn number_exists_test() {
-        let test_db = TestDb::new().await;
+    async fn number_exists_test(test_db: &TestDb) {
         let test_id = "block_number_exists";
         let block_store = BlockStorePostgres::new(&test_db.pool);
 
@@ -224,13 +226,11 @@ mod tests {
         block_store.add(&test_block, 0.0).await;
 
         assert!(block_store.number_exists(&test_number).await);
-
-        test_db.cleanup().await;
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn hash_exists_test() {
-        let test_db = TestDb::new().await;
+    async fn hash_exists_test(test_db: &TestDb) {
         let test_id = "block_hash_exists";
         let block_store = BlockStorePostgres::new(&test_db.pool);
 
@@ -243,13 +243,11 @@ mod tests {
 
         // Test the hash exists.
         assert!(block_store.hash_exists(&test_block.hash).await);
-
-        test_db.cleanup().await;
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn last_test() {
-        let test_db = TestDb::new().await;
+    async fn last_test(test_db: &TestDb) {
         let test_id = "last";
         let block_store = BlockStorePostgres::new(&test_db.pool);
 
@@ -260,13 +258,11 @@ mod tests {
         let last_block = (&block_store).last().await;
 
         assert_eq!(last_block, test_block);
-
-        test_db.cleanup().await;
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn hash_from_number_test() {
-        let test_db = TestDb::new().await;
+    async fn hash_from_number_test(test_db: &TestDb) {
         let test_id = "hash_from_number";
         let block_store = BlockStorePostgres::new(&test_db.pool);
 
@@ -285,13 +281,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(hash, test_block.hash);
-
-        test_db.cleanup().await;
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn time_range_from_block_range_test() {
-        let test_db = TestDb::new().await;
+    async fn time_range_from_block_range_test(test_db: &TestDb) {
         let test_id = "time_range_from_block_range";
         let block_store = BlockStorePostgres::new(&test_db.pool);
 
@@ -312,7 +306,5 @@ mod tests {
 
         assert_eq!(start_time, test_block_1.timestamp);
         assert_eq!(end_time, test_block_2.timestamp);
-
-        test_db.cleanup().await;
     }
 }
