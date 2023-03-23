@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use chrono::{Duration, DurationRound, TimeZone, Utc};
-use sqlx::{Connection, PgConnection, Postgres};
+use sqlx::Postgres;
+use store::EthPriceStore;
 use tracing::{debug, info};
 
 use crate::{db, execution_chain, log};
@@ -19,9 +20,9 @@ pub async fn heal_eth_prices() {
         .unwrap_or(10);
 
     debug!("getting all eth prices");
-    let mut connection = PgConnection::connect(&db::get_db_url_with_name("heal-eth-prices"))
-        .await
-        .unwrap();
+    let db_pool = db::get_db_pool("heal-eth-prices").await;
+    let eth_price_store = store::EthPriceStorePostgres::new(db_pool.clone());
+
     let eth_prices = sqlx::query_as::<Postgres, EthPriceTimestamp>(
         "
             SELECT
@@ -30,7 +31,7 @@ pub async fn heal_eth_prices() {
                 eth_prices
         ",
     )
-    .fetch_all(&mut connection)
+    .fetch_all(&db_pool)
     .await
     .unwrap();
 
@@ -75,7 +76,7 @@ pub async fn heal_eth_prices() {
                 }
                 Some(usd) => {
                     debug!("found a price on Bybit, adding it to the DB");
-                    store::store_price(&mut connection, timestamp_date_time, usd).await;
+                    eth_price_store.store_price(&timestamp_date_time, usd).await;
                 }
             }
         }

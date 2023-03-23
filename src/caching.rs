@@ -15,6 +15,7 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Sequence)]
 pub enum CacheKey {
+    AverageEthPrices,
     BaseFeeOverTime,
     BaseFeePerGas,
     BaseFeePerGasBarrier,
@@ -46,6 +47,7 @@ impl CacheKey {
         use TimeFrame::*;
 
         match self {
+            AverageEthPrices => "average-eth-prices",
             BaseFeeOverTime => "base-fee-over-time",
             BaseFeePerGas => "current-base-fee",
             BaseFeePerGasBarrier => "base-fee-per-gas-barrier",
@@ -96,6 +98,7 @@ impl FromStr for CacheKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "average-eth-prices" => Ok(Self::AverageEthPrices),
             "base-fee-over-time" => Ok(Self::BaseFeeOverTime),
             "current-base-fee" => Ok(Self::BaseFeePerGas),
             "base-fee-per-gas" => Ok(Self::BaseFeePerGas),

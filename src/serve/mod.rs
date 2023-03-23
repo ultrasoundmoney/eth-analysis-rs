@@ -66,6 +66,12 @@ pub async fn start_server() {
 
     let app = Router::new()
         .route(
+            "/api/v2/fees/average-eth-prices",
+            get(|state: StateExtension| async move {
+                cached_get(state, &CacheKey::AverageEthPrices).await
+            }),
+        )
+        .route(
             "/api/v2/fees/base-fee-over-time",
             get(|state: StateExtension| async move {
                 cached_get(state, &CacheKey::BaseFeeOverTime).await

@@ -21,7 +21,7 @@ use crate::{
     performance::TimedExt,
     time_frames::TimeFrame,
     units::{EthNewtype, UsdNewtype},
-    usd_price,
+    usd_price::EthPriceStore,
 };
 
 const PROOF_OF_WORK_DAILY_ISSUANCE_ESTIMATE: f64 = 13500.0;
@@ -47,6 +47,7 @@ pub type GaugeRates = HashMap<TimeFrame, GaugeRatesTimeFrame>;
 
 pub async fn on_new_block(
     db_pool: &PgPool,
+    eth_price_store: &impl EthPriceStore,
     issuance_store: &impl IssuanceStore,
     block: &ExecutionNodeBlock,
     burn_sums: &BurnSums,
@@ -65,12 +66,9 @@ pub async fn on_new_block(
             issuance_store
                 .issuance_from_time_frame(block, &time_frame)
                 .timed(&format!("issuance_from_time_frame_{time_frame}")),
-            usd_price::average_from_time_range(
-                db_pool,
-                time_frame.start_timestamp(block),
-                block.timestamp,
-            )
-            .timed(&format!("usd_price::average_from_time_range_{time_frame}"))
+            eth_price_store
+                .average_from_time_range(time_frame.start_timestamp(block), block.timestamp,)
+                .timed(&format!("usd_price::average_from_time_range_{time_frame}"))
         );
 
         let issuance_time_frame_eth: EthNewtype = issuance_time_frame?.into();

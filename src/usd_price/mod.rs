@@ -4,12 +4,13 @@ mod heal;
 mod resync;
 mod store;
 
-pub use average::average_from_time_range;
 pub use heal::heal_eth_prices;
 pub use resync::resync_all;
-pub use store::get_eth_price_by_block;
 
-use store::get_price_h24_ago;
+pub use store::EthPriceStore;
+pub use store::EthPriceStorePostgres;
+
+pub use average::on_new_block;
 
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
@@ -49,6 +50,7 @@ fn calc_h24_change(current_price: &EthPrice, price_h24_ago: &EthPrice) -> f64 {
 
 async fn update_eth_price_with_most_recent(
     db_pool: &PgPool,
+    eth_price_store: &impl EthPriceStore,
     last_price: &mut EthPrice,
 ) -> Result<()> {
     let most_recent_price = bybit::get_eth_price().await?;
@@ -74,11 +76,14 @@ async fn update_eth_price_with_most_recent(
             );
         }
 
-        store::store_price(db_pool, most_recent_price.timestamp, most_recent_price.usd).await;
+        eth_price_store
+            .store_price(&most_recent_price.timestamp, most_recent_price.usd)
+            .await;
 
         *last_price = most_recent_price;
 
-        let price_h24_ago = get_price_h24_ago(db_pool, Duration::minutes(10))
+        let price_h24_ago = eth_price_store
+            .get_price_h24_ago(&Duration::minutes(10))
             .await
             .expect("24h old price should be available within 10min of now - 24h");
 
@@ -107,11 +112,12 @@ pub async fn record_eth_price() -> Result<()> {
     info!("recording eth prices");
 
     let db_pool = db::get_db_pool("record-eth-price").await;
+    let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
 
-    let mut last_price = store::get_most_recent_price(&db_pool).await?;
+    let mut last_price = eth_price_store.get_most_recent_price().await?;
 
     loop {
-        update_eth_price_with_most_recent(&db_pool, &mut last_price).await?;
+        update_eth_price_with_most_recent(&db_pool, &eth_price_store, &mut last_price).await?;
         sleep(std::time::Duration::from_secs(10)).await;
     }
 }
@@ -128,20 +134,23 @@ mod tests {
     #[test_context(TestDb)]
     #[tokio::test]
     async fn update_eth_price_with_most_recent_test(test_db: &TestDb) {
+        let eth_price_store = EthPriceStorePostgres::new(test_db.pool.clone());
         let test_price = EthPrice {
             timestamp: Utc::now().trunc_subsecs(0) - Duration::minutes(10),
             usd: 0.0,
         };
 
-        store::store_price(&test_db.pool, Utc::now() - Duration::hours(24), 0.0).await;
+        eth_price_store
+            .store_price(&(Utc::now() - Duration::hours(24)), 0.0)
+            .await;
 
         let mut last_price = test_price.clone();
 
-        update_eth_price_with_most_recent(&test_db.pool, &mut last_price)
+        update_eth_price_with_most_recent(&test_db.pool, &eth_price_store, &mut last_price)
             .await
             .unwrap();
 
-        let eth_price = store::get_most_recent_price(&test_db.pool).await.unwrap();
+        let eth_price = eth_price_store.get_most_recent_price().await.unwrap();
 
         assert_ne!(eth_price, test_price);
     }
