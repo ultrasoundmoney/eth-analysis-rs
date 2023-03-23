@@ -152,24 +152,24 @@ pub trait IssuanceStore {
     ) -> Result<GweiNewtype, IssuanceUnavailableError>;
 }
 
-pub struct IssuanceStorePostgres<'a> {
-    db_pool: &'a PgPool,
+pub struct IssuanceStorePostgres {
+    db_pool: PgPool,
 }
 
-impl<'a> IssuanceStorePostgres<'a> {
-    pub fn new(db_pool: &'a PgPool) -> Self {
+impl IssuanceStorePostgres {
+    pub fn new(db_pool: PgPool) -> Self {
         Self { db_pool }
     }
 }
 
 #[async_trait]
-impl IssuanceStore for &IssuanceStorePostgres<'_> {
+impl IssuanceStore for IssuanceStorePostgres {
     async fn current_issuance(&self) -> GweiNewtype {
-        get_current_issuance(self.db_pool).await
+        get_current_issuance(&self.db_pool).await
     }
 
     async fn day7_ago_issuance(&self) -> GweiNewtype {
-        get_day7_ago_issuance(self.db_pool).await
+        get_day7_ago_issuance(&self.db_pool).await
     }
 
     async fn issuance_at_timestamp(
@@ -186,7 +186,7 @@ impl IssuanceStore for &IssuanceStorePostgres<'_> {
              ",
             timestamp
         )
-        .fetch_optional(self.db_pool)
+        .fetch_optional(&self.db_pool)
         .await
         .unwrap()
         .map_or_else(
@@ -209,7 +209,7 @@ impl IssuanceStore for &IssuanceStorePostgres<'_> {
     }
 }
 
-pub async fn get_last_week_issuance(issuance_store: impl IssuanceStore) -> GweiNewtype {
+pub async fn get_last_week_issuance(issuance_store: &impl IssuanceStore) -> GweiNewtype {
     let (current_issuance, day7_ago_issuance) = join!(
         issuance_store.current_issuance(),
         issuance_store.day7_ago_issuance()
@@ -231,7 +231,7 @@ struct IssuanceEstimate {
     issuance_per_slot_gwei: f64,
 }
 
-async fn get_issuance_per_slot_estimate(issuance_store: impl IssuanceStore) -> f64 {
+async fn get_issuance_per_slot_estimate(issuance_store: &impl IssuanceStore) -> f64 {
     let last_week_issuance = get_last_week_issuance(issuance_store).await;
     last_week_issuance.0 as f64 / SLOTS_PER_WEEK
 }
@@ -240,7 +240,7 @@ pub async fn update_issuance_estimate() {
     info!("updating issuance estimate");
 
     let db_pool = db::get_db_pool("update-issuance-estimate").await;
-    let issuance_store = IssuanceStorePostgres::new(&db_pool);
+    let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
 
     let issuance_per_slot_gwei = get_issuance_per_slot_estimate(&issuance_store).await;
     let slot = super::get_last_state(&db_pool)
@@ -459,7 +459,7 @@ mod tests {
     async fn get_last_week_issuance_test() {
         let issuance_store = IssuanceStoreTest {};
 
-        let issuance = get_last_week_issuance(issuance_store).await;
+        let issuance = get_last_week_issuance(&issuance_store).await;
 
         assert_eq!(issuance, GweiNewtype(50));
     }

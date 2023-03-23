@@ -31,7 +31,7 @@ pub fn estimate_barrier_from_issuance(issuance: GweiNewtype) -> f64 {
         / APPROXIMATE_GAS_USED_PER_BLOCK as f64
 }
 
-pub async fn get_barrier(issuance_store: impl IssuanceStore) -> Barrier {
+pub async fn get_barrier(issuance_store: &impl IssuanceStore) -> Barrier {
     debug!("estimating base fee per gas barrier");
 
     let issuance = beacon_chain::get_last_week_issuance(issuance_store)

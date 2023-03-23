@@ -47,7 +47,7 @@ pub type GaugeRates = HashMap<TimeFrame, GaugeRatesTimeFrame>;
 
 pub async fn on_new_block(
     db_pool: &PgPool,
-    issuance_store: impl IssuanceStore + Copy,
+    issuance_store: &impl IssuanceStore,
     block: &ExecutionNodeBlock,
     burn_sums: &BurnSums,
     eth_supply: &EthNewtype,

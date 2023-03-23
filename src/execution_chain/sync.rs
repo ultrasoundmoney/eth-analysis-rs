@@ -35,7 +35,7 @@ async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber)
 }
 
 async fn sync_by_hash(
-    issuance_store: impl IssuanceStore + Copy,
+    issuance_store: &impl IssuanceStore,
     execution_node: &mut ExecutionNode,
     db_pool: &PgPool,
     hash: &str,

@@ -27,7 +27,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let issuance_store = IssuanceStorePostgres::new(&db_pool);
+    let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
 
     let crowd_sale: GweiNewtype = EthNewtype(60_108_506.26).into();
     debug!(

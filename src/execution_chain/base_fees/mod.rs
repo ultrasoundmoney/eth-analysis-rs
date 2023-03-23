@@ -39,7 +39,7 @@ fn issuance_from_time_frame(
 
 pub async fn on_new_block(
     db_pool: &PgPool,
-    issuance_store: impl IssuanceStore,
+    issuance_store: &impl IssuanceStore,
     block: &ExecutionNodeBlock,
 ) {
     let barrier = barrier::get_barrier(issuance_store).await;
