@@ -16,11 +16,15 @@ use tracing::debug;
 use crate::{
     burn_sums::store::BurnSumStore,
     caching::{self, CacheKey},
-    execution_chain::{BlockNumber, BlockRange, BlockStore, ExecutionNodeBlock},
+    execution_chain::{
+        BlockNumber, BlockRange, BlockStore, BlockStorePostgres, ExecutionNodeBlock,
+    },
     performance::TimedExt,
     time_frames::{LimitedTimeFrame, TimeFrame},
     units::{EthNewtype, UsdNewtype, WeiNewtype},
 };
+
+use self::store::BurnSumStorePostgres;
 
 #[derive(Debug, PartialEq)]
 struct WeiUsdAmount {
@@ -87,12 +91,12 @@ pub struct BurnSumRecord {
 }
 
 pub async fn on_rollback(connection: &mut PgConnection, block_number_gte: &BlockNumber) {
-    BurnSumStore::delete_new_sums_tx(connection, block_number_gte).await;
+    BurnSumStorePostgres::delete_new_sums_tx(connection, block_number_gte).await;
 }
 
 async fn expired_burn_from(
-    block_store: &BlockStore<'_>,
-    burn_sum_store: &BurnSumStore<'_>,
+    block_store: &impl BlockStore,
+    burn_sum_store: &impl BurnSumStore,
     last_burn_sum: &BurnSumRecord,
     block: &ExecutionNodeBlock,
     limited_time_frame: &LimitedTimeFrame,
@@ -132,7 +136,7 @@ async fn expired_burn_from(
                 .burn_sum_from_block_range(&expired_block_range)
                 .await;
 
-            debug!(%expired_block_range, %expired_included_burn_wei, %expired_included_burn_usd, %limited_time_frame, "subtracting expired burn");
+            debug!(%expired_block_range, %expired_included_burn_wei, %expired_included_burn_usd, %limited_time_frame, "expired burn");
 
             Some((
                 first_included_block_number,
@@ -144,12 +148,15 @@ async fn expired_burn_from(
 }
 
 async fn calc_new_burn_sum_record_from_scratch(
-    burn_sum_store: &BurnSumStore<'_>,
+    block_store: &impl BlockStore,
+    burn_sum_store: &impl BurnSumStore,
     block: &ExecutionNodeBlock,
     time_frame: &TimeFrame,
 ) -> BurnSumRecord {
     debug!(%block.number, %block.hash, %time_frame, "calculating new burn sum record from scratch");
-    let range = BlockRange::from_last_plus_time_frame(&block.number, time_frame);
+    let range = BlockRange::from_block_and_time_frame(block_store, block, time_frame)
+        .await
+        .expect("expect blocks to be available when calculating new burn sum from scratch");
     let (sum_wei, sum_usd) = burn_sum_store.burn_sum_from_block_range(&range).await;
     BurnSumRecord {
         first_included_block_number: range.start,
@@ -163,8 +170,8 @@ async fn calc_new_burn_sum_record_from_scratch(
 }
 
 async fn calc_new_burn_sum_record_from_last(
-    block_store: &BlockStore<'_>,
-    burn_sum_store: &BurnSumStore<'_>,
+    block_store: &impl BlockStore,
+    burn_sum_store: &impl BurnSumStore,
     last_burn_sum: &BurnSumRecord,
     block: &ExecutionNodeBlock,
     time_frame: &TimeFrame,
@@ -219,9 +226,9 @@ async fn calc_new_burn_sum_record_from_last(
     }
 }
 
-async fn calc_new_burn_sum_record(
-    block_store: &BlockStore<'_>,
-    burn_sum_store: &BurnSumStore<'_>,
+async fn burn_sum_from_block(
+    block_store: &impl BlockStore,
+    burn_sum_store: &impl BurnSumStore,
     block: &ExecutionNodeBlock,
     time_frame: TimeFrame,
 ) -> BurnSumRecord {
@@ -236,16 +243,19 @@ async fn calc_new_burn_sum_record(
             )
             .await
         }
-        None => calc_new_burn_sum_record_from_scratch(burn_sum_store, block, &time_frame).await,
+        None => {
+            calc_new_burn_sum_record_from_scratch(block_store, burn_sum_store, block, &time_frame)
+                .await
+        }
     }
 }
 
 pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> BurnSumsEnvelope {
-    let block_store = BlockStore::new(db_pool);
-    let burn_sum_store = BurnSumStore::new(db_pool);
+    let block_store = BlockStorePostgres::new(db_pool);
+    let burn_sum_store = BurnSumStorePostgres::new(db_pool);
 
     let futures = all::<TimeFrame>().map(|time_frame| {
-        calc_new_burn_sum_record(&block_store, &burn_sum_store, block, time_frame)
+        burn_sum_from_block(&block_store, &burn_sum_store, block, time_frame)
             .timed(&format!("calc_new_burn_sum_record_{time_frame}"))
     });
     let burn_sum_records = join_all(futures).await;

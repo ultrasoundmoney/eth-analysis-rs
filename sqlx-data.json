@@ -774,32 +774,6 @@
     },
     "query": "\n            SELECT\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum_usd,\n                sum_wei::TEXT AS \"sum_wei!\"\n            FROM burn_sums\n            WHERE time_frame = $1\n            ORDER BY last_included_block_number DESC\n            LIMIT 1\n            "
   },
-  "65b6a62649270388952eb823c8d7b1f686d73d744f7a2262ebe6ac380ec1cc04": {
-    "describe": {
-      "columns": [
-        {
-          "name": "balances_slot",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "supply!",
-          "ordinal": 1,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n                SELECT\n                    balances_slot,\n                    supply::TEXT AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    balances_slot = $1\n                "
-  },
   "6e5840a62473818a418e10adb6ba3c8808a9f057e7194a4910096fdaf503d699": {
     "describe": {
       "columns": [],

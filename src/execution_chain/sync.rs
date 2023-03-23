@@ -14,14 +14,14 @@ use tracing::{debug, info, warn};
 use crate::{
     beacon_chain::{IssuanceStore, IssuanceStorePostgres},
     burn_rates, burn_sums, db, eth_supply,
-    execution_chain::{self, base_fees, BlockStore, ExecutionNode},
+    execution_chain::{self, base_fees, BlockStorePostgres, ExecutionNode},
     gauges, log,
     performance::TimedExt,
     units::EthNewtype,
     usd_price,
 };
 
-use super::{BlockNumber, LONDON_HARD_FORK_BLOCK_HASH};
+use super::{BlockNumber, BlockStore, LONDON_HARD_FORK_BLOCK_HASH};
 
 async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber) {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
@@ -92,7 +92,7 @@ async fn sync_by_hash(
 
 async fn find_last_matching_block_number(
     execution_node: &mut ExecutionNode,
-    block_store: &BlockStore<'_>,
+    block_store: &BlockStorePostgres<'_>,
     starting_candidate: BlockNumber,
 ) -> BlockNumber {
     let mut current_candidate_number = starting_candidate;
@@ -116,7 +116,7 @@ async fn find_last_matching_block_number(
 }
 
 async fn estimate_blocks_remaining(
-    block_store: &BlockStore<'_>,
+    block_store: &impl BlockStore,
     execution_node: &mut ExecutionNode,
 ) -> i32 {
     let last_on_chain = execution_node.get_latest_block().await;
@@ -148,7 +148,7 @@ pub async fn sync_blocks() {
 
     let mut execution_node = ExecutionNode::connect().await;
     let issuance_store = IssuanceStorePostgres::new(&db_pool);
-    let block_store = BlockStore::new(&db_pool);
+    let block_store = BlockStorePostgres::new(&db_pool);
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
     let mut heads_queue: HeadsQueue = VecDeque::new();
 

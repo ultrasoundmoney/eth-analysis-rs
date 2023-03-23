@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::{PgConnection, PgPool};
 use tracing::debug;
@@ -12,16 +13,32 @@ use super::BurnSumRecord;
 
 const REORG_LIMIT: i32 = 100;
 
-pub struct BurnSumStore<'a> {
+#[async_trait]
+pub trait BurnSumStore {
+    async fn burn_sum_from_block_range(&self, block_range: &BlockRange)
+        -> (WeiNewtype, UsdNewtype);
+    async fn delete_old_sums(&self, last_block: BlockNumber);
+    async fn last_burn_sum(&self, time_frame: &TimeFrame) -> Option<BurnSumRecord>;
+    async fn store_burn_sums(&self, burn_sum: &[BurnSumRecord]);
+    async fn delete_new_sums_tx<'a>(
+        transaction: &'a mut PgConnection,
+        block_number_gte: &'a BlockNumber,
+    );
+}
+
+pub struct BurnSumStorePostgres<'a> {
     db_pool: &'a PgPool,
 }
 
-impl<'a> BurnSumStore<'a> {
+impl<'a> BurnSumStorePostgres<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self { db_pool }
     }
+}
 
-    pub async fn burn_sum_from_block_range(
+#[async_trait]
+impl BurnSumStore for BurnSumStorePostgres<'_> {
+    async fn burn_sum_from_block_range(
         &self,
         block_range: &BlockRange,
     ) -> (WeiNewtype, UsdNewtype) {
@@ -50,7 +67,7 @@ impl<'a> BurnSumStore<'a> {
         (wei, usd)
     }
 
-    pub async fn delete_old_sums(&self, last_block: BlockNumber) {
+    async fn delete_old_sums(&self, last_block: BlockNumber) {
         let block_number_limit = last_block - REORG_LIMIT;
 
         debug!(block_number_limit, "deleting old sums");
@@ -68,7 +85,7 @@ impl<'a> BurnSumStore<'a> {
     }
 
     /// Returns the last sum which relates to a canonical block.
-    pub async fn last_burn_sum(&self, time_frame: &TimeFrame) -> Option<BurnSumRecord> {
+    async fn last_burn_sum(&self, time_frame: &TimeFrame) -> Option<BurnSumRecord> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -100,7 +117,7 @@ impl<'a> BurnSumStore<'a> {
         })
     }
 
-    pub async fn store_burn_sums(&self, burn_sum: &[BurnSumRecord]) {
+    async fn store_burn_sums(&self, burn_sum: &[BurnSumRecord]) {
         let mut v1: Vec<String> = Vec::new();
         let mut v2: Vec<BlockNumber> = Vec::new();
         let mut v3: Vec<BlockNumber> = Vec::new();
@@ -151,9 +168,9 @@ impl<'a> BurnSumStore<'a> {
         .unwrap();
     }
 
-    pub async fn delete_new_sums_tx(
-        transaction: &mut PgConnection,
-        block_number_gte: &BlockNumber,
+    async fn delete_new_sums_tx<'a>(
+        transaction: &'a mut PgConnection,
+        block_number_gte: &'a BlockNumber,
     ) {
         sqlx::query!(
             "
@@ -183,7 +200,7 @@ mod tests {
     async fn burn_sum_from_block_range_test() {
         let test_db = TestDb::new().await;
         let pool = &test_db.pool;
-        let burn_sum_store = BurnSumStore::new(pool);
+        let burn_sum_store = BurnSumStorePostgres::new(pool);
 
         let test_id = "burn_sum_from_time_frame";
 

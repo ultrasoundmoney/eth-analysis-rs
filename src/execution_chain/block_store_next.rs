@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
 use sqlx::PgPool;
@@ -6,35 +7,28 @@ use crate::execution_chain::{BlockNumber, BlockRange, ExecutionNodeBlock};
 
 use super::block_store;
 
-pub struct BlockStore<'a> {
+#[async_trait]
+pub trait BlockStore {
+    async fn number_exists(&self, block_number: &BlockNumber) -> bool;
+    // async fn hash_exists(&self, block_hash: &str) -> bool;
+    // async fn delete_from_range(&self, block_range: &BlockRange);
+    // async fn add(&self, block: &ExecutionNodeBlock, eth_price: f64);
+    async fn first_number_after_or_at(&self, timestamp: &DateTime<Utc>) -> Option<BlockNumber>;
+    async fn last(&self) -> ExecutionNodeBlock;
+    async fn hash_from_number(&self, block_number: &BlockNumber) -> Option<String>;
+}
+
+pub struct BlockStorePostgres<'a> {
     db_pool: &'a PgPool,
 }
 
-impl<'a> BlockStore<'a> {
+impl<'a> BlockStorePostgres<'a> {
     pub fn new(db_pool: &'a PgPool) -> Self {
         Self { db_pool }
     }
 
     #[allow(dead_code)]
-    pub async fn number_exists(&self, block_number: &BlockNumber) -> bool {
-        sqlx::query!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM blocks_next
-                WHERE number = $1
-            ) AS "exists!"
-            "#,
-            block_number
-        )
-        .fetch_one(self.db_pool)
-        .await
-        .unwrap()
-        .exists
-    }
-
-    #[allow(dead_code)]
-    pub async fn hash_exists(&self, block_hash: &str) -> bool {
+    async fn hash_exists(&self, block_hash: &str) -> bool {
         sqlx::query!(
             r#"
             SELECT EXISTS (
@@ -52,7 +46,7 @@ impl<'a> BlockStore<'a> {
     }
 
     #[allow(dead_code)]
-    pub async fn delete_from_range(&self, block_range: &BlockRange) {
+    async fn delete_from_range(&self, block_range: &BlockRange) {
         sqlx::query!(
             "
             DELETE FROM
@@ -71,11 +65,44 @@ impl<'a> BlockStore<'a> {
     }
 
     #[allow(dead_code)]
-    pub async fn add(&self, block: &ExecutionNodeBlock, eth_price: f64) {
+    async fn add(&self, block: &ExecutionNodeBlock, eth_price: f64) {
         block_store::store_block(self.db_pool, block, eth_price).await
     }
 
-    pub async fn first_number_after_or_at(&self, timestamp: &DateTime<Utc>) -> Option<BlockNumber> {
+    #[allow(dead_code)]
+    async fn timestamp_from_number(&self, block_number: &BlockNumber) -> DateTime<Utc> {
+        sqlx::query!(
+            r#"
+            SELECT
+                timestamp
+            FROM
+                blocks_next
+            WHERE
+                number = $1
+            "#,
+            block_number
+        )
+        .fetch_one(self.db_pool)
+        .await
+        .unwrap()
+        .timestamp
+    }
+
+    #[allow(dead_code)]
+    async fn time_range_from_block_range(
+        &self,
+        block_range: &BlockRange,
+    ) -> (DateTime<Utc>, DateTime<Utc>) {
+        join!(
+            self.timestamp_from_number(&block_range.start),
+            self.timestamp_from_number(&block_range.end)
+        )
+    }
+}
+
+#[async_trait]
+impl BlockStore for BlockStorePostgres<'_> {
+    async fn first_number_after_or_at(&self, timestamp: &DateTime<Utc>) -> Option<BlockNumber> {
         sqlx::query!(
             "
             SELECT
@@ -96,7 +123,7 @@ impl<'a> BlockStore<'a> {
         .map(|row| row.number)
     }
 
-    pub async fn last(&self) -> ExecutionNodeBlock {
+    async fn last(&self) -> ExecutionNodeBlock {
         sqlx::query!(
             r#"
             SELECT
@@ -131,7 +158,7 @@ impl<'a> BlockStore<'a> {
         .unwrap()
     }
 
-    pub async fn hash_from_number(&self, block_number: &BlockNumber) -> Option<String> {
+    async fn hash_from_number(&self, block_number: &BlockNumber) -> Option<String> {
         sqlx::query!(
             r#"
             SELECT
@@ -149,34 +176,29 @@ impl<'a> BlockStore<'a> {
         .map(|row| row.hash)
     }
 
-    #[allow(dead_code)]
-    pub async fn timestamp_from_number(&self, block_number: &BlockNumber) -> DateTime<Utc> {
+    async fn number_exists(&self, block_number: &BlockNumber) -> bool {
         sqlx::query!(
             r#"
-            SELECT
-                timestamp
-            FROM
-                blocks_next
-            WHERE
-                number = $1
+            SELECT EXISTS (
+                SELECT 1
+                FROM blocks_next
+                WHERE number = $1
+            ) AS "exists!"
             "#,
             block_number
         )
         .fetch_one(self.db_pool)
         .await
         .unwrap()
-        .timestamp
+        .exists
     }
+}
 
-    #[allow(dead_code)]
-    pub async fn time_range_from_block_range(
-        &self,
-        block_range: &BlockRange,
-    ) -> (DateTime<Utc>, DateTime<Utc>) {
-        join!(
-            self.timestamp_from_number(&block_range.start),
-            self.timestamp_from_number(&block_range.end)
-        )
+impl Clone for BlockStorePostgres<'_> {
+    fn clone(&self) -> Self {
+        Self {
+            db_pool: self.db_pool,
+        }
     }
 }
 
@@ -190,7 +212,7 @@ mod tests {
     async fn number_exists_test() {
         let test_db = TestDb::new().await;
         let test_id = "block_number_exists";
-        let block_store = BlockStore::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(&test_db.pool);
 
         let test_number = 1351;
         let test_block = ExecutionNodeBlockBuilder::new(test_id)
@@ -210,7 +232,7 @@ mod tests {
     async fn hash_exists_test() {
         let test_db = TestDb::new().await;
         let test_id = "block_hash_exists";
-        let block_store = BlockStore::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(&test_db.pool);
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
@@ -229,13 +251,13 @@ mod tests {
     async fn last_test() {
         let test_db = TestDb::new().await;
         let test_id = "last";
-        let block_store = BlockStore::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(&test_db.pool);
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
         block_store.add(&test_block, 0.0).await;
 
-        let last_block = block_store.last().await;
+        let last_block = (&block_store).last().await;
 
         assert_eq!(last_block, test_block);
 
@@ -246,7 +268,7 @@ mod tests {
     async fn hash_from_number_test() {
         let test_db = TestDb::new().await;
         let test_id = "hash_from_number";
-        let block_store = BlockStore::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(&test_db.pool);
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
@@ -257,7 +279,7 @@ mod tests {
 
         block_store.add(&test_block, 0.0).await;
 
-        let hash = block_store
+        let hash = (&block_store)
             .hash_from_number(&test_block.number)
             .await
             .unwrap();
@@ -271,7 +293,7 @@ mod tests {
     async fn time_range_from_block_range_test() {
         let test_db = TestDb::new().await;
         let test_id = "time_range_from_block_range";
-        let block_store = BlockStore::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(&test_db.pool);
 
         let test_block_1 = ExecutionNodeBlockBuilder::new(test_id).build();
         let test_block_2 = ExecutionNodeBlockBuilder::new(test_id)

@@ -22,6 +22,7 @@ pub use block_store::get_last_block_number;
 pub use block_store::store_block;
 
 pub use block_store_next::BlockStore;
+pub use block_store_next::BlockStorePostgres;
 
 pub use export_blocks::write_blocks_from_august;
 pub use export_blocks::write_blocks_from_london;
