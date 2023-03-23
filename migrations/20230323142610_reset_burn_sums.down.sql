@@ -1,0 +1,1 @@
+-- Nothing to do. No way to undo TRUNCATE.
