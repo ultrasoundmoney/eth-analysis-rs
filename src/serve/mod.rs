@@ -66,9 +66,9 @@ pub async fn start_server() {
 
     let app = Router::new()
         .route(
-            "/api/v2/fees/average-eth-prices",
+            "/api/v2/fees/average-eth-price",
             get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::AverageEthPrices).await
+                cached_get(state, &CacheKey::AverageEthPrice).await
             }),
         )
         .route(
