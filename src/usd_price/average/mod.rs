@@ -28,6 +28,7 @@ pub async fn average_from_time_range(
 #[cfg(test)]
 mod tests {
     use chrono::{DateTime, Utc};
+    use test_context::test_context;
 
     use crate::{db::tests::TestDb, execution_chain::ExecutionNodeBlockBuilder};
 
@@ -35,9 +36,9 @@ mod tests {
 
     use super::*;
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn average_from_time_range_test() {
-        let test_db = TestDb::new().await;
+    async fn average_from_time_range_test(test_db: &TestDb) {
         let test_id = "average_from_block_range_test";
 
         let test_block_1 = ExecutionNodeBlockBuilder::new(test_id)
@@ -63,7 +64,5 @@ mod tests {
         .await;
 
         assert_eq!(average.0, 1.5);
-
-        test_db.cleanup().await;
     }
 }
