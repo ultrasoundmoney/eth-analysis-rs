@@ -38,7 +38,6 @@ async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> SupplyAtTime {
         "
         SELECT
             timestamp,
-            balances_slot,
             supply::FLOAT8 / 1e18 AS \"supply!\"
         FROM
             eth_supply
@@ -199,7 +198,6 @@ async fn from_time_frame(
                 "
                 SELECT
                     DISTINCT ON (DATE_BIN('5 minutes', timestamp, '2022-01-01')) DATE_BIN('5 minutes', timestamp, '2022-01-01') AS \"five_minute_timestamp!\",
-                    balances_slot AS balances_slot,
                     supply::FLOAT8 / 1e18 AS \"supply!\"
                 FROM
                     eth_supply
