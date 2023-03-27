@@ -170,14 +170,14 @@ async fn from_time_frame(
             sqlx::query!(
                 "
                 SELECT
-                    DISTINCT ON (DATE_TRUNC('minute', timestamp)) DATE_TRUNC('minute', timestamp) AS \"minute_timestamp!\",
+                    DISTINCT ON (date_bin('384 seconds', timestamp, '2022-1-1')) date_bin('384 seconds', timestamp, '2022-1-1') AS \"epoch_timestamp!\",
                     supply::FLOAT8 / 1e18 AS \"supply!\"
                 FROM
                     eth_supply
                 WHERE
                     timestamp >= NOW() - $1::INTERVAL
                 ORDER BY
-                    DATE_TRUNC('minute', timestamp), timestamp ASC
+                    date_bin('384 seconds', timestamp, '2022-1-1'), timestamp ASC
                 ",
                 Into::<PgInterval>::into(ltf)
             )
@@ -187,7 +187,7 @@ async fn from_time_frame(
                 .into_iter()
             .map(|row| {
                 SupplyAtTime {
-                    timestamp: row.minute_timestamp,
+                    timestamp: row.epoch_timestamp,
                     supply: EthNewtype(row.supply),
                 }
             })
