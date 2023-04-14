@@ -310,7 +310,7 @@ mod tests {
                 &withdrawal_sum_aggregated,
                 &deposit_sum_aggregated
             ),
-            GweiNewtype(50)
+            GweiNewtype(40)
         )
     }
 
