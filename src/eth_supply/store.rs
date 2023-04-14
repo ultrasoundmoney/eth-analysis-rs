@@ -240,6 +240,8 @@ mod tests {
             &test_block,
             &GweiNewtype(0),
             &GweiNewtype(5),
+            &GweiNewtype(0),
+            &GweiNewtype(5),
             &test_header,
         )
         .await;

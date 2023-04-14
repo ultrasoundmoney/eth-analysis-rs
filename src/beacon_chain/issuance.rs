@@ -45,9 +45,10 @@ pub async fn store_issuance(
 
 pub fn calc_issuance(
     validator_balances_sum_gwei: &GweiNewtype,
+    withdrawal_sum_aggregated: &GweiNewtype,
     deposit_sum_aggregated: &GweiNewtype,
 ) -> GweiNewtype {
-    *validator_balances_sum_gwei - *deposit_sum_aggregated
+    *validator_balances_sum_gwei - *withdrawal_sum_aggregated - *deposit_sum_aggregated
 }
 
 pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
@@ -300,10 +301,15 @@ mod tests {
     #[test]
     fn calc_issuance_test() {
         let validator_balances_sum_gwei = GweiNewtype(100);
+        let withdrawal_sum_aggregated = GweiNewtype(10);
         let deposit_sum_aggregated = GweiNewtype(50);
 
         assert_eq!(
-            calc_issuance(&validator_balances_sum_gwei, &deposit_sum_aggregated),
+            calc_issuance(
+                &validator_balances_sum_gwei,
+                &withdrawal_sum_aggregated,
+                &deposit_sum_aggregated
+            ),
             GweiNewtype(50)
         )
     }

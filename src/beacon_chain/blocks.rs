@@ -21,12 +21,12 @@ pub async fn get_deposit_sum_from_block_root(
 ) -> GweiNewtype {
     sqlx::query!(
         "
-            SELECT
-                deposit_sum_aggregated
-            FROM
-                beacon_blocks
-            WHERE
-                block_root = $1
+        SELECT
+            deposit_sum_aggregated
+        FROM
+            beacon_blocks
+        WHERE
+            block_root = $1
         ",
         block_root
     )
@@ -38,6 +38,30 @@ pub async fn get_deposit_sum_from_block_root(
     .unwrap()
 }
 
+pub async fn get_withdrawal_sum_from_block_root(
+    executor: impl PgExecutor<'_>,
+    block_root: &str,
+) -> GweiNewtype {
+    sqlx::query!(
+        "
+        SELECT
+            withdrawal_sum_aggregated
+        FROM
+            beacon_blocks
+        WHERE
+            block_root = $1
+        ",
+        block_root
+    )
+    .fetch_one(executor)
+    .await
+    .unwrap()
+    .withdrawal_sum_aggregated
+    .unwrap_or_default()
+    .try_into()
+    .unwrap()
+}
+
 pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) -> bool {
     if block_root == GENESIS_PARENT_ROOT {
         return true;
@@ -45,10 +69,10 @@ pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) 
 
     sqlx::query(
         "
-            SELECT EXISTS (
-                SELECT 1 FROM beacon_blocks
-                WHERE block_root = $1
-            )
+        SELECT EXISTS (
+            SELECT 1 FROM beacon_blocks
+            WHERE block_root = $1
+        )
         ",
     )
     .bind(block_root)
@@ -63,26 +87,32 @@ pub async fn store_block(
     block: &BeaconBlock,
     deposit_sum: &GweiNewtype,
     deposit_sum_aggregated: &GweiNewtype,
+    withdrawal_sum: &GweiNewtype,
+    withdrawal_sum_aggregated: &GweiNewtype,
     header: &BeaconHeaderSignedEnvelope,
 ) {
     sqlx::query!(
         "
-            INSERT INTO beacon_blocks (
-                block_hash,
-                block_root,
-                deposit_sum,
-                deposit_sum_aggregated,
-                parent_root,
-                state_root
-            )
-            VALUES (
-                $1, $2, $3, $4, $5, $6
-            )
+        INSERT INTO beacon_blocks (
+            block_hash,
+            block_root,
+            deposit_sum,
+            deposit_sum_aggregated,
+            withdrawal_sum,
+            withdrawal_sum_aggregated,
+            parent_root,
+            state_root
+        )
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8
+        )
         ",
         block.block_hash(),
         header.root,
         i64::from(deposit_sum.to_owned()),
         i64::from(deposit_sum_aggregated.to_owned()),
+        i64::from(withdrawal_sum.to_owned()),
+        i64::from(withdrawal_sum_aggregated.to_owned()),
         header.parent_root(),
         header.state_root(),
     )
@@ -94,14 +124,14 @@ pub async fn store_block(
 pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
     sqlx::query!(
         "
-            DELETE FROM beacon_blocks
-            WHERE state_root IN (
-                SELECT
-                    state_root
-                FROM
-                    beacon_states
-                WHERE beacon_states.slot >= $1
-            )
+        DELETE FROM beacon_blocks
+        WHERE state_root IN (
+            SELECT
+                state_root
+            FROM
+                beacon_states
+            WHERE beacon_states.slot >= $1
+        )
         ",
         greater_than_or_equal.0
     )
@@ -113,14 +143,14 @@ pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal:
 pub async fn delete_block(executor: impl PgExecutor<'_>, slot: &Slot) {
     sqlx::query(
         "
-            DELETE FROM beacon_blocks
-            WHERE state_root IN (
-                SELECT
-                    state_root
-                FROM
-                    beacon_states
-                WHERE slot = $1
-            )
+        DELETE FROM beacon_blocks
+        WHERE state_root IN (
+            SELECT
+                state_root
+            FROM
+                beacon_states
+            WHERE slot = $1
+        )
         ",
     )
     .bind(slot.0)
@@ -133,20 +163,20 @@ pub async fn get_block_before_slot(executor: impl PgExecutor<'_>, less_than: &Sl
     sqlx::query_as!(
         BlockDbRow,
         "
-            SELECT
-                block_root,
-                beacon_blocks.state_root,
-                parent_root,
-                deposit_sum,
-                deposit_sum_aggregated,
-                block_hash
-            FROM
-                beacon_blocks 
-            JOIN beacon_states ON
-                beacon_blocks.state_root = beacon_states.state_root 
-            WHERE slot < $1
-            ORDER BY slot DESC 
-            LIMIT 1
+        SELECT
+            block_root,
+            beacon_blocks.state_root,
+            parent_root,
+            deposit_sum,
+            deposit_sum_aggregated,
+            block_hash
+        FROM
+            beacon_blocks 
+        JOIN beacon_states ON
+            beacon_blocks.state_root = beacon_states.state_root 
+        WHERE slot < $1
+        ORDER BY slot DESC 
+        LIMIT 1
         ",
         less_than.0
     )
@@ -169,12 +199,12 @@ pub struct DbBlock {
 pub async fn update_block_hash(executor: impl PgExecutor<'_>, block_root: &str, block_hash: &str) {
     sqlx::query!(
         "
-            UPDATE
-                beacon_blocks
-            SET
-                block_hash = $1
-            WHERE
-                block_root = $2
+        UPDATE
+            beacon_blocks
+        SET
+            block_hash = $1
+        WHERE
+            block_root = $2
         ",
         block_hash,
         block_root
@@ -210,19 +240,19 @@ pub async fn get_block_by_slot(executor: impl PgExecutor<'_>, slot: &Slot) -> Op
     sqlx::query_as!(
         BlockDbRow,
         r#"
-            SELECT
-                block_root,
-                beacon_blocks.state_root,
-                parent_root,
-                deposit_sum,
-                deposit_sum_aggregated,
-                block_hash
-            FROM
-                beacon_blocks
-            JOIN beacon_states ON
-                beacon_blocks.state_root = beacon_states.state_root
-            WHERE
-                slot = $1
+        SELECT
+            block_root,
+            beacon_blocks.state_root,
+            parent_root,
+            deposit_sum,
+            deposit_sum_aggregated,
+            block_hash
+        FROM
+            beacon_blocks
+        JOIN beacon_states ON
+            beacon_blocks.state_root = beacon_states.state_root
+        WHERE
+            slot = $1
         "#,
         slot.0
     )
@@ -322,6 +352,8 @@ mod tests {
                 slot,
                 state_root: state_root.clone(),
             },
+            &GweiNewtype(0),
+            &GweiNewtype(0),
             &GweiNewtype(0),
             &GweiNewtype(0),
             &BeaconHeaderSignedEnvelope {
@@ -458,6 +490,7 @@ mod tests {
                     deposits: vec![],
                     execution_payload: Some(ExecutionPayload {
                         block_hash: block_hash.clone(),
+                        withdrawals: None,
                     }),
                 },
                 parent_root: GENESIS_PARENT_ROOT.to_string(),
