@@ -26,6 +26,25 @@
     },
     "query": "\n            WITH\n              eth_price_distances AS (\n                SELECT\n                  ethusd,\n                  timestamp,\n                  ABS(\n                    EXTRACT(\n                      epoch\n                      FROM\n                        (timestamp - (NOW() - '24 hours':: INTERVAL))\n                    )\n                  ) AS distance_seconds\n                FROM\n                  eth_prices\n                ORDER BY\n                  distance_seconds ASC\n              )\n            SELECT ethusd AS usd, timestamp\n            FROM eth_price_distances\n            WHERE distance_seconds <= $1\n            LIMIT 1\n            "
   },
+  "05f76b83575171bc7275f2f3ff3100a9d6150192e67a29a3f1fa80cdead19f47": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text",
+          "Int8",
+          "Int8",
+          "Int8",
+          "Int8",
+          "Text",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        INSERT INTO beacon_blocks (\n            block_hash,\n            block_root,\n            deposit_sum,\n            deposit_sum_aggregated,\n            withdrawal_sum,\n            withdrawal_sum_aggregated,\n            parent_root,\n            state_root\n        )\n        VALUES (\n            $1, $2, $3, $4, $5, $6, $7, $8\n        )\n        "
+  },
   "0a008d415e6395b49f8168f50baeb5ccb61602fb739683a6ec0fbf98dbc3a490": {
     "describe": {
       "columns": [
@@ -244,6 +263,26 @@
     },
     "query": "\n                SELECT\n                    DISTINCT ON (DATE_TRUNC('hour', timestamp)) DATE_TRUNC('hour', timestamp) AS \"hour_timestamp!\",\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY\n                    DATE_TRUNC('hour', timestamp), timestamp ASC\n                "
   },
+  "2345c8d8037c9244b3ef6af000c37cfc47691d343becb49046c39bb0481d28e9": {
+    "describe": {
+      "columns": [
+        {
+          "name": "deposit_sum_aggregated",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            deposit_sum_aggregated\n        FROM\n            beacon_blocks\n        WHERE\n            block_root = $1\n        "
+  },
   "26022725182b69f2b8a9695711836592df07efb3a1561c046294646ab178b5e7": {
     "describe": {
       "columns": [],
@@ -261,23 +300,6 @@
       }
     },
     "query": "\n            INSERT INTO burn_sums (\n                time_frame,\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum_usd,\n                sum_wei\n            )\n            SELECT * FROM UNNEST (\n                $1::text[],\n                $2::int[],\n                $3::int[],\n                $4::text[],\n                $5::timestamptz[],\n                $6::float8[],\n                $7::numeric[]\n            )\n            "
-  },
-  "262e7c58ea23ae1e7b2694ff084a5594b35d80df367844abb6fc0ad7b56ac0a9": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text",
-          "Int8",
-          "Int8",
-          "Text",
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO beacon_blocks (\n                block_hash,\n                block_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                parent_root,\n                state_root\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6\n            )\n        "
   },
   "28409ca2bee68e0969632f7278e521cae6fb20ec9247d24680b29ac9b727aaa2": {
     "describe": {
@@ -557,19 +579,6 @@
     },
     "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= $1\n            ORDER BY base_fee_per_gas DESC\n            LIMIT 1\n            "
   },
-  "440e3270c27b7133ca07349f03510777f0218e8acefd1f2ffad9d8528e7db2de": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            UPDATE\n                beacon_blocks\n            SET\n                block_hash = $1\n            WHERE\n                block_root = $2\n        "
-  },
   "49360b2160a50eaf2d3e27daa2fc138d995b6a42ff3a2de4d3f59b727d36e985": {
     "describe": {
       "columns": [
@@ -596,6 +605,76 @@
       }
     },
     "query": "\n        SELECT\n            timestamp,\n            supply\n        FROM daily_supply_glassnode\n        WHERE timestamp < $1\n        AND timestamp >= $2\n        ORDER BY timestamp ASC\n        "
+  },
+  "4af8583a1cc8a87929d6625b1a3019920c56b8c7c0b3a6b0708763ed3d386ed3": {
+    "describe": {
+      "columns": [
+        {
+          "name": "withdrawal_sum_aggregated",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            withdrawal_sum_aggregated\n        FROM\n            beacon_blocks\n        WHERE\n            block_root = $1\n        "
+  },
+  "4c311cd6fc10898b9a865fe7f2b50dec072356e8d0f9dc0b6185423a035769fb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "state_root",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "parent_root",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "deposit_sum",
+          "ordinal": 3,
+          "type_info": "Int8"
+        },
+        {
+          "name": "deposit_sum_aggregated",
+          "ordinal": 4,
+          "type_info": "Int8"
+        },
+        {
+          "name": "block_hash",
+          "ordinal": 5,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            block_root,\n            beacon_blocks.state_root,\n            parent_root,\n            deposit_sum,\n            deposit_sum_aggregated,\n            block_hash\n        FROM\n            beacon_blocks\n        JOIN beacon_states ON\n            beacon_blocks.state_root = beacon_states.state_root\n        WHERE\n            slot = $1\n        "
   },
   "4f33c5d4b851b645f1e49b3666841146232c99799e9390421814229745c5e110": {
     "describe": {
@@ -694,6 +773,56 @@
     },
     "query": "\n            DELETE FROM\n                burn_sums\n            WHERE\n                last_included_block_number >= $1\n            "
   },
+  "55d22ce3778a0a15030cc6b5ae5fa2b4856e4f92e082c7cfc560a47aab34a6a8": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "state_root",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "parent_root",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "deposit_sum",
+          "ordinal": 3,
+          "type_info": "Int8"
+        },
+        {
+          "name": "deposit_sum_aggregated",
+          "ordinal": 4,
+          "type_info": "Int8"
+        },
+        {
+          "name": "block_hash",
+          "ordinal": 5,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            block_root,\n            beacon_blocks.state_root,\n            parent_root,\n            deposit_sum,\n            deposit_sum_aggregated,\n            block_hash\n        FROM\n            beacon_blocks \n        JOIN beacon_states ON\n            beacon_blocks.state_root = beacon_states.state_root \n        WHERE slot < $1\n        ORDER BY slot DESC \n        LIMIT 1\n        "
+  },
   "57078faa5541b50ec9487ceda072ba2b46a55ebf9f66ffebecf38b2d4a1e4469": {
     "describe": {
       "columns": [
@@ -714,6 +843,18 @@
     },
     "query": "\n            SELECT\n                hash\n            FROM\n                blocks_next\n            WHERE\n                number = $1\n            "
   },
+  "58a9a8ae222d1c817a8dec63edbc27bab498e47427b2eaa147177fb7bcfeee62": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        DELETE FROM beacon_blocks\n        WHERE state_root IN (\n            SELECT\n                state_root\n            FROM\n                beacon_states\n            WHERE beacon_states.slot >= $1\n        )\n        "
+  },
   "5c0ebd75feae47d74c50bc83c80a9f61c6d3a8304cfca8a04a4d0ad66340f863": {
     "describe": {
       "columns": [
@@ -731,26 +872,6 @@
       }
     },
     "query": "\n        SELECT\n            MAX(balances_slot)\n        FROM\n            eth_supply\n        "
-  },
-  "622a4e700745a450c178d411239781e6319ad98f430c62e6b99685af6962f4d4": {
-    "describe": {
-      "columns": [
-        {
-          "name": "deposit_sum_aggregated",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                deposit_sum_aggregated\n            FROM\n                beacon_blocks\n            WHERE\n                block_root = $1\n        "
   },
   "635c841223a110075c5e88878f1d20c80532255799f6fe926259dbaa88fbf881": {
     "describe": {
@@ -802,17 +923,18 @@
     },
     "query": "\n            SELECT\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum_usd,\n                sum_wei::TEXT AS \"sum_wei!\"\n            FROM burn_sums\n            WHERE time_frame = $1\n            ORDER BY last_included_block_number DESC\n            LIMIT 1\n            "
   },
-  "6e5840a62473818a418e10adb6ba3c8808a9f057e7194a4910096fdaf503d699": {
+  "70fe7aeee3f5bfadebafd85d7a6dd4afced8b08c7072baadef6d180af03813c4": {
     "describe": {
       "columns": [],
       "nullable": [],
       "parameters": {
         "Left": [
-          "Int4"
+          "Text",
+          "Text"
         ]
       }
     },
-    "query": "\n            DELETE FROM beacon_blocks\n            WHERE state_root IN (\n                SELECT\n                    state_root\n                FROM\n                    beacon_states\n                WHERE beacon_states.slot >= $1\n            )\n        "
+    "query": "\n        UPDATE\n            beacon_blocks\n        SET\n            block_hash = $1\n        WHERE\n            block_root = $2\n        "
   },
   "73d291d9db99ddd05727fadba267f267d5b1b4a06c4bb827f76c101b185b6e08": {
     "describe": {
@@ -854,56 +976,6 @@
       }
     },
     "query": "\n            SELECT AVG(ethusd) AS \"avg!\"\n            FROM eth_prices\n            WHERE timestamp >= $1\n            AND timestamp <= $2\n            "
-  },
-  "74c729ccee7552d42a69774267a32655d8ba8b72b7959dc1763623a86fd5079d": {
-    "describe": {
-      "columns": [
-        {
-          "name": "block_root",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "state_root",
-          "ordinal": 1,
-          "type_info": "Text"
-        },
-        {
-          "name": "parent_root",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "deposit_sum",
-          "ordinal": 3,
-          "type_info": "Int8"
-        },
-        {
-          "name": "deposit_sum_aggregated",
-          "ordinal": 4,
-          "type_info": "Int8"
-        },
-        {
-          "name": "block_hash",
-          "ordinal": 5,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks \n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root \n            WHERE slot < $1\n            ORDER BY slot DESC \n            LIMIT 1\n        "
   },
   "7a0f47afbae84d65766452b366e2fa4567e97e125a4cce2707f0e1114ca5c6e2": {
     "describe": {
@@ -1140,56 +1212,6 @@
       }
     },
     "query": "\n        WITH issuance_distances AS (\n            SELECT\n              gwei,\n              timestamp,\n              ABS(\n                EXTRACT(\n                  epoch\n                  FROM\n                    (timestamp - (NOW() - '7 days':: INTERVAL))\n                )\n              ) AS distance_seconds\n            FROM\n              beacon_issuance\n            ORDER BY\n              distance_seconds ASC\n        )\n        SELECT gwei\n        FROM issuance_distances \n        WHERE distance_seconds <= 86400\n        LIMIT 1\n        "
-  },
-  "a262647098b76d069f84fcabe8c4affa833727791f3a15c47b8b41e2f3fb5ea2": {
-    "describe": {
-      "columns": [
-        {
-          "name": "block_root",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "state_root",
-          "ordinal": 1,
-          "type_info": "Text"
-        },
-        {
-          "name": "parent_root",
-          "ordinal": 2,
-          "type_info": "Text"
-        },
-        {
-          "name": "deposit_sum",
-          "ordinal": 3,
-          "type_info": "Int8"
-        },
-        {
-          "name": "deposit_sum_aggregated",
-          "ordinal": 4,
-          "type_info": "Int8"
-        },
-        {
-          "name": "block_hash",
-          "ordinal": 5,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                block_root,\n                beacon_blocks.state_root,\n                parent_root,\n                deposit_sum,\n                deposit_sum_aggregated,\n                block_hash\n            FROM\n                beacon_blocks\n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot = $1\n        "
   },
   "a3d5a3dc158b75b9ef06af433f5120fbdde7754553522ce31fa2fb18ce3e7234": {
     "describe": {
