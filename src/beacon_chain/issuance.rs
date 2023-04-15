@@ -48,7 +48,7 @@ pub fn calc_issuance(
     withdrawal_sum_aggregated: &GweiNewtype,
     deposit_sum_aggregated: &GweiNewtype,
 ) -> GweiNewtype {
-    *validator_balances_sum_gwei - *withdrawal_sum_aggregated - *deposit_sum_aggregated
+    (*validator_balances_sum_gwei + *withdrawal_sum_aggregated) - *deposit_sum_aggregated
 }
 
 pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
