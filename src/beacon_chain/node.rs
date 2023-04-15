@@ -633,7 +633,8 @@ pub mod tests {
 
     #[test]
     fn decode_validator_balances() {
-        let file = File::open("src/beacon_chain/data_samples/validator_balaces_1229.json").unwrap();
+        let file =
+            File::open("src/beacon_chain/data_samples/validator_balances_1229.json").unwrap();
         let reader = BufReader::new(file);
 
         serde_json::from_reader::<BufReader<File>, ValidatorBalancesEnvelope>(reader).unwrap();
