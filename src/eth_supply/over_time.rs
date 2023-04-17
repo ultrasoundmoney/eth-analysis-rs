@@ -62,12 +62,12 @@ async fn get_early_supply_since_burn(executor: impl PgExecutor<'_>) -> Vec<Suppl
             timestamp,
             supply
         FROM daily_supply_glassnode
-        WHERE timestamp < $1
-        AND timestamp >= $2
+        WHERE timestamp >= $2
+        AND timestamp < $1
         ORDER BY timestamp ASC
         ",
+        *execution_chain::LONDON_HARD_FORK_TIMESTAMP,
         *ETH_SUPPLY_FIRST_TIMESTAMP_DAY,
-        *execution_chain::LONDON_HARD_FORK_TIMESTAMP
     )
     .fetch_all(executor)
     .await
