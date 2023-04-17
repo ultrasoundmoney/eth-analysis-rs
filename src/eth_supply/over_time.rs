@@ -322,6 +322,41 @@ pub async fn get_supply_over_time(
     Ok(supply_over_time)
 }
 
+pub async fn get_daily_eth_supply(db_pool: &PgPool) -> Vec<SupplyAtTime> {
+    let eth_supply_glassnode: Vec<_> = sqlx::query!(
+        "
+        SELECT
+            timestamp,
+            supply
+        FROM daily_supply_glassnode
+        WHERE timestamp >= $2
+        AND timestamp < $1
+        ORDER BY timestamp ASC
+        ",
+        *execution_chain::LONDON_HARD_FORK_TIMESTAMP,
+        *ETH_SUPPLY_FIRST_TIMESTAMP_DAY,
+    )
+    .fetch_all(db_pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| SupplyAtTime {
+        timestamp: row.timestamp,
+        supply: EthNewtype(row.supply),
+    })
+    .collect();
+
+    let eth_supply_ours =
+        from_time_frame(db_pool, &TimeFrame::Growing(GrowingTimeFrame::SinceBurn)).await;
+
+    let eth_supply: Vec<SupplyAtTime> = eth_supply_glassnode
+        .into_iter()
+        .chain(eth_supply_ours.into_iter())
+        .collect();
+
+    eth_supply
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, SubsecRound};

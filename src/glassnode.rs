@@ -3,7 +3,7 @@ use format_url::FormatUrl;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::env;
+use crate::{env, eth_supply::SupplyAtTime};
 
 const GLASSNODE_API: &str = "https://api.glassnode.com";
 
@@ -23,35 +23,13 @@ pub struct GlassnodeDataPoint {
     pub v: f64,
 }
 
-pub async fn get_circulating_supply_data() -> Vec<GlassnodeDataPoint> {
-    let since = ("2015-07-30T00:00:00Z")
-        .parse::<DateTime<Utc>>()
-        .unwrap()
-        .timestamp()
-        .to_string();
-    let until = chrono::Utc::now().timestamp().to_string();
-
-    let url = FormatUrl::new(GLASSNODE_API)
-        .with_path_template("/v1/metrics/supply/current")
-        .with_query_params(vec![
-            ("a", "ETH"),
-            ("api_key", &GLASSNODE_API_KEY),
-            ("c", "NATIVE"),
-            ("f", "JSON"),
-            ("i", "24h"),
-            ("s", &since),
-            ("u", &until),
-        ])
-        .format_url();
-
-    reqwest::get(url)
-        .await
-        .unwrap()
-        .error_for_status()
-        .unwrap()
-        .json::<Vec<GlassnodeDataPoint>>()
-        .await
-        .unwrap()
+impl From<SupplyAtTime> for GlassnodeDataPoint {
+    fn from(supply_at_time: SupplyAtTime) -> Self {
+        GlassnodeDataPoint {
+            t: supply_at_time.timestamp.timestamp() as u64,
+            v: supply_at_time.supply.0,
+        }
+    }
 }
 
 pub async fn get_locked_eth_data() -> Vec<GlassnodeDataPoint> {

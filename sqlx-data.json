@@ -553,6 +553,33 @@
     },
     "query": "\n        SELECT\n          timestamp,\n          ethusd AS \"ethusd!\"\n        FROM eth_prices\n        ORDER BY ABS(EXTRACT(epoch FROM (timestamp - $1)))\n        LIMIT 1\n        "
   },
+  "3d7c15b712be6daaa1d0193a33798ef0d2868022bf73316f71b1dafe32dd4730": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            timestamp,\n            supply\n        FROM daily_supply_glassnode\n        WHERE timestamp >= $2\n        AND timestamp < $1\n        ORDER BY timestamp ASC\n        "
+  },
   "3e71ae5b218c205c14cad0ce43a9e5fc08eb0c7d0c5d0bd9fe1629d67f83dfe9": {
     "describe": {
       "columns": [

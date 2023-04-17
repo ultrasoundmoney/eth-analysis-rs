@@ -14,7 +14,9 @@ pub use export::export_thousandth_epoch_supply;
 
 pub use gaps::fill_gaps as fill_eth_supply_gaps;
 
+pub use over_time::get_daily_eth_supply;
 pub use over_time::get_supply_over_time;
+pub use over_time::SupplyAtTime;
 pub use over_time::SupplyOverTime;
 
 pub use parts::SupplyParts;
