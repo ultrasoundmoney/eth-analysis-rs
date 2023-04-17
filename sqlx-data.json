@@ -527,6 +527,33 @@
     },
     "query": "\n        SELECT\n            balances_slot\n        FROM\n            eth_supply\n        WHERE\n            balances_slot = $1\n        "
   },
+  "3beca1df64753ceeade24fca690ef352165b33b851c3f8db40cefb7738e2b1f4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "supply",
+          "ordinal": 1,
+          "type_info": "Float8"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            timestamp,\n            supply\n        FROM daily_supply_glassnode\n        WHERE timestamp >= $1\n        AND timestamp < $2\n        ORDER BY timestamp ASC\n        "
+  },
   "3d2eeee2f4479ee8f9cc9095b81a9e9d9415c301f2645283bd689df2839351f1": {
     "describe": {
       "columns": [
