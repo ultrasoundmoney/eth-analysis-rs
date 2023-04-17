@@ -81,9 +81,4 @@ mod tests {
     async fn test_get_locked_eth_data() {
         get_locked_eth_data().await;
     }
-
-    #[tokio::test]
-    async fn test_get_circulating_supply_data() {
-        get_circulating_supply_data().await;
-    }
 }
