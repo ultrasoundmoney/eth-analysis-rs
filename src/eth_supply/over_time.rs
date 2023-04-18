@@ -322,18 +322,16 @@ pub async fn get_supply_over_time(
     Ok(supply_over_time)
 }
 
-pub async fn get_daily_eth_supply(db_pool: &PgPool) -> Vec<SupplyAtTime> {
+pub async fn get_daily_supply(db_pool: &PgPool) -> Vec<SupplyAtTime> {
     let eth_supply_glassnode: Vec<_> = sqlx::query!(
         "
         SELECT
             timestamp,
             supply
         FROM daily_supply_glassnode
-        WHERE timestamp >= $2
-        AND timestamp < $1
+        WHERE timestamp < $1
         ORDER BY timestamp ASC
         ",
-        *execution_chain::LONDON_HARD_FORK_TIMESTAMP,
         *ETH_SUPPLY_FIRST_TIMESTAMP_DAY,
     )
     .fetch_all(db_pool)

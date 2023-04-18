@@ -92,7 +92,7 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
         in_beacon_validators_by_day.len()
     );
 
-    let supply_by_day: Vec<GlassnodeDataPoint> = eth_supply::get_daily_eth_supply(&db_pool)
+    let supply_by_day: Vec<GlassnodeDataPoint> = eth_supply::get_daily_supply(&db_pool)
         .await
         .into_iter()
         .filter(|point| point.timestamp >= *SUPPLY_LOWER_LIMIT_DATE_TIME)
