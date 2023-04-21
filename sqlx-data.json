@@ -1155,24 +1155,6 @@
     },
     "query": "\n                SELECT\n                    slot,\n                    state_root\n                FROM\n                    beacon_states\n                WHERE\n                    slot >= $1\n                AND\n                    slot <= $2\n                ORDER BY\n                    slot ASC\n            "
   },
-  "8ef139145cb1046f1042974f72c29b0602d313b784cb970c720dbc17d9772e5f": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n        WITH issuance_distances AS (\n            SELECT\n              gwei,\n              timestamp,\n              ABS(\n                EXTRACT(\n                  epoch\n                  FROM\n                    (timestamp - (NOW() - '7 days':: INTERVAL))\n                )\n              ) AS distance_seconds\n            FROM\n              beacon_issuance\n            ORDER BY\n              distance_seconds ASC\n        )\n        SELECT gwei\n        FROM issuance_distances \n        -- WHERE distance_seconds <= 86400\n        -- As a hotfix we use 14 day ago issuance\n        WHERE distance_seconds <= 172800\n        LIMIT 1\n        "
-  },
   "91013ee5f53e5dcaf39a4cff0df3f34c8e7709e334863c41a35a8a375e235804": {
     "describe": {
       "columns": [],
@@ -1265,6 +1247,24 @@
       }
     },
     "query": "\n        SELECT\n            number\n        FROM\n            blocks_next\n        ORDER BY number DESC\n        LIMIT 1\n        "
+  },
+  "a25ad8d5a3b7d3cb2870f2bd7d12bc79c781b0756a6efd0f142fdf35bdbb7f85": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        WITH issuance_distances AS (\n            SELECT\n              gwei,\n              timestamp,\n              ABS(\n                EXTRACT(\n                  epoch\n                  FROM\n                    (timestamp - (NOW() - '7 days':: INTERVAL))\n                )\n              ) AS distance_seconds\n            FROM\n              beacon_issuance\n            ORDER BY\n              distance_seconds ASC\n        )\n        SELECT gwei\n        FROM issuance_distances \n        WHERE distance_seconds <= 86400\n        LIMIT 1\n        "
   },
   "a3d5a3dc158b75b9ef06af433f5120fbdde7754553522ce31fa2fb18ce3e7234": {
     "describe": {
