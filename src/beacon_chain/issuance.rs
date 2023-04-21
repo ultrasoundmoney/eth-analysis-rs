@@ -470,6 +470,6 @@ mod tests {
 
         let issuance = get_last_week_issuance(&issuance_store).await;
 
-        assert_eq!(issuance, GweiNewtype(25));
+        assert_eq!(issuance, GweiNewtype(50));
     }
 }
