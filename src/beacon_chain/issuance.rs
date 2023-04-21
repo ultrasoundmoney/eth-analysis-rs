@@ -122,7 +122,9 @@ pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype
         )
         SELECT gwei
         FROM issuance_distances 
-        WHERE distance_seconds <= 86400
+        -- WHERE distance_seconds <= 86400
+        -- As a hotfix we use 14 day ago issuance
+        WHERE distance_seconds <= 172800
         LIMIT 1
         ",
     )
@@ -215,7 +217,8 @@ pub async fn get_last_week_issuance(issuance_store: &impl IssuanceStore) -> Gwei
         issuance_store.current_issuance(),
         issuance_store.day7_ago_issuance()
     );
-    current_issuance - day7_ago_issuance
+    // TODO: This is a hotfix, we should use the issuance from the last 7 days
+    (current_issuance - day7_ago_issuance) / GweiNewtype(2)
 }
 
 const SLOTS_PER_MINUTE: u64 = 5;
