@@ -42,11 +42,13 @@ pub async fn on_new_block(
     issuance_store: &impl IssuanceStore,
     block: &ExecutionNodeBlock,
 ) {
-    let barrier = barrier::get_barrier(issuance_store).await;
+    let (barrier, ()) = join!(
+        barrier::get_barrier(issuance_store),
+        last::update_last_base_fee(db_pool, block).timed("update_last_base_fee"),
+    );
 
     join!(
         barrier::on_new_barrier(db_pool, barrier, block),
-        last::update_last_base_fee(db_pool, block).timed("update_last_base_fee"),
         stats::update_base_fee_stats(db_pool, barrier, block).timed("update_base_fee_stats"),
         over_time::update_base_fee_over_time(db_pool, barrier, &block.number)
             .timed("update_base_fee_over_time"),
