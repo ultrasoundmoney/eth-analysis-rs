@@ -18,6 +18,7 @@ use crate::{
     caching::{self, CacheKey},
     db,
     execution_chain::ExecutionNodeBlock,
+    log,
     time_frames::TimeFrame,
     units::GweiNewtype,
 };
@@ -245,6 +246,8 @@ async fn get_issuance_per_slot_estimate(issuance_store: &impl IssuanceStore) -> 
 }
 
 pub async fn update_issuance_estimate() {
+    log::init_with_env();
+
     info!("updating issuance estimate");
 
     let db_pool = db::get_db_pool("update-issuance-estimate").await;
