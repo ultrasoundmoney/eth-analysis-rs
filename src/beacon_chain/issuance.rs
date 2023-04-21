@@ -12,7 +12,7 @@ use futures::join;
 use serde::Serialize;
 use sqlx::{postgres::types::PgInterval, PgExecutor, PgPool};
 use thiserror::Error;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     caching::{self, CacheKey},
@@ -120,6 +120,7 @@ pub async fn get_n_days_ago_issuance(executor: impl PgExecutor<'_>, n: i32) -> G
               beacon_issuance
             ORDER BY
               distance_seconds ASC
+            LIMIT 100
         )
         SELECT gwei
         FROM issuance_distances 
@@ -219,10 +220,10 @@ impl IssuanceStore for IssuanceStorePostgres {
 
     /// Weekly issuance in Gwei
     async fn weekly_issuance(&self) -> GweiNewtype {
-        let (d7_issuance, now_issuance) =
-            join!(self.n_days_ago_issuance(7), self.current_issuance());
+        let (d14_issuance, now_issuance) =
+            join!(self.n_days_ago_issuance(14), self.current_issuance());
 
-        now_issuance - d7_issuance
+        GweiNewtype((now_issuance - d14_issuance).0 / 2)
     }
 }
 
@@ -254,6 +255,7 @@ pub async fn update_issuance_estimate() {
     let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
 
     let issuance_per_slot_gwei = get_issuance_per_slot_estimate(&issuance_store).await;
+    debug!("issuance per slot estimate: {}", issuance_per_slot_gwei);
     let slot = super::get_last_state(&db_pool)
         .await
         .expect("expect last state to exist in order to update issuance estimate")
