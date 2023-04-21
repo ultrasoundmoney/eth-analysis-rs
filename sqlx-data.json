@@ -1248,24 +1248,6 @@
     },
     "query": "\n        SELECT\n            number\n        FROM\n            blocks_next\n        ORDER BY number DESC\n        LIMIT 1\n        "
   },
-  "a25ad8d5a3b7d3cb2870f2bd7d12bc79c781b0756a6efd0f142fdf35bdbb7f85": {
-    "describe": {
-      "columns": [
-        {
-          "name": "gwei",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n        WITH issuance_distances AS (\n            SELECT\n              gwei,\n              timestamp,\n              ABS(\n                EXTRACT(\n                  epoch\n                  FROM\n                    (timestamp - (NOW() - '7 days':: INTERVAL))\n                )\n              ) AS distance_seconds\n            FROM\n              beacon_issuance\n            ORDER BY\n              distance_seconds ASC\n        )\n        SELECT gwei\n        FROM issuance_distances \n        WHERE distance_seconds <= 86400\n        LIMIT 1\n        "
-  },
   "a3d5a3dc158b75b9ef06af433f5120fbdde7754553522ce31fa2fb18ce3e7234": {
     "describe": {
       "columns": [
@@ -1538,6 +1520,26 @@
       }
     },
     "query": "\n            SELECT gwei AS \"gwei!\"\n            FROM beacon_issuance\n            WHERE timestamp >= $1\n            ORDER BY timestamp ASC\n            LIMIT 1\n             "
+  },
+  "d16cc388417d7ccb75e5b23fae173ecb369ceaafb99d5bbc32d9e57eccbd51e9": {
+    "describe": {
+      "columns": [
+        {
+          "name": "gwei",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Interval"
+        ]
+      }
+    },
+    "query": "\n        WITH issuance_distances AS (\n            SELECT\n              gwei,\n              timestamp,\n              ABS(\n                EXTRACT(\n                  epoch\n                  FROM\n                    (timestamp - (NOW() - $1::INTERVAL))\n                )\n              ) AS distance_seconds\n            FROM\n              beacon_issuance\n            ORDER BY\n              distance_seconds ASC\n        )\n        SELECT gwei\n        FROM issuance_distances \n        -- while we have holes in the data, we limit distance to 2 days\n        WHERE distance_seconds <= 172800\n        LIMIT 1\n        "
   },
   "d3bf0b8a5482556c44f37153e8e2dd3f95d96d3e0aa684d414586740c7369f2a": {
     "describe": {
