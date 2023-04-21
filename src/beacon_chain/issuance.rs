@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
-use sqlx::{PgExecutor, PgPool};
+use sqlx::{postgres::types::PgInterval, PgExecutor, PgPool};
 use thiserror::Error;
 use tracing::info;
 
@@ -101,7 +101,7 @@ pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
     .unwrap();
 }
 
-pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
+pub async fn get_n_days_ago_issuance(executor: impl PgExecutor<'_>, n: i32) -> GweiNewtype {
     sqlx::query!(
         "
         WITH issuance_distances AS (
@@ -112,7 +112,7 @@ pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype
                 EXTRACT(
                   epoch
                   FROM
-                    (timestamp - (NOW() - '7 days':: INTERVAL))
+                    (timestamp - (NOW() - $1::INTERVAL))
                 )
               ) AS distance_seconds
             FROM
@@ -122,9 +122,15 @@ pub async fn get_day7_ago_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype
         )
         SELECT gwei
         FROM issuance_distances 
-        WHERE distance_seconds <= 86400
+        -- while we have holes in the data, we limit distance to 2 days
+        WHERE distance_seconds <= 172800
         LIMIT 1
         ",
+        PgInterval {
+            days: n,
+            microseconds: 0,
+            months: 0,
+        }
     )
     .fetch_one(executor)
     .await
@@ -141,7 +147,7 @@ pub enum IssuanceUnavailableError {
 #[async_trait]
 pub trait IssuanceStore {
     async fn current_issuance(&self) -> GweiNewtype;
-    async fn day7_ago_issuance(&self) -> GweiNewtype;
+    async fn n_days_ago_issuance(&self, n: i32) -> GweiNewtype;
     async fn issuance_at_timestamp(
         &self,
         timestamp: DateTime<Utc>,
@@ -151,6 +157,7 @@ pub trait IssuanceStore {
         block: &ExecutionNodeBlock,
         time_frame: &TimeFrame,
     ) -> Result<GweiNewtype, IssuanceUnavailableError>;
+    async fn weekly_issuance(&self) -> GweiNewtype;
 }
 
 pub struct IssuanceStorePostgres {
@@ -169,8 +176,8 @@ impl IssuanceStore for IssuanceStorePostgres {
         get_current_issuance(&self.db_pool).await
     }
 
-    async fn day7_ago_issuance(&self) -> GweiNewtype {
-        get_day7_ago_issuance(&self.db_pool).await
+    async fn n_days_ago_issuance(&self, n: i32) -> GweiNewtype {
+        get_n_days_ago_issuance(&self.db_pool, n).await
     }
 
     async fn issuance_at_timestamp(
@@ -208,14 +215,14 @@ impl IssuanceStore for IssuanceStorePostgres {
         issuance_time_frame_ago
             .map(|issuance_time_frame_ago| current_issuance - issuance_time_frame_ago)
     }
-}
 
-pub async fn get_last_week_issuance(issuance_store: &impl IssuanceStore) -> GweiNewtype {
-    let (current_issuance, day7_ago_issuance) = join!(
-        issuance_store.current_issuance(),
-        issuance_store.day7_ago_issuance()
-    );
-    current_issuance - day7_ago_issuance
+    /// Weekly issuance in Gwei
+    async fn weekly_issuance(&self) -> GweiNewtype {
+        let (d7_issuance, now_issuance) =
+            join!(self.n_days_ago_issuance(7), self.current_issuance());
+
+        now_issuance - d7_issuance
+    }
 }
 
 const SLOTS_PER_MINUTE: u64 = 5;
@@ -233,7 +240,7 @@ struct IssuanceEstimate {
 }
 
 async fn get_issuance_per_slot_estimate(issuance_store: &impl IssuanceStore) -> f64 {
-    let last_week_issuance = get_last_week_issuance(issuance_store).await;
+    let last_week_issuance = issuance_store.weekly_issuance().await;
     last_week_issuance.0 as f64 / SLOTS_PER_WEEK
 }
 
@@ -428,7 +435,7 @@ mod tests {
         )
         .await;
 
-        let day7_ago_issuance = get_day7_ago_issuance(&mut transaction).await;
+        let day7_ago_issuance = get_n_days_ago_issuance(&mut transaction, 7).await;
 
         assert_eq!(day7_ago_issuance, GweiNewtype(100));
     }
@@ -441,7 +448,7 @@ mod tests {
             GweiNewtype(100)
         }
 
-        async fn day7_ago_issuance(&self) -> GweiNewtype {
+        async fn n_days_ago_issuance(&self, _n: i32) -> GweiNewtype {
             GweiNewtype(50)
         }
 
@@ -459,13 +466,17 @@ mod tests {
         ) -> Result<GweiNewtype, IssuanceUnavailableError> {
             Ok(GweiNewtype(100))
         }
+
+        async fn weekly_issuance(&self) -> GweiNewtype {
+            GweiNewtype(50)
+        }
     }
 
     #[tokio::test]
     async fn get_last_week_issuance_test() {
         let issuance_store = IssuanceStoreTest {};
 
-        let issuance = get_last_week_issuance(&issuance_store).await;
+        let issuance = issuance_store.weekly_issuance().await;
 
         assert_eq!(issuance, GweiNewtype(50));
     }

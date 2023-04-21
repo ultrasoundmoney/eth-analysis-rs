@@ -34,7 +34,6 @@ pub use effective_balance_sum::{
     get_last_stored_effective_balance_sum, update_effective_balance_sum,
 };
 
-pub use issuance::get_last_week_issuance;
 pub use issuance::update_issuance_estimate;
 pub use issuance::IssuanceStore;
 pub use issuance::IssuanceStorePostgres;
