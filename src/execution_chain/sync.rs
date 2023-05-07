@@ -14,14 +14,14 @@ use tracing::{debug, info, warn};
 use crate::{
     beacon_chain::{IssuanceStore, IssuanceStorePostgres},
     burn_rates, burn_sums, db, eth_supply,
-    execution_chain::{self, base_fees, BlockStore, ExecutionNode},
+    execution_chain::{self, base_fees, BlockStorePostgres, ExecutionNode},
     gauges, log,
     performance::TimedExt,
     units::EthNewtype,
-    usd_price,
+    usd_price::{self, EthPriceStore, EthPriceStorePostgres},
 };
 
-use super::{BlockNumber, LONDON_HARD_FORK_BLOCK_HASH};
+use super::{BlockNumber, BlockStore, LONDON_HARD_FORK_BLOCK_HASH};
 
 async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber) {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
@@ -35,7 +35,8 @@ async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber)
 }
 
 async fn sync_by_hash(
-    issuance_store: impl IssuanceStore + Copy,
+    issuance_store: &impl IssuanceStore,
+    eth_price_store: &impl EthPriceStore,
     execution_node: &mut ExecutionNode,
     db_pool: &PgPool,
     hash: &str,
@@ -47,7 +48,8 @@ async fn sync_by_hash(
         // block_root the block may have disappeared. Right now we panic, we could do better.
         .expect("block not to disappear between deciding to add it and adding it");
 
-    let eth_price = usd_price::get_eth_price_by_block(db_pool, &block)
+    let eth_price = eth_price_store
+        .get_eth_price_by_block(&block)
         .timed("get_eth_price_by_block")
         .await
         .expect("eth price close to block to be available");
@@ -77,6 +79,7 @@ async fn sync_by_hash(
             .await;
         gauges::on_new_block(
             db_pool,
+            eth_price_store,
             issuance_store,
             &block,
             &burn_sums_envelope,
@@ -84,7 +87,10 @@ async fn sync_by_hash(
         )
         .timed("gauges::on_new_block")
         .await
-        .unwrap_or_else(|err| warn!("gauges::on_new_block failed: {}", err))
+        .unwrap_or_else(|err| warn!("gauges::on_new_block failed: {}", err));
+        usd_price::on_new_block(db_pool, eth_price_store, &block)
+            .timed("usd_price::on_new_block")
+            .await;
     } else {
         debug!("not synced, skipping skippables");
     }
@@ -92,7 +98,7 @@ async fn sync_by_hash(
 
 async fn find_last_matching_block_number(
     execution_node: &mut ExecutionNode,
-    block_store: &BlockStore<'_>,
+    block_store: &BlockStorePostgres<'_>,
     starting_candidate: BlockNumber,
 ) -> BlockNumber {
     let mut current_candidate_number = starting_candidate;
@@ -116,7 +122,7 @@ async fn find_last_matching_block_number(
 }
 
 async fn estimate_blocks_remaining(
-    block_store: &BlockStore<'_>,
+    block_store: &impl BlockStore,
     execution_node: &mut ExecutionNode,
 ) -> i32 {
     let last_on_chain = execution_node.get_latest_block().await;
@@ -147,8 +153,9 @@ pub async fn sync_blocks() {
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let mut execution_node = ExecutionNode::connect().await;
-    let issuance_store = IssuanceStorePostgres::new(&db_pool);
-    let block_store = BlockStore::new(&db_pool);
+    let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
+    let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
+    let block_store = BlockStorePostgres::new(&db_pool);
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
     let mut heads_queue: HeadsQueue = VecDeque::new();
 
@@ -189,6 +196,7 @@ pub async fn sync_blocks() {
                 // Add to the chain.
                 sync_by_hash(
                     &issuance_store,
+                    &eth_price_store,
                     &mut execution_node,
                     &db_pool,
                     &next_block.hash,

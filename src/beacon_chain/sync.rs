@@ -8,6 +8,7 @@ use sqlx::{Acquire, PgConnection, PgExecutor};
 use std::{cmp::Ordering, collections::VecDeque};
 use tracing::{debug, info, warn};
 
+use crate::beacon_chain::withdrawals;
 use crate::{
     beacon_chain::{balances, deposits, issuance, slot_from_string},
     db,
@@ -194,6 +195,9 @@ pub async fn sync_slot_by_state_root(
             let deposit_sum_aggregated =
                 deposits::get_deposit_sum_aggregated(&mut transaction, block).await;
 
+            let withdrawal_sum_aggregated =
+                withdrawals::get_withdrawal_sum_aggregated(&mut transaction, block).await;
+
             debug!(
                 %slot,
                 state_root,
@@ -217,6 +221,8 @@ pub async fn sync_slot_by_state_root(
                 block,
                 &deposits::get_deposit_sum_from_block(block),
                 &deposit_sum_aggregated,
+                &withdrawals::get_withdrawal_sum_from_block(block),
+                &withdrawal_sum_aggregated,
                 header,
             )
             .await;
@@ -237,11 +243,18 @@ pub async fn sync_slot_by_state_root(
         if let Some((_, block)) = header_block_tuple {
             let deposit_sum_aggregated =
                 deposits::get_deposit_sum_aggregated(&mut transaction, &block).await;
+            let withdrawal_sum_aggregated =
+                withdrawals::get_withdrawal_sum_aggregated(&mut transaction, &block).await;
+
             issuance::store_issuance(
                 &mut transaction,
                 state_root,
                 slot,
-                &issuance::calc_issuance(&validator_balances_sum, &deposit_sum_aggregated),
+                &issuance::calc_issuance(
+                    &validator_balances_sum,
+                    &withdrawal_sum_aggregated,
+                    &deposit_sum_aggregated,
+                ),
             )
             .await;
         }

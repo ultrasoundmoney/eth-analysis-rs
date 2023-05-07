@@ -8,6 +8,7 @@ mod rewards;
 mod states;
 mod sync;
 mod units;
+mod withdrawals;
 
 pub use balances::backfill_balances_to_london;
 pub use balances::backfill_daily_balances_to_london;
@@ -33,7 +34,6 @@ pub use effective_balance_sum::{
     get_last_stored_effective_balance_sum, update_effective_balance_sum,
 };
 
-pub use issuance::get_last_week_issuance;
 pub use issuance::update_issuance_estimate;
 pub use issuance::IssuanceStore;
 pub use issuance::IssuanceStorePostgres;
@@ -68,7 +68,8 @@ pub const FIRST_POST_LONDON_SLOT: Slot = Slot(1778566);
 
 lazy_static! {
     static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");
-    static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp_opt(1606824023, 0).unwrap();
+    pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp_opt(1606824023, 0).unwrap();
+    pub static ref SHAPELLA_SLOT: Slot = Slot(6209536);
 }
 
 #[cfg(test)]
@@ -101,6 +102,15 @@ pub mod tests {
         )
         .await;
 
-        store_block(executor, block, &GweiNewtype(0), &GweiNewtype(0), header).await;
+        store_block(
+            executor,
+            block,
+            &GweiNewtype(0),
+            &GweiNewtype(0),
+            &GweiNewtype(0),
+            &GweiNewtype(0),
+            header,
+        )
+        .await;
     }
 }

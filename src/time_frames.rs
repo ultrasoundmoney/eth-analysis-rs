@@ -7,8 +7,7 @@ use sqlx::postgres::types::PgInterval;
 use thiserror::Error;
 
 use crate::execution_chain::{
-    BlockNumber, ExecutionNodeBlock, LONDON_HARD_FORK_BLOCK_NUMBER, LONDON_HARD_FORK_TIMESTAMP,
-    MERGE_BLOCK_NUMBER, MERGE_HARD_FORK_TIMESTAMP,
+    self, BlockNumber, ExecutionNodeBlock, LONDON_HARD_FORK_BLOCK_NUMBER, MERGE_BLOCK_NUMBER,
 };
 
 use GrowingTimeFrame::*;
@@ -71,16 +70,6 @@ impl LimitedTimeFrame {
                 days: 0,
                 microseconds: Duration::minutes(5).num_microseconds().unwrap(),
             },
-        }
-    }
-
-    pub fn to_db_key(self) -> &'static str {
-        match self {
-            Day1 => "d1",
-            Day30 => "d1",
-            Day7 => "d7",
-            Hour1 => "h1",
-            Minute5 => "m5",
         }
     }
 
@@ -151,8 +140,8 @@ pub enum GrowingTimeFrame {
 impl GrowingTimeFrame {
     pub fn start_timestamp(&self) -> DateTime<Utc> {
         match self {
-            SinceBurn => *LONDON_HARD_FORK_TIMESTAMP,
-            SinceMerge => *MERGE_HARD_FORK_TIMESTAMP,
+            SinceBurn => *execution_chain::LONDON_HARD_FORK_TIMESTAMP,
+            SinceMerge => *execution_chain::PARIS_HARD_FORK_TIMESTAMP,
         }
     }
 

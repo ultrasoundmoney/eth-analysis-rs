@@ -10,10 +10,9 @@ use super::{blocks, Slot};
 
 pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
     block
-        .body
-        .deposits
+        .deposits()
         .iter()
-        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.data.amount)
+        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount)
 }
 
 pub async fn get_deposit_sum_aggregated(
@@ -95,6 +94,8 @@ mod tests {
         store_block(
             &mut transaction,
             &test_block,
+            &GweiNewtype(0),
+            &GweiNewtype(1),
             &GweiNewtype(0),
             &GweiNewtype(1),
             &test_header,

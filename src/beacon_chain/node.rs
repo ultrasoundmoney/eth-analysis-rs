@@ -45,23 +45,33 @@ impl Display for BlockId {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Deposit {
+pub struct DepositData {
     pub amount: GweiNewtype,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct DepositEnvelope {
-    pub data: Deposit,
+pub struct Deposit {
+    pub data: DepositData,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Withdrawal {
+    #[serde(deserialize_with = "i32_from_string")]
+    pub index: i32,
+    #[allow(dead_code)]
+    pub address: String,
+    pub amount: GweiNewtype,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ExecutionPayload {
     pub block_hash: BlockHash,
+    pub withdrawals: Option<Vec<Withdrawal>>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct BeaconBlockBody {
-    pub deposits: Vec<DepositEnvelope>,
+    pub deposits: Vec<Deposit>,
     pub execution_payload: Option<ExecutionPayload>,
 }
 
@@ -75,20 +85,26 @@ pub struct BeaconBlock {
 }
 
 impl BeaconBlock {
-    #[allow(unused)]
-    pub fn deposits(&self) -> Vec<GweiNewtype> {
-        self.body
-            .deposits
-            .iter()
-            .map(|envelope| envelope.data.amount)
-            .collect()
-    }
-
     pub fn block_hash(&self) -> Option<&BlockHash> {
         self.body
             .execution_payload
             .as_ref()
             .map(|payload| &payload.block_hash)
+    }
+
+    pub fn deposits(&self) -> Vec<&DepositData> {
+        self.body
+            .deposits
+            .iter()
+            .map(|deposit| &deposit.data)
+            .collect()
+    }
+
+    pub fn withdrawals(&self) -> Option<&Vec<Withdrawal>> {
+        self.body
+            .execution_payload
+            .as_ref()
+            .and_then(|execution_payload| execution_payload.withdrawals.as_ref())
     }
 }
 
@@ -484,11 +500,25 @@ pub mod tests {
     use super::*;
 
     pub struct BeaconBlockBuilder {
+        block_hash: Option<BlockHash>,
         deposits: Vec<GweiNewtype>,
         parent_root: BlockRoot,
         slot: Slot,
         state_root: StateRoot,
-        block_hash: Option<BlockHash>,
+        withdrawals: Option<Vec<Withdrawal>>,
+    }
+
+    impl Default for BeaconBlockBuilder {
+        fn default() -> Self {
+            Self {
+                deposits: vec![],
+                parent_root: GENESIS_PARENT_ROOT.to_string(),
+                slot: Slot(0),
+                state_root: StateRoot::default(),
+                block_hash: None,
+                withdrawals: None,
+            }
+        }
     }
 
     impl BeaconBlockBuilder {
@@ -497,18 +527,29 @@ pub mod tests {
             self
         }
 
+        pub fn withdrawals(mut self, withdrawals: Vec<Withdrawal>) -> Self {
+            self.withdrawals = Some(withdrawals);
+            self
+        }
+
+        pub fn slot(mut self, slot: Slot) -> Self {
+            self.slot = slot;
+            self
+        }
+
         pub fn build(self) -> BeaconBlock {
             let deposits = self
                 .deposits
                 .into_iter()
-                .map(|deposit| DepositEnvelope {
-                    data: Deposit { amount: deposit },
+                .map(|deposit| Deposit {
+                    data: DepositData { amount: deposit },
                 })
                 .collect();
 
-            let execution_payload = self
-                .block_hash
-                .map(|block_hash| ExecutionPayload { block_hash });
+            let execution_payload = self.block_hash.map(|block_hash| ExecutionPayload {
+                block_hash,
+                withdrawals: self.withdrawals,
+            });
 
             BeaconBlock {
                 body: BeaconBlockBody {
@@ -530,6 +571,7 @@ pub mod tests {
                 parent_root: header.parent_root(),
                 slot: header.slot(),
                 state_root: header.state_root(),
+                withdrawals: None,
             }
         }
     }
@@ -591,7 +633,8 @@ pub mod tests {
 
     #[test]
     fn decode_validator_balances() {
-        let file = File::open("src/beacon_chain/data_samples/validator_balaces_1229.json").unwrap();
+        let file =
+            File::open("src/beacon_chain/data_samples/validator_balances_1229.json").unwrap();
         let reader = BufReader::new(file);
 
         serde_json::from_reader::<BufReader<File>, ValidatorBalancesEnvelope>(reader).unwrap();
@@ -721,5 +764,29 @@ pub mod tests {
             )
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_deposits() {
+        let beacon_node = BeaconNode::new();
+        let block = beacon_node
+            .get_block_by_slot(&Slot(1229))
+            .await
+            .unwrap()
+            .unwrap();
+        let deposits = block.deposits();
+        assert_eq!(deposits.len(), 16);
+    }
+
+    #[tokio::test]
+    async fn get_withdrawals() {
+        let beacon_node = BeaconNode::new();
+        let block = beacon_node
+            .get_block_by_slot(&Slot(6212480))
+            .await
+            .unwrap()
+            .unwrap();
+        let withdrawals = block.withdrawals().unwrap();
+        assert_eq!(withdrawals.len(), 16);
     }
 }

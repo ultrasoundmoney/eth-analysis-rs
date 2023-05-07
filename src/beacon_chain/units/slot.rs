@@ -78,6 +78,10 @@ impl Slot {
         // If we hit a slot without a block, we keep searching.
         unimplemented!()
     }
+
+    pub fn epoch(&self) -> i32 {
+        self.0 / 32
+    }
 }
 
 impl Display for Slot {

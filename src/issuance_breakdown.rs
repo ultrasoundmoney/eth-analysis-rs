@@ -27,7 +27,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let issuance_store = IssuanceStorePostgres::new(&db_pool);
+    let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
 
     let crowd_sale: GweiNewtype = EthNewtype(60_108_506.26).into();
     debug!(
@@ -43,7 +43,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
     let ethereum_foundation = EthNewtype(3_483_159.75);
     debug!("ethereum foundation: {} ETH", ethereum_foundation.0);
 
-    let proof_of_stake = (&issuance_store).current_issuance().await;
+    let proof_of_stake = issuance_store.current_issuance().await;
     debug!(
         "proof of stake issuance: {} ETH",
         Into::<EthNewtype>::into(proof_of_stake)

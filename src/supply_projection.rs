@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use lazy_static::lazy_static;
 use serde::Serialize;
 use sqlx::{postgres::PgPoolOptions, Decode};
 use tracing::{debug, info};
@@ -7,11 +8,16 @@ use tracing::{debug, info};
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    db,
+    db, eth_supply,
     glassnode::{self, GlassnodeDataPoint},
     log,
     units::GWEI_PER_ETH_F64,
 };
+
+lazy_static! {
+    static ref SUPPLY_LOWER_LIMIT_DATE_TIME: DateTime<Utc> =
+        ("2015-07-30T00:00:00Z").parse::<DateTime<Utc>>().unwrap();
+}
 
 #[derive(Decode)]
 pub struct GweiInTimeRow {
@@ -56,13 +62,13 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
 
     info!("updating supply projection inputs");
 
-    let pool = PgPoolOptions::new()
+    let db_pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&db::get_db_url_with_name("supply_projection_inputs"))
         .await
         .unwrap();
 
-    sqlx::migrate!().run(&pool).await.unwrap();
+    sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let in_contracts_by_day = glassnode::get_locked_eth_data().await;
 
@@ -71,25 +77,27 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
         in_contracts_by_day.len()
     );
 
-    let in_beacon_validators_by_day = beacon_chain::get_validator_balances_by_start_of_day(&pool)
-        .await
-        .iter()
-        .map(|point| GlassnodeDataPoint {
-            t: point.t,
-            v: point.v as f64 / GWEI_PER_ETH_F64,
-        })
-        .collect::<Vec<_>>();
+    let in_beacon_validators_by_day =
+        beacon_chain::get_validator_balances_by_start_of_day(&db_pool)
+            .await
+            .iter()
+            .map(|point| GlassnodeDataPoint {
+                t: point.t,
+                v: point.v as f64 / GWEI_PER_ETH_F64,
+            })
+            .collect::<Vec<_>>();
 
     debug!(
         "got balances in beacon validators by day, {} data points",
         in_beacon_validators_by_day.len()
     );
 
-    let supply_data = glassnode::get_circulating_supply_data().await;
-
-    debug!("got supply data by day, {} data points", supply_data.len());
-
-    let supply_by_day = supply_data;
+    let supply_by_day: Vec<GlassnodeDataPoint> = eth_supply::get_daily_supply(&db_pool)
+        .await
+        .into_iter()
+        .filter(|point| point.timestamp >= *SUPPLY_LOWER_LIMIT_DATE_TIME)
+        .map(Into::into)
+        .collect();
 
     debug!("got supply by day, {} data points", supply_by_day.len());
 
@@ -101,7 +109,7 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
     };
 
     caching::update_and_publish(
-        &pool,
+        &db_pool,
         &CacheKey::SupplyProjectionInputs,
         &supply_projetion_inputs,
     )

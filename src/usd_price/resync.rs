@@ -1,15 +1,16 @@
 use chrono::{Duration, DurationRound, TimeZone, Utc};
 use serde_json::{json, Value};
-use sqlx::{postgres::PgRow, Connection, PgConnection, Row};
+use sqlx::{postgres::PgRow, PgExecutor, Row};
+use store::EthPriceStore;
 use tracing::{debug, info};
 
-use crate::{db, execution_chain::LONDON_HARD_FORK_TIMESTAMP, log};
+use crate::{db, execution_chain, log};
 
 use super::{bybit, store};
 
 const RESYNC_ETH_PRICES_KEY: &str = "resync-eth-prices";
 
-async fn get_last_synced_minute(executor: &mut PgConnection) -> Option<u32> {
+async fn get_last_synced_minute(executor: impl PgExecutor<'_>) -> Option<u32> {
     sqlx::query(
         "
         SELECT
@@ -30,7 +31,7 @@ async fn get_last_synced_minute(executor: &mut PgConnection) -> Option<u32> {
     .unwrap()
 }
 
-async fn set_last_synced_minute(executor: &mut PgConnection, minute: u32) {
+async fn set_last_synced_minute(executor: impl PgExecutor<'_>, minute: u32) {
     sqlx::query(
         "
         INSERT INTO
@@ -57,24 +58,23 @@ pub async fn resync_all() {
         .and_then(|str| str.parse::<i64>().ok())
         .unwrap_or(10);
 
-    let mut connection = PgConnection::connect(&db::get_db_url_with_name("resync-all-prices"))
-        .await
-        .unwrap();
+    let db_pool = db::get_db_pool("resync-all-prices").await;
+    let eth_price_store = store::EthPriceStorePostgres::new(db_pool.clone());
 
     debug!("walking through all minutes since London hardfork");
 
-    let duration_since_london =
-        Utc::now().duration_round(Duration::minutes(1)).unwrap() - *LONDON_HARD_FORK_TIMESTAMP;
+    let duration_since_london = Utc::now().duration_round(Duration::minutes(1)).unwrap()
+        - *execution_chain::LONDON_HARD_FORK_TIMESTAMP;
     let minutes_since_london: u32 = duration_since_london.num_minutes().try_into().unwrap();
 
-    let london_minute_timestamp: u32 = LONDON_HARD_FORK_TIMESTAMP
+    let london_minute_timestamp: u32 = execution_chain::LONDON_HARD_FORK_TIMESTAMP
         .duration_round(Duration::minutes(1))
         .unwrap()
         .timestamp()
         .try_into()
         .unwrap();
 
-    let start_minute = get_last_synced_minute(&mut connection)
+    let start_minute = get_last_synced_minute(&db_pool)
         .await
         .map_or(0, |minute| minute + 1);
 
@@ -108,7 +108,7 @@ pub async fn resync_all() {
                 );
             }
             Some(usd) => {
-                store::store_price(&mut connection, timestamp_date_time, usd).await;
+                eth_price_store.store_price(&timestamp_date_time, usd).await;
             }
         }
 
@@ -120,7 +120,7 @@ pub async fn resync_all() {
                 timestamp = timestamp_date_time.to_string(),
                 "100 minutes synced, checkpointing"
             );
-            set_last_synced_minute(&mut connection, minute_n).await;
+            set_last_synced_minute(&db_pool, minute_n).await;
 
             info!("{}", progress.get_progress_string());
         };
@@ -129,16 +129,18 @@ pub async fn resync_all() {
 
 #[cfg(test)]
 mod tests {
+    use test_context::test_context;
+
+    use crate::db::tests::TestDb;
+
     use super::*;
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn get_set_last_synced_minute_test() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn get_set_last_synced_minute_test(test_db: &TestDb) {
+        set_last_synced_minute(&test_db.pool, 1559).await;
 
-        set_last_synced_minute(&mut transaction, 1559).await;
-
-        let minute = get_last_synced_minute(&mut transaction).await;
+        let minute = get_last_synced_minute(&test_db.pool).await;
         assert_eq!(minute, Some(1559));
     }
 }

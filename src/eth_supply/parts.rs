@@ -14,15 +14,9 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct SupplyParts {
     pub beacon_balances_sum: GweiNewtype,
-    #[deprecated = "switch to beacon_balances_sum"]
-    beacon_balances_sum_next: GweiNewtype,
     pub beacon_deposits_sum: GweiNewtype,
-    #[deprecated = "switch to beacon_deposits_sum"]
-    beacon_deposits_sum_next: GweiNewtype,
     pub block_number: BlockNumber,
     pub execution_balances_sum: WeiNewtype,
-    #[deprecated = "switch to execution_balances_sum"]
-    execution_balances_sum_next: WeiNewtype,
     pub slot: Slot,
 }
 
@@ -36,23 +30,15 @@ impl SupplyParts {
     ) -> Self {
         Self {
             beacon_balances_sum,
-            beacon_balances_sum_next: beacon_balances_sum,
             beacon_deposits_sum,
-            beacon_deposits_sum_next: beacon_deposits_sum,
             block_number: *block_number,
             execution_balances_sum,
-            execution_balances_sum_next: execution_balances_sum,
             slot: *slot,
         }
     }
 
     pub fn block_number(&self) -> BlockNumber {
         self.block_number
-    }
-
-    pub fn supply(&self) -> WeiNewtype {
-        self.execution_balances_sum + self.beacon_balances_sum.into()
-            - self.beacon_deposits_sum.into()
     }
 }
 
@@ -96,7 +82,7 @@ async fn get_supply_parts(
         &state_root,
     )
     .await
-    .ok_or_else(|| SupplyPartsError::NoValidatorBalancesAvailable(*slot))?;
+    .ok_or(SupplyPartsError::NoValidatorBalancesAvailable(*slot))?;
 
     debug!(
         %slot,

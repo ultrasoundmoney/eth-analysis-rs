@@ -12,7 +12,7 @@ use crate::{
     beacon_chain::Slot,
     caching::{self, CacheKey},
     eth_supply::{
-        self, SupplyChangesStore, SupplyOverTime, SupplyParts, SupplyPartsError, SupplyPartsStore,
+        self, SupplyChanges, SupplyOverTime, SupplyParts, SupplyPartsError, SupplyPartsStore,
     },
     performance::TimedExt,
 };
@@ -53,13 +53,11 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
         }
     };
 
-    let supply_changes_store = SupplyChangesStore::new(db_pool);
-    let supply_changes = supply_changes_store.get(&limit_slot, &supply_parts).await?;
-
     let supply_over_time =
         eth_supply::get_supply_over_time(db_pool, &limit_slot, supply_parts.block_number())
             .timed("get-supply-over-time")
             .await?;
+    let supply_changes: SupplyChanges = (&supply_over_time).into();
 
     // let supply_dashboard_analysis = SupplyDashboardAnalysis {
     //     supply_parts: supply_parts.clone(),

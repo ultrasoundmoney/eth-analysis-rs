@@ -6,10 +6,12 @@ mod data_integrity;
 mod db;
 mod env;
 mod eth_supply;
+mod eth_time;
 mod etherscan;
 mod execution_chain;
 mod gauges;
 mod glassnode;
+mod health;
 mod issuance_breakdown;
 mod json_codecs;
 mod key_value_store;
@@ -37,6 +39,7 @@ pub use beacon_chain::update_validator_rewards;
 pub use data_integrity::check_beacon_state_gaps;
 pub use data_integrity::check_blocks_gaps;
 
+pub use eth_supply::export_thousandth_epoch_supply;
 pub use eth_supply::fill_eth_supply_gaps;
 
 pub use execution_chain::summary_from_deltas_csv;

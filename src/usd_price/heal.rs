@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
 use chrono::{Duration, DurationRound, TimeZone, Utc};
-use sqlx::{Connection, PgConnection, Postgres};
+use sqlx::Postgres;
+use store::EthPriceStore;
 use tracing::{debug, info};
 
-use crate::{db, execution_chain::LONDON_HARD_FORK_TIMESTAMP, log};
+use crate::{db, execution_chain, log};
 
 use super::{bybit, store, EthPriceTimestamp};
 use futures::stream::{self, StreamExt};
@@ -20,9 +21,9 @@ pub async fn heal_eth_prices() {
         .unwrap_or(10);
 
     debug!("getting all eth prices");
-    let mut connection = PgConnection::connect(&db::get_db_url_with_name("heal-eth-prices"))
-        .await
-        .unwrap();
+    let db_pool = db::get_db_pool("heal-eth-prices").await;
+    let eth_price_store = store::EthPriceStorePostgres::new(db_pool.clone());
+
     let eth_prices = sqlx::query_as::<Postgres, EthPriceTimestamp>(
         "
             SELECT
@@ -31,7 +32,7 @@ pub async fn heal_eth_prices() {
                 eth_prices
         ",
     )
-    .fetch_all(&mut connection)
+    .fetch_all(&db_pool)
     .await
     .unwrap();
 
@@ -48,11 +49,11 @@ pub async fn heal_eth_prices() {
 
     debug!("walking through all minutes since London hardfork to look for missing minutes");
 
-    let duration_since_london =
-        Utc::now().duration_round(Duration::minutes(1)).unwrap() - *LONDON_HARD_FORK_TIMESTAMP;
+    let duration_since_london = Utc::now().duration_round(Duration::minutes(1)).unwrap()
+        - *execution_chain::LONDON_HARD_FORK_TIMESTAMP;
     let minutes_since_london = duration_since_london.num_minutes();
 
-    let london_minute_timestamp = LONDON_HARD_FORK_TIMESTAMP
+    let london_minute_timestamp = execution_chain::LONDON_HARD_FORK_TIMESTAMP
         .duration_round(Duration::minutes(1))
         .unwrap()
         .timestamp();
@@ -96,7 +97,7 @@ pub async fn heal_eth_prices() {
     while let Some((usd, timestamp))  = missing_minutes_stream.next().await {
         if let Some(usd) = usd {
             debug!("Storing price for timestamp: {:?}", timestamp);
-            store::store_price(&mut connection, timestamp, usd).await;
+            eth_price_store.store_price(&timestamp, usd).await;
             debug!("Stored price for timestamp: {:?}", timestamp);
         }
     };

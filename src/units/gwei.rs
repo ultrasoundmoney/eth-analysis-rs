@@ -81,7 +81,7 @@ impl From<GweiNewtype> for String {
 
 impl From<EthNewtype> for GweiNewtype {
     fn from(EthNewtype(amount): EthNewtype) -> Self {
-        ((amount * EthNewtype::GWEI_PER_ETH as f64).trunc() as i64).into()
+        ((amount * EthNewtype::GWEI_PER_ETH as f64) as i64).into()
     }
 }
 

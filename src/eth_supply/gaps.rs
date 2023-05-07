@@ -9,10 +9,11 @@ use pit_wall::Progress;
 use tracing::warn;
 use tracing::{debug, info};
 
-use crate::eth_supply::{self, SupplyPartsError, SupplyPartsStore};
 use crate::{
     beacon_chain::{self, Slot},
-    db, log,
+    db,
+    eth_supply::{self, SupplyPartsError, SupplyPartsStore},
+    log,
 };
 
 // The first slot we have stored.
