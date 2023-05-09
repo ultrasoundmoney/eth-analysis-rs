@@ -68,41 +68,39 @@ pub async fn heal_eth_prices() {
     let concurrent_requests = 8;
     info!("found {} missing minutes", missing_minutes_timestamps.len());
     let mut missing_minutes_stream = stream::iter(missing_minutes_timestamps)
-        .map(|timestamp| {
-            async move {
-                let timestamp_date_time = Utc.timestamp_opt(timestamp, 0).unwrap();
-                debug!(minute = timestamp_date_time.to_string(), "missing minute");
-                let usd = bybit::get_closest_price_by_minute(
-                    timestamp_date_time,
-                    Duration::minutes(max_distance_in_minutes),
-                )
-                .await;
-                match usd {
-                    None => {
-                        panic!(
-                            "no Bybit price available for timestamp: {}",
-                            timestamp_date_time.to_string(),
-                        );
-                    }
-                    Some(usd) => {
-                        info!(
-                            "found a price on Bybit for timestamp: {} - {}",
-                            timestamp, usd
-                        );
-                    }
-                };
-                (usd, timestamp_date_time)
-            }
+        .map(|timestamp| async move {
+            let timestamp_date_time = Utc.timestamp_opt(timestamp, 0).unwrap();
+            debug!(minute = timestamp_date_time.to_string(), "missing minute");
+            let usd = bybit::get_closest_price_by_minute(
+                timestamp_date_time,
+                Duration::minutes(max_distance_in_minutes),
+            )
+            .await;
+            match usd {
+                None => {
+                    panic!(
+                        "no Bybit price available for timestamp: {}",
+                        timestamp_date_time,
+                    );
+                }
+                Some(usd) => {
+                    info!(
+                        "found a price on Bybit for timestamp: {} - {}",
+                        timestamp, usd
+                    );
+                }
+            };
+            (usd, timestamp_date_time)
         })
         .buffer_unordered(concurrent_requests);
 
-    while let Some((usd, timestamp))  = missing_minutes_stream.next().await {
+    while let Some((usd, timestamp)) = missing_minutes_stream.next().await {
         if let Some(usd) = usd {
             debug!("Storing price for timestamp: {:?}", timestamp);
             eth_price_store.store_price(&timestamp, usd).await;
             debug!("Stored price for timestamp: {:?}", timestamp);
         }
-    };
+    }
 
     info!("done healing eth prices");
 }
