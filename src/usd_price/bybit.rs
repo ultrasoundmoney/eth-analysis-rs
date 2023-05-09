@@ -1,8 +1,10 @@
 use std::{cmp::Ordering, ops::Sub};
 
+use backoff::{self, Error, ExponentialBackoff};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use format_url::FormatUrl;
 use serde::Deserialize;
+use tracing::info;
 
 use super::EthPrice;
 
@@ -40,7 +42,7 @@ const BYBIT_API: &str = "https://api.bybit.com";
 async fn get_eth_candles(
     start: DateTime<Utc>,
     end: DateTime<Utc>,
-) -> reqwest::Result<Vec<EthPrice>> {
+) -> Result<Vec<EthPrice>, Error<reqwest::Error>> {
     let url = FormatUrl::new(BYBIT_API)
         .with_path_template("/derivatives/v3/public/index-price-kline")
         .with_query_params(vec![
@@ -52,9 +54,19 @@ async fn get_eth_candles(
         ])
         .format_url();
 
+    let op = || async {
+        let result = send_eth_price_request(url.clone())
+            .await
+            .map_err(Error::transient)?;
+        Ok(result)
+    };
+    backoff::future::retry(ExponentialBackoff::default(), op).await
+}
+
+pub async fn send_eth_price_request(url: String) -> Result<Vec<EthPrice>, reqwest::Error> {
+    info!("sending request to {}", url);
     reqwest::get(url)
-        .await
-        .unwrap()
+        .await?
         .json::<BybitPriceResponse>()
         .await
         .map(|body| {
@@ -74,7 +86,7 @@ async fn get_eth_candles(
 }
 
 // Return current 1min candle open price
-pub async fn get_eth_price() -> reqwest::Result<EthPrice> {
+pub async fn get_eth_price() -> Result<EthPrice, Error<reqwest::Error>> {
     let end = Utc::now();
     let start = end.sub(Duration::minutes(1));
     get_eth_candles(start, end)
@@ -124,7 +136,7 @@ pub async fn get_closest_price_by_minute(
     let start = target_minute_rounded - max_distance;
     let end = target_minute_rounded + max_distance;
 
-    let candles = get_eth_candles(start, end).await.unwrap();
+    let candles = get_eth_candles(start, end).await.unwrap_or(Vec::new());
 
     if candles.is_empty() {
         None
