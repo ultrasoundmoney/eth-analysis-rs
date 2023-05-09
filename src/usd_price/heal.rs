@@ -9,6 +9,7 @@ use crate::{db, execution_chain, log};
 
 use super::{bybit, store, EthPriceTimestamp};
 use futures::stream::{self, StreamExt};
+use tracing::warn;
 
 pub async fn heal_eth_prices() {
     log::init_with_env();
@@ -20,8 +21,9 @@ pub async fn heal_eth_prices() {
         .and_then(|str| str.parse::<i64>().ok())
         .unwrap_or(10);
 
-    debug!("getting all eth prices");
+    info!("getting all eth prices");
     let db_pool = db::get_db_pool("heal-eth-prices").await;
+
     let eth_price_store = store::EthPriceStorePostgres::new(db_pool.clone());
 
     let eth_prices = sqlx::query_as::<Postgres, EthPriceTimestamp>(
@@ -37,17 +39,17 @@ pub async fn heal_eth_prices() {
     .unwrap();
 
     if eth_prices.is_empty() {
-        panic!("no eth prices found, are you running against a DB with prices?")
+        warn!("no eth prices found, are you running against a DB with prices?")
     }
 
-    debug!("building set of known minutes");
+    info!("building set of known minutes");
     let mut known_minutes = HashSet::new();
 
     for eth_price in eth_prices.iter() {
         known_minutes.insert(eth_price.timestamp.timestamp());
     }
 
-    debug!("walking through all minutes since London hardfork to look for missing minutes");
+    info!("walking through all minutes since London hardfork to look for missing minutes");
 
     let duration_since_london = Utc::now().duration_round(Duration::minutes(1)).unwrap()
         - *execution_chain::LONDON_HARD_FORK_TIMESTAMP;
@@ -63,8 +65,8 @@ pub async fn heal_eth_prices() {
         .filter(|timestamp| !known_minutes.contains(timestamp))
         .collect::<Vec<i64>>();
 
-    let concurrent_requests = 50;
-    debug!("found {} missing minutes", missing_minutes_timestamps.len());
+    let concurrent_requests = 8;
+    info!("found {} missing minutes", missing_minutes_timestamps.len());
     let mut missing_minutes_stream = stream::iter(missing_minutes_timestamps)
         .map(|timestamp| {
             async move {
@@ -77,13 +79,13 @@ pub async fn heal_eth_prices() {
                 .await;
                 match usd {
                     None => {
-                        debug!(
-                            timestamp = timestamp_date_time.to_string(),
-                            "no Bybit price available",
+                        panic!(
+                            "no Bybit price available for timestamp: {}",
+                            timestamp_date_time.to_string(),
                         );
                     }
                     Some(usd) => {
-                        debug!(
+                        info!(
                             "found a price on Bybit for timestamp: {} - {}",
                             timestamp, usd
                         );
