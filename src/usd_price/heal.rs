@@ -11,6 +11,8 @@ use super::{bybit, store, EthPriceTimestamp};
 use futures::stream::{self, StreamExt};
 use tracing::warn;
 
+const CONCURRENT_REQUESTS: usize = 8;
+
 pub async fn heal_eth_prices() {
     log::init_with_env();
 
@@ -65,7 +67,6 @@ pub async fn heal_eth_prices() {
         .filter(|timestamp| !known_minutes.contains(timestamp))
         .collect::<Vec<i64>>();
 
-    let concurrent_requests = 8;
     info!("found {} missing minutes", missing_minutes_timestamps.len());
     let mut missing_minutes_stream = stream::iter(missing_minutes_timestamps)
         .map(|timestamp| async move {
@@ -92,7 +93,7 @@ pub async fn heal_eth_prices() {
             };
             (usd, timestamp_date_time)
         })
-        .buffer_unordered(concurrent_requests);
+        .buffer_unordered(CONCURRENT_REQUESTS);
 
     while let Some((usd, timestamp)) = missing_minutes_stream.next().await {
         if let Some(usd) = usd {

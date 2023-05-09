@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, ops::Sub};
 
-use backoff::{self, Error, ExponentialBackoffBuilder};
+use backoff::{self, Error, ExponentialBackoff};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use format_url::FormatUrl;
 use serde::Deserialize;
@@ -60,10 +60,7 @@ async fn get_eth_candles(
             .map_err(Error::transient)?;
         Ok(result)
     };
-    let backoff = ExponentialBackoffBuilder::new()
-        .with_max_elapsed_time(Some(std::time::Duration::from_secs(60)))
-        .build();
-    backoff::future::retry(backoff, op).await
+    backoff::future::retry(ExponentialBackoff::default(), op).await
 }
 
 pub async fn send_eth_price_request(url: String) -> Result<Vec<EthPrice>, reqwest::Error> {
