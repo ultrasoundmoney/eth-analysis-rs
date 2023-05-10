@@ -127,6 +127,26 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
+  "145ea2e8e6ed4a9cc41990b66b1a72624b534772405dfa45d6adf212bd14aec7": {
+    "describe": {
+      "columns": [
+        {
+          "name": "effective_balance_sum",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            effective_balance_sum\n        FROM\n            beacon_states\n        WHERE\n            state_root = $1\n        "
+  },
   "146416f8451be76f2f9f4f686f19babf08bdf86d7e4ce9c6e171df3ab5058ddb": {
     "describe": {
       "columns": [
@@ -410,26 +430,6 @@
       }
     },
     "query": "\n        DELETE FROM beacon_issuance\n        WHERE state_root IN (\n            SELECT state_root FROM beacon_states\n            WHERE slot = $1\n        )\n        "
-  },
-  "373699992ba24383ca449966a910ff1caae73a250224e03a01bb463cc9ec5966": {
-    "describe": {
-      "columns": [
-        {
-          "name": "effective_balance_sum",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                effective_balance_sum\n            FROM\n                beacon_states\n            WHERE\n                state_root = $1\n        "
   },
   "376e760f404471d87aac22f443ea64ace718725a92af4474a7c8391ad17d4baa": {
     "describe": {
@@ -1250,6 +1250,19 @@
     },
     "query": "\n                SELECT\n                    timestamp,\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY\n                    timestamp ASC\n                "
   },
+  "9fd4f5582d534d68ba6d1cd86abc49e1dad76f38ab45cd85c0ca9295a1629cc1": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int8",
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        UPDATE\n            beacon_states\n        SET\n            effective_balance_sum = $1\n        WHERE\n            state_root = $2\n        "
+  },
   "a071befc1dabc8df4310891a11943b3d9e337870cc85e36fe30151a3a02937c0": {
     "describe": {
       "columns": [
@@ -1361,19 +1374,6 @@
       }
     },
     "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot AS \"slot: Slot\"\n            FROM beacon_states\n            ORDER BY slot DESC\n            LIMIT 1\n        "
-  },
-  "afcdf2723131331fa33290904bd69c0b3c49033b1cb4756e10b2dddd1f483ee5": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Int8",
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            UPDATE\n                beacon_states\n            SET\n                effective_balance_sum = $1\n            WHERE\n                state_root = $2\n        "
   },
   "b2688f2135e83c9a84ec1f3b1a866922a1663083c2b2e826de9d7232da47b9cd": {
     "describe": {
