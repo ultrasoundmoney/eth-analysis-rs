@@ -21,12 +21,13 @@ async fn get_effective_balance_sum(
     beacon_node
         .get_validators_by_state(state_root)
         .await
-        .map(|validators| {
-            validators.iter().fold(GweiNewtype(0), |sum, validator| {
-                sum + validator.effective_balance
-            })
-        })
         .unwrap()
+        .iter()
+        .filter(|validator_envelope| validator_envelope.is_active())
+        // Sum the effective balance of all validators in the state.
+        .fold(GweiNewtype(0), |sum, validator_envelope| {
+            sum + validator_envelope.effective_balance()
+        })
 }
 
 #[allow(dead_code)]
