@@ -233,7 +233,20 @@ pub struct Validator {
 
 #[derive(Debug, Deserialize)]
 pub struct ValidatorEnvelope {
+    pub status: String,
     pub validator: Validator,
+}
+
+impl ValidatorEnvelope {
+    pub fn is_active(&self) -> bool {
+        self.status == "active_ongoing"
+            || self.status == "active_exiting"
+            || self.status == "active_slashed"
+    }
+
+    pub fn effective_balance(&self) -> GweiNewtype {
+        self.validator.effective_balance
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -472,7 +485,7 @@ impl BeaconNode {
     pub async fn get_validators_by_state(
         &self,
         state_root: &str,
-    ) -> reqwest::Result<Vec<Validator>> {
+    ) -> reqwest::Result<Vec<ValidatorEnvelope>> {
         let url = make_validators_by_state_url(state_root);
         self.client
             .get(&url)
@@ -481,13 +494,7 @@ impl BeaconNode {
             .error_for_status()?
             .json::<ValidatorsEnvelope>()
             .await
-            .map(|validators_envelope| {
-                validators_envelope
-                    .data
-                    .into_iter()
-                    .map(|validator_envelope| validator_envelope.validator)
-                    .collect()
-            })
+            .map(|envelope| envelope.data)
     }
 }
 

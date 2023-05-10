@@ -56,7 +56,7 @@ pub async fn get_last_effective_balance_sum(
         .await
         .map(|validators| {
             validators.iter().fold(GweiNewtype(0), |sum, validator| {
-                sum + validator.effective_balance
+                sum + validator.effective_balance()
             })
         })
         .unwrap()
