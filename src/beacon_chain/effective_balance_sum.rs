@@ -3,7 +3,7 @@ use sqlx::{
     postgres::{PgPoolOptions, PgRow},
     PgExecutor, Row,
 };
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     beacon_chain,
@@ -39,12 +39,12 @@ pub async fn get_stored_effective_balance_sum(
     // all requested state_roots to be in the DB.
     let row = sqlx::query!(
         "
-            SELECT
-                effective_balance_sum
-            FROM
-                beacon_states
-            WHERE
-                state_root = $1
+        SELECT
+            effective_balance_sum
+        FROM
+            beacon_states
+        WHERE
+            state_root = $1
         ",
         state_root
     )
@@ -59,14 +59,14 @@ pub async fn get_stored_effective_balance_sum(
 pub async fn get_last_stored_effective_balance_sum(executor: impl PgExecutor<'_>) -> GweiNewtype {
     sqlx::query(
         "
-            SELECT
-                effective_balance_sum
-            FROM
-                beacon_states
-            WHERE
-                effective_balance_sum IS NOT NULL
-            ORDER BY slot DESC
-            LIMIT 1
+        SELECT
+            effective_balance_sum
+        FROM
+            beacon_states
+        WHERE
+            effective_balance_sum IS NOT NULL
+        ORDER BY slot DESC
+        LIMIT 1
         ",
     )
     .map(|row: PgRow| {
@@ -88,12 +88,12 @@ async fn store_effective_balance_sum<'a>(
         .expect("GweiAmount to fit in i64 when encoding for storage in Postgres");
     sqlx::query!(
         "
-            UPDATE
-                beacon_states
-            SET
-                effective_balance_sum = $1
-            WHERE
-                state_root = $2
+        UPDATE
+            beacon_states
+        SET
+            effective_balance_sum = $1
+        WHERE
+            state_root = $2
         ",
         gwei_i64,
         state_root
@@ -126,6 +126,11 @@ pub async fn update_effective_balance_sum() -> Result<()> {
     store_effective_balance_sum(&db_pool, effective_balance_sum, &last_state.state_root).await;
 
     let effective_balance_sum_f64: f64 = effective_balance_sum.into();
+
+    debug!(
+        "effective balance sum updated to {}",
+        effective_balance_sum_f64
+    );
 
     key_value_store::set_value(
         &db_pool,
