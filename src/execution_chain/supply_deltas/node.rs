@@ -69,7 +69,7 @@ impl From<SupplyDeltaMessageV1> for SupplyDelta {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SupplyDeltaFV2 {
+pub struct SupplyDeltaF {
     block: BlockNumber,
     burn: Wei,
     destruct: Option<Wei>,
@@ -80,8 +80,8 @@ pub struct SupplyDeltaFV2 {
     uncles_reward: Wei,
 }
 
-impl From<SupplyDeltaMessageV2> for SupplyDelta {
-    fn from(message: SupplyDeltaMessageV2) -> Self {
+impl From<SupplyDeltaMessage> for SupplyDelta {
+    fn from(message: SupplyDeltaMessage) -> Self {
         let f = message.params.result;
 
         Self {
@@ -98,17 +98,17 @@ impl From<SupplyDeltaMessageV2> for SupplyDelta {
 }
 
 #[derive(Deserialize)]
-pub struct SupplyDeltaParamsV2 {
+pub struct SupplyDeltaParams {
     // subscription: String,
-    result: SupplyDeltaFV2,
+    result: SupplyDeltaF,
 }
 
 #[derive(Deserialize)]
-pub struct SupplyDeltaMessageV2 {
-    params: SupplyDeltaParamsV2,
+pub struct SupplyDeltaMessage {
+    params: SupplyDeltaParams,
 }
 
-fn make_supply_delta_subscribe_message_v2(greater_than_or_equal_to: &BlockNumber) -> String {
+fn make_supply_delta_subscribe_message(greater_than_or_equal_to: &BlockNumber) -> String {
     let msg = json!({
         "id": 0,
         "jsonrpc": "2.0",
@@ -119,20 +119,8 @@ fn make_supply_delta_subscribe_message_v2(greater_than_or_equal_to: &BlockNumber
     serde_json::to_string(&msg).unwrap()
 }
 
-fn make_supply_delta_subscribe_message_v1(greater_than_or_equal_to: &BlockNumber) -> String {
-    let msg = json!({
-        "id": 0,
-        "jsonrpc": "2.0",
-        "method": "eth_subscribe",
-        "params": ["issuance", greater_than_or_equal_to]
-    });
-
-    serde_json::to_string(&msg).unwrap()
-}
-
 pub fn stream_supply_deltas_from(
     greater_than_or_equal_to: BlockNumber,
-    use_legacy_format: bool,
 ) -> impl Stream<Item = SupplyDelta> {
     tracing::debug!("streaming supply deltas gte {greater_than_or_equal_to}");
     let (mut tx, rx) = futures::channel::mpsc::unbounded();
@@ -141,13 +129,8 @@ pub fn stream_supply_deltas_from(
         let url = (*EXECUTION_URL).to_string();
         let mut ws = connect_async(&url).await.unwrap().0;
 
-        let deltas_subscribe_message = {
-            if use_legacy_format {
-                make_supply_delta_subscribe_message_v1(&greater_than_or_equal_to)
-            } else {
-                make_supply_delta_subscribe_message_v2(&greater_than_or_equal_to)
-            }
-        };
+        let deltas_subscribe_message =
+            make_supply_delta_subscribe_message(&greater_than_or_equal_to);
 
         ws.send(Message::text(deltas_subscribe_message))
             .await
@@ -166,14 +149,9 @@ pub fn stream_supply_deltas_from(
 
             let message_text = message.into_text().unwrap();
             let supply_delta: SupplyDelta = {
-                if use_legacy_format {
-                    serde_json::from_str::<SupplyDeltaMessageV1>(&message_text)
-                        .map(|message| message.into())
-                } else {
-                    serde_json::from_str::<SupplyDeltaMessageV2>(&message_text)
-                        .map(|message| message.into())
-                }
-                .unwrap()
+                serde_json::from_str::<SupplyDeltaMessage>(&message_text)
+                    .map(|message| message.into())
+                    .unwrap()
             };
             tx.send(supply_delta).await.unwrap();
         }
@@ -188,17 +166,16 @@ pub async fn stream_supply_deltas_from_last<'a>(
     let last_synced_supply_delta_number = sync::get_last_synced_supply_delta_number(executor)
         .await
         .unwrap_or(super::snapshot::SUPPLY_SNAPSHOT_15082718.block_number);
-    stream_supply_deltas_from(last_synced_supply_delta_number + 1, false)
+    stream_supply_deltas_from(last_synced_supply_delta_number + 1)
 }
 
 pub fn stream_supply_delta_chunks(
     from: BlockNumber,
     chunk_size: usize,
-    use_legacy_format: bool,
 ) -> UnboundedReceiver<Vec<SupplyDelta>> {
     let (mut tx, rx) = futures::channel::mpsc::unbounded();
 
-    let mut supply_deltas_rx = stream_supply_deltas_from(from, use_legacy_format);
+    let mut supply_deltas_rx = stream_supply_deltas_from(from);
 
     let mut supply_delta_buffer = Vec::with_capacity(chunk_size);
 
@@ -235,7 +212,7 @@ pub async fn get_supply_delta_by_block_number(
     let url = (*EXECUTION_URL).to_string();
     let mut ws = connect_async(&url).await.unwrap().0;
 
-    let deltas_subscribe_message = make_supply_delta_subscribe_message_v2(&(block_number));
+    let deltas_subscribe_message = make_supply_delta_subscribe_message(&(block_number));
 
     ws.send(Message::text(deltas_subscribe_message))
         .await
@@ -257,7 +234,7 @@ pub async fn get_supply_delta_by_block_number(
 
             let message_text = message.into_text().unwrap();
             let supply_delta: SupplyDelta =
-                serde_json::from_str::<SupplyDeltaMessageV2>(&message_text)
+                serde_json::from_str::<SupplyDeltaMessage>(&message_text)
                     .map(|message| message.into())
                     .unwrap();
             return Ok(supply_delta);
@@ -288,7 +265,7 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_stream_supply_deltas() {
-        let stream = stream_supply_deltas_from(15_000_000, false);
+        let stream = stream_supply_deltas_from(15_000_000);
         let ten_deltas_future = stream.take(10).collect::<Vec<_>>();
         match timeout(Duration::from_secs(4), ten_deltas_future).await {
             Err(_) => {

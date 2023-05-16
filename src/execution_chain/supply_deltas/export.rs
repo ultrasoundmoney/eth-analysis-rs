@@ -14,7 +14,7 @@ pub async fn write_deltas() {
     info!("writing supply deltas {timestamp}");
 
     let mut supply_deltas_rx =
-        supply_deltas::stream_supply_delta_chunks(0, SUPPLY_DELTA_BUFFER_SIZE, true);
+        supply_deltas::stream_supply_delta_chunks(0, SUPPLY_DELTA_BUFFER_SIZE);
 
     let mut progress = pit_wall::Progress::new("write supply deltas", 15_000_000);
 

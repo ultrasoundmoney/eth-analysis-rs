@@ -27,8 +27,7 @@ pub async fn write_deltas_log() {
     let mut execution_node = ExecutionNode::connect().await;
     let latest_block = execution_node.get_latest_block().await;
 
-    let mut supply_deltas_stream =
-        supply_deltas::stream_supply_deltas_from(latest_block.number, false);
+    let mut supply_deltas_stream = supply_deltas::stream_supply_deltas_from(latest_block.number);
 
     let file_path = format!("supply_deltas_log_{timestamp}.csv");
 
