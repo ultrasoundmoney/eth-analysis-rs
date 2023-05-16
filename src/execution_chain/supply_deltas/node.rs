@@ -119,6 +119,21 @@ fn make_supply_delta_subscribe_message(greater_than_or_equal_to: &BlockNumber) -
     serde_json::to_string(&msg).unwrap()
 }
 
+#[derive(Deserialize)]
+struct SubscriptionError {
+    code: i32,
+    message: String,
+}
+
+// success: {"jsonrpc":"2.0","id":0,"result":"0x166ea326fc28c4a9f4dcf0b5929881c8"}
+// failure: {"jsonrpc":"2.0","id":0,"error":{"code":-32601,"message":"no \"issuance\" subscription in eth namespace"}}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum SubscriptionConfirmation {
+    Confirmation { result: String },
+    Error { error: SubscriptionError },
+}
+
 pub fn stream_supply_deltas_from(
     greater_than_or_equal_to: BlockNumber,
 ) -> impl Stream<Item = SupplyDelta> {
@@ -136,8 +151,27 @@ pub fn stream_supply_deltas_from(
             .await
             .unwrap();
 
-        ws.next().await;
-        tracing::debug!("got subscription confirmation message");
+        // We recieve a confirmation message from the websocket server when we subscribe.
+        let subscription_confirmation = {
+            let message = ws.next().await.unwrap().unwrap();
+            let message_text = message.into_text().unwrap();
+            serde_json::from_str::<SubscriptionConfirmation>(&message_text).unwrap()
+        };
+
+        match subscription_confirmation {
+            SubscriptionConfirmation::Confirmation { result } => {
+                tracing::debug!("subscribed to supply deltas: {}", result);
+                // When the subscription is successful continue with the rest of the stream.
+            }
+            SubscriptionConfirmation::Error { error } => {
+                tracing::error!(
+                    "failed to subscribe to supply deltas: {} {}",
+                    error.code,
+                    error.message
+                );
+                return;
+            }
+        }
 
         while let Some(message_result) = ws.next().await {
             let message = message_result.unwrap();
