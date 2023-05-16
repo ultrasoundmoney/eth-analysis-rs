@@ -81,7 +81,7 @@ struct OutRow {
 // We have the one after this in our DB already.
 const EARLIEST_STORED_DB_BLOCK_NUMBER: BlockNumber = 15429946;
 
-async fn write_blocks_from(gte_block_number: BlockNumber, to_path: &str) -> Result<()> {
+async fn export_blocks_from(gte_block_number: BlockNumber, to_path: &str) -> Result<()> {
     debug!("loading eth prices");
 
     let mut eth_prices_csv = csv::Reader::from_path("eth_prices.csv")
@@ -195,7 +195,7 @@ async fn write_blocks_from(gte_block_number: BlockNumber, to_path: &str) -> Resu
     Ok(())
 }
 
-pub async fn write_blocks_from_august() -> Result<()> {
+pub async fn export_blocks_from_august() -> Result<()> {
     log::init_with_env();
 
     info!(
@@ -212,12 +212,12 @@ pub async fn write_blocks_from_august() -> Result<()> {
 
     let file_path = format!("blocks_from_august_{timestamp}.csv");
 
-    write_blocks_from(EXECUTION_BLOCK_NUMBER_AUG_1ST, &file_path).await?;
+    export_blocks_from(EXECUTION_BLOCK_NUMBER_AUG_1ST, &file_path).await?;
 
     Ok(())
 }
 
-pub async fn write_blocks_from_london() -> Result<()> {
+pub async fn export_blocks_from_london() -> Result<()> {
     log::init_with_env();
 
     info!(
@@ -231,7 +231,7 @@ pub async fn write_blocks_from_london() -> Result<()> {
     match file {
         Err(_err) => {
             info!("first run, starting at london hardfork");
-            write_blocks_from(LONDON_HARD_FORK_BLOCK_NUMBER, file_path).await?;
+            export_blocks_from(LONDON_HARD_FORK_BLOCK_NUMBER, file_path).await?;
         }
         Ok(file) => {
             // Because we interrupt the writing sometimes the last row may be malformed, if a file
@@ -250,7 +250,7 @@ pub async fn write_blocks_from_london() -> Result<()> {
                 .map(|row: Result<OutRow, _>| row.unwrap().number)
                 .unwrap_or(LONDON_HARD_FORK_BLOCK_NUMBER);
             info!(last_stored_block_number, "picking up from previous run");
-            write_blocks_from(last_stored_block_number + 1, file_path).await?;
+            export_blocks_from(last_stored_block_number + 1, file_path).await?;
         }
     };
 

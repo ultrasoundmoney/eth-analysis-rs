@@ -42,13 +42,13 @@ pub use data_integrity::check_blocks_gaps;
 pub use eth_supply::export_thousandth_epoch_supply;
 pub use eth_supply::fill_eth_supply_gaps;
 
+pub use execution_chain::export_blocks_from_august;
+pub use execution_chain::export_blocks_from_london;
+pub use execution_chain::export_execution_supply_deltas;
 pub use execution_chain::summary_from_deltas_csv;
 pub use execution_chain::sync_execution_blocks;
 pub use execution_chain::sync_execution_supply_deltas;
-pub use execution_chain::write_blocks_from_august;
-pub use execution_chain::write_blocks_from_london;
 pub use execution_chain::write_execution_heads_log;
-pub use execution_chain::write_execution_supply_deltas;
 pub use execution_chain::write_execution_supply_deltas_log;
 
 pub use issuance_breakdown::update_issuance_breakdown;

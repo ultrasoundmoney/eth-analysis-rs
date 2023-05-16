@@ -6,7 +6,7 @@ use crate::{execution_chain::supply_deltas, log};
 
 const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
 
-pub async fn write_deltas() {
+pub async fn export_deltas() {
     log::init_with_env();
 
     let timestamp = crate::time::get_timestamp();
