@@ -39,6 +39,7 @@ pub use beacon_chain::update_validator_rewards;
 pub use data_integrity::check_beacon_state_gaps;
 pub use data_integrity::check_blocks_gaps;
 
+pub use eth_supply::export_daily_supply_since_merge;
 pub use eth_supply::export_thousandth_epoch_supply;
 pub use eth_supply::fill_eth_supply_gaps;
 

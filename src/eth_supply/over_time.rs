@@ -80,7 +80,7 @@ async fn get_early_supply_since_burn(executor: impl PgExecutor<'_>) -> Vec<Suppl
     .collect()
 }
 
-async fn from_time_frame(
+pub async fn from_time_frame(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
 ) -> Vec<SupplyAtTime> {

@@ -10,6 +10,7 @@ mod test;
 
 pub use changes::SupplyChanges;
 
+pub use export::export_daily_supply_since_merge;
 pub use export::export_thousandth_epoch_supply;
 
 pub use gaps::fill_gaps as fill_eth_supply_gaps;

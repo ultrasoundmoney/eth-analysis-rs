@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::{
     beacon_chain::{self, Slot},
     db,
+    time_frames::{GrowingTimeFrame, TimeFrame},
     units::EthNewtype,
 };
 
@@ -129,7 +130,7 @@ pub async fn export_thousandth_epoch_supply() {
     let mut csv_writer = csv::Writer::from_path("eth_supply.csv").unwrap();
     let mut last_epoch: Option<i32> = None;
     for supply in supply {
-        let row: Row = Row {
+        let row = Row {
             epoch: supply.epoch,
             epoch_delta: last_epoch.map(|e| supply.epoch - e).unwrap_or(0),
             slot: supply.slot,
@@ -138,6 +139,38 @@ pub async fn export_thousandth_epoch_supply() {
             timestamp_unix: supply.timestamp.timestamp(),
         };
         last_epoch = Some(supply.epoch);
+        csv_writer
+            .serialize(row)
+            .expect("failed to serialize supply");
+    }
+    csv_writer.flush().unwrap();
+}
+
+#[derive(Debug, Serialize)]
+struct SupplyAtTimeRow {
+    supply: EthNewtype,
+    timestamp: DateTime<Utc>,
+    timestamp_unix: i64,
+}
+
+pub async fn export_daily_supply_since_merge() {
+    let db_pool = db::get_db_pool("export_daily_supply_since_merge").await;
+    let supply = super::over_time::from_time_frame(
+        &db_pool,
+        &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),
+    )
+    .await;
+
+    let timestamp = crate::time::get_timestamp();
+
+    let mut csv_writer =
+        csv::Writer::from_path(format!("eth_supply_since_merge_{timestamp}.csv")).unwrap();
+    for supply in supply {
+        let row = SupplyAtTimeRow {
+            supply: supply.supply,
+            timestamp: supply.timestamp,
+            timestamp_unix: supply.timestamp.timestamp(),
+        };
         csv_writer
             .serialize(row)
             .expect("failed to serialize supply");
