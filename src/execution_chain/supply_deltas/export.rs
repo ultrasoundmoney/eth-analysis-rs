@@ -23,11 +23,13 @@ pub async fn write_deltas() {
     let mut csv_writer = csv::Writer::from_path(&file_path).unwrap();
 
     while let Some(supply_deltas) = supply_deltas_rx.next().await {
+        let len = supply_deltas.len();
+
         for supply_delta in supply_deltas {
             csv_writer.serialize(supply_delta).unwrap();
         }
 
-        progress.inc_work_done_by(SUPPLY_DELTA_BUFFER_SIZE.try_into().unwrap());
+        progress.inc_work_done_by(len.try_into().unwrap());
         debug!("{}", progress.get_progress_string());
     }
 
