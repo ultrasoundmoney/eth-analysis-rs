@@ -65,7 +65,6 @@ mod tests {
                 },
             ])
             .build();
-        dbg!(&block);
         assert_eq!(get_withdrawal_sum_from_block(&block), GweiNewtype(3));
     }
 }
