@@ -717,6 +717,7 @@ pub mod tests {
         beacon_node
             .get_validator_balances(STATE_ROOT_1229)
             .await
+            .unwrap()
             .unwrap();
     }
 
