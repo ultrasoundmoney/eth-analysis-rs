@@ -12,7 +12,17 @@ use crate::{
     log,
 };
 
-async fn backfill_balances(db_pool: &PgPool, work_todo: u64, daily_only: bool) -> Result<()> {
+enum Granularity {
+    Slot,
+    Hour,
+    Day,
+}
+
+async fn backfill_balances(
+    db_pool: &PgPool,
+    work_todo: u64,
+    granularity: Granularity,
+) -> Result<()> {
     let beacon_node = BeaconNode::new();
 
     let mut rows = sqlx::query!(
@@ -33,13 +43,10 @@ async fn backfill_balances(db_pool: &PgPool, work_todo: u64, daily_only: bool) -
         FIRST_POST_LONDON_SLOT.0,
     )
     .fetch(db_pool)
-    .try_filter(|row| {
-        if daily_only {
-            let is_first_of_day_slot = Slot(row.slot).is_first_of_day();
-            futures::future::ready(is_first_of_day_slot)
-        } else {
-            futures::future::ready(true)
-        }
+    .try_filter(|row| match granularity {
+        Granularity::Slot => futures::future::ready(true),
+        Granularity::Hour => futures::future::ready(Slot(row.slot).is_first_of_hour()),
+        Granularity::Day => futures::future::ready(Slot(row.slot).is_first_of_day()),
     });
 
     let mut progress = Progress::new("backfill-beacon-balances", work_todo);
@@ -50,7 +57,7 @@ async fn backfill_balances(db_pool: &PgPool, work_todo: u64, daily_only: bool) -
         let validator_balances = beacon_node
             .get_validator_balances(&row.state_root)
             .await?
-            .expect("expect block to exist for historic block_root");
+            .expect("expect balances to exist for every state root");
         let balances_sum = balances::sum_validator_balances(&validator_balances);
 
         balances::store_validators_balance(
@@ -69,17 +76,8 @@ async fn backfill_balances(db_pool: &PgPool, work_todo: u64, daily_only: bool) -
     Ok(())
 }
 
-pub async fn backfill_balances_to_london() -> Result<()> {
-    log::init_with_env();
-
-    info!("backfilling beacon balances");
-
-    let db_pool = PgPoolOptions::new()
-        .max_connections(2)
-        .connect(&db::get_db_url_with_name("backfill-beacon-balances"))
-        .await?;
-
-    let work_todo = sqlx::query!(
+async fn get_slots_since_merge(db_pool: &PgPool) -> Result<u64> {
+    let row = sqlx::query!(
         r#"
         SELECT
             COUNT(*) AS "count!"
@@ -94,14 +92,52 @@ pub async fn backfill_balances_to_london() -> Result<()> {
         "#,
         FIRST_POST_LONDON_SLOT.0
     )
-    .fetch_one(&db_pool)
+    .fetch_one(db_pool)
     .await?;
 
-    debug!(work_todo.count, "work todo");
+    Ok(row.count.try_into().unwrap())
+}
 
-    backfill_balances(&db_pool, work_todo.count.try_into().unwrap(), false).await?;
+pub async fn backfill_balances_to_london() -> Result<()> {
+    log::init_with_env();
+
+    info!("backfilling beacon balances");
+
+    let db_pool = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&db::get_db_url_with_name("backfill-beacon-balances"))
+        .await?;
+
+    let slot_count = get_slots_since_merge(&db_pool).await?;
+    debug!(slot_count, "work todo");
+
+    backfill_balances(&db_pool, slot_count, Granularity::Slot).await?;
 
     info!("done backfilling beacon balances");
+
+    Ok(())
+}
+
+pub async fn backfill_hourly_balances_to_london() -> Result<()> {
+    log::init_with_env();
+
+    info!("backfilling daily beacon balances");
+
+    let db_pool = PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&db::get_db_url_with_name("backfill-beacon-balances"))
+        .await?;
+
+    let hours_since_merge = (Utc::now() - *LONDON_HARD_FORK_TIMESTAMP).num_hours();
+
+    backfill_balances(
+        &db_pool,
+        hours_since_merge.try_into().unwrap(),
+        Granularity::Hour,
+    )
+    .await?;
+
+    info!("done backfilling daily beacon block hashes");
 
     Ok(())
 }
@@ -118,7 +154,12 @@ pub async fn backfill_daily_balances_to_london() -> Result<()> {
 
     let days_since_merge = (Utc::now() - *LONDON_HARD_FORK_TIMESTAMP).num_days();
 
-    backfill_balances(&db_pool, days_since_merge.try_into().unwrap(), true).await?;
+    backfill_balances(
+        &db_pool,
+        days_since_merge.try_into().unwrap(),
+        Granularity::Day,
+    )
+    .await?;
 
     info!("done backfilling daily beacon block hashes");
 

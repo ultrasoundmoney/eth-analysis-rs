@@ -54,6 +54,17 @@ impl Slot {
         day_previous_slot != day
     }
 
+    pub fn is_first_of_hour(&self) -> bool {
+        if self.0 == 0 {
+            return true;
+        };
+
+        let hour_previous_slot = Self(self.0 - 1).date_time().hour();
+        let hour = Self(self.0).date_time().hour();
+
+        hour_previous_slot != hour
+    }
+
     pub fn is_first_of_minute(&self) -> bool {
         if self.0 == 0 {
             return true;
@@ -234,6 +245,14 @@ mod tests {
         assert!(!Slot(1).is_first_of_day());
         assert!(!Slot(3598).is_first_of_day());
         assert!(!Slot(3600).is_first_of_day());
+    }
+
+    #[test]
+    fn first_of_hour_test() {
+        assert!(Slot(0).is_first_of_hour());
+        assert!(!Slot(298).is_first_of_hour());
+        assert!(Slot(299).is_first_of_hour());
+        assert!(!Slot(300).is_first_of_hour());
     }
 
     #[test]

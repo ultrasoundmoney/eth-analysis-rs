@@ -12,6 +12,7 @@ mod withdrawals;
 
 pub use balances::backfill_balances_to_london;
 pub use balances::backfill_daily_balances_to_london;
+pub use balances::backfill_hourly_balances_to_london;
 pub use balances::get_balances_by_state_root;
 pub use balances::get_validator_balances_by_start_of_day;
 pub use balances::store_validators_balance;

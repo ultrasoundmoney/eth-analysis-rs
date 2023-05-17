@@ -12,6 +12,7 @@ use super::{get_last_state, Slot};
 
 pub use backfill::backfill_balances_to_london;
 pub use backfill::backfill_daily_balances_to_london;
+pub use backfill::backfill_hourly_balances_to_london;
 
 pub fn sum_validator_balances(validator_balances: &[ValidatorBalance]) -> GweiNewtype {
     validator_balances
