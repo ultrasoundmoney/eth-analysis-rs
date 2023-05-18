@@ -121,7 +121,7 @@ pub async fn backfill_balances_to_london() -> Result<()> {
 pub async fn backfill_hourly_balances_to_london() -> Result<()> {
     log::init_with_env();
 
-    info!("backfilling daily beacon balances");
+    info!("backfilling hourly beacon balances");
 
     let db_pool = PgPoolOptions::new()
         .max_connections(2)
@@ -137,7 +137,7 @@ pub async fn backfill_hourly_balances_to_london() -> Result<()> {
     )
     .await?;
 
-    info!("done backfilling daily beacon block hashes");
+    info!("done backfilling hourly beacon block hashes");
 
     Ok(())
 }
