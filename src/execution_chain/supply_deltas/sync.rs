@@ -29,13 +29,13 @@ async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) 
     }
 
     sqlx::query!(
-        r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM execution_supply_deltas
-                WHERE block_hash = $1
-            ) AS "exists!"
-        "#,
+        "
+        SELECT EXISTS (
+            SELECT 1
+            FROM execution_supply_deltas
+            WHERE block_hash = $1
+        ) AS \"exists!\"
+        ",
         block_hash
     )
     .fetch_one(executor)
@@ -49,13 +49,13 @@ async fn get_is_block_number_known<'a>(
     block_number: &BlockNumber,
 ) -> bool {
     sqlx::query!(
-        r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM execution_supply_deltas
-                WHERE block_number = $1
-            ) AS "exists!"
-        "#,
+        "
+        SELECT EXISTS (
+            SELECT 1
+            FROM execution_supply_deltas
+            WHERE block_number = $1
+        ) AS \"exists!\"
+        ",
         *block_number
     )
     .fetch_one(executor)
@@ -67,26 +67,26 @@ async fn get_is_block_number_known<'a>(
 async fn store_delta<'a>(executor: impl PgExecutor<'a>, supply_delta: &SupplyDelta) {
     sqlx::query(
         "
-            INSERT INTO execution_supply_deltas (
-                block_hash,
-                block_number,
-                fee_burn,
-                fixed_reward,
-                parent_hash,
-                self_destruct,
-                supply_delta,
-                uncles_reward
-            )
-            VALUES (
-                $1,
-                $2,
-                $3::NUMERIC,
-                $4::NUMERIC,
-                $5,
-                $6::NUMERIC,
-                $7::NUMERIC,
-                $8::NUMERIC
-            )
+        INSERT INTO execution_supply_deltas (
+            block_hash,
+            block_number,
+            fee_burn,
+            fixed_reward,
+            parent_hash,
+            self_destruct,
+            supply_delta,
+            uncles_reward
+        )
+        VALUES (
+            $1,
+            $2,
+            $3::NUMERIC,
+            $4::NUMERIC,
+            $5,
+            $6::NUMERIC,
+            $7::NUMERIC,
+            $8::NUMERIC
+        )
         ",
     )
     .bind(supply_delta.block_hash.clone())
@@ -109,11 +109,11 @@ async fn store_execution_supply(
 ) -> sqlx::Result<PgQueryResult> {
     sqlx::query(
         "
-            INSERT INTO execution_supply (
-                block_hash,
-                block_number,
-                balances_sum
-            ) VALUES ($1, $2, $3::NUMERIC)
+        INSERT INTO execution_supply (
+            block_hash,
+            block_number,
+            balances_sum
+        ) VALUES ($1, $2, $3::NUMERIC)
        ",
     )
     .bind(supply_delta.block_hash.clone())
@@ -144,8 +144,8 @@ async fn get_balances_at_hash<'a>(executor: impl PgExecutor<'a>, block_hash: &st
 
     sqlx::query(
         "
-            SELECT balances_sum::TEXT FROM execution_supply
-            WHERE block_hash = $1
+        SELECT balances_sum::TEXT FROM execution_supply
+        WHERE block_hash = $1
         ",
     )
     .bind(block_hash)
@@ -186,10 +186,10 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_numb
     let mut transaction = executor.begin().await.unwrap();
 
     sqlx::query(
-        r#"
-            DELETE FROM execution_supply
-            WHERE block_number >= $1
-        "#,
+        "
+        DELETE FROM execution_supply
+        WHERE block_number >= $1
+        ",
     )
     .bind(*gte_block_number)
     .execute(&mut *transaction)
@@ -197,10 +197,10 @@ async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_numb
     .unwrap();
 
     sqlx::query(
-        r#"
-            DELETE FROM execution_supply_deltas
-            WHERE block_number >= $1
-        "#,
+        "
+        DELETE FROM execution_supply_deltas
+        WHERE block_number >= $1
+        ",
     )
     .bind(*gte_block_number)
     .execute(&mut *transaction)
@@ -215,10 +215,10 @@ pub async fn get_last_synced_supply_delta_number(
 ) -> Option<BlockNumber> {
     sqlx::query!(
         "
-            SELECT
-                MAX(block_number)
-            FROM
-                execution_supply_deltas
+        SELECT
+            MAX(block_number)
+        FROM
+            execution_supply_deltas
         ",
     )
     .fetch_one(executor)
