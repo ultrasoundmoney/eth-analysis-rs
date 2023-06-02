@@ -1,3 +1,5 @@
+//! Ethereum wei unit type and associated fns.
+//! A 1e-18th of an ether.
 use std::{
     fmt::Display,
     num::ParseIntError,
@@ -11,6 +13,9 @@ use super::{EthNewtype, GweiNewtype, WEI_PER_ETH};
 
 pub type WeiF64 = f64;
 
+// Use this for cases where precision matters. This type can store at most 2^127 - 1 Wei precisely.
+// That is, 1.7014e20 ETH, where the entire supply of ETH is ~120e6 ETH. When precision doesn't
+// matter WeiF64 may be more ergonomic.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(into = "String")]
 #[serde(try_from = "String")]

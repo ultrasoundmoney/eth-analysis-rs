@@ -13,7 +13,7 @@ use super::{eth::EthNewtype, WeiNewtype};
 // ~9_000_000_000 ETH, which is more than the entire supply.
 // When converting to f64 however, max safe is 2^53, so anything more than ~9M ETH will lose
 // accuracy. i.e. don't put this into JSON for amounts >9M ETH.
-// GweiNewtype should probably convert to and from f64 and be represented as f64 or to and from String and represented as i64.
+// For precise amounts use this, for imprecise, create a new GweiF64 type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(into = "String")]
 pub struct GweiNewtype(pub i64);
