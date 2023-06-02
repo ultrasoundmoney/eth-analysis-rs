@@ -42,6 +42,7 @@ pub use node::TotalDifficulty;
 pub use node::ExecutionNodeBlockBuilder;
 
 pub use supply_deltas::add_delta;
+pub use supply_deltas::backfill_execution_supply;
 pub use supply_deltas::export_deltas as export_execution_supply_deltas;
 pub use supply_deltas::stream_supply_deltas_from;
 pub use supply_deltas::summary_from_deltas_csv;
@@ -73,6 +74,8 @@ const MERGE_SLOT_SUPPLY: WeiNewtype = WeiNewtype(120_521_140_924_621_298_474_538
 // an estimate based on glassnode data.
 #[allow(dead_code)]
 const LONDON_SLOT_SUPPLY_ESTIMATE: WeiNewtype = WeiNewtype(117_397_725_113_869_100_000_000_000);
+
+const GENESIS_SUPPLY: WeiNewtype = WeiNewtype(72_009_990_499_480_000_000_000_000);
 
 lazy_static! {
     pub static ref LONDON_HARD_FORK_TIMESTAMP: DateTime<Utc> =

@@ -127,6 +127,18 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
+  "11c3417bf584a56722bb09d7a1a0cf88f0fb61c16599ea2fd2d6d207bb209555": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Numeric"
+        ]
+      }
+    },
+    "query": "\n                INSERT INTO execution_supply (block_hash, block_number, balances_sum) VALUES (\n                    '0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3',\n                    0,\n                    $1::NUMERIC\n                )\n                "
+  },
   "145ea2e8e6ed4a9cc41990b66b1a72624b534772405dfa45d6adf212bd14aec7": {
     "describe": {
       "columns": [
@@ -146,24 +158,6 @@
       }
     },
     "query": "\n        SELECT\n            effective_balance_sum\n        FROM\n            beacon_states\n        WHERE\n            state_root = $1\n        "
-  },
-  "146416f8451be76f2f9f4f686f19babf08bdf86d7e4ce9c6e171df3ab5058ddb": {
-    "describe": {
-      "columns": [
-        {
-          "name": "max",
-          "ordinal": 0,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n            SELECT\n                MAX(block_number)\n            FROM\n                execution_supply_deltas\n        "
   },
   "14fe911032ff0992a50fde6b869cd3fd54e19f6e28cbcc21182a9bfa0869c52a": {
     "describe": {
@@ -431,6 +425,77 @@
     },
     "query": "\n        DELETE FROM beacon_issuance\n        WHERE state_root IN (\n            SELECT state_root FROM beacon_states\n            WHERE slot = $1\n        )\n        "
   },
+  "34109d2e095b037f5cbfb2ce0ad402c365f29e2f6afb455554e5cf3d7e4ca35b": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_number",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "block_hash",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "parent_hash",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "supply_delta",
+          "ordinal": 3,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n            SELECT block_number, block_hash, parent_hash, supply_delta::TEXT FROM execution_supply_deltas\n            WHERE block_number >= $1 AND block_number <= $2\n            ORDER BY block_number ASC\n            "
+  },
+  "361e967512bda4b86666d32b04d5d5235faded41e5ae89d74acb4a4219a1f960": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_hash",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "block_number",
+          "ordinal": 1,
+          "type_info": "Int4"
+        },
+        {
+          "name": "balances_sum",
+          "ordinal": 2,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n                SELECT\n                    block_hash,\n                    block_number,\n                    balances_sum::TEXT\n                FROM\n                    execution_supply\n                WHERE\n                    block_number = $1\n                "
+  },
   "376e760f404471d87aac22f443ea64ace718725a92af4474a7c8391ad17d4baa": {
     "describe": {
       "columns": [],
@@ -652,6 +717,26 @@
       }
     },
     "query": "\n        SELECT\n            withdrawal_sum_aggregated\n        FROM\n            beacon_blocks\n        WHERE\n            block_root = $1\n        "
+  },
+  "4bf64993d17357bd4d87493e7c9226be8bff2d992aef81e7d574bbc0670522d4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM execution_supply_deltas\n            WHERE block_number = $1\n        ) AS \"exists!\"\n        "
   },
   "4c311cd6fc10898b9a865fe7f2b50dec072356e8d0f9dc0b6185423a035769fb": {
     "describe": {
@@ -1009,26 +1094,6 @@
     },
     "query": "\n        UPDATE\n            beacon_blocks\n        SET\n            block_hash = $1\n        WHERE\n            block_root = $2\n        "
   },
-  "73d291d9db99ddd05727fadba267f267d5b1b4a06c4bb827f76c101b185b6e08": {
-    "describe": {
-      "columns": [
-        {
-          "name": "exists!",
-          "ordinal": 0,
-          "type_info": "Bool"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM execution_supply_deltas\n                WHERE block_number = $1\n            ) AS \"exists!\"\n        "
-  },
   "74686dd09493c11746a41929cc7785f376f9039a5525a95be503d375801a15e4": {
     "describe": {
       "columns": [
@@ -1094,6 +1159,26 @@
       }
     },
     "query": "\n        DELETE FROM blocks_next\n        WHERE number >= $1\n        "
+  },
+  "8193331df362cde001f2bc0a6c72e85f62bfdb9436aaabe17c63fa025dc50f6f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "exists!",
+          "ordinal": 0,
+          "type_info": "Bool"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM execution_supply_deltas\n            WHERE block_hash = $1\n        ) AS \"exists!\"\n        "
   },
   "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
     "describe": {
@@ -1331,6 +1416,24 @@
     },
     "query": "\n        SELECT\n            beacon_states.state_root,\n            beacon_states.slot\n        FROM\n            beacon_states\n        LEFT JOIN beacon_validators_balance ON\n            beacon_states.state_root = beacon_validators_balance.state_root\n        WHERE\n            slot >= $1\n        AND\n            beacon_validators_balance.state_root IS NULL\n        ORDER BY slot DESC\n        "
   },
+  "a79cd0ac63132faff48792b2d9c80d5393506f1672493003aa6d6209027f7902": {
+    "describe": {
+      "columns": [
+        {
+          "name": "min",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "SELECT MIN(block_number) FROM execution_supply"
+  },
   "abf3b6b71ceb87bf2f711262eb4ddd7e5bb839a465da07a902d5332f221f32d6": {
     "describe": {
       "columns": [
@@ -1399,6 +1502,24 @@
     },
     "query": "\n            SELECT\n                timestamp, ethusd AS usd\n            FROM\n                eth_prices\n            ORDER BY timestamp DESC\n            LIMIT 1\n            "
   },
+  "b6ce4c2aa988d75def4e75256faa51e88f6beda84fec8da5fbb8dc5f86c43b8a": {
+    "describe": {
+      "columns": [
+        {
+          "name": "max",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            MAX(block_number)\n        FROM\n            execution_supply_deltas\n        "
+  },
   "b74c08aa0d4962b217a17a9463115a9a125b1874146ea6ff2a32231ab186f489": {
     "describe": {
       "columns": [
@@ -1424,26 +1545,6 @@
       }
     },
     "query": "\n                SELECT\n                    DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                    SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= $1\n                GROUP BY \"day_timestamp!\"\n                ORDER BY \"day_timestamp!\" ASC\n                "
-  },
-  "b963875714b300b2b0cc7694f8e77ad6f77203de4ad1e6b394a7c64ac380ea5c": {
-    "describe": {
-      "columns": [
-        {
-          "name": "exists!",
-          "ordinal": 0,
-          "type_info": "Bool"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM execution_supply_deltas\n                WHERE block_hash = $1\n            ) AS \"exists!\"\n        "
   },
   "bfc3d6da794a828526867dd2547eff7d22a929fa98544723e52c97c3ec53f92a": {
     "describe": {

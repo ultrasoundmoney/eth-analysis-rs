@@ -1,12 +1,20 @@
+mod backfill;
 mod export;
 mod logs;
 mod node;
 pub mod snapshot;
 mod sync;
 
-pub use export::{export_deltas, summary_from_deltas_csv};
+pub use backfill::backfill_execution_supply;
+
+pub use export::export_deltas;
+pub use export::summary_from_deltas_csv;
+
 pub use logs::write_deltas_log;
-pub use node::{stream_supply_delta_chunks, stream_supply_deltas_from};
+
+pub use node::stream_supply_delta_chunks;
+pub use node::stream_supply_deltas_from;
+
 pub use sync::add_delta;
 pub use sync::sync_deltas;
 

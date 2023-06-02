@@ -8,7 +8,7 @@ use sqlx::{postgres::PgRow, PgExecutor, Row};
 
 use crate::units::WeiNewtype;
 
-use super::BlockNumber;
+use super::{BlockHash, BlockNumber};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,6 +20,7 @@ pub struct ExecutionBalancesSum {
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExecutionSupply {
     pub block_number: BlockNumber,
+    pub block_hash: BlockHash,
     pub balances_sum: WeiNewtype,
 }
 
@@ -31,6 +32,7 @@ pub async fn get_execution_balances_by_hash(
         "
             SELECT
                 balances_sum::TEXT,
+                block_hash,
                 block_number
             FROM
                 execution_supply
@@ -41,10 +43,12 @@ pub async fn get_execution_balances_by_hash(
     .bind(block_hash)
     .map(|row: PgRow| {
         let balances_sum: WeiNewtype = (row.get::<String, _>("balances_sum")).parse().unwrap();
+        let block_hash = row.get::<String, _>("block_hash");
         let block_number = row.get::<i32, _>("block_number");
 
         ExecutionSupply {
             balances_sum,
+            block_hash,
             block_number,
         }
     })
@@ -100,6 +104,7 @@ mod tests {
 
         assert_eq!(
             ExecutionSupply {
+                block_hash,
                 block_number: 0,
                 balances_sum: WeiNewtype(1)
             },
