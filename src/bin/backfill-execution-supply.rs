@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use sqlx::{postgres::PgRow, PgExecutor, Row};
+use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 use tracing::{debug, info};
 
 use eth_analysis::{
@@ -50,6 +50,40 @@ async fn set_last_synced_block(executor: impl PgExecutor<'_>, block: BlockNumber
 }
 
 const BLOCK_NUMBER_MIN_BEFORE_BACKFILL: BlockNumber = 15082719;
+
+async fn bulk_insert_execution_supplies(
+    pool: &PgPool,
+    execution_supplies: &Vec<(String, BlockNumber, i128)>,
+) {
+    let block_hashes = execution_supplies
+        .iter()
+        .map(|(block_hash, _, _)| block_hash.as_str())
+        .collect::<Vec<_>>();
+    let block_numbers = execution_supplies
+        .iter()
+        .map(|(_, block_number, _)| *block_number)
+        .collect::<Vec<_>>();
+    let balances_sums = execution_supplies
+        .iter()
+        .map(|(_, _, balances_sum)| balances_sum.to_string())
+        .collect::<Vec<_>>();
+
+    sqlx::query!(
+        "
+        INSERT INTO execution_supply (block_hash, block_number, balances_sum)
+        SELECT * FROM UNNEST($1::text[], $2::int4[], $3::numeric[])
+        ON CONFLICT (block_hash) DO UPDATE SET
+            balances_sum = excluded.balances_sum,
+            block_number = excluded.block_number
+        ",
+        &block_hashes[..] as &[&str],
+        &block_numbers[..],
+        &balances_sums as &Vec<String>,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
 
 #[tokio::main]
 pub async fn main() {
@@ -153,7 +187,7 @@ pub async fn main() {
         })
         .collect::<Vec<_>>();
 
-        let new_execution_supplies: Vec<(String, BlockNumber, Wei)> = supply_deltas
+        let new_execution_supplies: Vec<(String, i32, Wei)> = supply_deltas
             .iter()
             .map(|row| {
                 // We calculate the next supply by taking the last supply we synced,
@@ -169,37 +203,8 @@ pub async fn main() {
             })
             .collect();
 
-        let mut query_string =
-            "INSERT INTO execution_supply (block_hash, block_number, balances_sum) VALUES"
-                .to_string();
-        let mut values = Vec::new();
+        bulk_insert_execution_supplies(&db_pool, &new_execution_supplies).await;
 
-        for (i, (block_hash, block_number, balances_sum)) in
-            new_execution_supplies.into_iter().enumerate()
-        {
-            query_string.push_str(&format!(
-                " (${}, ${}, ${}::NUMERIC)",
-                3 * i + 1,
-                3 * i + 2,
-                3 * i + 3
-            ));
-
-            if i != supply_deltas.len() - 1 {
-                query_string.push(',');
-            }
-
-            values.push(block_hash);
-            values.push(block_number.to_string());
-            values.push(balances_sum.to_string());
-        }
-
-        let mut query = sqlx::query(&query_string);
-
-        for value in values {
-            query = query.bind(value);
-        }
-
-        query.execute(&db_pool).await.unwrap();
         set_last_synced_block(&db_pool, last_supply.1).await;
 
         progress.inc_work_done_by(supply_deltas.len().try_into().unwrap());

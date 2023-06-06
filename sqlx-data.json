@@ -834,6 +834,20 @@
     },
     "query": "\n            SELECT\n                state_root\n            FROM\n                beacon_states\n            WHERE\n                slot = $1\n        "
   },
+  "4f473a7e9ccf8ffc60dcea1b5aadd6e2a17faf0108db3e210d24863f1659504c": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "TextArray",
+          "Int4Array",
+          "NumericArray"
+        ]
+      }
+    },
+    "query": "\n        INSERT INTO execution_supply (block_hash, block_number, balances_sum)\n        SELECT * FROM UNNEST($1::text[], $2::int4[], $3::numeric[])\n        ON CONFLICT (block_hash) DO UPDATE SET\n            balances_sum = excluded.balances_sum,\n            block_number = excluded.block_number\n        "
+  },
   "4faf5f18f446d8614f80c6771957263fa497640ca2f6332b25d02fec90b61fe2": {
     "describe": {
       "columns": [
@@ -1415,24 +1429,6 @@
       }
     },
     "query": "\n        SELECT\n            beacon_states.state_root,\n            beacon_states.slot\n        FROM\n            beacon_states\n        LEFT JOIN beacon_validators_balance ON\n            beacon_states.state_root = beacon_validators_balance.state_root\n        WHERE\n            slot >= $1\n        AND\n            beacon_validators_balance.state_root IS NULL\n        ORDER BY slot DESC\n        "
-  },
-  "a79cd0ac63132faff48792b2d9c80d5393506f1672493003aa6d6209027f7902": {
-    "describe": {
-      "columns": [
-        {
-          "name": "min",
-          "ordinal": 0,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "SELECT MIN(block_number) FROM execution_supply"
   },
   "abf3b6b71ceb87bf2f711262eb4ddd7e5bb839a465da07a902d5332f221f32d6": {
     "describe": {
