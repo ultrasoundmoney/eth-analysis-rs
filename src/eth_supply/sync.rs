@@ -12,7 +12,7 @@ pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) {
     let last_stored_execution_balances_slot =
         store::get_last_stored_balances_slot(executor.acquire().await.unwrap()).await;
 
-    let slots_to_store: Option<Vec<Slot>> = match last_stored_execution_balances_slot {
+    let slots_to_store = match last_stored_execution_balances_slot {
         None => {
             warn!("no execution balances have ever been stored, skipping store eth supply");
             None
@@ -33,14 +33,16 @@ pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) {
                         "eth supply has never been stored, starting from FIRST_POST_MERGE_SLOT"
                     );
                     let range = FIRST_POST_MERGE_SLOT.0..=sync_limit.0;
-                    Some(range.map(Slot).collect())
+                    let slots: Vec<_> = range.map(Slot).collect();
+                    Some(slots)
                 }
                 Some(last_stored_supply_slot) => match last_stored_supply_slot.cmp(&sync_limit) {
                     Ordering::Less => {
                         debug!("execution balances have updated, storing eth supply for new slots");
                         let first = last_stored_supply_slot + 1;
                         let range = first.0..=last_stored_execution_balances_slot.0;
-                        Some(range.map(Slot).collect())
+                        let slots = range.map(Slot).collect();
+                        Some(slots)
                     }
                     Ordering::Equal => {
                         debug!("no new execution balances stored since last slot sync, skipping store eth supply");
