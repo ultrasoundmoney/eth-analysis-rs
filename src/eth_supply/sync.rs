@@ -10,9 +10,7 @@ use super::store;
 /// Stores an eth supply for a given slot.
 pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) {
     let last_stored_execution_balances_slot =
-        store::get_last_stored_balances_slot(executor.acquire().await.unwrap())
-            .await
-            .unwrap();
+        store::get_last_stored_balances_slot(executor.acquire().await.unwrap()).await;
 
     let slots_to_store: Option<Vec<Slot>> = match last_stored_execution_balances_slot {
         None => {

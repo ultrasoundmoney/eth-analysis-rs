@@ -141,8 +141,8 @@ pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: &Slot)
     };
 }
 
-pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
-    let row = sqlx::query!(
+pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Option<Slot> {
+    sqlx::query!(
         "
         SELECT
             beacon_states.slot
@@ -159,9 +159,9 @@ pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Res
         ",
     )
     .fetch_optional(executor)
-    .await?;
-
-    Ok(row.map(|row| Slot(row.slot)))
+    .await
+    .unwrap()
+    .map(|row| Slot(row.slot))
 }
 
 pub async fn last_eth_supply(executor: impl PgExecutor<'_>) -> WeiNewtype {
