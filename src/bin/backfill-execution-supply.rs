@@ -51,6 +51,7 @@ async fn set_last_synced_block(executor: impl PgExecutor<'_>, block: BlockNumber
 
 const BLOCK_NUMBER_MIN_BEFORE_BACKFILL: BlockNumber = 15082719;
 
+#[tokio::main]
 pub async fn main() {
     log::init_with_env();
 

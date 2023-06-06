@@ -21,7 +21,7 @@ mod phoenix;
 mod serve;
 mod supply_dashboard_analysis;
 mod supply_projection;
-mod time;
+pub mod time;
 mod time_frames;
 pub mod units;
 mod update_by_hand;
@@ -44,7 +44,6 @@ pub use eth_supply::export_daily_supply_since_merge;
 pub use eth_supply::export_thousandth_epoch_supply;
 pub use eth_supply::fill_eth_supply_gaps;
 
-pub use execution_chain::backfill_execution_supply;
 pub use execution_chain::export_blocks_from_august;
 pub use execution_chain::export_blocks_from_london;
 pub use execution_chain::export_execution_supply_deltas;

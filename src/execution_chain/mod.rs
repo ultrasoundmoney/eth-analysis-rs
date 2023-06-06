@@ -7,7 +7,7 @@ mod export_blocks;
 mod logs;
 mod node;
 pub mod routes;
-mod supply_deltas;
+pub mod supply_deltas;
 mod sync;
 
 pub use balances::get_execution_balances_by_hash;
@@ -42,7 +42,6 @@ pub use node::TotalDifficulty;
 pub use node::ExecutionNodeBlockBuilder;
 
 pub use supply_deltas::add_delta;
-pub use supply_deltas::backfill_execution_supply;
 pub use supply_deltas::export_deltas as export_execution_supply_deltas;
 pub use supply_deltas::stream_supply_deltas_from;
 pub use supply_deltas::summary_from_deltas_csv;
