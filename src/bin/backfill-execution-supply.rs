@@ -121,7 +121,7 @@ pub async fn main() {
 
     const BULK_INSERT_SIZE: i32 = 10000;
 
-    while last_supply.1 < BLOCK_NUMBER_MIN_BEFORE_BACKFILL {
+    while last_supply.1 < BLOCK_NUMBER_MIN_BEFORE_BACKFILL - 1 {
         // To get execution supply n, we add execution supply n - 1 to the delta for block n.
         let next_range = BlockRange::new(
             last_supply.1 + 1,
