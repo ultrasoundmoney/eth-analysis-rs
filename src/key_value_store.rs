@@ -9,8 +9,8 @@ pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> sqlx::Result
 
     let row = sqlx::query!(
         "
-            SELECT value FROM key_value_store
-            WHERE key = $1
+        SELECT value FROM key_value_store
+        WHERE key = $1
         ",
         key,
     )
@@ -53,9 +53,9 @@ pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Val
 
     sqlx::query!(
         "
-            INSERT INTO key_value_store (key, value) VALUES ($1, $2)
-            ON CONFLICT (key) DO UPDATE SET
-                value = excluded.value
+        INSERT INTO key_value_store (key, value) VALUES ($1, $2)
+        ON CONFLICT (key) DO UPDATE SET
+            value = excluded.value
         ",
         key,
         value
