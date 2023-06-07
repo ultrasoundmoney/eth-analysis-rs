@@ -75,7 +75,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
         proof_of_work: proof_of_work.into(),
     };
 
-    caching::update_and_publish(&db_pool, &CacheKey::IssuanceBreakdown, issuance_breakdown).await?;
+    caching::update_and_publish(&db_pool, &CacheKey::IssuanceBreakdown, issuance_breakdown).await;
 
     info!("done updating issuance breakdown");
 

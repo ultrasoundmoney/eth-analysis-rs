@@ -1,13 +1,12 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgExecutor;
 use tracing::debug;
 
-pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> sqlx::Result<Option<Value>> {
+pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> Option<Value> {
     debug!(key = key, "getting key value pair");
 
-    let row = sqlx::query!(
+    sqlx::query!(
         "
         SELECT value FROM key_value_store
         WHERE key = $1
@@ -15,40 +14,30 @@ pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> sqlx::Result
         key,
     )
     .fetch_optional(executor)
-    .await?;
-    // .map(|row: PgRow| row.get::<Option<Value>, _>("value"))
-
-    Ok(row.and_then(|row| row.value))
+    .await
+    .unwrap()
+    .and_then(|row| row.value)
 }
 
-pub async fn get_deserializable_value<T>(
-    executor: impl PgExecutor<'_>,
-    key: &str,
-) -> Result<Option<T>>
+pub async fn get_deserializable_value<T>(executor: impl PgExecutor<'_>, key: &str) -> Option<T>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let value = get_value(executor, key).await?;
-    match value {
-        None => Ok(None),
-        Some(value) => {
-            let decoded_value: T = serde_json::from_value::<T>(value)?;
-            Ok(Some(decoded_value))
-        }
-    }
+    get_value(executor, key)
+        .await
+        .map(|value| serde_json::from_value::<T>(value).expect("expect value to be deserializable"))
 }
 
 pub async fn set_serializable_value(
     executor: impl PgExecutor<'_>,
     key: &str,
     value: impl Serialize,
-) -> Result<()> {
-    let serialized = serde_json::to_value(value)?;
-    set_value(executor, key, &serialized).await?;
-    Ok(())
+) {
+    let serialized = serde_json::to_value(value).expect("expect value to be serializable");
+    set_value(executor, key, &serialized).await;
 }
 
-pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Value) -> Result<()> {
+pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Value) {
     debug!("storing key: {}", &key,);
 
     sqlx::query!(
@@ -61,10 +50,10 @@ pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Val
         value
     )
     .execute(executor)
-    .await?;
-
-    Ok(())
+    .await
+    .unwrap();
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -97,12 +86,8 @@ mod tests {
             "test-key",
             &serde_json::to_value(&test_json).unwrap(),
         )
-        .await
-        .unwrap();
-        let value = get_value(&mut transaction, "test-key")
-            .await
-            .unwrap()
-            .unwrap();
+        .await;
+        let value = get_value(&mut transaction, "test-key").await.unwrap();
         let test_json_from_db = serde_json::from_value::<TestJson>(value).unwrap();
 
         assert_eq!(test_json_from_db, test_json)
@@ -118,13 +103,9 @@ mod tests {
             "test-key",
             &serde_json::to_value(json!(None::<String>)).unwrap(),
         )
-        .await
-        .unwrap();
+        .await;
 
-        let value = get_value(&mut transaction, "test-key")
-            .await
-            .unwrap()
-            .unwrap();
+        let value = get_value(&mut transaction, "test-key").await.unwrap();
         let test_json_from_db = serde_json::from_value::<Option<String>>(value).unwrap();
 
         assert_eq!(test_json_from_db, None)
@@ -140,14 +121,11 @@ mod tests {
             age: 30,
         };
 
-        set_serializable_value(&mut transaction, "test-key", test_json.clone())
-            .await
-            .unwrap();
+        set_serializable_value(&mut transaction, "test-key", test_json.clone()).await;
 
         let retrieved_test_json =
             get_deserializable_value::<TestJson>(&mut transaction, "test-key")
                 .await
-                .unwrap()
                 .unwrap();
 
         assert_eq!(retrieved_test_json, test_json);

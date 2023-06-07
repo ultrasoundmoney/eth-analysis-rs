@@ -14,7 +14,5 @@ pub async fn update_last_base_fee(db_pool: &PgPool, block: &ExecutionNodeBlock) 
         wei: block.base_fee_per_gas,
     };
 
-    caching::update_and_publish(db_pool, &CacheKey::BaseFeePerGas, base_fee_per_gas)
-        .await
-        .unwrap();
+    caching::update_and_publish(db_pool, &CacheKey::BaseFeePerGas, base_fee_per_gas).await;
 }

@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use futures::try_join;
+use futures::join;
 use serde::Serialize;
 use sqlx::PgPool;
 use tracing::warn;
@@ -79,11 +79,11 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     // caching::publish_cache_update(db_pool, CacheKey::SupplyDashboardAnalysis)
     //     .await?;
 
-    try_join!(
+    join!(
         caching::update_and_publish(db_pool, &CacheKey::SupplyParts, supply_parts),
         caching::update_and_publish(db_pool, &CacheKey::SupplyOverTime, supply_over_time),
         caching::update_and_publish(db_pool, &CacheKey::SupplyChanges, &supply_changes)
-    )?;
+    );
 
     Ok(())
 }

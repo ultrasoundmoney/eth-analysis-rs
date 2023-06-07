@@ -155,7 +155,7 @@ pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: &Cache
 pub async fn get_serialized_caching_value(
     executor: impl PgExecutor<'_>,
     cache_key: &CacheKey,
-) -> sqlx::Result<Option<Value>> {
+) -> Option<Value> {
     key_value_store::get_value(executor, cache_key.to_db_key()).await
 }
 
@@ -163,24 +163,18 @@ pub async fn set_value<'a>(
     executor: impl PgExecutor<'_>,
     cache_key: &CacheKey,
     value: impl Serialize,
-) -> Result<()> {
+) {
     key_value_store::set_value(
         executor,
         cache_key.to_db_key(),
-        &serde_json::to_value(value)?,
+        &serde_json::to_value(value).expect("expect value to be serializable"),
     )
-    .await?;
-    Ok(())
+    .await;
 }
 
-pub async fn update_and_publish(
-    db_pool: &PgPool,
-    cache_key: &CacheKey,
-    value: impl Serialize,
-) -> Result<()> {
-    set_value(db_pool, cache_key, value).await?;
-    publish_cache_update(db_pool, cache_key).await?;
-    Ok(())
+pub async fn update_and_publish(db_pool: &PgPool, cache_key: &CacheKey, value: impl Serialize) {
+    set_value(db_pool, cache_key, value).await;
+    publish_cache_update(db_pool, cache_key).await;
 }
 
 #[cfg(test)]
@@ -238,11 +232,11 @@ mod tests {
             &CacheKey::BaseFeePerGasStats,
             &serde_json::to_value(&test_json).unwrap(),
         )
-        .await?;
+        .await;
 
         let raw_value: Value =
             get_serialized_caching_value(&mut transaction, &CacheKey::BaseFeePerGasStats)
-                .await?
+                .await
                 .unwrap();
 
         assert_eq!(raw_value, serde_json::to_value(test_json).unwrap());
@@ -265,13 +259,13 @@ mod tests {
             &CacheKey::BaseFeePerGasStats,
             test_json.clone(),
         )
-        .await?;
+        .await;
 
         let caching_value = key_value_store::get_deserializable_value::<TestJson>(
             &mut transaction,
             CacheKey::BaseFeePerGasStats.to_db_key(),
         )
-        .await?
+        .await
         .unwrap();
 
         assert_eq!(caching_value, test_json);

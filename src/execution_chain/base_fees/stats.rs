@@ -311,8 +311,7 @@ pub async fn update_base_fee_stats(
             &CacheKey::BaseFeePerGasStatsTimeFrame(*time_frame),
             stats,
         )
-        .await
-        .unwrap();
+        .await;
     }
 
     let base_fee_per_gas_stats_envelope = BaseFeePerGasStatsEnvelope {
@@ -335,8 +334,7 @@ pub async fn update_base_fee_stats(
         &CacheKey::BaseFeePerGasStats,
         &base_fee_per_gas_stats_envelope,
     )
-    .await
-    .unwrap();
+    .await;
 }
 
 #[cfg(test)]

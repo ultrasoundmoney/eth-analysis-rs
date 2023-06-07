@@ -4,7 +4,6 @@ use crate::{
     beacon_chain::{self, sync, Slot},
     key_value_store,
 };
-use anyhow::Result;
 use pit_wall::Progress;
 use sqlx::{postgres::PgPoolOptions, PgExecutor};
 use tracing::{debug, info, warn};
@@ -16,18 +15,15 @@ const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = Slot(0);
 
 const HEAL_BEACON_STATES_KEY: &str = "heal-beacon-states";
 
-async fn store_last_checked(executor: impl PgExecutor<'_>, slot: &Slot) -> Result<()> {
-    key_value_store::set_serializable_value(executor, HEAL_BEACON_STATES_KEY, slot).await?;
-    Ok(())
+async fn store_last_checked(executor: impl PgExecutor<'_>, slot: &Slot) {
+    key_value_store::set_serializable_value(executor, HEAL_BEACON_STATES_KEY, slot).await;
 }
 
-async fn get_last_checked(executor: impl PgExecutor<'_>) -> Result<Option<Slot>> {
-    let slot =
-        key_value_store::get_deserializable_value::<Slot>(executor, HEAL_BEACON_STATES_KEY).await?;
-    Ok(slot)
+async fn get_last_checked(executor: impl PgExecutor<'_>) -> Option<Slot> {
+    key_value_store::get_deserializable_value::<Slot>(executor, HEAL_BEACON_STATES_KEY).await
 }
 
-pub async fn heal_beacon_states() -> Result<()> {
+pub async fn heal_beacon_states() {
     log::init_with_env();
 
     info!("healing reorged states");
@@ -35,7 +31,8 @@ pub async fn heal_beacon_states() -> Result<()> {
     let db_pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&db::get_db_url_with_name("heal-beacon-states"))
-        .await?;
+        .await
+        .unwrap();
 
     let beacon_node = BeaconNode::new();
     let last_slot = beacon_chain::get_last_state(&db_pool)
@@ -43,7 +40,7 @@ pub async fn heal_beacon_states() -> Result<()> {
         .expect("a beacon state should be stored before trying to heal any")
         .slot
         .0;
-    let last_checked = get_last_checked(&db_pool).await?;
+    let last_checked = get_last_checked(&db_pool).await;
     let starting_slot = last_checked.unwrap_or(FIRST_STORED_ETH_SUPPLY_SLOT).0;
 
     debug!(
@@ -78,7 +75,8 @@ pub async fn heal_beacon_states() -> Result<()> {
             *last
         )
         .fetch_all(&db_pool)
-        .await?
+        .await
+        .unwrap()
         .into_iter()
         .map(|row| (row.slot, row.state_root))
         .collect::<HashMap<i32, String>>();
@@ -87,24 +85,27 @@ pub async fn heal_beacon_states() -> Result<()> {
             let stored_state_root = stored_states.get(&slot).unwrap();
             let state_root = beacon_node
                 .get_state_root_by_slot(&slot.into())
-                .await?
+                .await
+                .unwrap()
                 .expect("expect state_root to exist for historic slots");
 
             if *stored_state_root != state_root {
                 warn!("state root mismatch, rolling back stored and resyncing");
-                sync::rollback_slot(&mut *db_pool.acquire().await?, &slot.into()).await?;
+                sync::rollback_slot(&mut *db_pool.acquire().await.unwrap(), &slot.into())
+                    .await
+                    .unwrap();
                 sync::sync_slot_by_state_root(&db_pool, &beacon_node, &state_root, &slot.into())
-                    .await?;
+                    .await
+                    .unwrap();
                 info!(%slot, "healed state at slot");
             }
 
             progress.inc_work_done();
         }
 
-        store_last_checked(&db_pool, &last.into()).await?;
+        store_last_checked(&db_pool, &last.into()).await;
         info!("{}", progress.get_progress_string());
     }
 
     info!("done healing beacon states");
-    Ok(())
 }

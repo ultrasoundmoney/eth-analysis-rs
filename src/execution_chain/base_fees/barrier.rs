@@ -53,9 +53,7 @@ pub async fn on_new_barrier(db_pool: &PgPool, barrier: Barrier, block: &Executio
         block_number: block.number,
         timestamp: block.timestamp,
     };
-    caching::update_and_publish(db_pool, &CacheKey::BaseFeePerGasBarrier, barrier_stats)
-        .await
-        .unwrap();
+    caching::update_and_publish(db_pool, &CacheKey::BaseFeePerGasBarrier, barrier_stats).await;
 }
 
 #[cfg(test)]
