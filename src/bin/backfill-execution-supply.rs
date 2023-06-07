@@ -69,6 +69,7 @@ pub async fn main() {
                     0,
                     $1::NUMERIC
                 )
+                ON CONFLICT (block_hash) DO NOTHING
                 ",
                 GENESIS_SUPPLY.0.to_string() as String,
             )
