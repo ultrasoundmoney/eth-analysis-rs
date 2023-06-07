@@ -116,9 +116,7 @@ pub async fn on_new_block(
         );
     }
 
-    caching::update_and_publish(db_pool, &CacheKey::GaugeRates, gauge_rates)
-        .await
-        .unwrap();
+    caching::update_and_publish(db_pool, &CacheKey::GaugeRates, gauge_rates).await;
 
     Ok(())
 }

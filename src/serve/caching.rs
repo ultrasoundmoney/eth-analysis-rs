@@ -33,9 +33,7 @@ impl Cache {
 
         // Tries to fetch a value from the key value store for every cached analysis value.
         for key in all::<CacheKey>().collect::<Vec<_>>() {
-            let value = caching::get_serialized_caching_value(db_pool, &key)
-                .await
-                .unwrap();
+            let value = caching::get_serialized_caching_value(db_pool, &key).await;
             if let Some(value) = value {
                 map.write().unwrap().insert(key, value);
             }
@@ -98,9 +96,7 @@ async fn process_notifications(
             }
             Ok(cache_key) => {
                 debug!(%cache_key, "cache update");
-                let value = caching::get_serialized_caching_value(db_pool, &cache_key)
-                    .await
-                    .unwrap();
+                let value = caching::get_serialized_caching_value(db_pool, &cache_key).await;
                 if let Some(value) = value {
                     state.cache.0.write().unwrap().insert(cache_key, value);
                 } else {

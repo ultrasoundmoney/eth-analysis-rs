@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 use serde_json::Value;
-use sqlx::PgExecutor;
+use sqlx::{PgExecutor, PgPool};
 use tracing::debug;
 
 pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> Option<Value> {
@@ -17,24 +17,6 @@ pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> Option<Value
     .await
     .unwrap()
     .and_then(|row| row.value)
-}
-
-pub async fn get_deserializable_value<T>(executor: impl PgExecutor<'_>, key: &str) -> Option<T>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    get_value(executor, key)
-        .await
-        .map(|value| serde_json::from_value::<T>(value).expect("expect value to be deserializable"))
-}
-
-pub async fn set_serializable_value(
-    executor: impl PgExecutor<'_>,
-    key: &str,
-    value: impl Serialize,
-) {
-    let serialized = serde_json::to_value(value).expect("expect value to be serializable");
-    set_value(executor, key, &serialized).await;
 }
 
 pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Value) {
@@ -54,6 +36,32 @@ pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Val
     .unwrap();
 }
 
+#[async_trait]
+pub trait KeyValueStore {
+    async fn get_value(&self, key: &str) -> Option<Value>;
+    async fn set_value(&self, key: &str, value: &Value);
+}
+
+pub struct KeyValueStorePostgres {
+    db_pool: PgPool,
+}
+
+impl KeyValueStorePostgres {
+    pub fn new(db_pool: PgPool) -> Self {
+        Self { db_pool }
+    }
+}
+
+#[async_trait]
+impl KeyValueStore for KeyValueStorePostgres {
+    async fn get_value(&self, key: &str) -> Option<Value> {
+        get_value(&self.db_pool, key).await
+    }
+
+    async fn set_value(&self, key: &str, value: &Value) {
+        set_value(&self.db_pool, key, value).await
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -109,25 +117,5 @@ mod tests {
         let test_json_from_db = serde_json::from_value::<Option<String>>(value).unwrap();
 
         assert_eq!(test_json_from_db, None)
-    }
-
-    #[tokio::test]
-    async fn get_set_serializable_test() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
-
-        let test_json = TestJson {
-            name: "alex".to_string(),
-            age: 30,
-        };
-
-        set_serializable_value(&mut transaction, "test-key", test_json.clone()).await;
-
-        let retrieved_test_json =
-            get_deserializable_value::<TestJson>(&mut transaction, "test-key")
-                .await
-                .unwrap();
-
-        assert_eq!(retrieved_test_json, test_json);
     }
 }

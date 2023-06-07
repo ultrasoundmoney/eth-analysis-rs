@@ -34,9 +34,7 @@ pub async fn on_new_block(
 
     debug!("calculated new average prices");
 
-    caching::update_and_publish(db_pool, &CacheKey::AverageEthPrice, &eth_prices)
-        .await
-        .unwrap();
+    caching::update_and_publish(db_pool, &CacheKey::AverageEthPrice, &eth_prices).await;
 }
 
 #[cfg(test)]

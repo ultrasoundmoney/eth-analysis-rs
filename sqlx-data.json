@@ -45,32 +45,6 @@
     },
     "query": "\n        INSERT INTO beacon_blocks (\n            block_hash,\n            block_root,\n            deposit_sum,\n            deposit_sum_aggregated,\n            withdrawal_sum,\n            withdrawal_sum_aggregated,\n            parent_root,\n            state_root\n        )\n        VALUES (\n            $1, $2, $3, $4, $5, $6, $7, $8\n        )\n        "
   },
-  "0a008d415e6395b49f8168f50baeb5ccb61602fb739683a6ec0fbf98dbc3a490": {
-    "describe": {
-      "columns": [
-        {
-          "name": "block_root",
-          "ordinal": 0,
-          "type_info": "Text"
-        },
-        {
-          "name": "slot!",
-          "ordinal": 1,
-          "type_info": "Int4"
-        }
-      ],
-      "nullable": [
-        false,
-        false
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                block_root,\n                slot AS \"slot!\"\n            FROM\n                beacon_blocks\n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot >= $1\n        "
-  },
   "0a2508d2c3fbce38482cdb84e0e3bd6983a0a50d3e2036b9e8237a89d4ecdd14": {
     "describe": {
       "columns": [
@@ -671,6 +645,26 @@
     },
     "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= $1\n            ORDER BY base_fee_per_gas DESC\n            LIMIT 1\n            "
   },
+  "3f206d13107a2c1ec4dfabe83d455a2cb07f08fc4306a925c3285bf7c6437b67": {
+    "describe": {
+      "columns": [
+        {
+          "name": "value",
+          "ordinal": 0,
+          "type_info": "Jsonb"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\n        SELECT value FROM key_value_store\n        WHERE key = $1\n        "
+  },
   "49360b2160a50eaf2d3e27daa2fc138d995b6a42ff3a2de4d3f59b727d36e985": {
     "describe": {
       "columns": [
@@ -1194,59 +1188,6 @@
     },
     "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM execution_supply_deltas\n            WHERE block_hash = $1\n        ) AS \"exists!\"\n        "
   },
-  "872177b7547af8196a990b8de0a381be7b0694656ead1748d0c8b0d0da2b2231": {
-    "describe": {
-      "columns": [
-        {
-          "name": "value",
-          "ordinal": 0,
-          "type_info": "Jsonb"
-        }
-      ],
-      "nullable": [
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n            SELECT value FROM key_value_store\n            WHERE key = $1\n        "
-  },
-  "88b950efda6150dc3a044420e67b11138cd14fbfca10c53a5b9f640bd5a45610": {
-    "describe": {
-      "columns": [],
-      "nullable": [],
-      "parameters": {
-        "Left": [
-          "Text",
-          "Jsonb"
-        ]
-      }
-    },
-    "query": "\n            INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n            ON CONFLICT (key) DO UPDATE SET\n                value = excluded.value\n        "
-  },
-  "8c73136998c1db86353e475ce346ec87d78a2daf0d9775e9c0f88b119c0fe632": {
-    "describe": {
-      "columns": [
-        {
-          "name": "count!",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n            SELECT\n                COUNT(*) AS \"count!\"\n            FROM\n                beacon_blocks\n            JOIN beacon_states ON\n                beacon_blocks.state_root = beacon_states.state_root\n            WHERE\n                slot >= $1\n            AND\n                block_hash IS NULL\n        "
-  },
   "8ecdb845a8d20242d267393d5c79173f8de281f872a806ec2dd85f49d1c675fc": {
     "describe": {
       "columns": [
@@ -1349,6 +1290,32 @@
     },
     "query": "\n                SELECT\n                    timestamp,\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY\n                    timestamp ASC\n                "
   },
+  "9fc66ee1900454416f9b3a837df82c6f509a58cc642f133fae587266b5226888": {
+    "describe": {
+      "columns": [
+        {
+          "name": "block_root",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "slot!",
+          "ordinal": 1,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            block_root,\n            slot AS \"slot!\"\n        FROM\n            beacon_blocks\n        JOIN beacon_states ON\n            beacon_blocks.state_root = beacon_states.state_root\n        WHERE\n            slot >= $1\n        "
+  },
   "9fd4f5582d534d68ba6d1cd86abc49e1dad76f38ab45cd85c0ca9295a1629cc1": {
     "describe": {
       "columns": [],
@@ -1449,6 +1416,19 @@
       }
     },
     "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM blocks_next\n                WHERE number = $1\n            ) AS \"exists!\"\n            "
+  },
+  "aced44020f4b305945d3d203a29174a5c832cb5e52f2b265223dd659a4bfe55e": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Jsonb"
+        ]
+      }
+    },
+    "query": "\n        INSERT INTO key_value_store (key, value) VALUES ($1, $2)\n        ON CONFLICT (key) DO UPDATE SET\n            value = excluded.value\n        "
   },
   "afc80a58058ec48b784e3e6fabb6a2aaffac18fe875c12c880c73c86690fb4be": {
     "describe": {
@@ -1716,6 +1696,26 @@
       }
     },
     "query": "\n        DELETE FROM\n            eth_supply\n        WHERE\n            deposits_slot = $1\n            OR balances_slot = $1\n        "
+  },
+  "e0080416467c163964180ba62248b120a7d2f07b5952642d726fb59613ab3cc8": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            COUNT(*) AS \"count!\"\n        FROM\n            beacon_blocks\n        JOIN beacon_states ON\n            beacon_blocks.state_root = beacon_states.state_root\n        WHERE\n            slot >= $1\n        AND\n            block_hash IS NULL\n        "
   },
   "e629b9d9f49fb724cd7c02288f174d62ff4e87620277aff0248d88c15f90fe2d": {
     "describe": {

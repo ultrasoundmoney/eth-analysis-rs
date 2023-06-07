@@ -137,7 +137,7 @@ impl FromStr for CacheKey {
     }
 }
 
-pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: &CacheKey) -> Result<()> {
+pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: &CacheKey) {
     debug!(?key, "publishing cache update");
 
     sqlx::query!(
@@ -147,9 +147,8 @@ pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: &Cache
         key.to_db_key()
     )
     .execute(executor)
-    .await?;
-
-    Ok(())
+    .await
+    .unwrap();
 }
 
 pub async fn get_serialized_caching_value(
@@ -182,7 +181,10 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use sqlx::Acquire;
 
-    use crate::db;
+    use crate::{
+        db,
+        key_value_store::{KeyValueStore, KeyValueStorePostgres},
+    };
 
     use super::*;
 
@@ -205,9 +207,7 @@ mod tests {
 
         let mut connection = db::tests::get_test_db_connection().await;
 
-        publish_cache_update(&mut connection, &CacheKey::EffectiveBalanceSum)
-            .await
-            .unwrap();
+        publish_cache_update(&mut connection, &CacheKey::EffectiveBalanceSum).await;
 
         let notification = notification_future.await.unwrap();
 
@@ -246,8 +246,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_set_caching_value_test() -> Result<()> {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+        let test_db = db::tests::TestDb::new().await;
+        let key_value_store = KeyValueStorePostgres::new(test_db.pool.clone());
 
         let test_json = TestJson {
             age: 29,
@@ -255,18 +255,17 @@ mod tests {
         };
 
         set_value(
-            &mut transaction,
+            &test_db.pool,
             &CacheKey::BaseFeePerGasStats,
             test_json.clone(),
         )
         .await;
 
-        let caching_value = key_value_store::get_deserializable_value::<TestJson>(
-            &mut transaction,
-            CacheKey::BaseFeePerGasStats.to_db_key(),
-        )
-        .await
-        .unwrap();
+        let caching_value = key_value_store
+            .get_value(CacheKey::BaseFeePerGasStats.to_db_key())
+            .await
+            .map(|value| serde_json::from_value::<TestJson>(value).unwrap())
+            .unwrap();
 
         assert_eq!(caching_value, test_json);
 

@@ -8,7 +8,9 @@ use tracing::{debug, info};
 use crate::{
     beacon_chain,
     caching::{self, CacheKey},
-    db, key_value_store, log,
+    db,
+    key_value_store::{KeyValueStore, KeyValueStorePostgres},
+    log,
     units::GweiNewtype,
 };
 
@@ -112,6 +114,7 @@ pub async fn update_effective_balance_sum() -> Result<()> {
         .connect(&db::get_db_url_with_name("update-effective-balance-sum"))
         .await
         .unwrap();
+    let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
@@ -132,14 +135,14 @@ pub async fn update_effective_balance_sum() -> Result<()> {
         effective_balance_sum_f64
     );
 
-    key_value_store::set_value(
-        &db_pool,
-        CacheKey::EffectiveBalanceSum.to_db_key(),
-        &effective_balance_sum_f64.into(),
-    )
-    .await?;
+    key_value_store
+        .set_value(
+            CacheKey::EffectiveBalanceSum.to_db_key(),
+            &effective_balance_sum_f64.into(),
+        )
+        .await;
 
-    caching::publish_cache_update(&db_pool, &CacheKey::EffectiveBalanceSum).await?;
+    caching::publish_cache_update(&db_pool, &CacheKey::EffectiveBalanceSum).await;
 
     Ok(())
 }

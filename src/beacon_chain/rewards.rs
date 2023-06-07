@@ -149,9 +149,7 @@ pub async fn update_validator_rewards() {
     let validator_rewards = get_validator_rewards(&db_pool, &beacon_node).await;
     debug!("validator rewards: {:?}", validator_rewards);
 
-    caching::update_and_publish(&db_pool, &CacheKey::ValidatorRewards, validator_rewards)
-        .await
-        .unwrap();
+    caching::update_and_publish(&db_pool, &CacheKey::ValidatorRewards, validator_rewards).await;
 
     info!("done updating validator rewards");
 }

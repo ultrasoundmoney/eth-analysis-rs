@@ -113,8 +113,7 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
         &CacheKey::SupplyProjectionInputs,
         &supply_projetion_inputs,
     )
-    .await
-    .unwrap();
+    .await;
 
     info!("done updating supply projection inputs");
 

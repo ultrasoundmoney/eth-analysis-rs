@@ -52,7 +52,5 @@ pub async fn on_new_block(db_pool: &PgPool, burn_sums: &BurnSums) {
         .map(|(tf, bs)| -> (TimeFrame, BurnRate) { (*tf, (tf, bs).into()) })
         .collect();
 
-    caching::update_and_publish(db_pool, &CacheKey::BurnRates, burn_rates)
-        .await
-        .unwrap();
+    caching::update_and_publish(db_pool, &CacheKey::BurnRates, burn_rates).await;
 }

@@ -268,9 +268,7 @@ pub async fn update_issuance_estimate() {
         issuance_per_slot_gwei,
     };
 
-    caching::update_and_publish(&db_pool, &CacheKey::IssuanceEstimate, issuance_estimate)
-        .await
-        .unwrap();
+    caching::update_and_publish(&db_pool, &CacheKey::IssuanceEstimate, issuance_estimate).await;
 
     info!("updated issuance estimate");
 }

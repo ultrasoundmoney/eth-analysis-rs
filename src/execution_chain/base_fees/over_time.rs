@@ -225,13 +225,9 @@ pub async fn update_base_fee_over_time(
         since_merge,
     };
 
-    caching::set_value(executor, &CacheKey::BaseFeeOverTime, base_fee_over_time)
-        .await
-        .unwrap();
+    caching::set_value(executor, &CacheKey::BaseFeeOverTime, base_fee_over_time).await;
 
-    caching::publish_cache_update(executor, &CacheKey::BaseFeeOverTime)
-        .await
-        .unwrap();
+    caching::publish_cache_update(executor, &CacheKey::BaseFeeOverTime).await;
 }
 
 #[cfg(test)]

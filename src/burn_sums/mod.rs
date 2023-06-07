@@ -275,9 +275,7 @@ pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> BurnS
 
     debug!("calculated new burn sums");
 
-    caching::update_and_publish(db_pool, &CacheKey::BurnSums, &burn_sums)
-        .await
-        .unwrap();
+    caching::update_and_publish(db_pool, &CacheKey::BurnSums, &burn_sums).await;
 
     burn_sums
 }

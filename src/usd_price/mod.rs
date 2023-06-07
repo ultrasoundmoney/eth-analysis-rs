@@ -19,9 +19,11 @@ use sqlx::{FromRow, PgPool};
 use tokio::time::sleep;
 use tracing::{debug, info};
 
+use crate::key_value_store::KeyValueStore;
+use crate::key_value_store::KeyValueStorePostgres;
 use crate::{
     caching::{self, CacheKey},
-    db, key_value_store, log,
+    db, log,
 };
 
 #[derive(Debug, FromRow)]
@@ -50,6 +52,7 @@ fn calc_h24_change(current_price: &EthPrice, price_h24_ago: &EthPrice) -> f64 {
 
 async fn update_eth_price_with_most_recent(
     db_pool: &PgPool,
+    key_value_store: &impl KeyValueStore,
     eth_price_store: &impl EthPriceStore,
     last_price: &mut EthPrice,
 ) -> Result<()> {
@@ -93,14 +96,14 @@ async fn update_eth_price_with_most_recent(
             h24_change: calc_h24_change(last_price, &price_h24_ago),
         };
 
-        key_value_store::set_value(
-            db_pool,
-            CacheKey::EthPrice.to_db_key(),
-            &serde_json::to_value(&eth_price_stats).unwrap(),
-        )
-        .await?;
+        key_value_store
+            .set_value(
+                CacheKey::EthPrice.to_db_key(),
+                &serde_json::to_value(&eth_price_stats).unwrap(),
+            )
+            .await;
 
-        caching::publish_cache_update(db_pool, &CacheKey::EthPrice).await?;
+        caching::publish_cache_update(db_pool, &CacheKey::EthPrice).await;
     }
 
     Ok(())
@@ -112,12 +115,19 @@ pub async fn record_eth_price() -> Result<()> {
     info!("recording eth prices");
 
     let db_pool = db::get_db_pool("record-eth-price").await;
+    let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
     let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
 
     let mut last_price = eth_price_store.get_most_recent_price().await?;
 
     loop {
-        update_eth_price_with_most_recent(&db_pool, &eth_price_store, &mut last_price).await?;
+        update_eth_price_with_most_recent(
+            &db_pool,
+            &key_value_store,
+            &eth_price_store,
+            &mut last_price,
+        )
+        .await?;
         sleep(std::time::Duration::from_secs(10)).await;
     }
 }
@@ -134,6 +144,7 @@ mod tests {
     #[test_context(TestDb)]
     #[tokio::test]
     async fn update_eth_price_with_most_recent_test(test_db: &TestDb) {
+        let key_value_store = KeyValueStorePostgres::new(test_db.pool.clone());
         let eth_price_store = EthPriceStorePostgres::new(test_db.pool.clone());
         let test_price = EthPrice {
             timestamp: Utc::now().trunc_subsecs(0) - Duration::minutes(10),
@@ -146,9 +157,14 @@ mod tests {
 
         let mut last_price = test_price.clone();
 
-        update_eth_price_with_most_recent(&test_db.pool, &eth_price_store, &mut last_price)
-            .await
-            .unwrap();
+        update_eth_price_with_most_recent(
+            &test_db.pool,
+            &key_value_store,
+            &eth_price_store,
+            &mut last_price,
+        )
+        .await
+        .unwrap();
 
         let eth_price = eth_price_store.get_most_recent_price().await.unwrap();
 

@@ -1,53 +1,16 @@
-use serde_json::{json, Value};
-use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
+use sqlx::PgPool;
 use tracing::{debug, info};
 
 use eth_analysis::{
     db,
     execution_chain::{BlockNumber, BlockRange, GENESIS_SUPPLY},
+    job_progress::JobProgress,
+    key_value_store::KeyValueStorePostgres,
     log,
     units::Wei,
 };
 
 const BACKFILL_EXECUTION_SUPPLY_KEY: &str = "backfill-execution-supply";
-
-async fn get_last_synced_block(executor: impl PgExecutor<'_>) -> Option<BlockNumber> {
-    sqlx::query(
-        "
-        SELECT
-            value
-        FROM
-            key_value_store
-        WHERE
-            key = $1
-        ",
-    )
-    .bind(BACKFILL_EXECUTION_SUPPLY_KEY)
-    .map(|row: PgRow| {
-        let value: Value = row.get("value");
-        serde_json::from_value::<BlockNumber>(value).unwrap()
-    })
-    .fetch_optional(executor)
-    .await
-    .unwrap()
-}
-
-async fn set_last_synced_block(executor: impl PgExecutor<'_>, block: BlockNumber) {
-    sqlx::query(
-        "
-        INSERT INTO
-            key_value_store (key, value)
-        VALUES ($1, $2)
-        ON CONFLICT (key) DO UPDATE SET
-            value = excluded.value
-        ",
-    )
-    .bind(BACKFILL_EXECUTION_SUPPLY_KEY)
-    .bind(json!(block))
-    .execute(executor)
-    .await
-    .unwrap();
-}
 
 const BLOCK_NUMBER_MIN_BEFORE_BACKFILL: BlockNumber = 15082719;
 
@@ -91,7 +54,10 @@ pub async fn main() {
 
     let db_pool = db::get_db_pool("backfill-execution-supply").await;
 
-    let last_synced_block = get_last_synced_block(&db_pool).await;
+    let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
+    let job_progress = JobProgress::new(BACKFILL_EXECUTION_SUPPLY_KEY, &key_value_store);
+
+    let last_synced_block: Option<BlockNumber> = job_progress.get().await;
 
     let mut last_supply: (String, BlockNumber, Wei) = match last_synced_block {
         None => {
@@ -110,7 +76,7 @@ pub async fn main() {
             .await
             .unwrap();
 
-            set_last_synced_block(&db_pool, 0).await;
+            job_progress.set(&0).await;
 
             (
                 "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3".to_string(),
@@ -205,7 +171,7 @@ pub async fn main() {
 
         bulk_insert_execution_supplies(&db_pool, &new_execution_supplies).await;
 
-        set_last_synced_block(&db_pool, last_supply.1).await;
+        job_progress.set(&last_supply.1).await;
 
         progress.inc_work_done_by(supply_deltas.len().try_into().unwrap());
         debug!(?last_supply, "stored execution supplies");
