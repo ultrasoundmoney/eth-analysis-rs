@@ -19,7 +19,8 @@ impl IntoResponse for HealthStatus {
         match self {
             HealthStatus::Healthy => StatusCode::OK.into_response(),
             HealthStatus::Unhealthy(message) => {
-                let message = message.unwrap_or_else(|| "serve module unhealthy".to_string());
+                let message =
+                    message.unwrap_or_else(|| "eth-analysis module unhealthy".to_string());
                 let body = json!({ "message": message });
                 (StatusCode::SERVICE_UNAVAILABLE, Json(body)).into_response()
             }
