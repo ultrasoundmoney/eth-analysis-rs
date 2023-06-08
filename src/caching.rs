@@ -253,9 +253,8 @@ mod tests {
         .await;
 
         let caching_value = key_value_store
-            .get_value(CacheKey::BaseFeePerGasStats.to_db_key())
+            .get_deserializable_value::<TestJson>(CacheKey::BaseFeePerGasStats.to_db_key())
             .await
-            .map(|value| serde_json::from_value::<TestJson>(value).unwrap())
             .unwrap();
 
         assert_eq!(caching_value, test_json);
