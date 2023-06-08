@@ -17,6 +17,7 @@ use tower_http::compression::CompressionLayer;
 use tracing::{debug, error, info};
 
 use crate::health::HealthCheckable;
+use crate::key_value_store::KeyValueStorePostgres;
 use crate::serve::health::ServeHealth;
 use crate::{caching::CacheKey, db, env, execution_chain, log};
 
@@ -45,11 +46,13 @@ pub async fn start_server() {
         .await
         .unwrap();
 
+    let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
+
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
     debug!("warming cache");
 
-    let cache = Cache::new(&db_pool).await;
+    let cache = Cache::new(&key_value_store).await;
 
     info!("cache ready");
 

@@ -9,7 +9,7 @@ use thiserror::Error;
 use tracing::debug;
 
 use crate::{
-    key_value_store,
+    key_value_store::{self, KeyValueStore},
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
 };
 
@@ -152,10 +152,10 @@ pub async fn publish_cache_update<'a>(executor: impl PgExecutor<'a>, key: &Cache
 }
 
 pub async fn get_serialized_caching_value(
-    executor: impl PgExecutor<'_>,
+    key_value_store: &impl KeyValueStore,
     cache_key: &CacheKey,
 ) -> Option<Value> {
-    key_value_store::get_value(executor, cache_key.to_db_key()).await
+    key_value_store.get_value(cache_key.to_db_key()).await
 }
 
 pub async fn set_value<'a>(
@@ -179,12 +179,8 @@ pub async fn update_and_publish(db_pool: &PgPool, cache_key: &CacheKey, value: i
 #[cfg(test)]
 mod tests {
     use serde::{Deserialize, Serialize};
-    use sqlx::Acquire;
 
-    use crate::{
-        db,
-        key_value_store::{KeyValueStore, KeyValueStorePostgres},
-    };
+    use crate::{db, key_value_store::KeyValueStorePostgres};
 
     use super::*;
 
@@ -218,30 +214,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_raw_caching_value_test() -> Result<()> {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn get_serialized_caching_value_test() {
+        let test_db = db::tests::TestDb::new().await;
+        let key_value_store = KeyValueStorePostgres::new(test_db.pool.clone());
 
         let test_json = TestJson {
             name: "alex".to_string(),
             age: 29,
         };
 
-        set_value(
-            &mut transaction,
-            &CacheKey::BaseFeePerGasStats,
-            &serde_json::to_value(&test_json).unwrap(),
-        )
-        .await;
+        key_value_store
+            .set_serializable_value(CacheKey::BaseFeePerGasStats.to_db_key(), &test_json)
+            .await;
 
         let raw_value: Value =
-            get_serialized_caching_value(&mut transaction, &CacheKey::BaseFeePerGasStats)
+            get_serialized_caching_value(&key_value_store, &CacheKey::BaseFeePerGasStats)
                 .await
                 .unwrap();
 
         assert_eq!(raw_value, serde_json::to_value(test_json).unwrap());
-
-        Ok(())
     }
 
     #[tokio::test]

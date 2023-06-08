@@ -20,6 +20,7 @@ use tracing::{debug, trace, warn};
 use crate::{
     caching::{self, CacheKey, ParseCacheKeyError},
     db,
+    key_value_store::{KeyValueStore, KeyValueStorePostgres},
 };
 
 use super::{State, StateExtension};
@@ -28,12 +29,12 @@ use super::{State, StateExtension};
 pub struct Cache(RwLock<HashMap<CacheKey, Value>>);
 
 impl Cache {
-    pub async fn new(db_pool: &PgPool) -> Self {
+    pub async fn new(key_value_store: &impl KeyValueStore) -> Self {
         let map = RwLock::new(HashMap::new());
 
         // Tries to fetch a value from the key value store for every cached analysis value.
         for key in all::<CacheKey>().collect::<Vec<_>>() {
-            let value = caching::get_serialized_caching_value(db_pool, &key).await;
+            let value = caching::get_serialized_caching_value(key_value_store, &key).await;
             if let Some(value) = value {
                 map.write().unwrap().insert(key, value);
             }
@@ -82,7 +83,7 @@ pub async fn cached_get(state: StateExtension, analysis_cache_key: &CacheKey) ->
 async fn process_notifications(
     mut notification_stream: impl Stream<Item = Result<PgNotification, sqlx::Error>> + Unpin,
     state: Arc<State>,
-    db_pool: &PgPool,
+    key_value_store: impl KeyValueStore,
 ) {
     while let Some(notification) = notification_stream.try_next().await.unwrap() {
         let payload = notification.payload();
@@ -96,7 +97,8 @@ async fn process_notifications(
             }
             Ok(cache_key) => {
                 debug!(%cache_key, "cache update");
-                let value = caching::get_serialized_caching_value(db_pool, &cache_key).await;
+                let value =
+                    caching::get_serialized_caching_value(&key_value_store, &cache_key).await;
                 if let Some(value) = value {
                     state.cache.0.write().unwrap().insert(cache_key, value);
                 } else {
@@ -123,9 +125,9 @@ pub async fn update_cache_from_notifications(
     debug!("listening for cache updates");
 
     let notification_stream = listener.into_stream();
-    let db_pool_cloned = db_pool.clone();
+    let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
 
     tokio::spawn(async move {
-        process_notifications(notification_stream, state, &db_pool_cloned).await;
+        process_notifications(notification_stream, state, key_value_store).await;
     })
 }
