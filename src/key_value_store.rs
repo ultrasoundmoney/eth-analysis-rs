@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{PgExecutor, PgPool};
 use tracing::debug;
@@ -49,6 +50,24 @@ pub struct KeyValueStorePostgres {
 impl KeyValueStorePostgres {
     pub fn new(db_pool: PgPool) -> Self {
         Self { db_pool }
+    }
+
+    pub async fn get_deserializable_value<D: for<'de> Deserialize<'de>>(
+        &self,
+        key: &str,
+    ) -> Option<D> {
+        get_value(&self.db_pool, key)
+            .await
+            .and_then(|value| serde_json::from_value(value).ok())
+    }
+
+    pub async fn set_serializable_value<S: Serialize>(&self, key: &str, value: S) {
+        set_value(
+            &self.db_pool,
+            key,
+            &serde_json::to_value(value).expect("expect value to be serializable"),
+        )
+        .await
     }
 }
 
@@ -117,5 +136,35 @@ mod tests {
         let test_json_from_db = serde_json::from_value::<Option<String>>(value).unwrap();
 
         assert_eq!(test_json_from_db, None)
+    }
+
+    #[tokio::test]
+    async fn test_set_and_get_value() {
+        let test_db = db::tests::TestDb::new().await;
+        let store = KeyValueStorePostgres::new(test_db.pool.clone());
+
+        // Set a value for a key
+        let key = "test_key";
+        let value = "test_value";
+        store.set_serializable_value(key, value).await;
+
+        // Get the value for the key and deserialize it
+        let retrieved_value: Option<String> = store.get_deserializable_value(key).await;
+
+        // Assert that the value retrieved is the same as the one set
+        assert_eq!(retrieved_value, Some(value.to_owned()));
+    }
+
+    #[tokio::test]
+    async fn test_get_nonexistent_value() {
+        let test_db = db::tests::TestDb::new().await;
+        let store = KeyValueStorePostgres::new(test_db.pool.clone());
+
+        // Get the value for a nonexistent key
+        let key = "nonexistent_key";
+        let retrieved_value: Option<String> = store.get_deserializable_value(key).await;
+
+        // Assert that the retrieved value is None
+        assert_eq!(retrieved_value, None);
     }
 }
