@@ -1,8 +1,6 @@
 use anyhow::Result;
-use cached::proc_macro::once;
-use chrono::{DateTime, Duration, DurationRound, Utc};
+use chrono::{DateTime, Utc};
 use futures::join;
-use lazy_static::lazy_static;
 use serde::Serialize;
 use sqlx::postgres::types::PgInterval;
 use sqlx::{PgExecutor, PgPool};
@@ -18,14 +16,6 @@ use crate::{
 
 use GrowingTimeFrame::*;
 use LimitedTimeFrame::*;
-
-lazy_static! {
-    static ref ETH_SUPPLY_FIRST_TIMESTAMP_DAY: DateTime<Utc> = "2022-09-09T21:36:23Z"
-        .parse::<DateTime<Utc>>()
-        .unwrap()
-        .duration_trunc(Duration::days(1))
-        .unwrap();
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SupplyAtTime {
@@ -54,8 +44,27 @@ async fn get_last_supply_point(executor: impl PgExecutor<'_>) -> SupplyAtTime {
     .unwrap()
 }
 
-#[once]
-async fn get_early_supply_since_burn(executor: impl PgExecutor<'_>) -> Vec<SupplyAtTime> {
+async fn get_our_first_timestamp(executor: impl PgExecutor<'_>) -> DateTime<Utc> {
+    sqlx::query!(
+        "
+        SELECT
+            timestamp
+        FROM
+            eth_supply
+        ORDER BY timestamp ASC
+        LIMIT 1
+        ",
+    )
+    .fetch_one(executor)
+    .await
+    .map(|row| row.timestamp)
+    .unwrap()
+}
+
+async fn get_early_supply_since_burn(
+    executor: impl PgExecutor<'_>,
+    our_first_timestamp: &DateTime<Utc>,
+) -> Vec<SupplyAtTime> {
     sqlx::query!(
         "
         SELECT
@@ -67,7 +76,7 @@ async fn get_early_supply_since_burn(executor: impl PgExecutor<'_>) -> Vec<Suppl
         ORDER BY timestamp ASC
         ",
         *execution_chain::LONDON_HARD_FORK_TIMESTAMP,
-        *ETH_SUPPLY_FIRST_TIMESTAMP_DAY,
+        our_first_timestamp,
     )
     .fetch_all(executor)
     .await
@@ -253,9 +262,10 @@ pub async fn from_time_frame(
 async fn get_supply_since_burn(db_pool: &PgPool) -> Vec<SupplyAtTime> {
     // We're in the process of collecting slot by slot ETH supply data. This is a slow process.
     // Until we are done, we use Glassnode's data to fill in the gap temporarily until our own
-    // table reaches back to genesis. Currently, it reaches back to ETH_SUPPLY_FIRST_TIMESTAMP_DAY.
-    // Everything up to there is from Glassnode.
-    let eth_supply_glassnode = get_early_supply_since_burn(db_pool).await;
+    // table reaches back to genesis. We query to find out when our table starts, and then query
+    // everything up to there from Glassnode based table.
+    let our_first_timestamp = get_our_first_timestamp(db_pool).await;
+    let eth_supply_glassnode = get_early_supply_since_burn(db_pool, &our_first_timestamp).await;
     let eth_supply_ours =
         from_time_frame(db_pool, &TimeFrame::Growing(GrowingTimeFrame::SinceBurn)).await;
 
@@ -323,6 +333,8 @@ pub async fn get_supply_over_time(
 }
 
 pub async fn get_daily_supply(db_pool: &PgPool) -> Vec<SupplyAtTime> {
+    let our_first_timestamp = get_our_first_timestamp(db_pool).await;
+
     let eth_supply_glassnode: Vec<_> = sqlx::query!(
         "
         SELECT
@@ -332,7 +344,7 @@ pub async fn get_daily_supply(db_pool: &PgPool) -> Vec<SupplyAtTime> {
         WHERE timestamp < $1
         ORDER BY timestamp ASC
         ",
-        *ETH_SUPPLY_FIRST_TIMESTAMP_DAY,
+        our_first_timestamp,
     )
     .fetch_all(db_pool)
     .await
@@ -357,7 +369,7 @@ pub async fn get_daily_supply(db_pool: &PgPool) -> Vec<SupplyAtTime> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, SubsecRound};
+    use chrono::{Duration, DurationRound, SubsecRound};
     use sqlx::Acquire;
 
     use crate::{db, eth_supply::test::store_test_eth_supply, units::EthNewtype};
@@ -395,7 +407,12 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let test_supply_at_time = SupplyAtTime {
-            timestamp: *ETH_SUPPLY_FIRST_TIMESTAMP_DAY - Duration::days(1),
+            timestamp: "2022-09-09T21:36:23Z"
+                .parse::<DateTime<Utc>>()
+                .unwrap()
+                .duration_trunc(Duration::days(1))
+                .unwrap()
+                - Duration::days(1),
             supply: EthNewtype(10.0),
         };
 
@@ -408,7 +425,11 @@ mod tests {
         .await
         .unwrap();
 
-        let since_burn = get_early_supply_since_burn(&mut transaction).await;
+        let since_burn = get_early_supply_since_burn(
+            &mut transaction,
+            &(test_supply_at_time.timestamp + Duration::seconds(1)),
+        )
+        .await;
 
         assert_eq!(since_burn, vec![test_supply_at_time]);
     }
