@@ -1007,6 +1007,54 @@
     },
     "query": "\n        SELECT\n            MAX(balances_slot)\n        FROM\n            eth_supply\n        "
   },
+  "5e52306fdecb78234768f7c59e626f1e1a8a72a8bc90d7d5546240f8592b09d3": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "beacon_balances",
+          "ordinal": 1,
+          "type_info": "Int8"
+        },
+        {
+          "name": "beacon_deposits",
+          "ordinal": 2,
+          "type_info": "Int8"
+        },
+        {
+          "name": "block_hash",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "execution_balances",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "beacon_timestamp",
+          "ordinal": 5,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        null,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            slot,\n            beacon_validators_balance.gwei AS beacon_balances,\n            beacon_blocks.deposit_sum_aggregated AS beacon_deposits,\n            beacon_blocks.block_hash,\n            execution_supply.balances_sum::TEXT AS execution_balances,\n            timestamp As beacon_timestamp\n        FROM\n            beacon_states\n        JOIN beacon_blocks ON beacon_blocks.state_root = beacon_states.state_root\n        JOIN beacon_validators_balance ON beacon_validators_balance.state_root = beacon_states.state_root\n        JOIN execution_supply ON execution_supply.block_hash = beacon_blocks.block_hash\n        ORDER BY slot DESC\n        "
+  },
   "635c841223a110075c5e88878f1d20c80532255799f6fe926259dbaa88fbf881": {
     "describe": {
       "columns": [
@@ -1510,6 +1558,24 @@
     },
     "query": "\n                SELECT\n                    DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                    SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS \"base_fee_per_gas!\"\n                FROM\n                    blocks_next\n                WHERE\n                    timestamp >= $1\n                GROUP BY \"day_timestamp!\"\n                ORDER BY \"day_timestamp!\" ASC\n                "
   },
+  "ba8a8e020a534ee71b3a9958e4c86d64142f9e087fbac28392e29513fff8129d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "timestamp",
+          "ordinal": 0,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            timestamp\n        FROM\n            eth_supply\n        ORDER BY timestamp ASC\n        LIMIT 1\n        "
+  },
   "bfc3d6da794a828526867dd2547eff7d22a929fa98544723e52c97c3ec53f92a": {
     "describe": {
       "columns": [],
@@ -1858,6 +1924,27 @@
       }
     },
     "query": "\n            SELECT\n                base_fee_per_gas,\n                difficulty,\n                eth_price,\n                gas_used,\n                hash,\n                number,\n                parent_hash,\n                timestamp,\n                total_difficulty::TEXT AS \"total_difficulty!\"\n            FROM\n                blocks_next\n            ORDER BY\n                number DESC\n            LIMIT 1\n            "
+  },
+  "f453dd4fcc6cb5eba0b63e62781a34adaf125f72a6fe4be977f6ef4d0ee93a28": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Int4",
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            slot\n        FROM\n            beacon_states\n        JOIN\n            beacon_validators_balance\n        ON\n            beacon_validators_balance.state_root = beacon_states.state_root\n        WHERE\n            slot >= $1\n            AND slot <= $2\n        ORDER BY\n            slot ASC\n        "
   },
   "f913377c6a26d8fdec3e4cd36d34bef19794b0db70da8d5f6c0218b2f08f5876": {
     "describe": {
