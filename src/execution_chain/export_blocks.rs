@@ -28,7 +28,7 @@ fn get_historic_stream(block_range: &BlockRange) -> impl Stream<Item = Execution
 
     let block_range_clone = block_range.clone();
     tokio::spawn(async move {
-        let mut execution_node = ExecutionNode::connect().await;
+        let execution_node = ExecutionNode::connect().await;
         for block_number in block_range_clone.into_iter() {
             let block = execution_node
                 .get_block_by_number(&block_number)

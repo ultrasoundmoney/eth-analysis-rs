@@ -86,7 +86,7 @@ pub async fn heal_beacon_states() {
 
             if *stored_state_root != state_root {
                 warn!("state root mismatch, rolling back stored and resyncing");
-                sync::rollback_slot(&mut *db_pool.acquire().await.unwrap(), &slot.into())
+                sync::rollback_slot(&mut db_pool.acquire().await.unwrap(), &slot.into())
                     .await
                     .unwrap();
                 sync::sync_slot_by_state_root(&db_pool, &beacon_node, &state_root, &slot.into())

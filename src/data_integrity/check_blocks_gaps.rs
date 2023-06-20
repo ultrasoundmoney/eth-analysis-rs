@@ -56,7 +56,7 @@ pub async fn check_blocks_gaps() -> Result<()> {
 
     let mut progress = Progress::new("check on-chain hashes", blocks.len().try_into().unwrap());
 
-    let mut execution_node = ExecutionNode::connect().await;
+    let execution_node = ExecutionNode::connect().await;
 
     for (number, stored_hash) in blocks {
         let on_chain = execution_node.get_block_by_number(&number).await.unwrap();

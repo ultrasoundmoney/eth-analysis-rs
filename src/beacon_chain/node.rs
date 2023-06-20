@@ -284,6 +284,12 @@ pub struct BeaconNode {
     client: reqwest::Client,
 }
 
+impl Default for BeaconNode {
+    fn default() -> Self {
+        BeaconNode::new()
+    }
+}
+
 impl BeaconNode {
     pub fn new() -> Self {
         Self {

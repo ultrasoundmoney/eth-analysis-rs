@@ -14,7 +14,7 @@ use async_tungstenite::{
     tungstenite::Message,
     WebSocketStream,
 };
-use futures::stream::{FuturesOrdered, FuturesUnordered, StreamExt};
+use futures::stream::{FuturesOrdered, StreamExt};
 use futures::SinkExt;
 use futures::{channel::oneshot, stream::SplitStream};
 use lazy_static::lazy_static;

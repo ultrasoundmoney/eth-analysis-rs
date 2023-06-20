@@ -154,7 +154,7 @@ fn stream_historic_block_numbers(block_range: BlockRange) -> impl Stream<Item = 
     let (mut tx, rx) = futures::channel::mpsc::channel(10);
 
     tokio::spawn(async move {
-        let mut execution_node = ExecutionNode::connect().await;
+        let execution_node = ExecutionNode::connect().await;
         for block_number in block_range {
             let block = execution_node
                 .get_block_by_number(&block_number)
@@ -170,7 +170,7 @@ fn stream_historic_block_numbers(block_range: BlockRange) -> impl Stream<Item = 
 pub async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = BlockNumber> {
     debug!(from = gte_slot, "streaming heads");
 
-    let mut execution_node = ExecutionNode::connect().await;
+    let execution_node = ExecutionNode::connect().await;
     let last_block_on_start = execution_node.get_latest_block().await;
     debug!(
         block_number = last_block_on_start.number,

@@ -37,7 +37,7 @@ async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber)
 async fn sync_by_hash(
     issuance_store: &impl IssuanceStore,
     eth_price_store: &impl EthPriceStore,
-    execution_node: &mut ExecutionNode,
+    execution_node: &ExecutionNode,
     db_pool: &PgPool,
     hash: &str,
 ) {
@@ -97,7 +97,7 @@ async fn sync_by_hash(
 }
 
 async fn find_last_matching_block_number(
-    execution_node: &mut ExecutionNode,
+    execution_node: &ExecutionNode,
     block_store: &BlockStorePostgres,
     starting_candidate: BlockNumber,
 ) -> BlockNumber {
@@ -123,7 +123,7 @@ async fn find_last_matching_block_number(
 
 async fn estimate_blocks_remaining(
     block_store: &impl BlockStore,
-    execution_node: &mut ExecutionNode,
+    execution_node: &ExecutionNode,
 ) -> i32 {
     let last_on_chain = execution_node.get_latest_block().await;
     let last_stored = block_store.last().await;
@@ -152,14 +152,14 @@ pub async fn sync_blocks() {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let mut execution_node = ExecutionNode::connect().await;
+    let execution_node = ExecutionNode::connect().await;
     let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
     let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
     let block_store = BlockStorePostgres::new(db_pool.clone());
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
     let mut heads_queue: HeadsQueue = VecDeque::new();
 
-    let blocks_remaining_on_start = estimate_blocks_remaining(&block_store, &mut execution_node)
+    let blocks_remaining_on_start = estimate_blocks_remaining(&block_store, &execution_node)
         .await
         .try_into()
         .unwrap();
@@ -197,7 +197,7 @@ pub async fn sync_blocks() {
                 sync_by_hash(
                     &issuance_store,
                     &eth_price_store,
-                    &mut execution_node,
+                    &execution_node,
                     &db_pool,
                     &next_block.hash,
                 )
@@ -214,7 +214,7 @@ pub async fn sync_blocks() {
                 // Roll back until we're following the canonical chain again, queue all rolled
                 // back blocks.
                 let last_matching_block_number = find_last_matching_block_number(
-                    &mut execution_node,
+                    &execution_node,
                     &block_store,
                     last_stored_block.number - 1,
                 )

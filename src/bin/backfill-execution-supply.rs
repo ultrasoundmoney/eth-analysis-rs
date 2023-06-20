@@ -16,7 +16,7 @@ const BLOCK_NUMBER_MIN_BEFORE_BACKFILL: BlockNumber = 15082719;
 
 async fn bulk_insert_execution_supplies(
     pool: &PgPool,
-    execution_supplies: &Vec<(String, BlockNumber, i128)>,
+    execution_supplies: &[(String, BlockNumber, i128)],
 ) {
     let block_hashes = execution_supplies
         .iter()
