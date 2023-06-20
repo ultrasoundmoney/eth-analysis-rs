@@ -1,7 +1,7 @@
 use eth_analysis::{
     beacon_chain::{
         backfill::{backfill_balances, Granularity},
-        FIRST_POST_LONDON_SLOT,
+        Slot,
     },
     db, log,
 };
@@ -15,7 +15,7 @@ pub async fn main() {
 
     let db_pool = db::get_db_pool("backfill-hourly-balances").await;
 
-    backfill_balances(&db_pool, &Granularity::Hour, &FIRST_POST_LONDON_SLOT).await;
+    backfill_balances(&db_pool, &Granularity::Hour, &Slot(0)).await;
 
     info!("done backfilling hourly beacon balances");
 }
