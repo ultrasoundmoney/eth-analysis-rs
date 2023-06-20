@@ -22,6 +22,7 @@ async fn backfill_balances(
     db_pool: &PgPool,
     work_todo: u64,
     granularity: Granularity,
+    from: &Slot,
 ) -> Result<()> {
     let beacon_node = BeaconNode::new();
 
@@ -40,7 +41,7 @@ async fn backfill_balances(
             beacon_validators_balance.state_root IS NULL
         ORDER BY slot DESC
         "#,
-        FIRST_POST_LONDON_SLOT.0,
+        from.0,
     )
     .fetch(db_pool)
     .try_filter(|row| match granularity {
@@ -111,7 +112,13 @@ pub async fn backfill_balances_to_london() -> Result<()> {
     let slot_count = get_slots_since_merge(&db_pool).await?;
     debug!(slot_count, "work todo");
 
-    backfill_balances(&db_pool, slot_count, Granularity::Slot).await?;
+    backfill_balances(
+        &db_pool,
+        slot_count,
+        Granularity::Slot,
+        &FIRST_POST_LONDON_SLOT,
+    )
+    .await?;
 
     info!("done backfilling beacon balances");
 
@@ -134,10 +141,11 @@ pub async fn backfill_hourly_balances_to_london() -> Result<()> {
         &db_pool,
         hours_since_merge.try_into().unwrap(),
         Granularity::Hour,
+        &FIRST_POST_LONDON_SLOT,
     )
     .await?;
 
-    info!("done backfilling hourly beacon block hashes");
+    info!("done backfilling hourly beacon balances");
 
     Ok(())
 }
@@ -158,10 +166,11 @@ pub async fn backfill_daily_balances_to_london() -> Result<()> {
         &db_pool,
         days_since_merge.try_into().unwrap(),
         Granularity::Day,
+        &FIRST_POST_LONDON_SLOT,
     )
     .await?;
 
-    info!("done backfilling daily beacon block hashes");
+    info!("done backfilling daily beacon balances");
 
     Ok(())
 }
