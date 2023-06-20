@@ -1,4 +1,4 @@
-mod beacon_chain;
+pub mod beacon_chain;
 mod burn_rates;
 mod burn_sums;
 mod caching;

@@ -10,6 +10,7 @@ mod sync;
 mod units;
 mod withdrawals;
 
+pub use balances::backfill;
 pub use balances::backfill_balances_to_london;
 pub use balances::backfill_daily_balances_to_london;
 pub use balances::backfill_hourly_balances_to_london;

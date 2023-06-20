@@ -12,13 +12,13 @@ use crate::{
     log,
 };
 
-enum Granularity {
+pub enum Granularity {
     Slot,
     Hour,
     Day,
 }
 
-async fn backfill_balances(
+pub async fn backfill_balances(
     db_pool: &PgPool,
     work_todo: u64,
     granularity: Granularity,
