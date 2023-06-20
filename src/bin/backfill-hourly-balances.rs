@@ -1,12 +1,9 @@
-use chrono::Utc;
 use eth_analysis::{
     beacon_chain::{
         backfill::{backfill_balances, Granularity},
         FIRST_POST_LONDON_SLOT,
     },
-    db,
-    execution_chain::LONDON_HARD_FORK_TIMESTAMP,
-    log,
+    db, log,
 };
 use tracing::info;
 
@@ -18,16 +15,7 @@ pub async fn main() {
 
     let db_pool = db::get_db_pool("backfill-hourly-balances").await;
 
-    let days_since_merge = (Utc::now() - *LONDON_HARD_FORK_TIMESTAMP).num_days();
-
-    backfill_balances(
-        &db_pool,
-        days_since_merge.try_into().unwrap(),
-        Granularity::Day,
-        &FIRST_POST_LONDON_SLOT,
-    )
-    .await
-    .unwrap();
+    backfill_balances(&db_pool, &Granularity::Hour, &FIRST_POST_LONDON_SLOT).await;
 
     info!("done backfilling hourly beacon balances");
 }

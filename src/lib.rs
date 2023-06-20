@@ -28,9 +28,6 @@ pub mod units;
 mod update_by_hand;
 mod usd_price;
 
-pub use beacon_chain::backfill_balances_to_london;
-pub use beacon_chain::backfill_daily_balances_to_london;
-pub use beacon_chain::backfill_hourly_balances_to_london;
 pub use beacon_chain::heal_beacon_states;
 pub use beacon_chain::heal_block_hashes;
 pub use beacon_chain::sync_beacon_states;

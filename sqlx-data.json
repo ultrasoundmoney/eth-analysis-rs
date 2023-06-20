@@ -830,26 +830,6 @@
     },
     "query": "\n        INSERT INTO execution_supply (block_hash, block_number, balances_sum)\n        SELECT * FROM UNNEST($1::text[], $2::int4[], $3::numeric[])\n        ON CONFLICT (block_hash) DO UPDATE SET\n            balances_sum = excluded.balances_sum,\n            block_number = excluded.block_number\n        "
   },
-  "4faf5f18f446d8614f80c6771957263fa497640ca2f6332b25d02fec90b61fe2": {
-    "describe": {
-      "columns": [
-        {
-          "name": "count!",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        null
-      ],
-      "parameters": {
-        "Left": [
-          "Int4"
-        ]
-      }
-    },
-    "query": "\n        SELECT\n            COUNT(*) AS \"count!\"\n        FROM\n            beacon_states\n        LEFT JOIN beacon_validators_balance ON\n            beacon_states.state_root = beacon_validators_balance.state_root\n        WHERE\n            slot >= $1\n        AND\n            beacon_validators_balance.state_root IS NULL\n        "
-  },
   "51ef5e66cebfc87b3dc99d2122dfb2c23dca5a446a4d0d560d947247a167968d": {
     "describe": {
       "columns": [
@@ -1651,6 +1631,26 @@
       }
     },
     "query": "\n                SELECT\n                    DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= $1\n                ORDER BY\n                    DATE_TRUNC('day', timestamp), timestamp ASC\n                "
+  },
+  "ca336526554400ce1d5543e7bde0208d01430613b4eafc52b4471b1ccb8f559c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "count!",
+          "ordinal": 0,
+          "type_info": "Int8"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": [
+          "Int4"
+        ]
+      }
+    },
+    "query": "\n        SELECT\n            COUNT(beacon_states.slot) as \"count!\"\n        FROM\n            beacon_states\n        LEFT JOIN beacon_validators_balance ON\n            beacon_states.state_root = beacon_validators_balance.state_root\n        WHERE\n            slot >= $1\n        AND\n            beacon_validators_balance.state_root IS NULL\n        "
   },
   "cf1180963d6c58dda37e2468b2919a37bbc799980be97478ba727f91f9cd4077": {
     "describe": {

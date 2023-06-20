@@ -1,4 +1,4 @@
-mod balances;
+pub mod balances;
 mod blocks;
 mod deposits;
 mod effective_balance_sum;
@@ -11,9 +11,6 @@ mod units;
 mod withdrawals;
 
 pub use balances::backfill;
-pub use balances::backfill_balances_to_london;
-pub use balances::backfill_daily_balances_to_london;
-pub use balances::backfill_hourly_balances_to_london;
 pub use balances::get_balances_by_state_root;
 pub use balances::get_validator_balances_by_start_of_day;
 pub use balances::store_validators_balance;
@@ -27,7 +24,6 @@ pub use blocks::store_block;
 pub use blocks::GENESIS_PARENT_ROOT;
 
 use chrono::DateTime;
-use chrono::TimeZone;
 use chrono::Utc;
 pub use deposits::get_deposits_sum_by_state_root;
 pub use deposits::BeaconDepositsSum;
@@ -70,7 +66,7 @@ pub const FIRST_POST_LONDON_SLOT: Slot = Slot(1778566);
 
 lazy_static! {
     static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");
-    pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = Utc.timestamp_opt(1606824023, 0).unwrap();
+    pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = "2020-12-01T12:00:23Z".parse().unwrap();
     pub static ref SHAPELLA_SLOT: Slot = Slot(6209536);
 }
 
