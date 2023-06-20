@@ -14,7 +14,7 @@ use async_tungstenite::{
     tungstenite::Message,
     WebSocketStream,
 };
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::stream::{FuturesOrdered, FuturesUnordered, StreamExt};
 use futures::SinkExt;
 use futures::{channel::oneshot, stream::SplitStream};
 use lazy_static::lazy_static;
@@ -264,10 +264,10 @@ impl ExecutionNode {
         &self,
         block: &ExecutionNodeBlock,
     ) -> Option<Vec<TransactionReceipt>> {
-        let mut receipt_futures = FuturesUnordered::new();
+        let mut receipt_futures = FuturesOrdered::new();
 
         for tx_hash in block.transactions.iter() {
-            receipt_futures.push(self.get_transaction_receipt(tx_hash));
+            receipt_futures.push_back(self.get_transaction_receipt(tx_hash));
         }
 
         let mut receipts = Vec::new();
@@ -334,7 +334,7 @@ mod tests {
     #[tokio::test]
     async fn get_transaction_receipts_for_block_test() {
         let node = ExecutionNode::connect().await;
-        let block_number = 12965000; // Replace with a valid Ethereum block number with some transactions
+        let block_number = 17523391; // Replace with a valid Ethereum block number with some transactions
         let block = node.get_block_by_number(&block_number).await;
 
         assert!(block.is_some(), "Block not found");
