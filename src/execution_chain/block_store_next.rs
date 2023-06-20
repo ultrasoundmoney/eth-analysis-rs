@@ -18,12 +18,12 @@ pub trait BlockStore {
     async fn hash_from_number(&self, block_number: &BlockNumber) -> Option<String>;
 }
 
-pub struct BlockStorePostgres<'a> {
-    db_pool: &'a PgPool,
+pub struct BlockStorePostgres {
+    db_pool: PgPool,
 }
 
-impl<'a> BlockStorePostgres<'a> {
-    pub fn new(db_pool: &'a PgPool) -> Self {
+impl BlockStorePostgres {
+    pub fn new(db_pool: PgPool) -> Self {
         Self { db_pool }
     }
 
@@ -39,7 +39,7 @@ impl<'a> BlockStorePostgres<'a> {
             "#,
             block_hash
         )
-        .fetch_one(self.db_pool)
+        .fetch_one(&self.db_pool)
         .await
         .unwrap()
         .exists
@@ -59,14 +59,14 @@ impl<'a> BlockStorePostgres<'a> {
             block_range.start,
             block_range.end
         )
-        .execute(self.db_pool)
+        .execute(&self.db_pool)
         .await
         .unwrap();
     }
 
     #[allow(dead_code)]
     async fn add(&self, block: &ExecutionNodeBlock, eth_price: f64) {
-        block_store::store_block(self.db_pool, block, eth_price).await
+        block_store::store_block(&self.db_pool, block, eth_price).await
     }
 
     #[allow(dead_code)]
@@ -82,7 +82,7 @@ impl<'a> BlockStorePostgres<'a> {
             "#,
             block_number
         )
-        .fetch_one(self.db_pool)
+        .fetch_one(&self.db_pool)
         .await
         .unwrap()
         .timestamp
@@ -101,7 +101,7 @@ impl<'a> BlockStorePostgres<'a> {
 }
 
 #[async_trait]
-impl BlockStore for BlockStorePostgres<'_> {
+impl BlockStore for BlockStorePostgres {
     async fn first_number_after_or_at(&self, timestamp: &DateTime<Utc>) -> Option<BlockNumber> {
         sqlx::query!(
             "
@@ -117,7 +117,7 @@ impl BlockStore for BlockStorePostgres<'_> {
             ",
             timestamp
         )
-        .fetch_optional(self.db_pool)
+        .fetch_optional(&self.db_pool)
         .await
         .unwrap()
         .map(|row| row.number)
@@ -143,7 +143,7 @@ impl BlockStore for BlockStorePostgres<'_> {
             LIMIT 1
             "#
         )
-        .fetch_one(self.db_pool)
+        .fetch_one(&self.db_pool)
         .await
         .map(|row| ExecutionNodeBlock {
             base_fee_per_gas: row.base_fee_per_gas as u64,
@@ -170,7 +170,7 @@ impl BlockStore for BlockStorePostgres<'_> {
             "#,
             block_number
         )
-        .fetch_optional(self.db_pool)
+        .fetch_optional(&self.db_pool)
         .await
         .unwrap()
         .map(|row| row.hash)
@@ -187,18 +187,10 @@ impl BlockStore for BlockStorePostgres<'_> {
             "#,
             block_number
         )
-        .fetch_one(self.db_pool)
+        .fetch_one(&self.db_pool)
         .await
         .unwrap()
         .exists
-    }
-}
-
-impl Clone for BlockStorePostgres<'_> {
-    fn clone(&self) -> Self {
-        Self {
-            db_pool: self.db_pool,
-        }
     }
 }
 
@@ -214,7 +206,7 @@ mod tests {
     #[tokio::test]
     async fn number_exists_test(test_db: &TestDb) {
         let test_id = "block_number_exists";
-        let block_store = BlockStorePostgres::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(test_db.pool.clone());
 
         let test_number = 1351;
         let test_block = ExecutionNodeBlockBuilder::new(test_id)
@@ -232,7 +224,7 @@ mod tests {
     #[tokio::test]
     async fn hash_exists_test(test_db: &TestDb) {
         let test_id = "block_hash_exists";
-        let block_store = BlockStorePostgres::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(test_db.pool.clone());
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
@@ -249,7 +241,7 @@ mod tests {
     #[tokio::test]
     async fn last_test(test_db: &TestDb) {
         let test_id = "last";
-        let block_store = BlockStorePostgres::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(test_db.pool.clone());
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
@@ -264,7 +256,7 @@ mod tests {
     #[tokio::test]
     async fn hash_from_number_test(test_db: &TestDb) {
         let test_id = "hash_from_number";
-        let block_store = BlockStorePostgres::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(test_db.pool.clone());
 
         let test_block = ExecutionNodeBlockBuilder::new(test_id).build();
 
@@ -287,7 +279,7 @@ mod tests {
     #[tokio::test]
     async fn time_range_from_block_range_test(test_db: &TestDb) {
         let test_id = "time_range_from_block_range";
-        let block_store = BlockStorePostgres::new(&test_db.pool);
+        let block_store = BlockStorePostgres::new(test_db.pool.clone());
 
         let test_block_1 = ExecutionNodeBlockBuilder::new(test_id).build();
         let test_block_2 = ExecutionNodeBlockBuilder::new(test_id)

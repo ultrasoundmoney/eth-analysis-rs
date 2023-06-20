@@ -257,8 +257,8 @@ async fn burn_sum_from_block(
 }
 
 pub async fn on_new_block(db_pool: &PgPool, block: &ExecutionNodeBlock) -> BurnSums {
-    let block_store = BlockStorePostgres::new(db_pool);
-    let burn_sum_store = BurnSumStorePostgres::new(db_pool);
+    let block_store = BlockStorePostgres::new(db_pool.clone());
+    let burn_sum_store = BurnSumStorePostgres::new(db_pool.clone());
 
     let futures = all::<TimeFrame>().map(|time_frame| {
         burn_sum_from_block(&block_store, &burn_sum_store, block, time_frame)

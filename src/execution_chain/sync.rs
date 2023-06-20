@@ -98,7 +98,7 @@ async fn sync_by_hash(
 
 async fn find_last_matching_block_number(
     execution_node: &mut ExecutionNode,
-    block_store: &BlockStorePostgres<'_>,
+    block_store: &BlockStorePostgres,
     starting_candidate: BlockNumber,
 ) -> BlockNumber {
     let mut current_candidate_number = starting_candidate;
@@ -155,7 +155,7 @@ pub async fn sync_blocks() {
     let mut execution_node = ExecutionNode::connect().await;
     let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
     let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
-    let block_store = BlockStorePostgres::new(&db_pool);
+    let block_store = BlockStorePostgres::new(db_pool.clone());
     let mut heads_stream = stream_heads_from_last(&db_pool).await;
     let mut heads_queue: HeadsQueue = VecDeque::new();
 

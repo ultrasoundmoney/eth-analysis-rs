@@ -26,18 +26,18 @@ pub trait BurnSumStore {
     );
 }
 
-pub struct BurnSumStorePostgres<'a> {
-    db_pool: &'a PgPool,
+pub struct BurnSumStorePostgres {
+    db_pool: PgPool,
 }
 
-impl<'a> BurnSumStorePostgres<'a> {
-    pub fn new(db_pool: &'a PgPool) -> Self {
+impl BurnSumStorePostgres {
+    pub fn new(db_pool: PgPool) -> Self {
         Self { db_pool }
     }
 }
 
 #[async_trait]
-impl BurnSumStore for BurnSumStorePostgres<'_> {
+impl BurnSumStore for BurnSumStorePostgres {
     async fn burn_sum_from_block_range(
         &self,
         block_range: &BlockRange,
@@ -57,7 +57,7 @@ impl BurnSumStore for BurnSumStorePostgres<'_> {
             block_range.start,
             block_range.end
         )
-        .fetch_one(self.db_pool)
+        .fetch_one(&self.db_pool)
         .await
         .unwrap();
 
@@ -79,7 +79,7 @@ impl BurnSumStore for BurnSumStorePostgres<'_> {
             ",
             block_number_limit
         )
-        .execute(self.db_pool)
+        .execute(&self.db_pool)
         .await
         .unwrap();
     }
@@ -102,7 +102,7 @@ impl BurnSumStore for BurnSumStorePostgres<'_> {
             "#,
             time_frame.to_string()
         )
-        .fetch_optional(self.db_pool)
+        .fetch_optional(&self.db_pool)
         .await
         .unwrap();
 
@@ -163,7 +163,7 @@ impl BurnSumStore for BurnSumStorePostgres<'_> {
             &v6,
             &v7 as &[String]
         )
-        .execute(self.db_pool)
+        .execute(&self.db_pool)
         .await
         .unwrap();
     }
@@ -201,8 +201,7 @@ mod tests {
     #[test_context(TestDb)]
     #[tokio::test]
     async fn burn_sum_from_block_range_test(test_db: &TestDb) {
-        let pool = &test_db.pool;
-        let burn_sum_store = BurnSumStorePostgres::new(pool);
+        let burn_sum_store = BurnSumStorePostgres::new(test_db.pool.clone());
 
         let test_id = "burn_sum_from_time_frame";
 
@@ -213,8 +212,8 @@ mod tests {
             .with_burn(WeiNewtype::from_eth(2))
             .build();
 
-        block_store::store_block(pool, &block_1, 1.0).await;
-        block_store::store_block(pool, &block_2, 2.0).await;
+        block_store::store_block(&test_db.pool, &block_1, 1.0).await;
+        block_store::store_block(&test_db.pool, &block_2, 2.0).await;
 
         let (burn_sum_wei, burn_sum_usd) = burn_sum_store
             .burn_sum_from_block_range(&BlockRange {
