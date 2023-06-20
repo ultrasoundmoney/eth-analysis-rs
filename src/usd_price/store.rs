@@ -251,6 +251,7 @@ mod tests {
             parent_hash: "0xparent".to_string(),
             timestamp: Utc::now(),
             total_difficulty: 0,
+            transactions: vec![],
         }
     }
 

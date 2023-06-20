@@ -25,6 +25,8 @@ impl From<ExecutionBlockRow> for ExecutionNodeBlock {
             parent_hash: row.parent_hash,
             timestamp: row.timestamp,
             total_difficulty: row.total_difficulty.parse::<u128>().unwrap(),
+            // Types for blocks coming from the node and from our DB should be split.
+            transactions: vec![],
         }
     }
 }
@@ -126,6 +128,7 @@ mod tests {
             parent_hash: "0xparent".to_string(),
             timestamp: Utc::now().duration_round(Duration::seconds(1)).unwrap(),
             total_difficulty: 0,
+            transactions: vec![],
         }
     }
 

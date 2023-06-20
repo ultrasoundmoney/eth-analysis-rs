@@ -1,6 +1,7 @@
 mod blocks;
 mod decoders;
 mod heads;
+mod transaction_receipts;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -9,21 +10,17 @@ use std::{
 
 use anyhow::Result;
 use async_tungstenite::{
-    stream::Stream,
     tokio::{connect_async, TokioAdapter},
     tungstenite::Message,
     WebSocketStream,
 };
-use futures::{
-    channel::oneshot,
-    prelude::*,
-    stream::{SplitSink, SplitStream},
-};
+use futures::stream::{FuturesUnordered, StreamExt};
+use futures::SinkExt;
+use futures::{channel::oneshot, stream::SplitStream};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tokio::net::TcpStream;
-use tokio_native_tls::TlsStream;
+use tokio::{net::TcpStream, sync::mpsc};
 
 use crate::env;
 
@@ -40,6 +37,8 @@ pub use heads::Head;
 #[cfg(test)]
 pub use blocks::tests::ExecutionNodeBlockBuilder;
 
+use self::transaction_receipts::TransactionReceipt;
+
 lazy_static! {
     static ref EXECUTION_URL: String = env::get_env_var_unsafe("GETH_URL");
 }
@@ -54,8 +53,17 @@ struct RpcError {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum RpcMessage {
-    RpcMessageError { id: u16, error: RpcError },
-    RpcMessageResult { id: u16, result: serde_json::Value },
+    Error { id: u16, error: RpcError },
+    Result { id: u16, result: serde_json::Value },
+}
+
+impl RpcMessage {
+    fn id(&self) -> u16 {
+        match self {
+            RpcMessage::Error { id, .. } => *id,
+            RpcMessage::Result { id, .. } => *id,
+        }
+    }
 }
 
 struct IdPool {
@@ -99,73 +107,61 @@ type NodeMessageRx = SplitStream<
     >,
 >;
 
-type MessageHandlersShared =
-    Arc<Mutex<HashMap<u16, oneshot::Sender<Result<serde_json::Value, RpcError>>>>>;
-type IdPoolShared = Arc<Mutex<IdPool>>;
+type MessageHandlers = HashMap<u16, oneshot::Sender<Result<Value, RpcError>>>;
 
 async fn handle_messages(
     mut ws_rx: NodeMessageRx,
-    message_handlers: MessageHandlersShared,
-    id_pool: IdPoolShared,
-) -> Result<()> {
+    message_rx_map: Arc<Mutex<MessageHandlers>>,
+    id_pool: Arc<Mutex<IdPool>>,
+) {
     while let Some(message_result) = ws_rx.next().await {
-        let message = message_result?;
+        let message = message_result.expect("expect websocket message to be Ok");
 
         // We get ping messages too. Do nothing with those.
         if message.is_ping() {
             continue;
         }
 
-        let message_text = message.into_text()?;
-        let rpc_message: RpcMessage = serde_json::from_str(&message_text).unwrap();
+        let message_bytes = message.into_data();
+        let rpc_message = serde_json::from_slice::<RpcMessage>(&message_bytes)
+            .expect("expect node messages to be JsonRpcMessages");
 
-        let id = match rpc_message {
-            RpcMessage::RpcMessageResult { id, .. } => id,
-            RpcMessage::RpcMessageError { id, .. } => id,
-        };
-
-        match message_handlers.lock().unwrap().remove(&id) {
-            None => {
-                tracing::error!(
-                    "got a message but missing a registered handler for id: {id}, message: {:?}",
-                    rpc_message
-                );
-            }
-            Some(tx) => match rpc_message {
-                RpcMessage::RpcMessageResult { result, .. } => {
-                    tx.send(Ok(result)).unwrap();
-                }
-                RpcMessage::RpcMessageError { error, .. } => {
-                    tx.send(Err(error)).unwrap();
-                }
-            },
-        };
+        let id = rpc_message.id();
 
         id_pool.lock().unwrap().free_id(&id);
+
+        let tx = message_rx_map
+            .lock()
+            .unwrap()
+            .remove(&id)
+            .expect("expect a message handler for every received message id");
+
+        match rpc_message {
+            RpcMessage::Result { result, .. } => {
+                tx.send(Ok(result)).unwrap();
+            }
+            RpcMessage::Error { error, .. } => {
+                tx.send(Err(error)).unwrap();
+            }
+        };
     }
-
-    Ok(())
 }
-
-type SplitMessageSink = SplitSink<
-    WebSocketStream<Stream<TokioAdapter<TcpStream>, TokioAdapter<TlsStream<TcpStream>>>>,
-    Message,
->;
 
 pub struct ExecutionNode {
     id_pool: Arc<Mutex<IdPool>>,
-    message_handlers: MessageHandlersShared,
-    message_sink: SplitMessageSink,
+    message_rx_map: Arc<Mutex<MessageHandlers>>,
+    message_tx: mpsc::Sender<Message>,
 }
 
 impl ExecutionNode {
     pub async fn connect() -> Self {
         let id_pool_am = Arc::new(Mutex::new(IdPool::new(u16::MAX.into())));
 
-        let message_handlers_am = Arc::new(Mutex::new(HashMap::with_capacity(u16::MAX.into())));
+        let message_rx_map = Arc::new(Mutex::new(HashMap::with_capacity(u16::MAX.into())));
 
         let url = (*EXECUTION_URL).to_string();
-        let (ws_tx, ws_rx) = connect_async(&url).await.unwrap().0.split();
+        let (connected_socket, _) = connect_async(&url).await.unwrap();
+        let (mut sink, stream) = connected_socket.split();
 
         // We'd like to read websocket messages concurrently so we read in a thread.
         // The websocket uses pipelining, so IDs are used to match request and response.
@@ -184,33 +180,35 @@ impl ExecutionNode {
         }));
 
         let id_pool_ref = id_pool_am.clone();
-        let message_handlers_ref = message_handlers_am.clone();
+        let message_handlers_ref = message_rx_map.clone();
         tokio::spawn(async move {
-            handle_messages(ws_rx, message_handlers_ref, id_pool_ref)
-                .await
-                .unwrap()
+            handle_messages(stream, message_handlers_ref, id_pool_ref).await;
+        });
+
+        let (message_tx, mut rx) = mpsc::channel(512);
+        tokio::spawn(async move {
+            while let Some(message) = rx.recv().await {
+                sink.send(message).await.unwrap();
+            }
         });
 
         ExecutionNode {
             id_pool: id_pool_am,
-            message_handlers: message_handlers_am,
-            message_sink: ws_tx,
+            message_rx_map,
+            message_tx,
         }
     }
 
-    pub async fn get_latest_block(&mut self) -> ExecutionNodeBlock {
+    pub async fn get_latest_block(&self) -> ExecutionNodeBlock {
         let value = self
-            .call(
-                "eth_getBlockByNumber",
-                &json!((String::from("latest"), false)),
-            )
+            .call("eth_getBlockByNumber", &json!(("latest", false)))
             .await
             .unwrap();
 
         serde_json::from_value::<ExecutionNodeBlock>(value).unwrap()
     }
 
-    pub async fn get_block_by_hash(&mut self, hash: &str) -> Option<ExecutionNodeBlock> {
+    pub async fn get_block_by_hash(&self, hash: &str) -> Option<ExecutionNodeBlock> {
         self.call("eth_getBlockByHash", &json!((hash, false)))
             .await
             .map_or_else(
@@ -222,10 +220,7 @@ impl ExecutionNode {
             )
     }
 
-    pub async fn get_block_by_number(
-        &mut self,
-        number: &BlockNumber,
-    ) -> Option<ExecutionNodeBlock> {
+    pub async fn get_block_by_number(&self, number: &BlockNumber) -> Option<ExecutionNodeBlock> {
         let hex_number = format!("0x{number:x}");
         self.call("eth_getBlockByNumber", &json!((hex_number, false)))
             .await
@@ -238,7 +233,7 @@ impl ExecutionNode {
             )
     }
 
-    async fn call(&mut self, method: &str, params: &Value) -> Result<serde_json::Value, RpcError> {
+    async fn call(&self, method: &str, params: &Value) -> Result<serde_json::Value, RpcError> {
         let id = self.id_pool.lock().unwrap().get_next_id();
 
         let json = json!({
@@ -252,18 +247,39 @@ impl ExecutionNode {
 
         let (tx, rx) = oneshot::channel();
 
-        self.message_handlers.lock().unwrap().insert(id, tx);
-        self.message_sink
-            .send(Message::Text(message))
-            .await
-            .unwrap();
+        self.message_rx_map.lock().unwrap().insert(id, tx);
+        self.message_tx.send(Message::Text(message)).await.unwrap();
 
         rx.await.unwrap()
     }
 
-    #[allow(dead_code)]
-    pub async fn close(mut self) {
-        self.message_sink.close().await.unwrap();
+    pub async fn get_transaction_receipt(&self, tx_hash: &str) -> Option<TransactionReceipt> {
+        self.call("eth_getTransactionReceipt", &json!((tx_hash,)))
+            .await
+            .map(|value| serde_json::from_value::<Option<TransactionReceipt>>(value).unwrap())
+            .unwrap()
+    }
+
+    pub async fn get_transaction_receipts_for_block(
+        &self,
+        block: &ExecutionNodeBlock,
+    ) -> Option<Vec<TransactionReceipt>> {
+        let mut receipt_futures = FuturesUnordered::new();
+
+        for tx_hash in block.transactions.iter() {
+            receipt_futures.push(self.get_transaction_receipt(tx_hash));
+        }
+
+        let mut receipts = Vec::new();
+
+        while let Some(receipt_opt) = receipt_futures.next().await {
+            match receipt_opt {
+                Some(receipt) => receipts.push(receipt),
+                None => return None,
+            }
+        }
+
+        Some(receipts)
     }
 }
 
@@ -273,42 +289,73 @@ mod tests {
 
     #[tokio::test]
     async fn get_latest_block_test() {
-        let mut node = ExecutionNode::connect().await;
+        let node = ExecutionNode::connect().await;
         let _block = node.get_latest_block().await;
-        node.close().await;
     }
 
     #[tokio::test]
     async fn get_block_by_number_test() {
-        let mut node = ExecutionNode::connect().await;
+        let node = ExecutionNode::connect().await;
         let block = node.get_block_by_number(&12965000).await;
         assert_eq!(block.unwrap().number, 12965000);
-        node.close().await;
     }
 
     #[tokio::test]
     async fn get_unavailable_block_by_number_test() {
-        let mut node = ExecutionNode::connect().await;
+        let node = ExecutionNode::connect().await;
         let block = node.get_block_by_number(&999_999_999).await;
         assert_eq!(block, None);
-        node.close().await;
     }
 
     #[tokio::test]
     async fn get_block_by_hash_test() {
-        let mut node = ExecutionNode::connect().await;
+        let node = ExecutionNode::connect().await;
         let block = node
             .get_block_by_hash("0x1b9595ee9ccda512b7f60beb1127095854475422ceb754a05fe537ee8163e4e7")
             .await;
         assert_eq!(block.unwrap().number, 15327142);
-        node.close().await;
     }
 
     #[tokio::test]
     async fn get_unavailable_block_by_hash_test() {
-        let mut node = ExecutionNode::connect().await;
+        let node = ExecutionNode::connect().await;
         let block = node.get_block_by_hash("0xdoesnotexist").await;
         assert_eq!(block, None);
-        node.close().await;
+    }
+
+    #[tokio::test]
+    async fn get_transaction_receipt_test() {
+        let node = ExecutionNode::connect().await;
+        let tx_hash = "0xbfeb7252b08ca57a63c91ed466658109941bbca8c089e536c6ae9206b26e6108"; // Replace with a valid Ethereum transaction hash
+        let receipt = node.get_transaction_receipt(tx_hash).await.unwrap();
+        assert_eq!(receipt.transaction_hash, tx_hash);
+    }
+
+    #[tokio::test]
+    async fn get_transaction_receipts_for_block_test() {
+        let node = ExecutionNode::connect().await;
+        let block_number = 12965000; // Replace with a valid Ethereum block number with some transactions
+        let block = node.get_block_by_number(&block_number).await;
+
+        assert!(block.is_some(), "Block not found");
+        let block = block.unwrap();
+
+        let receipts = node
+            .get_transaction_receipts_for_block(&block)
+            .await
+            .expect("expect receipts");
+
+        assert!(!receipts.is_empty(), "No transaction receipts found");
+
+        for (i, receipt) in receipts.iter().enumerate() {
+            assert_eq!(
+                receipt.transaction_hash, block.transactions[i],
+                "Mismatch in transaction hash"
+            );
+            assert_eq!(
+                receipt.block_number, block_number,
+                "Mismatch in block number"
+            );
+        }
     }
 }

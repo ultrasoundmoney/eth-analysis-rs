@@ -18,6 +18,7 @@ pub fn make_test_block() -> ExecutionNodeBlock {
         parent_hash: "0xparent".to_string(),
         timestamp: Utc::now().trunc_subsecs(0),
         total_difficulty: 10,
+        transactions: vec![],
     }
 }
 

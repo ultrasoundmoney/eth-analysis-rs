@@ -171,6 +171,7 @@ mod tests {
                 parent_hash: "".to_string(),
                 timestamp: Utc::now(),
                 total_difficulty: 0,
+                transactions: vec![],
             }
         }
     }
@@ -207,6 +208,7 @@ mod tests {
                 parent_hash: "".to_string(),
                 timestamp: Utc::now(),
                 total_difficulty: 0,
+                transactions: vec![],
             },
             &TimeFrame::Limited(LimitedTimeFrame::Minute5),
         )
@@ -241,6 +243,7 @@ mod tests {
                 parent_hash: "".to_string(),
                 timestamp: Utc::now(),
                 total_difficulty: 0,
+                transactions: vec![],
             },
             &TimeFrame::Limited(LimitedTimeFrame::Minute5),
         );

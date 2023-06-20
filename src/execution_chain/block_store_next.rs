@@ -154,6 +154,7 @@ impl BlockStore for BlockStorePostgres {
             parent_hash: row.parent_hash,
             timestamp: row.timestamp,
             total_difficulty: row.total_difficulty.parse().unwrap(),
+            transactions: vec![],
         })
         .unwrap()
     }
