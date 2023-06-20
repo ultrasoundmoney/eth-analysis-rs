@@ -36,6 +36,8 @@ pub struct ExecutionNodeBlock {
     pub timestamp: DateTime<Utc>,
     #[serde(deserialize_with = "from_u128_hex_str")]
     pub total_difficulty: TotalDifficulty,
+    // Types for blocks coming from the node and from our DB should be split.
+    pub transactions: Vec<String>,
 }
 
 #[cfg(test)]
@@ -76,19 +78,29 @@ pub mod tests {
                 .with_parent(parent)
         }
 
-        pub fn with_hash(mut self, hash: &str) -> Self {
-            self.hash = hash.to_string();
-            self
-        }
-
-        pub fn with_number(mut self, number: BlockNumber) -> Self {
-            self.number = number;
+        pub fn with_base_fee_per_gas(mut self, base_fee_per_gas: u64) -> Self {
+            self.base_fee_per_gas = base_fee_per_gas;
             self
         }
 
         pub fn with_burn(mut self, burn: WeiNewtype) -> Self {
             self.gas_used = 10;
             self.base_fee_per_gas = (burn.0 / self.gas_used as i128) as u64;
+            self
+        }
+
+        pub fn with_hash(mut self, hash: &str) -> Self {
+            self.hash = hash.to_string();
+            self
+        }
+
+        pub fn with_gas_used(mut self, gas_used: i32) -> Self {
+            self.gas_used = gas_used;
+            self
+        }
+
+        pub fn with_number(mut self, number: BlockNumber) -> Self {
+            self.number = number;
             self
         }
 
@@ -109,6 +121,11 @@ pub mod tests {
             self
         }
 
+        pub fn with_timestamp_set_to_now(mut self) -> Self {
+            self.timestamp = Utc::now();
+            self
+        }
+
         pub fn build(&self) -> ExecutionNodeBlock {
             ExecutionNodeBlock {
                 base_fee_per_gas: self.base_fee_per_gas,
@@ -119,6 +136,7 @@ pub mod tests {
                 parent_hash: self.parent_hash.clone(),
                 timestamp: self.timestamp,
                 total_difficulty: 1,
+                transactions: vec![],
             }
         }
     }

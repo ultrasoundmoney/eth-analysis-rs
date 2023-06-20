@@ -342,41 +342,29 @@ mod tests {
     use chrono::{Duration, SubsecRound};
     use sqlx::Acquire;
 
-    use crate::{db, execution_chain};
+    use crate::{
+        db,
+        execution_chain::{self, ExecutionNodeBlockBuilder},
+    };
 
     use super::*;
-
-    fn make_test_block() -> ExecutionNodeBlock {
-        ExecutionNodeBlock {
-            base_fee_per_gas: 1,
-            difficulty: 0,
-            gas_used: 0,
-            hash: "0xtest".to_string(),
-            number: 0,
-            parent_hash: "0xparent".to_string(),
-            timestamp: Utc::now().trunc_subsecs(0),
-            total_difficulty: 10,
-        }
-    }
 
     #[tokio::test]
     async fn get_average_fee_test() {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let test_block_1 = ExecutionNodeBlock {
-            gas_used: 10,
-            base_fee_per_gas: 10,
-            ..make_test_block()
-        };
-        let test_block_2 = ExecutionNodeBlock {
-            gas_used: 20,
-            base_fee_per_gas: 20,
-            hash: "0xtest2".to_string(),
-            parent_hash: "0xtest".to_string(),
-            number: 1,
-            ..make_test_block()
-        };
+        let test_block_1 = ExecutionNodeBlockBuilder::new("get_average_fee")
+            .with_gas_used(10)
+            .with_base_fee_per_gas(10)
+            .with_timestamp_set_to_now()
+            .build();
+
+        let test_block_2 = ExecutionNodeBlockBuilder::from_parent(&test_block_1)
+            .with_gas_used(20)
+            .with_base_fee_per_gas(20)
+            .with_timestamp_set_to_now()
+            .build();
 
         execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
         execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
@@ -395,21 +383,17 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let test_block_in_range = ExecutionNodeBlock {
-            gas_used: 10,
-            base_fee_per_gas: 10,
-            hash: "0xtest1".to_string(),
-            ..make_test_block()
-        };
-        let test_block_outside_range = ExecutionNodeBlock {
-            gas_used: 20,
-            base_fee_per_gas: 20,
-            timestamp: Utc::now().trunc_subsecs(0) - Duration::minutes(6),
-            hash: "0xtest2".to_string(),
-            parent_hash: "0xtest".to_string(),
-            number: 1,
-            ..make_test_block()
-        };
+        let test_block_in_range = ExecutionNodeBlockBuilder::new("get_average_fee")
+            .with_gas_used(10)
+            .with_base_fee_per_gas(10)
+            .with_timestamp_set_to_now()
+            .build();
+
+        let test_block_outside_range = ExecutionNodeBlockBuilder::from_parent(&test_block_in_range)
+            .with_gas_used(20)
+            .with_base_fee_per_gas(20)
+            .with_timestamp(&(Utc::now().trunc_subsecs(0) - Duration::minutes(6)))
+            .build();
 
         execution_chain::store_block(&mut transaction, &test_block_in_range, 0.0).await;
         execution_chain::store_block(&mut transaction, &test_block_outside_range, 0.0).await;
@@ -428,20 +412,17 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let test_block_1 = ExecutionNodeBlock {
-            gas_used: 10,
-            base_fee_per_gas: 10,
-            hash: "0xtest1".to_string(),
-            ..make_test_block()
-        };
-        let test_block_2 = ExecutionNodeBlock {
-            gas_used: 20,
-            base_fee_per_gas: 20,
-            hash: "0xtest2".to_string(),
-            parent_hash: "0xtest".to_string(),
-            number: 1,
-            ..make_test_block()
-        };
+        let test_block_1 = ExecutionNodeBlockBuilder::new("0xtest1")
+            .with_gas_used(10)
+            .with_base_fee_per_gas(10)
+            .with_timestamp_set_to_now()
+            .build();
+
+        let test_block_2 = ExecutionNodeBlockBuilder::from_parent(&test_block_1)
+            .with_gas_used(20)
+            .with_base_fee_per_gas(20)
+            .with_timestamp_set_to_now()
+            .build();
 
         execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
         execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
