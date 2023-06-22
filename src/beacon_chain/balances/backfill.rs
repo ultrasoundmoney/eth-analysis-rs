@@ -1,7 +1,10 @@
+use std::collections::HashSet;
+
 use futures::TryStreamExt;
+use lazy_static::lazy_static;
 use pit_wall::Progress;
 use sqlx::PgPool;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 use crate::beacon_chain::{balances, BeaconNode, Slot};
 
@@ -41,6 +44,12 @@ async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: &
     .unwrap()
 }
 
+lazy_static! {
+    static ref STATE_ROOTS_WITHOUT_BALANCES: HashSet<String> = HashSet::from([
+        "0x11fe6bf05886c92b5de2840d57859a64db132b44b29b96d1921f4d3b35c04c30".to_string()
+    ]);
+}
+
 pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from: &Slot) {
     let beacon_node = BeaconNode::new();
 
@@ -74,7 +83,7 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
     });
 
     while let Some(row) = rows.try_next().await.unwrap() {
-        debug!(row.slot, "getting validator balances");
+        debug!(row.slot, "fetching validator balances");
 
         let validator_balances = {
             let validator_balances = beacon_node
@@ -84,12 +93,20 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
             match validator_balances {
                 Some(validator_balances) => validator_balances,
                 None => {
-                    error!(
-                        state_root = row.state_root,
-                        slot = row.slot,
-                        "no validator balances found",
-                    );
-                    panic!("expect validator balances to be found for every state_root");
+                    if STATE_ROOTS_WITHOUT_BALANCES.contains(&row.state_root) {
+                        debug!(
+                            state_root = row.state_root,
+                            slot = row.slot,
+                            "known state_root without validator balances, skipping slot",
+                        );
+                    } else {
+                        panic!(
+                            "state_root without validator balances, slot: {}, state_root: {}",
+                            row.state_root, row.slot,
+                        );
+                    }
+                    progress.inc_work_done();
+                    continue;
                 }
             }
         };
