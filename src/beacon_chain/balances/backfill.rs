@@ -1,7 +1,7 @@
 use futures::TryStreamExt;
 use pit_wall::Progress;
 use sqlx::PgPool;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::beacon_chain::{balances, BeaconNode, Slot};
 
@@ -76,11 +76,24 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
     while let Some(row) = rows.try_next().await.unwrap() {
         debug!(row.slot, "getting validator balances");
 
-        let validator_balances = beacon_node
-            .get_validator_balances(&row.state_root)
-            .await
-            .unwrap()
-            .expect("expect balances to exist for every state root");
+        let validator_balances = {
+            let validator_balances = beacon_node
+                .get_validator_balances(&row.state_root)
+                .await
+                .unwrap();
+            match validator_balances {
+                Some(validator_balances) => validator_balances,
+                None => {
+                    error!(
+                        state_root = row.state_root,
+                        slot = row.slot,
+                        "no validator balances found",
+                    );
+                    panic!("expect validator balances to be found for every state_root");
+                }
+            }
+        };
+
         let balances_sum = balances::sum_validator_balances(&validator_balances);
 
         balances::store_validators_balance(
