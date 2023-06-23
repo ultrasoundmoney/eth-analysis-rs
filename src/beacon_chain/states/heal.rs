@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    beacon_chain::{self, sync, Slot},
+    beacon_chain::{self, node::BeaconNodeHttp, sync, Slot},
     job_progress::JobProgress,
     key_value_store::KeyValueStorePostgres,
 };
@@ -29,7 +29,7 @@ pub async fn heal_beacon_states() {
     let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
     let job_progress = JobProgress::new(HEAL_BEACON_STATES_KEY, &key_value_store);
 
-    let beacon_node = BeaconNode::new();
+    let beacon_node = BeaconNodeHttp::new();
     let last_slot = beacon_chain::get_last_state(&db_pool)
         .await
         .expect("a beacon state should be stored before trying to heal any")

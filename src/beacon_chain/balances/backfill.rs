@@ -6,7 +6,7 @@ use pit_wall::Progress;
 use sqlx::PgPool;
 use tracing::{debug, info};
 
-use crate::beacon_chain::{balances, BeaconNode, Slot};
+use crate::beacon_chain::{balances, node::BeaconNodeHttp, BeaconNode, Slot};
 
 pub enum Granularity {
     Slot,
@@ -51,7 +51,7 @@ lazy_static! {
 }
 
 pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from: &Slot) {
-    let beacon_node = BeaconNode::new();
+    let beacon_node = BeaconNodeHttp::new();
 
     debug!("estimating work to be done");
     let work_todo = estimate_work_todo(db_pool, granularity, from).await;

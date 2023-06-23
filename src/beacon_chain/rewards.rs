@@ -4,7 +4,8 @@ use serde::Serialize;
 use sqlx::{Decode, PgExecutor, PgPool};
 use tracing::{debug, info};
 
-use super::{balances, BeaconNode};
+use super::balances;
+use super::node::BeaconNodeHttp;
 use crate::caching::CacheKey;
 use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
 use crate::units::{EthNewtype, GweiImprecise, GweiNewtype, GWEI_PER_ETH_F64};
@@ -117,7 +118,7 @@ struct ValidatorRewards {
     mev: ValidatorReward,
 }
 
-async fn get_validator_rewards(db_pool: &PgPool, beacon_node: &BeaconNode) -> ValidatorRewards {
+async fn get_validator_rewards(db_pool: &PgPool, beacon_node: &BeaconNodeHttp) -> ValidatorRewards {
     let last_effective_balance_sum =
         balances::get_last_effective_balance_sum(db_pool, beacon_node).await;
     let issuance_reward = get_issuance_reward(last_effective_balance_sum);
@@ -144,7 +145,7 @@ pub async fn update_validator_rewards() {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let beacon_node = BeaconNode::new();
+    let beacon_node = BeaconNodeHttp::new();
 
     let validator_rewards = get_validator_rewards(&db_pool, &beacon_node).await;
     debug!("validator rewards: {:?}", validator_rewards);

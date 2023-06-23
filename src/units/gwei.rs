@@ -9,11 +9,10 @@ use serde::{de, de::Visitor, Deserialize, Serialize};
 
 use super::{eth::EthNewtype, WeiNewtype};
 
-// Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to i64 sometimes. That is
-// ~9_000_000_000 ETH, which is more than the entire supply.
-// When converting to f64 however, max safe is 2^53, so anything more than ~9M ETH will lose
-// accuracy. i.e. don't put this into JSON for amounts >9M ETH.
-// For precise amounts use this, for imprecise, create a new GweiF64 type.
+// Can handle at most 1.84e19 Gwei, or 9.22e18 when we need to convert to signed i64 sometimes.
+// That is ~9_000_000_000 ETH, which is more than the entire supply. When serializing, it defaults
+// to string. Converting to GweiImprecise is fine for values which fit in float. For float max safe
+// is 2^53, so anything more than ~9M ETH will lose accuracy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(into = "String")]
 pub struct GweiNewtype(pub i64);
@@ -97,8 +96,10 @@ impl From<WeiNewtype> for GweiNewtype {
     }
 }
 
-// When precision doesn't matter that much, or amounts are known to be less than 9M ETH.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+// This is a newtype for f64, which is used for imprecise Gwei amounts. Meaning amounts up to ~9M
+// Eth.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct GweiImprecise(pub f64);
 
 impl From<GweiNewtype> for GweiImprecise {

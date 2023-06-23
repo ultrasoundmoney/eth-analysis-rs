@@ -1,11 +1,11 @@
 pub mod balances;
 mod blocks;
 mod deposits;
-mod effective_balance_sum;
+pub mod effective_balance_sums;
 mod issuance;
 mod node;
 mod rewards;
-mod states;
+pub mod states;
 mod sync;
 mod units;
 mod withdrawals;
@@ -28,10 +28,6 @@ use chrono::Utc;
 pub use deposits::get_deposits_sum_by_state_root;
 pub use deposits::BeaconDepositsSum;
 
-pub use effective_balance_sum::{
-    get_last_stored_effective_balance_sum, update_effective_balance_sum,
-};
-
 pub use issuance::update_issuance_estimate;
 pub use issuance::IssuanceStore;
 pub use issuance::IssuanceStorePostgres;
@@ -44,6 +40,9 @@ pub use node::BeaconHeader;
 pub use node::BeaconHeaderEnvelope;
 pub use node::BeaconHeaderSignedEnvelope;
 pub use node::BeaconNode;
+pub use node::BeaconNodeHttp;
+pub use node::BlockId;
+pub use node::StateRoot;
 
 pub use rewards::update_validator_rewards;
 

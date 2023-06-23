@@ -101,26 +101,6 @@
     },
     "query": "\n            SELECT pg_notify('cache-update', $1)\n        "
   },
-  "145ea2e8e6ed4a9cc41990b66b1a72624b534772405dfa45d6adf212bd14aec7": {
-    "describe": {
-      "columns": [
-        {
-          "name": "effective_balance_sum",
-          "ordinal": 0,
-          "type_info": "Int8"
-        }
-      ],
-      "nullable": [
-        true
-      ],
-      "parameters": {
-        "Left": [
-          "Text"
-        ]
-      }
-    },
-    "query": "\n        SELECT\n            effective_balance_sum\n        FROM\n            beacon_states\n        WHERE\n            state_root = $1\n        "
-  },
   "14fe911032ff0992a50fde6b869cd3fd54e19f6e28cbcc21182a9bfa0869c52a": {
     "describe": {
       "columns": [],

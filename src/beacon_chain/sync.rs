@@ -18,7 +18,7 @@ use crate::{
 };
 use crate::{eth_supply, supply_dashboard_analysis};
 
-use super::node::{BeaconBlock, BeaconNode, StateRoot, ValidatorBalance};
+use super::node::{BeaconBlock, BeaconNode, BeaconNodeHttp, StateRoot, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot, BEACON_URL};
 
 lazy_static! {
@@ -89,7 +89,7 @@ struct SyncData {
 }
 
 async fn gather_sync_data(
-    beacon_node: &BeaconNode,
+    beacon_node: &BeaconNodeHttp,
     state_root: &StateRoot,
     slot: &Slot,
     sync_lag: &Duration,
@@ -154,7 +154,7 @@ async fn gather_sync_data(
     Ok(sync_data)
 }
 
-async fn get_sync_lag(beacon_node: &BeaconNode, syncing_slot: &Slot) -> Result<Duration> {
+async fn get_sync_lag(beacon_node: &BeaconNodeHttp, syncing_slot: &Slot) -> Result<Duration> {
     let last_header = beacon_node.get_last_header().await?;
     let last_on_chain_slot = last_header.header.message.slot;
     let last_on_chain_slot_date_time = last_on_chain_slot.date_time();
@@ -165,7 +165,7 @@ async fn get_sync_lag(beacon_node: &BeaconNode, syncing_slot: &Slot) -> Result<D
 
 pub async fn sync_slot_by_state_root(
     db_pool: &PgPool,
-    beacon_node: &BeaconNode,
+    beacon_node: &BeaconNodeHttp,
     state_root: &StateRoot,
     slot: &Slot,
 ) -> Result<()> {
@@ -365,7 +365,7 @@ async fn stream_slots(slot_to_follow: Slot) -> impl Stream<Item = Slot> {
 async fn stream_slots_from(gte_slot: &Slot) -> impl Stream<Item = Slot> {
     debug!("streaming slots from {gte_slot}");
 
-    let beacon_node = BeaconNode::new();
+    let beacon_node = BeaconNodeHttp::new();
     let last_slot_on_start = beacon_node
         .get_last_header()
         .await
@@ -426,7 +426,10 @@ pub async fn rollback_slot(executor: &mut PgConnection, slot: &Slot) -> Result<(
     Ok(())
 }
 
-async fn estimate_slots_remaining(executor: impl PgExecutor<'_>, beacon_node: &BeaconNode) -> i32 {
+async fn estimate_slots_remaining(
+    executor: impl PgExecutor<'_>,
+    beacon_node: &BeaconNodeHttp,
+) -> i32 {
     let last_on_chain = beacon_node.get_last_header().await.unwrap();
     let last_synced_slot = states::get_last_state(executor)
         .await
@@ -438,7 +441,7 @@ async fn estimate_slots_remaining(executor: impl PgExecutor<'_>, beacon_node: &B
 /// state_roots match.
 async fn find_last_matching_slot(
     db_pool: &PgPool,
-    beacon_node: &BeaconNode,
+    beacon_node: &BeaconNodeHttp,
     starting_candidate: &Slot,
 ) -> Result<Slot> {
     let mut candidate_slot = *starting_candidate;
@@ -490,7 +493,7 @@ pub async fn sync_beacon_states() -> Result<()> {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let beacon_node = BeaconNode::new();
+    let beacon_node = BeaconNodeHttp::new();
 
     let mut slots_stream = stream_slots_from_last(&db_pool).await;
 

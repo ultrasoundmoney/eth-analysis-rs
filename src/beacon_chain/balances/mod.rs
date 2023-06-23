@@ -7,7 +7,7 @@ use sqlx::PgExecutor;
 use crate::supply_projection::GweiInTime;
 use crate::units::GweiNewtype;
 
-use super::node::{BeaconNode, ValidatorBalance};
+use super::node::{BeaconNode, BeaconNodeHttp, ValidatorBalance};
 use super::{get_last_state, Slot};
 
 pub fn sum_validator_balances(validator_balances: &[ValidatorBalance]) -> GweiNewtype {
@@ -41,7 +41,7 @@ pub async fn store_validators_balance(
 
 pub async fn get_last_effective_balance_sum(
     executor: impl PgExecutor<'_>,
-    beacon_node: &BeaconNode,
+    beacon_node: &BeaconNodeHttp,
 ) -> GweiNewtype {
     let last_state_root = get_last_state(executor)
         .await
