@@ -4,7 +4,7 @@ use futures::TryStreamExt;
 use lazy_static::lazy_static;
 use pit_wall::Progress;
 use sqlx::PgPool;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::beacon_chain::{balances, node::BeaconNodeHttp, BeaconNode, Slot};
 
@@ -100,7 +100,7 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
                             "known state_root without validator balances, skipping slot",
                         );
                     } else {
-                        panic!(
+                        warn!(
                             "state_root without validator balances, slot: {}, state_root: {}",
                             row.state_root, row.slot,
                         );
