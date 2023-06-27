@@ -1,7 +1,4 @@
-use std::collections::HashSet;
-
-use futures::TryStreamExt;
-use lazy_static::lazy_static;
+use futures::{pin_mut, StreamExt};
 use pit_wall::Progress;
 use sqlx::PgPool;
 use tracing::{debug, info, warn};
@@ -44,12 +41,6 @@ async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: &
     .unwrap()
 }
 
-lazy_static! {
-    static ref STATE_ROOTS_WITHOUT_BALANCES: HashSet<String> = HashSet::from([
-        "0x11fe6bf05886c92b5de2840d57859a64db132b44b29b96d1921f4d3b35c04c30".to_string()
-    ]);
-}
-
 pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from: &Slot) {
     let beacon_node = BeaconNodeHttp::new();
 
@@ -58,7 +49,7 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
     debug!("estimated work to be done: {} slots", work_todo);
     let mut progress = Progress::new("backfill-beacon-balances", work_todo);
 
-    let mut rows = sqlx::query!(
+    let rows = sqlx::query!(
         "
         SELECT
             beacon_states.state_root,
@@ -75,36 +66,55 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
         ",
         from.0,
     )
-    .fetch(db_pool)
-    .try_filter(|row| match granularity {
-        Granularity::Slot => futures::future::ready(true),
-        Granularity::Hour => futures::future::ready(Slot(row.slot).is_first_of_hour()),
-        Granularity::Day => futures::future::ready(Slot(row.slot).is_first_of_day()),
+    .fetch(db_pool);
+
+    let rows_filtered = rows.filter_map(|row| async move {
+        if let Ok(row) = row {
+            match granularity {
+                Granularity::Slot => Some(row),
+                Granularity::Hour => {
+                    if Slot(row.slot).is_first_of_hour() {
+                        Some(row)
+                    } else {
+                        None
+                    }
+                }
+                Granularity::Day => {
+                    if Slot(row.slot).is_first_of_day() {
+                        Some(row)
+                    } else {
+                        None
+                    }
+                }
+            }
+        } else {
+            None
+        }
     });
 
-    while let Some(row) = rows.try_next().await.unwrap() {
-        debug!(row.slot, "fetching validator balances");
-
-        let validator_balances = {
-            let validator_balances = beacon_node
+    let tasks = rows_filtered.map(|row| {
+        let beacon_node_clone = beacon_node.clone();
+        async move {
+            let validator_balances = beacon_node_clone
                 .get_validator_balances(&row.state_root)
                 .await
                 .unwrap();
-            match validator_balances {
+            (row.state_root, row.slot, validator_balances)
+        }
+    });
+
+    let buffered_tasks = tasks.buffered(8); // Run at most eight in parallel.
+
+    pin_mut!(buffered_tasks);
+
+    while let Some((state_root, slot, balances_result)) = buffered_tasks.next().await {
+        debug!(slot, "fetching validator balances");
+
+        let validator_balances = {
+            match balances_result {
                 Some(validator_balances) => validator_balances,
                 None => {
-                    if STATE_ROOTS_WITHOUT_BALANCES.contains(&row.state_root) {
-                        debug!(
-                            state_root = row.state_root,
-                            slot = row.slot,
-                            "known state_root without validator balances, skipping slot",
-                        );
-                    } else {
-                        warn!(
-                            "state_root without validator balances, slot: {}, state_root: {}",
-                            row.state_root, row.slot,
-                        );
-                    }
+                    warn!(state_root, slot, "state_root without validator balances",);
                     progress.inc_work_done();
                     continue;
                 }
@@ -113,13 +123,7 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
 
         let balances_sum = balances::sum_validator_balances(&validator_balances);
 
-        balances::store_validators_balance(
-            db_pool,
-            &row.state_root,
-            &row.slot.into(),
-            &balances_sum,
-        )
-        .await;
+        balances::store_validators_balance(db_pool, &state_root, &slot.into(), &balances_sum).await;
 
         progress.inc_work_done();
 

@@ -281,6 +281,7 @@ struct CheckpointEnvelope {
     data: FinalityCheckpoints,
 }
 
+#[derive(Clone, Debug)]
 pub struct BeaconNodeHttp {
     client: reqwest::Client,
 }
