@@ -20,6 +20,7 @@ use futures::{channel::oneshot, stream::SplitStream};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use thiserror::Error;
 use tokio::{net::TcpStream, sync::mpsc};
 
 use crate::env;
@@ -153,6 +154,11 @@ pub struct ExecutionNode {
     message_tx: mpsc::Sender<Message>,
 }
 
+// Transactions may be unavailable due to pruning, or reorgs.
+#[derive(Error, Debug)]
+#[error("transaction receipt unavailable for tx hash: {0}")]
+pub struct TransactionReceiptUnavailable(String);
+
 impl ExecutionNode {
     pub async fn connect() -> Self {
         let id_pool_am = Arc::new(Mutex::new(IdPool::new(u16::MAX.into())));
@@ -253,17 +259,27 @@ impl ExecutionNode {
         rx.await.unwrap()
     }
 
-    pub async fn get_transaction_receipt(&self, tx_hash: &str) -> Option<TransactionReceipt> {
+    pub async fn get_transaction_receipt(
+        &self,
+        tx_hash: &str,
+    ) -> Result<TransactionReceipt, TransactionReceiptUnavailable> {
         self.call("eth_getTransactionReceipt", &json!((tx_hash,)))
             .await
-            .map(|value| serde_json::from_value::<Option<TransactionReceipt>>(value).unwrap())
+            .map(|value| {
+                let receipt = serde_json::from_value::<Option<TransactionReceipt>>(value)
+                    .expect("expect a transaction receipt response to be JSON");
+                match receipt {
+                    Some(receipt) => Ok(receipt),
+                    None => Err(TransactionReceiptUnavailable(tx_hash.to_string())),
+                }
+            })
             .unwrap()
     }
 
     pub async fn get_transaction_receipts_for_block(
         &self,
         block: &ExecutionNodeBlock,
-    ) -> Option<Vec<TransactionReceipt>> {
+    ) -> Result<Vec<TransactionReceipt>, TransactionReceiptUnavailable> {
         let mut receipt_futures = FuturesOrdered::new();
 
         for tx_hash in block.transactions.iter() {
@@ -272,14 +288,18 @@ impl ExecutionNode {
 
         let mut receipts = Vec::new();
 
-        while let Some(receipt_opt) = receipt_futures.next().await {
-            match receipt_opt {
-                Some(receipt) => receipts.push(receipt),
-                None => return None,
+        while let Some(receipt) = receipt_futures.next().await {
+            match receipt {
+                Ok(receipt) => receipts.push(receipt),
+                // If we can't get a single receipt for a transaction, the set of receipts for the
+                // block is invalid.
+                Err(err) => {
+                    return Err(err);
+                }
             }
         }
 
-        Some(receipts)
+        Ok(receipts)
     }
 }
 
