@@ -103,7 +103,7 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
         }
     });
 
-    let buffered_tasks = tasks.buffered(8); // Run at most eight in parallel.
+    let buffered_tasks = tasks.buffered(32); // Run at most eight in parallel.
 
     pin_mut!(buffered_tasks);
 
