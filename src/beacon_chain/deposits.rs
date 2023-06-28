@@ -67,8 +67,7 @@ mod tests {
 
     use crate::{
         beacon_chain::{
-            node::tests::{BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder},
-            store_block, store_state,
+            store_block, store_state, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder,
         },
         db,
     };

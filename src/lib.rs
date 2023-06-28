@@ -17,6 +17,7 @@ pub mod job_progress;
 mod json_codecs;
 pub mod key_value_store;
 pub mod log;
+pub mod mev_blocks;
 mod performance;
 mod phoenix;
 mod serve;
@@ -33,7 +34,6 @@ pub use beacon_chain::heal_beacon_states;
 pub use beacon_chain::heal_block_hashes;
 pub use beacon_chain::sync_beacon_states;
 pub use beacon_chain::update_issuance_estimate;
-pub use beacon_chain::update_validator_rewards;
 
 pub use data_integrity::check_beacon_state_gaps;
 pub use data_integrity::check_blocks_gaps;

@@ -1,15 +1,19 @@
-use chrono::Utc;
+mod mev_blocks;
 
+use crate::mev_blocks::sync_mev_blocks;
+use chrono::Utc;
+use eth_analysis::{
+    beacon_chain::{balances, BeaconNodeHttp},
+    caching::{self, CacheKey},
+    db,
+    execution_chain::LONDON_HARD_FORK_TIMESTAMP,
+    log,
+    mev_blocks::{MevBlocksStorePostgres, RelayApiHttp},
+    units::{EthNewtype, GweiImprecise, GweiNewtype, GWEI_PER_ETH_F64},
+};
 use serde::Serialize;
 use sqlx::{Decode, PgExecutor, PgPool};
 use tracing::{debug, info};
-
-use super::balances;
-use super::node::BeaconNodeHttp;
-use crate::caching::CacheKey;
-use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
-use crate::units::{EthNewtype, GweiImprecise, GweiNewtype, GWEI_PER_ETH_F64};
-use crate::{caching, db, log};
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,6 +73,7 @@ async fn get_tips_reward<'a>(
 const MAX_EFFECTIVE_BALANCE: f64 = 32f64 * GWEI_PER_ETH_F64;
 const SECONDS_PER_SLOT: u8 = 12;
 const SLOTS_PER_EPOCH: u8 = 32;
+const SLOTS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0 / SECONDS_PER_SLOT as f64;
 const EPOCHS_PER_DAY: f64 =
     (24 * 60 * 60) as f64 / SLOTS_PER_EPOCH as f64 / SECONDS_PER_SLOT as f64;
 const EPOCHS_PER_YEAR: f64 = 365.25 * EPOCHS_PER_DAY;
@@ -115,7 +120,7 @@ pub fn get_issuance_reward(GweiNewtype(effective_balance_sum): GweiNewtype) -> V
 struct ValidatorRewards {
     issuance: ValidatorReward,
     tips: ValidatorReward,
-    mev: ValidatorReward,
+    mev: Option<ValidatorReward>,
 }
 
 async fn get_validator_rewards(db_pool: &PgPool, beacon_node: &BeaconNodeHttp) -> ValidatorRewards {
@@ -125,18 +130,19 @@ async fn get_validator_rewards(db_pool: &PgPool, beacon_node: &BeaconNodeHttp) -
     let tips_reward = get_tips_reward(db_pool, last_effective_balance_sum)
         .await
         .unwrap();
+    let mev = mev_blocks::get_mev_reward(db_pool, last_effective_balance_sum)
+        .await
+        .unwrap();
 
     ValidatorRewards {
         issuance: issuance_reward,
+        mev: Some(mev),
         tips: tips_reward,
-        mev: ValidatorReward {
-            annual_reward: GweiImprecise(0.3 * GWEI_PER_ETH_F64),
-            apr: 0.01,
-        },
     }
 }
 
-pub async fn update_validator_rewards() {
+#[tokio::main]
+pub async fn main() {
     log::init_with_env();
 
     info!("updating validator rewards");
@@ -146,6 +152,10 @@ pub async fn update_validator_rewards() {
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let beacon_node = BeaconNodeHttp::new();
+    let relay_api = RelayApiHttp::new();
+    let mev_blocks_store = MevBlocksStorePostgres::new(db_pool.clone());
+
+    sync_mev_blocks(&mev_blocks_store, &beacon_node, &relay_api).await;
 
     let validator_rewards = get_validator_rewards(&db_pool, &beacon_node).await;
     debug!("validator rewards: {:?}", validator_rewards);

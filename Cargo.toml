@@ -54,9 +54,10 @@ tracing-subscriber = { version = "0.3", features = [
   "std",
 ] }
 tokio-native-tls = "0.3.0"
-backoff = {version = "0.4.0", features = ["tokio"]}
+backoff = { version = "0.4.0", features = ["tokio"] }
 
 [dev-dependencies]
+mockito = "1"
 test-context = "0.1.4"
 
 [profile.dev.package.sqlx-macros]

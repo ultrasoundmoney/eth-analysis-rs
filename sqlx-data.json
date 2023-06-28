@@ -117,6 +117,22 @@
     },
     "query": "\n        INSERT INTO eth_supply (\n            timestamp,\n            block_number,\n            deposits_slot,\n            balances_slot,\n            supply\n        )\n        VALUES ($1, $2, $3, $4, $5::NUMERIC)\n        "
   },
+  "1ad95842190174bd545ee9547251a7ec50a65abb6a89baab002224938a482896": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Int4Array",
+          "Int4Array",
+          "TextArray",
+          "NumericArray",
+          "TimestamptzArray"
+        ]
+      }
+    },
+    "query": "\n            INSERT INTO mev_blocks (slot, block_number, block_hash, bid_wei, timestamp)\n            SELECT * FROM UNNEST($1::int[], $2::int[], $3::text[], $4::numeric[], $5::timestamptz[])\n            ON CONFLICT (block_hash) DO UPDATE SET\n                bid_wei = excluded.bid_wei,\n                block_number = excluded.block_number,\n                slot = excluded.slot,\n                timestamp = excluded.timestamp\n            "
+  },
   "1b0b8bba7f8e9980b737ec1358fa83b27a96f77824d4617a2b60a0878eac7753": {
     "describe": {
       "columns": [
@@ -613,6 +629,24 @@
     },
     "query": "\n            SELECT\n                number,\n                base_fee_per_gas AS \"base_fee_per_gas!\"\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= $1\n            ORDER BY base_fee_per_gas DESC\n            LIMIT 1\n            "
   },
+  "3ea478831b74906e832977a8a73d7f95cb371103b06097a9ec458e3ac3f6fb77": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n            SELECT slot\n            FROM mev_blocks\n            ORDER BY slot DESC\n            LIMIT 1\n            "
+  },
   "3f206d13107a2c1ec4dfabe83d455a2cb07f08fc4306a925c3285bf7c6437b67": {
     "describe": {
       "columns": [
@@ -967,54 +1001,6 @@
     },
     "query": "\n        SELECT\n            MAX(balances_slot)\n        FROM\n            eth_supply\n        "
   },
-  "5e52306fdecb78234768f7c59e626f1e1a8a72a8bc90d7d5546240f8592b09d3": {
-    "describe": {
-      "columns": [
-        {
-          "name": "slot",
-          "ordinal": 0,
-          "type_info": "Int4"
-        },
-        {
-          "name": "beacon_balances",
-          "ordinal": 1,
-          "type_info": "Int8"
-        },
-        {
-          "name": "beacon_deposits",
-          "ordinal": 2,
-          "type_info": "Int8"
-        },
-        {
-          "name": "block_hash",
-          "ordinal": 3,
-          "type_info": "Text"
-        },
-        {
-          "name": "execution_balances",
-          "ordinal": 4,
-          "type_info": "Text"
-        },
-        {
-          "name": "beacon_timestamp",
-          "ordinal": 5,
-          "type_info": "Timestamptz"
-        }
-      ],
-      "nullable": [
-        false,
-        false,
-        false,
-        true,
-        null,
-        false
-      ],
-      "parameters": {
-        "Left": []
-      }
-    },
-    "query": "\n        SELECT\n            slot,\n            beacon_validators_balance.gwei AS beacon_balances,\n            beacon_blocks.deposit_sum_aggregated AS beacon_deposits,\n            beacon_blocks.block_hash,\n            execution_supply.balances_sum::TEXT AS execution_balances,\n            timestamp As beacon_timestamp\n        FROM\n            beacon_states\n        JOIN beacon_blocks ON beacon_blocks.state_root = beacon_states.state_root\n        JOIN beacon_validators_balance ON beacon_validators_balance.state_root = beacon_states.state_root\n        JOIN execution_supply ON execution_supply.block_hash = beacon_blocks.block_hash\n        ORDER BY slot DESC\n        "
-  },
   "635c841223a110075c5e88878f1d20c80532255799f6fe926259dbaa88fbf881": {
     "describe": {
       "columns": [
@@ -1285,6 +1271,54 @@
       }
     },
     "query": "\n                SELECT\n                    timestamp,\n                    supply::FLOAT8 / 1e18 AS \"supply!\"\n                FROM\n                    eth_supply\n                WHERE\n                    timestamp >= NOW() - $1::INTERVAL\n                ORDER BY\n                    timestamp ASC\n                "
+  },
+  "9ef43a937b234473bfee78ff0713d3ca1bb42e2fc9231a5aa36348b793792f16": {
+    "describe": {
+      "columns": [
+        {
+          "name": "slot",
+          "ordinal": 0,
+          "type_info": "Int4"
+        },
+        {
+          "name": "beacon_balances",
+          "ordinal": 1,
+          "type_info": "Int8"
+        },
+        {
+          "name": "beacon_deposits",
+          "ordinal": 2,
+          "type_info": "Int8"
+        },
+        {
+          "name": "block_hash",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "execution_balances",
+          "ordinal": 4,
+          "type_info": "Text"
+        },
+        {
+          "name": "beacon_timestamp",
+          "ordinal": 5,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        true,
+        null,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            slot,\n            beacon_validators_balance.gwei AS beacon_balances,\n            beacon_blocks.deposit_sum_aggregated AS beacon_deposits,\n            beacon_blocks.block_hash,\n            execution_supply.balances_sum::TEXT AS execution_balances,\n            timestamp AS beacon_timestamp\n        FROM\n            beacon_states\n        JOIN beacon_blocks ON beacon_blocks.state_root = beacon_states.state_root\n        JOIN beacon_validators_balance ON beacon_validators_balance.state_root = beacon_states.state_root\n        JOIN execution_supply ON execution_supply.block_hash = beacon_blocks.block_hash\n        ORDER BY slot DESC\n        "
   },
   "9fc66ee1900454416f9b3a837df82c6f509a58cc642f133fae587266b5226888": {
     "describe": {
@@ -1573,6 +1607,24 @@
       }
     },
     "query": "\n        SELECT\n            DISTINCT ON (DATE_TRUNC('day', timestamp)) DATE_TRUNC('day', timestamp) AS \"day_timestamp!\",\n            gwei\n        FROM\n            beacon_validators_balance\n        ORDER BY\n            DATE_TRUNC('day', timestamp), timestamp ASC\n        "
+  },
+  "c4a8b0ebbad2dff414a26c5bb92f50c3a4a481e7d1f839459798236cbffd25fe": {
+    "describe": {
+      "columns": [
+        {
+          "name": "avg",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        null
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT AVG(bid_wei)::TEXT\n        FROM mev_blocks\n        WHERE timestamp > NOW() - INTERVAL '6 months'\n        "
   },
   "c4f33536e0cf242082981afb66afbea9ee8c06cd39c61fa2c617d0ed2fb03caf": {
     "describe": {

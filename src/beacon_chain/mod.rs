@@ -4,7 +4,6 @@ mod deposits;
 pub mod effective_balance_sums;
 mod issuance;
 mod node;
-mod rewards;
 pub mod states;
 mod sync;
 mod units;
@@ -32,19 +31,16 @@ pub use issuance::update_issuance_estimate;
 pub use issuance::IssuanceStore;
 pub use issuance::IssuanceStorePostgres;
 
-#[cfg(test)]
-pub use node::tests::BeaconBlockBuilder;
-#[cfg(test)]
-pub use node::tests::BeaconHeaderSignedEnvelopeBuilder;
+pub use node::test_utils::BeaconBlockBuilder;
+pub use node::test_utils::BeaconHeaderSignedEnvelopeBuilder;
 pub use node::BeaconHeader;
 pub use node::BeaconHeaderEnvelope;
 pub use node::BeaconHeaderSignedEnvelope;
 pub use node::BeaconNode;
 pub use node::BeaconNodeHttp;
 pub use node::BlockId;
+pub use node::MockBeaconNode;
 pub use node::StateRoot;
-
-pub use rewards::update_validator_rewards;
 
 pub use states::get_last_state;
 pub use states::get_state_root_by_slot;
@@ -75,10 +71,7 @@ pub mod tests {
 
     use crate::units::GweiNewtype;
 
-    use super::{
-        node::{tests::BeaconBlockBuilder, BeaconBlock},
-        *,
-    };
+    use super::{node::BeaconBlock, *};
 
     pub async fn store_test_block(executor: &mut PgConnection, test_id: &str) {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
