@@ -4,11 +4,10 @@ use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
 use sqlx::PgExecutor;
 
-use crate::supply_projection::GweiInTime;
 use crate::units::GweiNewtype;
 
 use super::node::{BeaconNode, BeaconNodeHttp, ValidatorBalance};
-use super::{get_last_state, Slot};
+use super::{get_last_state, GweiInTime, Slot};
 
 pub fn sum_validator_balances(validator_balances: &[ValidatorBalance]) -> GweiNewtype {
     validator_balances

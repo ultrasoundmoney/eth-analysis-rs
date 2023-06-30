@@ -1,18 +1,19 @@
-use anyhow::Result;
-use chrono::{DateTime, Utc};
-use lazy_static::lazy_static;
-use serde::Serialize;
-use sqlx::{postgres::PgPoolOptions, Decode};
-use tracing::{debug, info};
+use std::fs::File;
 
-use crate::{
-    beacon_chain,
+use anyhow::anyhow;
+use chrono::{DateTime, Utc};
+use eth_analysis::{
+    beacon_chain::{self, GweiInTime},
     caching::{self, CacheKey},
-    db, eth_supply,
-    glassnode::{self, GlassnodeDataPoint},
-    log,
+    db, eth_supply, log,
     units::GWEI_PER_ETH_F64,
+    SupplyAtTime,
 };
+use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sqlx::Decode;
+use tracing::{debug, info};
 
 lazy_static! {
     static ref SUPPLY_LOWER_LIMIT_DATE_TIME: DateTime<Utc> =
@@ -25,21 +26,6 @@ pub struct GweiInTimeRow {
     pub gwei: i64,
 }
 
-#[derive(Serialize)]
-pub struct GweiInTime {
-    pub t: u64,
-    pub v: i64,
-}
-
-impl From<(DateTime<Utc>, i64)> for GweiInTime {
-    fn from((dt, gwei): (DateTime<Utc>, i64)) -> Self {
-        GweiInTime {
-            t: dt.timestamp().try_into().unwrap(),
-            v: gwei,
-        }
-    }
-}
-
 impl From<&GweiInTimeRow> for GweiInTime {
     fn from(row: &GweiInTimeRow) -> Self {
         Self {
@@ -49,28 +35,49 @@ impl From<&GweiInTimeRow> for GweiInTime {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct InContractsDataPoint {
+    pub t: u64,
+    // fraction
+    pub v: f64,
+}
+
+impl From<SupplyAtTime> for InContractsDataPoint {
+    fn from(supply_at_time: SupplyAtTime) -> Self {
+        InContractsDataPoint {
+            t: supply_at_time.timestamp.timestamp() as u64,
+            v: supply_at_time.supply.0,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SupplyProjectionInputs {
-    supply_by_day: Vec<GlassnodeDataPoint>,
-    in_contracts_by_day: Vec<GlassnodeDataPoint>,
-    in_beacon_validators_by_day: Vec<GlassnodeDataPoint>,
+    supply_by_day: Vec<InContractsDataPoint>,
+    in_contracts_by_day: Vec<InContractsDataPoint>,
+    in_beacon_validators_by_day: Vec<InContractsDataPoint>,
 }
 
-pub async fn update_supply_projection_inputs() -> Result<()> {
+#[tokio::main]
+pub async fn main() {
     log::init_with_env();
 
     info!("updating supply projection inputs");
 
-    let db_pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&db::get_db_url_with_name("supply_projection_inputs"))
-        .await
-        .unwrap();
+    let db_pool = db::get_db_pool("supply-projection-inputs").await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let in_contracts_by_day = glassnode::get_locked_eth_data().await;
+    // We originally got this data from the Glassnode API when we paid for it. We don't pay
+    // anymore, so no more new data.
+    let in_contracts_by_day_file =
+        File::open("src/bin/update-supply-projection-inputs/in_contracts_by_day.json")
+            .map_err(|e| anyhow!("failed to open supply_projection_inputs.json: {}", e))
+            .unwrap();
+    let json_value: Value = serde_json::from_reader(in_contracts_by_day_file).unwrap();
+    let in_contracts_by_day: Vec<InContractsDataPoint> =
+        serde_json::from_value(json_value).unwrap();
 
     debug!(
         "got gwei in contracts by day, {} data points",
@@ -81,7 +88,7 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
         beacon_chain::get_validator_balances_by_start_of_day(&db_pool)
             .await
             .iter()
-            .map(|point| GlassnodeDataPoint {
+            .map(|point| InContractsDataPoint {
                 t: point.t,
                 v: point.v as f64 / GWEI_PER_ETH_F64,
             })
@@ -92,7 +99,7 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
         in_beacon_validators_by_day.len()
     );
 
-    let supply_by_day: Vec<GlassnodeDataPoint> = eth_supply::get_daily_supply(&db_pool)
+    let supply_by_day: Vec<InContractsDataPoint> = eth_supply::get_daily_supply(&db_pool)
         .await
         .into_iter()
         .filter(|point| point.timestamp >= *SUPPLY_LOWER_LIMIT_DATE_TIME)
@@ -116,6 +123,4 @@ pub async fn update_supply_projection_inputs() -> Result<()> {
     .await;
 
     info!("done updating supply projection inputs");
-
-    Ok(())
 }

@@ -5,12 +5,11 @@ pub mod caching;
 mod data_integrity;
 pub mod db;
 mod env;
-mod eth_supply;
+pub mod eth_supply;
 mod eth_time;
 mod etherscan;
 pub mod execution_chain;
 mod gauges;
-mod glassnode;
 mod health;
 mod issuance_breakdown;
 pub mod job_progress;
@@ -22,7 +21,6 @@ mod performance;
 mod phoenix;
 mod serve;
 mod supply_dashboard_analysis;
-mod supply_projection;
 pub mod time;
 mod time_frames;
 pub mod units;
@@ -41,6 +39,7 @@ pub use data_integrity::check_blocks_gaps;
 pub use eth_supply::export_daily_supply_since_merge;
 pub use eth_supply::export_thousandth_epoch_supply;
 pub use eth_supply::fill_eth_supply_gaps;
+pub use eth_supply::SupplyAtTime;
 
 pub use execution_chain::export_blocks_from_august;
 pub use execution_chain::export_blocks_from_london;
@@ -56,8 +55,6 @@ pub use issuance_breakdown::update_issuance_breakdown;
 pub use phoenix::monitor_critical_services;
 
 pub use serve::start_server;
-
-pub use supply_projection::update_supply_projection_inputs;
 
 pub use update_by_hand::run_cli as update_by_hand;
 

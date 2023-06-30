@@ -53,6 +53,7 @@ pub use units::slot_from_string;
 pub use units::Slot;
 
 use lazy_static::lazy_static;
+use serde::Serialize;
 
 use crate::env;
 
@@ -63,6 +64,21 @@ lazy_static! {
     static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");
     pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = "2020-12-01T12:00:23Z".parse().unwrap();
     pub static ref SHAPELLA_SLOT: Slot = Slot(6209536);
+}
+
+#[derive(Serialize)]
+pub struct GweiInTime {
+    pub t: u64,
+    pub v: i64,
+}
+
+impl From<(DateTime<Utc>, i64)> for GweiInTime {
+    fn from((dt, gwei): (DateTime<Utc>, i64)) -> Self {
+        GweiInTime {
+            t: dt.timestamp().try_into().unwrap(),
+            v: gwei,
+        }
+    }
 }
 
 #[cfg(test)]
