@@ -279,7 +279,10 @@ mod tests {
     use sqlx::Acquire;
 
     use super::*;
-    use crate::{beacon_chain::states::store_state, db, supply_projection::GweiInTime};
+    use crate::{
+        beacon_chain::{states::store_state, GweiInTime},
+        db,
+    };
 
     pub async fn get_issuance_by_start_of_day(pool: impl PgExecutor<'_>) -> Vec<GweiInTime> {
         sqlx::query!(
