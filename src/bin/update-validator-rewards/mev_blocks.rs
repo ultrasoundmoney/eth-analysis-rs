@@ -59,8 +59,9 @@ pub async fn get_mev_reward(
 
     let effective_balance_sum_eth: EthNewtype = effective_balance_sum.into();
     let active_validators: f64 = (effective_balance_sum_eth.0 / 32.0).floor();
-    let annual_reward = mev_per_slot.0 * SLOTS_PER_YEAR / active_validators;
-    let apr = annual_reward / 32f64;
+    let annual_reward_eth = mev_per_slot.0 * SLOTS_PER_YEAR / active_validators;
+    let annual_reward = EthNewtype(annual_reward_eth).into();
+    let apr = annual_reward_eth / 32f64;
 
     debug!(
         "average MEV per slot in the last 6 months: {} ETH",
@@ -71,12 +72,10 @@ pub async fn get_mev_reward(
         effective_balance_sum_eth.0
     );
     debug!("nr of active validators: {}", active_validators);
+    debug!("MEV annual reward: {} ETH", annual_reward_eth);
     debug!("MEV APR: {:.2}%", apr * 100f64);
 
-    Ok(ValidatorReward {
-        annual_reward: GweiImprecise(annual_reward),
-        apr,
-    })
+    Ok(ValidatorReward { annual_reward, apr })
 }
 
 #[cfg(test)]
