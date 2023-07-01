@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use eth_analysis::{
     beacon_chain::BeaconNode,
     mev_blocks::{MevBlocksStore, RelayApi, EARLIEST_AVAILABLE_SLOT},
-    units::{EthNewtype, GweiImprecise, GweiNewtype, WeiNewtype},
+    units::{EthNewtype, GweiNewtype, WeiNewtype},
 };
 use sqlx::PgExecutor;
 use tracing::{debug, info};
