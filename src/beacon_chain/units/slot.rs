@@ -43,6 +43,10 @@ impl Slot {
         Self(slot as i32)
     }
 
+    pub fn is_first_of_epoch(&self) -> bool {
+        self.0 % 32 == 0
+    }
+
     pub fn is_first_of_day(&self) -> bool {
         if self.0 == 0 {
             return true;
@@ -274,5 +278,66 @@ mod tests {
     #[test]
     fn merge_from_date_time() {
         dbg!(Slot::from_date_time(&LONDON_HARD_FORK_TIMESTAMP));
+    }
+
+    #[test]
+    fn arithmetic_operations() {
+        let slot_a = Slot(3);
+        let slot_b = Slot(7);
+
+        assert_eq!((slot_a + 5).0, 8);
+        assert_eq!((slot_a - 2).0, 1);
+        assert_eq!((slot_a * 3).0, 9);
+        assert_eq!((slot_b % 3).0, 1);
+    }
+
+    #[test]
+    fn slot_to_datetime_conversion() {
+        let slot = Slot(1);
+        let datetime: DateTime<Utc> = slot.into();
+        let expected: DateTime<Utc> = "2020-12-01T12:00:35Z".parse().unwrap();
+
+        assert_eq!(datetime, expected);
+    }
+
+    #[test]
+    fn epoch_calculation() {
+        assert_eq!(Slot(0).epoch(), 0);
+        assert_eq!(Slot(32).epoch(), 1);
+        assert_eq!(Slot(320).epoch(), 10);
+    }
+
+    #[test]
+    fn slot_string_parse() {
+        let invalid_slot = "invalid";
+        assert!(Slot::from_str(invalid_slot).is_err());
+
+        let valid_slot = "5";
+        assert_eq!(Slot::from_str(valid_slot).unwrap().0, 5);
+    }
+
+    #[test]
+    fn test_first_of_epoch() {
+        // Slots divisible by 32 should be the first of their epoch
+        let slot1 = Slot(32);
+        let slot2 = Slot(64);
+        let slot3 = Slot(96);
+
+        assert_eq!(slot1.is_first_of_epoch(), true);
+        assert_eq!(slot2.is_first_of_epoch(), true);
+        assert_eq!(slot3.is_first_of_epoch(), true);
+
+        // Slots not divisible by 32 should not be the first of their epoch
+        let slot4 = Slot(33);
+        let slot5 = Slot(65);
+        let slot6 = Slot(97);
+
+        assert_eq!(slot4.is_first_of_epoch(), false);
+        assert_eq!(slot5.is_first_of_epoch(), false);
+        assert_eq!(slot6.is_first_of_epoch(), false);
+
+        // For Slot 0
+        let slot7 = Slot::GENESIS;
+        assert_eq!(slot7.is_first_of_epoch(), true);
     }
 }

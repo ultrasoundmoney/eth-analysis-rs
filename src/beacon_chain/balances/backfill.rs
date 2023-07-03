@@ -5,10 +5,13 @@ use tracing::{debug, info, warn};
 
 use crate::beacon_chain::{balances, node::BeaconNodeHttp, BeaconNode, Slot};
 
+const SLOTS_PER_EPOCH: i64 = 32;
+
 pub enum Granularity {
-    Slot,
-    Hour,
     Day,
+    Epoch,
+    Hour,
+    Slot,
 }
 
 async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: &Slot) -> u64 {
@@ -34,6 +37,7 @@ async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: &
 
     match granularity {
         Granularity::Slot => slots_count,
+        Granularity::Epoch => slots_count * SLOTS_PER_EPOCH,
         Granularity::Hour => slots_count / 300,
         Granularity::Day => slots_count / 7200,
     }
@@ -72,6 +76,13 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
         if let Ok(row) = row {
             match granularity {
                 Granularity::Slot => Some(row),
+                Granularity::Epoch => {
+                    if Slot(row.slot).is_first_of_epoch() {
+                        Some(row)
+                    } else {
+                        None
+                    }
+                }
                 Granularity::Hour => {
                     if Slot(row.slot).is_first_of_hour() {
                         Some(row)
