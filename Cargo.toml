@@ -28,7 +28,6 @@ format-url = "0.6"
 futures = "0.3"
 lazy_static = "1"
 nanoid = "0.4"
-num-bigint = "0.4"
 pin-project = "1"
 pit-wall = "0"
 reqwest = { version = "0.11", features = ["blocking", "json", "gzip"] }
