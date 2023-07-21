@@ -107,7 +107,7 @@ impl Alarm {
         let message = format!(
             "{} hasn't updated for more than {} seconds!",
             name,
-            PHOENIX_MAX_LIFESPAN.num_seconds()
+            MAX_WAIT.num_seconds()
         );
 
         self.fire(&message).await
@@ -115,7 +115,7 @@ impl Alarm {
 }
 
 lazy_static! {
-    static ref PHOENIX_MAX_LIFESPAN: Duration = Duration::minutes(6);
+    static ref MAX_WAIT: Duration = Duration::minutes(8);
 }
 
 struct Phoenix {
@@ -130,10 +130,10 @@ impl Phoenix {
         debug!(
             name = self.name,
             age = age.num_seconds(),
-            limit = PHOENIX_MAX_LIFESPAN.num_seconds(),
+            limit = MAX_WAIT.num_seconds(),
             "checking age"
         );
-        age >= *PHOENIX_MAX_LIFESPAN
+        age >= *MAX_WAIT
     }
 
     fn set_last_seen(&mut self, last_seen: DateTime<Utc>) {
@@ -173,7 +173,7 @@ async fn run_health_check_server(last_checked: Arc<Mutex<DateTime<Utc>>>) {
 async fn run_alarm_loop(last_checked: Arc<Mutex<DateTime<Utc>>>) {
     info!(
         "releasing phoenix, dies after {} seconds",
-        PHOENIX_MAX_LIFESPAN.num_seconds()
+        MAX_WAIT.num_seconds()
     );
 
     let mut alarm = Alarm::new();
