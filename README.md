@@ -36,4 +36,5 @@ RUST_LOG=eth_analysis=info cargo run --bin sync-beacon-states
 ```
 
 ## Logs
-Pass the env var `RUST_LOG` e.g. `RUST_LOG=eth_analysis=debug cargo run --bin serve`. For more examples see [the `env_logger` docs](https://docs.rs/env_logger/latest/env_logger/).
+
+Pass the env var `RUST_LOG` e.g. `RUST_LOG=debug,sqlx=warn,hyper=info cargo run --bin serve`. For more examples see [the `env_logger` docs](https://docs.rs/env_logger/latest/env_logger/).
