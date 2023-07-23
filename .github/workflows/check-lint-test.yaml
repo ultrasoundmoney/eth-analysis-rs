@@ -83,4 +83,5 @@ jobs:
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
-          command: test -- --nocapture
+          command: test
+          args: -- --nocapture
