@@ -1,37 +1,41 @@
 use std::{cmp::Ordering, ops::Sub};
 
+use anyhow::{Context, Result};
 use backoff::{self, Error, ExponentialBackoff};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use format_url::FormatUrl;
 use serde::Deserialize;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use super::EthPrice;
 
 #[derive(Debug, Deserialize)]
-#[serde(expecting = "expecting [<timestamp>, <usd>, <high>, <low>, <close>] array")]
-#[allow(dead_code)]
 struct BybitCandle {
     timestamp: String,
     usd: String,
+    #[allow(unused)]
     high: String,
+    #[allow(unused)]
     low: String,
+    #[allow(unused)]
     close: String,
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct BybitPriceResult {
+    #[allow(unused)]
     symbol: String,
+    #[allow(unused)]
     category: String,
     list: Vec<BybitCandle>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 struct BybitPriceResponse {
+    #[allow(unused)]
     ret_code: i64,
+    #[allow(unused)]
     ret_msg: String,
     result: BybitPriceResult,
 }
@@ -39,10 +43,7 @@ struct BybitPriceResponse {
 const BYBIT_API: &str = "https://api.bybit.com";
 
 // 1min candles of index price made up of of Kraken, Coinbase, Bitstamp & Bitfinex spot price
-async fn get_eth_candles(
-    start: DateTime<Utc>,
-    end: DateTime<Utc>,
-) -> Result<Vec<EthPrice>, Error<reqwest::Error>> {
+async fn get_eth_candles(start: DateTime<Utc>, end: DateTime<Utc>) -> Result<Vec<EthPrice>> {
     let url = FormatUrl::new(BYBIT_API)
         .with_path_template("/derivatives/v3/public/index-price-kline")
         .with_query_params(vec![
@@ -54,44 +55,62 @@ async fn get_eth_candles(
         ])
         .format_url();
 
-    let op = || async {
-        let result = send_eth_price_request(url.clone())
-            .await
-            .map_err(Error::transient)?;
-        Ok(result)
-    };
-    backoff::future::retry(ExponentialBackoff::default(), op).await
+    backoff::future::retry(ExponentialBackoff::default(), || async {
+        let candles = send_eth_price_request(&url).await.map_err(|err| {
+            info!(%err, "error sending request to bybit, retrying");
+            Error::transient(err)
+        })?;
+        if candles.is_empty() {
+            warn!(%start, %end, "bybit returned no candles for the requested period");
+        }
+
+        Ok(candles)
+    })
+    .await
 }
 
-pub async fn send_eth_price_request(url: String) -> Result<Vec<EthPrice>, reqwest::Error> {
-    info!("sending request to {}", url);
-    reqwest::get(url)
+pub async fn send_eth_price_request(url: &str) -> Result<Vec<EthPrice>> {
+    debug!("sending request to {}", url);
+
+    let body = reqwest::get(url)
         .await?
         .json::<BybitPriceResponse>()
-        .await
-        .map(|body| {
-            body.result
-                .list
-                .iter()
-                .map(|c| {
-                    let timestamp = Utc
-                        .timestamp_millis_opt(c.timestamp.parse::<i64>().unwrap())
-                        .unwrap();
-                    let usd = c.usd.parse::<f64>().unwrap();
-                    EthPrice { timestamp, usd }
-                })
-                .rev() // Reverse so we get timestamps in ascending order
-                .collect()
+        .await?;
+
+    let candles: Vec<EthPrice> = body
+        .result
+        .list
+        .iter()
+        .map(|c| {
+            let timestamp_millis = c
+                .timestamp
+                .parse::<i64>()
+                .expect("expect bybit candles to contain integer timestamps");
+            let timestamp = Utc
+                .timestamp_millis_opt(timestamp_millis)
+                .earliest()
+                .expect("expect bybit candles to contain millisecond timestamps");
+            let usd = c
+                .usd
+                .parse::<f64>()
+                .expect("expect bybit candles to contain float usd prices");
+            EthPrice { timestamp, usd }
         })
+        .rev() // Reverse so we get timestamps in ascending order
+        .collect();
+
+    Ok(candles)
 }
 
 // Return current 1min candle open price
-pub async fn get_eth_price() -> Result<EthPrice, Error<reqwest::Error>> {
+pub async fn get_eth_price() -> Result<EthPrice> {
     let end = Utc::now();
     let start = end.sub(Duration::minutes(1));
-    get_eth_candles(start, end)
-        .await
-        .map(|cs| cs.last().unwrap().to_owned())
+    get_eth_candles(start, end).await.and_then(|cs| {
+        cs.into_iter()
+            .last()
+            .context("tried to retrieve last element in empty array")
+    })
 }
 
 fn find_closest_price(prices: &[EthPrice], target_minute_rounded: DateTime<Utc>) -> &'_ EthPrice {
