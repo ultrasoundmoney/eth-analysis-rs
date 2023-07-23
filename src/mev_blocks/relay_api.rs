@@ -65,6 +65,12 @@ impl RelayApiHttp {
     }
 }
 
+impl Default for RelayApiHttp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl RelayApi for RelayApiHttp {
     async fn fetch_mev_blocks(&self, start_slot: i32, end_slot: i32) -> Vec<MevBlock> {
