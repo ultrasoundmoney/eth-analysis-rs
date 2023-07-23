@@ -7,14 +7,16 @@ These services are written with [ultrasound.money](https://ultrasound.money/) in
 To give a rough overview of the code: there are many binaries, all invoking top-level functions from `lib.rs`. Some are intended to run as cronjobs, others continually listen and react to Ethereum node events, and yet others serve API requests.
 
 ## Dependencies
-* Postgres
-* Execution client (tested with Geth)
-* Consensus client (tested with Lighthouse)
-* Etherscan API key (required for issuance breakdown)
-* Glassnode API key (required for supply projections)
-* OpsGenie API key (required for phoenix, alert service)
+
+- Postgres
+- Execution client (tested with Geth)
+- Consensus client (tested with Lighthouse)
+- Etherscan API key (required for issuance breakdown)
+- Glassnode API key (required for supply projections)
+- OpsGenie API key (required for phoenix, alert service)
 
 ## Environment Variables
+
 ```sh
 BEACON_URL=http://****:5052
 DATABASE_URL=postgresql://****
@@ -26,7 +28,9 @@ SQLX_OFFLINE=true
 ```
 
 ## Usage
+
 For runnable binaries see [the bin folder in this repo](https://github.com/ultrasoundmoney/eth-analysis-rs/tree/main/src/bin). After making any required env vars available one executes with cargo, e.g.
+
 ```sh
 RUST_LOG=eth_analysis=info cargo run --bin sync-beacon-states
 ```
