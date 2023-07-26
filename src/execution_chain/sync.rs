@@ -28,7 +28,7 @@ async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber)
 
     let mut transaction = db_pool.begin().await.unwrap();
 
-    burn_sums::on_rollback(&mut *transaction, greater_than_or_equal).await;
+    burn_sums::on_rollback(&mut transaction, greater_than_or_equal).await;
     execution_chain::delete_blocks(&mut *transaction, greater_than_or_equal).await;
 
     transaction.commit().await.unwrap();

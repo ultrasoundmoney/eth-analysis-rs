@@ -259,7 +259,7 @@ pub async fn sync_slot_by_state_root(
             .await;
         }
 
-        eth_supply::sync_eth_supply(&mut *transaction, slot).await;
+        eth_supply::sync_eth_supply(&mut transaction, slot).await;
     }
 
     transaction.commit().await?;
@@ -401,7 +401,7 @@ pub async fn rollback_slots(
 ) -> Result<()> {
     debug!("rolling back data based on slots gte {greater_than_or_equal}");
     let mut transaction = executor.begin().await?;
-    eth_supply::rollback_supply_from_slot(&mut *transaction, greater_than_or_equal)
+    eth_supply::rollback_supply_from_slot(&mut transaction, greater_than_or_equal)
         .await
         .unwrap();
     blocks::delete_blocks(&mut *transaction, greater_than_or_equal).await;
@@ -415,7 +415,7 @@ pub async fn rollback_slots(
 pub async fn rollback_slot(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
     debug!("rolling back data based on slot {slot}");
     let mut transaction = executor.begin().await?;
-    eth_supply::rollback_supply_slot(&mut *transaction, slot)
+    eth_supply::rollback_supply_slot(&mut transaction, slot)
         .await
         .unwrap();
     blocks::delete_block(&mut *transaction, slot).await;
