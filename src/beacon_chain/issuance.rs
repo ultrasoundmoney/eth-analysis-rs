@@ -334,11 +334,11 @@ mod tests {
 
         let test_id = "timestamp_is_start_of_day";
 
-        store_state(&mut transaction, test_id, &Slot(3599)).await;
+        store_state(&mut *transaction, test_id, &Slot(3599)).await;
 
-        store_issuance(&mut transaction, test_id, &Slot(3599), &GweiNewtype(100)).await;
+        store_issuance(&mut *transaction, test_id, &Slot(3599), &GweiNewtype(100)).await;
 
-        let validator_balances_by_day = get_issuance_by_start_of_day(&mut transaction).await;
+        let validator_balances_by_day = get_issuance_by_start_of_day(&mut *transaction).await;
 
         let unix_timestamp = validator_balances_by_day.first().unwrap().t;
 
@@ -356,12 +356,12 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance_1", &Slot(3599)).await;
+        store_state(&mut *transaction, "0xtest_issuance_1", &Slot(3599)).await;
 
-        store_state(&mut transaction, "0xtest_issuance_2", &Slot(10799)).await;
+        store_state(&mut *transaction, "0xtest_issuance_2", &Slot(10799)).await;
 
         store_issuance(
-            &mut transaction,
+            &mut *transaction,
             "0xtest_issuance_1",
             &Slot(3599),
             &GweiNewtype(100),
@@ -369,14 +369,14 @@ mod tests {
         .await;
 
         store_issuance(
-            &mut transaction,
+            &mut *transaction,
             "0xtest_issuance_2",
             &Slot(10799),
             &GweiNewtype(110),
         )
         .await;
 
-        let current_issuance = get_current_issuance(&mut transaction).await;
+        let current_issuance = get_current_issuance(&mut *transaction).await;
 
         assert_eq!(current_issuance, GweiNewtype(110));
     }
@@ -386,23 +386,23 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest_issuance", &Slot(3599)).await;
+        store_state(&mut *transaction, "0xtest_issuance", &Slot(3599)).await;
 
         store_issuance(
-            &mut transaction,
+            &mut *transaction,
             "0xtest_issuance",
             &Slot(3599),
             &GweiNewtype(100),
         )
         .await;
 
-        let issuance_by_day = get_issuance_by_start_of_day(&mut transaction).await;
+        let issuance_by_day = get_issuance_by_start_of_day(&mut *transaction).await;
 
         assert_eq!(issuance_by_day.len(), 1);
 
-        delete_issuances(&mut transaction, &Slot(3599)).await;
+        delete_issuances(&mut *transaction, &Slot(3599)).await;
 
-        let issuance_by_day_after = get_issuance_by_start_of_day(&mut transaction).await;
+        let issuance_by_day_after = get_issuance_by_start_of_day(&mut *transaction).await;
 
         assert_eq!(issuance_by_day_after.len(), 0);
     }
@@ -417,16 +417,16 @@ mod tests {
         let now_slot = Slot::from_date_time_rounded_down(&Utc::now());
 
         store_state(
-            &mut transaction,
+            &mut *transaction,
             "0xtest_issuance_1",
             &now_min_seven_days_slot,
         )
         .await;
 
-        store_state(&mut transaction, "0xtest_issuance_2", &now_slot).await;
+        store_state(&mut *transaction, "0xtest_issuance_2", &now_slot).await;
 
         store_issuance(
-            &mut transaction,
+            &mut *transaction,
             "0xtest_issuance_1",
             &now_min_seven_days_slot,
             &GweiNewtype(100),
@@ -434,14 +434,14 @@ mod tests {
         .await;
 
         store_issuance(
-            &mut transaction,
+            &mut *transaction,
             "0xtest_issuance_2",
             &now_slot,
             &GweiNewtype(110),
         )
         .await;
 
-        let day7_ago_issuance = get_n_days_ago_issuance(&mut transaction, 7).await;
+        let day7_ago_issuance = get_n_days_ago_issuance(&mut *transaction, 7).await;
 
         assert_eq!(day7_ago_issuance, GweiNewtype(100));
     }

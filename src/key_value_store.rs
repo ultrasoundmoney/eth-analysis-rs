@@ -20,7 +20,7 @@ pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> Option<Value
     .and_then(|row| row.value)
 }
 
-pub async fn set_value<'a>(executor: impl PgExecutor<'a>, key: &str, value: &Value) {
+pub async fn set_value(executor: impl PgExecutor<'_>, key: &str, value: &Value) {
     debug!("storing key: {}", &key,);
 
     sqlx::query!(
@@ -109,12 +109,12 @@ mod tests {
         };
 
         set_value(
-            &mut transaction,
+            &mut *transaction,
             "test-key",
             &serde_json::to_value(&test_json).unwrap(),
         )
         .await;
-        let value = get_value(&mut transaction, "test-key").await.unwrap();
+        let value = get_value(&mut *transaction, "test-key").await.unwrap();
         let test_json_from_db = serde_json::from_value::<TestJson>(value).unwrap();
 
         assert_eq!(test_json_from_db, test_json)
@@ -126,13 +126,13 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         set_value(
-            &mut transaction,
+            &mut *transaction,
             "test-key",
             &serde_json::to_value(json!(None::<String>)).unwrap(),
         )
         .await;
 
-        let value = get_value(&mut transaction, "test-key").await.unwrap();
+        let value = get_value(&mut *transaction, "test-key").await.unwrap();
         let test_json_from_db = serde_json::from_value::<Option<String>>(value).unwrap();
 
         assert_eq!(test_json_from_db, None)

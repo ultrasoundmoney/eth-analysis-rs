@@ -366,11 +366,11 @@ mod tests {
             .with_timestamp_set_to_now()
             .build();
 
-        execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
-        execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block_1, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block_2, 0.0).await;
 
         let average_base_fee_per_gas = base_fee_per_gas_average(
-            &mut transaction,
+            &mut *transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
         .await;
@@ -395,11 +395,11 @@ mod tests {
             .with_timestamp(&(Utc::now().trunc_subsecs(0) - Duration::minutes(6)))
             .build();
 
-        execution_chain::store_block(&mut transaction, &test_block_in_range, 0.0).await;
-        execution_chain::store_block(&mut transaction, &test_block_outside_range, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block_in_range, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block_outside_range, 0.0).await;
 
         let average_base_fee_per_gas = base_fee_per_gas_average(
-            &mut transaction,
+            &mut *transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Minute5),
         )
         .await;
@@ -424,18 +424,18 @@ mod tests {
             .with_timestamp_set_to_now()
             .build();
 
-        execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
-        execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block_1, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block_2, 0.0).await;
 
         let base_fee_per_gas_min = base_fee_per_gas_min(
-            &mut transaction,
+            &mut *transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
         .await;
         assert_eq!(base_fee_per_gas_min, (0, 10.0));
 
         let base_fee_per_gas_max = base_fee_per_gas_max(
-            &mut transaction,
+            &mut *transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
         .await;

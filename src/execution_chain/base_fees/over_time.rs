@@ -273,11 +273,11 @@ mod tests {
             ..make_test_block()
         };
 
-        execution_chain::store_block(&mut transaction, &excluded_block, 0.0).await;
-        execution_chain::store_block(&mut transaction, &included_block, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &excluded_block, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &included_block, 0.0).await;
 
         let base_fees_d1 = from_time_frame(
-            &mut transaction,
+            &mut *transaction,
             &TimeFrame::Limited(LimitedTimeFrame::Hour1),
         )
         .await;
@@ -306,10 +306,10 @@ mod tests {
             ..make_test_block()
         };
 
-        execution_chain::store_block(&mut transaction, &test_block_1, 0.0).await;
-        execution_chain::store_block(&mut transaction, &test_block_2, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block_1, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block_2, 0.0).await;
 
-        let base_fees_h1 = from_time_frame(&mut transaction, &TimeFrame::Limited(Hour1)).await;
+        let base_fees_h1 = from_time_frame(&mut *transaction, &TimeFrame::Limited(Hour1)).await;
 
         assert_eq!(
             base_fees_h1,

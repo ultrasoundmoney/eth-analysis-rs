@@ -187,16 +187,16 @@ pub async fn sync_slot_by_state_root(
                 "storing slot without block, slot: {:?}, state_root: {}",
                 slot, state_root
             );
-            states::store_state(&mut transaction, state_root, slot)
+            states::store_state(&mut *transaction, state_root, slot)
                 .timed("store state without block")
                 .await;
         }
         Some((ref header, ref block)) => {
             let deposit_sum_aggregated =
-                deposits::get_deposit_sum_aggregated(&mut transaction, block).await;
+                deposits::get_deposit_sum_aggregated(&mut *transaction, block).await;
 
             let withdrawal_sum_aggregated =
-                withdrawals::get_withdrawal_sum_aggregated(&mut transaction, block).await;
+                withdrawals::get_withdrawal_sum_aggregated(&mut *transaction, block).await;
 
             debug!(
                 %slot,
@@ -205,7 +205,7 @@ pub async fn sync_slot_by_state_root(
                 "storing slot with block"
             );
             let is_parent_known =
-                blocks::get_is_hash_known(&mut transaction, &header.parent_root()).await;
+                blocks::get_is_hash_known(&mut *transaction, &header.parent_root()).await;
             if !is_parent_known {
                 return Err(anyhow!(
             "trying to insert beacon block with missing parent, block_root: {}, parent_root: {:?}",
@@ -214,10 +214,10 @@ pub async fn sync_slot_by_state_root(
         ));
             }
 
-            states::store_state(&mut transaction, &header.state_root(), &header.slot()).await;
+            states::store_state(&mut *transaction, &header.state_root(), &header.slot()).await;
 
             blocks::store_block(
-                &mut transaction,
+                &mut *transaction,
                 block,
                 &deposits::get_deposit_sum_from_block(block),
                 &deposit_sum_aggregated,
@@ -233,7 +233,7 @@ pub async fn sync_slot_by_state_root(
         debug!("validator balances present");
         let validator_balances_sum = balances::sum_validator_balances(validator_balances);
         balances::store_validators_balance(
-            &mut transaction,
+            &mut *transaction,
             state_root,
             slot,
             &validator_balances_sum,
@@ -242,12 +242,12 @@ pub async fn sync_slot_by_state_root(
 
         if let Some((_, block)) = header_block_tuple {
             let deposit_sum_aggregated =
-                deposits::get_deposit_sum_aggregated(&mut transaction, &block).await;
+                deposits::get_deposit_sum_aggregated(&mut *transaction, &block).await;
             let withdrawal_sum_aggregated =
-                withdrawals::get_withdrawal_sum_aggregated(&mut transaction, &block).await;
+                withdrawals::get_withdrawal_sum_aggregated(&mut *transaction, &block).await;
 
             issuance::store_issuance(
-                &mut transaction,
+                &mut *transaction,
                 state_root,
                 slot,
                 &issuance::calc_issuance(
@@ -259,7 +259,7 @@ pub async fn sync_slot_by_state_root(
             .await;
         }
 
-        eth_supply::sync_eth_supply(&mut transaction, slot).await;
+        eth_supply::sync_eth_supply(&mut *transaction, slot).await;
     }
 
     transaction.commit().await?;
@@ -401,13 +401,13 @@ pub async fn rollback_slots(
 ) -> Result<()> {
     debug!("rolling back data based on slots gte {greater_than_or_equal}");
     let mut transaction = executor.begin().await?;
-    eth_supply::rollback_supply_from_slot(&mut transaction, greater_than_or_equal)
+    eth_supply::rollback_supply_from_slot(&mut *transaction, greater_than_or_equal)
         .await
         .unwrap();
-    blocks::delete_blocks(&mut transaction, greater_than_or_equal).await;
-    issuance::delete_issuances(&mut transaction, greater_than_or_equal).await;
-    balances::delete_validator_sums(&mut transaction, greater_than_or_equal).await;
-    states::delete_states(&mut transaction, greater_than_or_equal).await;
+    blocks::delete_blocks(&mut *transaction, greater_than_or_equal).await;
+    issuance::delete_issuances(&mut *transaction, greater_than_or_equal).await;
+    balances::delete_validator_sums(&mut *transaction, greater_than_or_equal).await;
+    states::delete_states(&mut *transaction, greater_than_or_equal).await;
     transaction.commit().await?;
     Ok(())
 }
@@ -415,13 +415,13 @@ pub async fn rollback_slots(
 pub async fn rollback_slot(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
     debug!("rolling back data based on slot {slot}");
     let mut transaction = executor.begin().await?;
-    eth_supply::rollback_supply_slot(&mut transaction, slot)
+    eth_supply::rollback_supply_slot(&mut *transaction, slot)
         .await
         .unwrap();
-    blocks::delete_block(&mut transaction, slot).await;
-    issuance::delete_issuance(&mut transaction, slot).await;
-    balances::delete_validator_sum(&mut transaction, slot).await;
-    states::delete_state(&mut transaction, slot).await;
+    blocks::delete_block(&mut *transaction, slot).await;
+    issuance::delete_issuance(&mut *transaction, slot).await;
+    balances::delete_validator_sum(&mut *transaction, slot).await;
+    states::delete_state(&mut *transaction, slot).await;
     transaction.commit().await?;
     Ok(())
 }

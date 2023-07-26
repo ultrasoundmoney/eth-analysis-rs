@@ -102,9 +102,9 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &Slot(0)).await;
+        store_state(&mut *transaction, "0xstate_root", &Slot(0)).await;
 
-        let state = get_last_state(&mut transaction).await.unwrap();
+        let state = get_last_state(&mut *transaction).await.unwrap();
 
         assert_eq!(
             BeaconState {
@@ -120,11 +120,11 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root_1", &Slot(0)).await;
+        store_state(&mut *transaction, "0xstate_root_1", &Slot(0)).await;
 
-        store_state(&mut transaction, "0xstate_root_2", &Slot(1)).await;
+        store_state(&mut *transaction, "0xstate_root_2", &Slot(1)).await;
 
-        let state = get_last_state(&mut transaction).await.unwrap();
+        let state = get_last_state(&mut *transaction).await.unwrap();
 
         assert_eq!(
             state,
@@ -140,14 +140,14 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xstate_root", &Slot(0)).await;
+        store_state(&mut *transaction, "0xstate_root", &Slot(0)).await;
 
-        let state = get_last_state(&mut transaction).await;
+        let state = get_last_state(&mut *transaction).await;
         assert!(state.is_some());
 
-        delete_states(&mut transaction, &Slot(0)).await;
+        delete_states(&mut *transaction, &Slot(0)).await;
 
-        let state_after = get_last_state(&mut transaction).await;
+        let state_after = get_last_state(&mut *transaction).await;
         assert!(state_after.is_none());
     }
 
@@ -156,9 +156,9 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut transaction, "0xtest", &Slot(0)).await;
+        store_state(&mut *transaction, "0xtest", &Slot(0)).await;
 
-        let state_root = get_state_root_by_slot(&mut transaction, &Slot(0))
+        let state_root = get_state_root_by_slot(&mut *transaction, &Slot(0))
             .await
             .unwrap();
 

@@ -392,11 +392,11 @@ mod tests {
             supply: EthNewtype(10.0),
         };
 
-        store_test_eth_supply(&mut transaction, &test_slot, EthNewtype(10.0))
+        store_test_eth_supply(&mut *transaction, &test_slot, EthNewtype(10.0))
             .await
             .unwrap();
 
-        let since_merge = from_time_frame(&mut transaction, &TimeFrame::Limited(Minute5)).await;
+        let since_merge = from_time_frame(&mut *transaction, &TimeFrame::Limited(Minute5)).await;
 
         assert_eq!(since_merge, vec![test_supply_at_time]);
     }
@@ -421,12 +421,12 @@ mod tests {
             test_supply_at_time.timestamp,
             test_supply_at_time.supply.0
         )
-        .execute(&mut transaction)
+        .execute(&mut *transaction)
         .await
         .unwrap();
 
         let since_burn = get_early_supply_since_burn(
-            &mut transaction,
+            &mut *transaction,
             &(test_supply_at_time.timestamp + Duration::seconds(1)),
         )
         .await;

@@ -303,7 +303,7 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let is_hash_known = get_is_hash_known(&mut transaction, GENESIS_PARENT_ROOT).await;
+        let is_hash_known = get_is_hash_known(&mut *transaction, GENESIS_PARENT_ROOT).await;
 
         assert!(is_hash_known);
     }
@@ -313,7 +313,7 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let is_hash_known = get_is_hash_known(&mut transaction, "0xnot_there").await;
+        let is_hash_known = get_is_hash_known(&mut *transaction, "0xnot_there").await;
 
         assert!(!is_hash_known);
     }
@@ -323,10 +323,10 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_test_block(&mut transaction, "is_hash_known_test").await;
+        store_test_block(&mut *transaction, "is_hash_known_test").await;
 
         let is_hash_known =
-            get_is_hash_known(&mut transaction, "0xis_hash_known_test_block_root").await;
+            get_is_hash_known(&mut *transaction, "0xis_hash_known_test_block_root").await;
 
         assert!(is_hash_known);
     }
@@ -339,10 +339,10 @@ mod tests {
         let state_root = "0xblock_test_state_root".to_string();
         let slot = Slot(0);
 
-        store_state(&mut transaction, &state_root, &slot).await;
+        store_state(&mut *transaction, &state_root, &slot).await;
 
         store_block(
-            &mut transaction,
+            &mut *transaction,
             &BeaconBlock {
                 body: BeaconBlockBody {
                     deposits: vec![],
@@ -369,7 +369,7 @@ mod tests {
         )
         .await;
 
-        let is_hash_known = get_is_hash_known(&mut transaction, "0xblock_root").await;
+        let is_hash_known = get_is_hash_known(&mut *transaction, "0xblock_root").await;
 
         assert!(is_hash_known);
     }
@@ -379,7 +379,7 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let block_number = get_last_block_slot(&mut transaction).await;
+        let block_number = get_last_block_slot(&mut *transaction).await;
         assert_eq!(block_number, None);
     }
 
@@ -395,9 +395,9 @@ mod tests {
             .build();
         let test_block = Into::<BeaconBlockBuilder>::into(&test_header).build();
 
-        store_custom_test_block(&mut transaction, &test_header, &test_block).await;
+        store_custom_test_block(&mut *transaction, &test_header, &test_block).await;
 
-        let last_block_slot = get_last_block_slot(&mut transaction).await;
+        let last_block_slot = get_last_block_slot(&mut *transaction).await;
         assert_eq!(last_block_slot, Some(slot));
     }
 
@@ -406,14 +406,14 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_test_block(&mut transaction, "delete_block_test").await;
+        store_test_block(&mut *transaction, "delete_block_test").await;
 
-        let block_slot = get_last_block_slot(&mut transaction).await;
+        let block_slot = get_last_block_slot(&mut *transaction).await;
         assert_eq!(block_slot, Some(Slot(0)));
 
-        delete_blocks(&mut transaction, &Slot(0)).await;
+        delete_blocks(&mut *transaction, &Slot(0)).await;
 
-        let block_slot = get_last_block_slot(&mut transaction).await;
+        let block_slot = get_last_block_slot(&mut *transaction).await;
         assert_eq!(block_slot, None);
     }
 
@@ -432,11 +432,11 @@ mod tests {
             .build();
         let test_block_after = Into::<BeaconBlockBuilder>::into(&test_header_after).build();
 
-        store_custom_test_block(&mut transaction, &test_header_before, &test_block_before).await;
+        store_custom_test_block(&mut *transaction, &test_header_before, &test_block_before).await;
 
-        store_custom_test_block(&mut transaction, &test_header_after, &test_block_after).await;
+        store_custom_test_block(&mut *transaction, &test_header_after, &test_block_after).await;
 
-        let last_block_before = get_block_before_slot(&mut transaction, &Slot(1)).await;
+        let last_block_before = get_block_before_slot(&mut *transaction, &Slot(1)).await;
 
         assert_eq!(test_header_before.root, last_block_before.block_root);
     }
@@ -455,16 +455,16 @@ mod tests {
             .parent_header(&test_header_before)
             .build();
 
-        store_custom_test_block(&mut transaction, &test_header_before, &test_block_before).await;
+        store_custom_test_block(&mut *transaction, &test_header_before, &test_block_before).await;
 
         store_state(
-            &mut transaction,
+            &mut *transaction,
             &test_header_after.state_root(),
             &test_header_after.slot(),
         )
         .await;
 
-        let last_block_before = get_block_before_slot(&mut transaction, &Slot(1)).await;
+        let last_block_before = get_block_before_slot(&mut *transaction, &Slot(1)).await;
 
         assert_eq!(test_header_before.root, last_block_before.block_root);
     }
@@ -483,7 +483,7 @@ mod tests {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
 
         store_custom_test_block(
-            &mut transaction,
+            &mut *transaction,
             &header,
             &BeaconBlock {
                 body: BeaconBlockBody {
@@ -500,9 +500,9 @@ mod tests {
         )
         .await;
 
-        update_block_hash(&mut transaction, &block_root, &block_hash_after).await;
+        update_block_hash(&mut *transaction, &block_root, &block_hash_after).await;
 
-        let block = get_block_by_slot(&mut transaction, &header.slot())
+        let block = get_block_by_slot(&mut *transaction, &header.slot())
             .await
             .unwrap();
 
@@ -518,13 +518,15 @@ mod tests {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
         let block = Into::<BeaconBlockBuilder>::into(&header).build();
 
-        let block_not_there = get_block_by_slot(&mut transaction, &Slot(0)).await;
+        let block_not_there = get_block_by_slot(&mut *transaction, &Slot(0)).await;
 
         assert_eq!(None, block_not_there);
 
-        store_custom_test_block(&mut transaction, &header, &block).await;
+        store_custom_test_block(&mut *transaction, &header, &block).await;
 
-        let block_there = get_block_by_slot(&mut transaction, &Slot(0)).await.unwrap();
+        let block_there = get_block_by_slot(&mut *transaction, &Slot(0))
+            .await
+            .unwrap();
 
         assert_eq!(header.root, block_there.block_root);
     }

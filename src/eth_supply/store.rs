@@ -301,7 +301,7 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &Slot(0)).await?;
+        let eth_supply_exists = get_supply_exists_by_slot(&mut *transaction, &Slot(0)).await?;
 
         assert!(!eth_supply_exists);
 
@@ -317,9 +317,9 @@ mod tests {
         let state_root = "0xstate_root";
         let slot = Slot(0);
 
-        execution_chain::store_block(&mut transaction, &test_block, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, state_root, &slot).await;
+        beacon_chain::store_state(&mut *transaction, state_root, &slot).await;
 
         let supply_parts = SupplyParts::new(
             &slot,
@@ -330,7 +330,7 @@ mod tests {
         );
 
         store(
-            &mut transaction,
+            &mut *transaction,
             &slot,
             &0,
             &supply_parts.execution_balances_sum,
@@ -340,7 +340,7 @@ mod tests {
         .await
         .unwrap();
 
-        let eth_supply_exists = get_supply_exists_by_slot(&mut transaction, &slot)
+        let eth_supply_exists = get_supply_exists_by_slot(&mut *transaction, &slot)
             .await
             .unwrap();
 
@@ -357,9 +357,9 @@ mod tests {
         let state_root = format!("0x{test_id}_state_root");
         let slot = Slot(0);
 
-        execution_chain::store_block(&mut transaction, &test_block, 0.0).await;
+        execution_chain::store_block(&mut *transaction, &test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut transaction, &state_root, &slot).await;
+        beacon_chain::store_state(&mut *transaction, &state_root, &slot).await;
 
         let supply_parts = SupplyParts::new(
             &slot,
@@ -370,7 +370,7 @@ mod tests {
         );
 
         store(
-            &mut transaction,
+            &mut *transaction,
             &slot,
             &0,
             &supply_parts.execution_balances_sum,
@@ -380,7 +380,7 @@ mod tests {
         .await
         .unwrap();
 
-        let last_stored_slot = get_last_stored_supply_slot(&mut transaction)
+        let last_stored_slot = get_last_stored_supply_slot(&mut *transaction)
             .await
             .unwrap()
             .unwrap();

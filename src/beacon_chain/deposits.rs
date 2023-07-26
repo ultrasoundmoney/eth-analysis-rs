@@ -84,14 +84,14 @@ mod tests {
         let test_block = Into::<BeaconBlockBuilder>::into(&test_header).build();
 
         store_state(
-            &mut transaction,
+            &mut *transaction,
             &test_header.state_root(),
             &test_header.slot(),
         )
         .await;
 
         store_block(
-            &mut transaction,
+            &mut *transaction,
             &test_block,
             &GweiNewtype(0),
             &GweiNewtype(1),
@@ -102,7 +102,7 @@ mod tests {
         .await;
 
         let deposits_sum =
-            get_deposits_sum_by_state_root(&mut transaction, &test_header.state_root())
+            get_deposits_sum_by_state_root(&mut *transaction, &test_header.state_root())
                 .await
                 .unwrap();
 

@@ -164,23 +164,26 @@ mod tests {
     #[tokio::test]
     async fn store_block_test() {
         let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
+        let mut transaction = db.begin().await.unwrap();
         let test_block = make_test_block();
 
-        assert_eq!(len(&mut tx).await, 0);
+        assert_eq!(len(&mut *transaction).await, 0);
 
-        store_block(&mut tx, &test_block, 0.0).await;
-        assert_eq!(get_block_by_number(&mut tx, &0).await.unwrap(), test_block);
+        store_block(&mut *transaction, &test_block, 0.0).await;
+        assert_eq!(
+            get_block_by_number(&mut *transaction, &0).await.unwrap(),
+            test_block
+        );
     }
 
     #[tokio::test]
     async fn delete_blocks_test() {
         let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
+        let mut transaction = db.begin().await.unwrap();
         let test_block = make_test_block();
-        store_block(&mut tx, &test_block, 0.0).await;
+        store_block(&mut *transaction, &test_block, 0.0).await;
         store_block(
-            &mut tx,
+            &mut *transaction,
             &ExecutionNodeBlock {
                 hash: "0xtest1".to_string(),
                 number: 1,
@@ -191,10 +194,10 @@ mod tests {
         )
         .await;
 
-        assert_eq!(len(&mut tx,).await, 2);
+        assert_eq!(len(&mut *transaction,).await, 2);
 
-        delete_blocks(&mut tx, &0).await;
-        assert_eq!(len(&mut tx,).await, 0);
+        delete_blocks(&mut *transaction, &0).await;
+        assert_eq!(len(&mut *transaction,).await, 0);
     }
 
     pub async fn get_block_by_hash(
@@ -229,41 +232,41 @@ mod tests {
     #[tokio::test]
     async fn get_block_by_hash_test() {
         let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
+        let mut transaction = db.begin().await.unwrap();
         let test_block = make_test_block();
 
-        store_block(&mut *tx, &test_block, 0.0).await;
-        let stored_block = get_block_by_hash(&mut *tx, &test_block.hash).await;
+        store_block(&mut *transaction, &test_block, 0.0).await;
+        let stored_block = get_block_by_hash(&mut *transaction, &test_block.hash).await;
         assert_eq!(stored_block, Some(test_block));
     }
 
     #[tokio::test]
     async fn get_block_by_number_test() {
         let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
+        let mut transaction = db.begin().await.unwrap();
         let test_block = make_test_block();
 
-        store_block(&mut *tx, &test_block, 0.0).await;
-        let stored_block = get_block_by_number(&mut *tx, &test_block.number).await;
+        store_block(&mut *transaction, &test_block, 0.0).await;
+        let stored_block = get_block_by_number(&mut *transaction, &test_block.number).await;
         assert_eq!(stored_block, Some(test_block));
     }
 
     #[tokio::test]
     async fn get_empty_last_block_number_test() {
         let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
+        let mut transaction = db.begin().await.unwrap();
 
-        assert_eq!(get_last_block_number(&mut *tx,).await, None);
+        assert_eq!(get_last_block_number(&mut *transaction,).await, None);
     }
 
     #[tokio::test]
     async fn get_last_block_number_test() {
         let mut db = db::tests::get_test_db_connection().await;
-        let mut tx = db.begin().await.unwrap();
+        let mut transaction = db.begin().await.unwrap();
         let test_block = make_test_block();
 
-        store_block(&mut *tx, &test_block, 0.0).await;
-        let last_block_number = get_last_block_number(&mut tx).await;
+        store_block(&mut *transaction, &test_block, 0.0).await;
+        let last_block_number = get_last_block_number(&mut *transaction).await;
         assert_eq!(last_block_number, Some(0));
     }
 }
