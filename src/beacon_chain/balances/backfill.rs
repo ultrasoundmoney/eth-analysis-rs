@@ -5,6 +5,7 @@ use tracing::{debug, info, warn};
 
 use crate::beacon_chain::{balances, node::BeaconNodeHttp, BeaconNode, Slot};
 
+const GET_BALANCES_CONCURRENCY_LIMIT: usize = 32;
 const SLOTS_PER_EPOCH: i64 = 32;
 
 pub enum Granularity {
@@ -114,7 +115,7 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
         }
     });
 
-    let buffered_tasks = tasks.buffered(32); // Run at most eight in parallel.
+    let buffered_tasks = tasks.buffered(GET_BALANCES_CONCURRENCY_LIMIT);
 
     pin_mut!(buffered_tasks);
 
