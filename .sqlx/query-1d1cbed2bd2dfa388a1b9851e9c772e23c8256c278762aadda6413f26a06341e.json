@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM beacon_states\n            WHERE slot = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1d1cbed2bd2dfa388a1b9851e9c772e23c8256c278762aadda6413f26a06341e"
+}

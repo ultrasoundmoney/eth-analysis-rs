@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum_usd,\n                sum_wei::TEXT AS \"sum_wei!\"\n            FROM burn_sums\n            WHERE time_frame = $1\n            ORDER BY last_included_block_number DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first_included_block_number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_included_block_number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_included_block_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "sum_usd",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "sum_wei!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "635c841223a110075c5e88878f1d20c80532255799f6fe926259dbaa88fbf881"
+}

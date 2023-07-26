@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                number\n            FROM\n                blocks_next\n            WHERE\n                timestamp >= $1\n            ORDER BY\n                timestamp ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2953654cbf712f2a858ed77d3cb5c4b8110fa09720510ee46758971a36b4a980"
+}

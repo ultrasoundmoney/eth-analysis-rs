@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            beacon_states\n        SET\n            effective_balance_sum = $1\n        WHERE\n            state_root = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9fd4f5582d534d68ba6d1cd86abc49e1dad76f38ab45cd85c0ca9295a1629cc1"
+}

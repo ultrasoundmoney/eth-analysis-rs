@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM beacon_blocks\n        WHERE state_root IN (\n            SELECT\n                state_root\n            FROM\n                beacon_states\n            WHERE beacon_states.slot >= $1\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "58a9a8ae222d1c817a8dec63edbc27bab498e47427b2eaa147177fb7bcfeee62"
+}

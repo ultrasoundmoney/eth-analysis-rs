@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            deposit_sum_aggregated\n        FROM\n            beacon_blocks\n        WHERE\n            block_root = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "deposit_sum_aggregated",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2345c8d8037c9244b3ef6af000c37cfc47691d343becb49046c39bb0481d28e9"
+}

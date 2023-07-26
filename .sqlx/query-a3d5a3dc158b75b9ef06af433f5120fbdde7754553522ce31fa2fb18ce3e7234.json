@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            timestamp,\n            supply::FLOAT8 / 1e18 AS \"supply!\"\n        FROM\n            eth_supply\n        ORDER BY timestamp DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "supply!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "a3d5a3dc158b75b9ef06af433f5120fbdde7754553522ce31fa2fb18ce3e7234"
+}

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT\n                    AS \"burn_sum_wei!\",\n                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78) / 1e18 * eth_price)\n                    AS \"burn_sum_usd!\"\n            FROM\n                blocks_next\n            WHERE\n                number >= $1 AND number <= $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "burn_sum_wei!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "burn_sum_usd!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "d67dfd2fde9ed1d9dffcb31fd7a327fe7c42c43b1363401a8370b7c883a502ab"
+}

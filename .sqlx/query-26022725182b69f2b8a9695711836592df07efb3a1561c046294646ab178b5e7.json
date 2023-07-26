@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO burn_sums (\n                time_frame,\n                first_included_block_number,\n                last_included_block_number,\n                last_included_block_hash,\n                timestamp,\n                sum_usd,\n                sum_wei\n            )\n            SELECT * FROM UNNEST (\n                $1::text[],\n                $2::int[],\n                $3::int[],\n                $4::text[],\n                $5::timestamptz[],\n                $6::float8[],\n                $7::numeric[]\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int4Array",
+        "Int4Array",
+        "TextArray",
+        "TimestamptzArray",
+        "Float8Array",
+        "NumericArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "26022725182b69f2b8a9695711836592df07efb3a1561c046294646ab178b5e7"
+}

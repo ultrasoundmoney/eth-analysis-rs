@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            balances_slot\n        FROM\n            eth_supply\n        WHERE\n            balances_slot = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "balances_slot",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3aed21a5e1ed297fedd5953b77216cbd3554f52859a5d4bf435b132c91ad89ed"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            supply::TEXT AS \"supply!\"\n        FROM\n            eth_supply\n        ORDER BY\n            timestamp DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "supply!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0a2508d2c3fbce38482cdb84e0e3bd6983a0a50d3e2036b9e8237a89d4ecdd14"
+}

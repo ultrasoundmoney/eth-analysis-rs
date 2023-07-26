@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            withdrawal_sum_aggregated\n        FROM\n            beacon_blocks\n        WHERE\n            block_root = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "withdrawal_sum_aggregated",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "4af8583a1cc8a87929d6625b1a3019920c56b8c7c0b3a6b0708763ed3d386ed3"
+}

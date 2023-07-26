@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH\n              eth_price_distances AS (\n                SELECT\n                  ethusd,\n                  timestamp,\n                  ABS(\n                    EXTRACT(\n                      epoch\n                      FROM\n                        (timestamp - (NOW() - '24 hours':: INTERVAL))\n                    )\n                  ) AS distance_seconds\n                FROM\n                  eth_prices\n                ORDER BY\n                  distance_seconds ASC\n              )\n            SELECT ethusd AS usd, timestamp\n            FROM eth_price_distances\n            WHERE distance_seconds <= $1\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "usd",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 1,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Numeric"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "02c53411d8986e5117c804ffee2a9ba7b6b3066ee8f7a501f774b7f5330a1f61"
+}
