@@ -7,8 +7,8 @@ repository = "https://github.com/ultrasoundmoney/eth-analysis-rs"
 publish = false
 
 [dependencies]
+anyhow = { version = "1", features = ["backtrace"] }
 axum = "0.6"
-anyhow = "1"
 async-trait = "0.1"
 async-tungstenite = { version = "0", features = ["tokio-native-tls"] }
 bytes = "1"
