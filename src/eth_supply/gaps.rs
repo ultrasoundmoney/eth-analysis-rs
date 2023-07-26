@@ -9,8 +9,9 @@ use pit_wall::Progress;
 use tracing::warn;
 use tracing::{debug, info};
 
+use crate::beacon_chain::{BeaconStore, BeaconStorePostgres};
 use crate::{
-    beacon_chain::{self, Slot},
+    beacon_chain::Slot,
     db,
     eth_supply::{self, SupplyPartsError, SupplyPartsStore},
     log,
@@ -25,8 +26,10 @@ pub async fn fill_gaps() -> Result<()> {
     info!("syncing gaps in eth supply");
 
     let db_pool = db::get_db_pool("sync-eth-supply-gaps").await;
+    let beacon_store = BeaconStorePostgres::new(db_pool.clone());
 
-    let last_slot = beacon_chain::get_last_state(&db_pool)
+    let last_slot = beacon_store
+        .get_last_state()
         .await
         .expect("a beacon state should be stored before trying to fill any gaps")
         .slot;

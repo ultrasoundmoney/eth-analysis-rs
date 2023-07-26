@@ -5,6 +5,7 @@ pub mod effective_balance_sums;
 mod issuance;
 mod node;
 pub mod states;
+mod store;
 mod sync;
 mod units;
 mod withdrawals;
@@ -46,6 +47,8 @@ pub use states::get_last_state;
 pub use states::get_state_root_by_slot;
 pub use states::heal_beacon_states;
 pub use states::store_state;
+
+pub use store::{BeaconStore, BeaconStorePostgres};
 
 pub use sync::sync_beacon_states;
 
