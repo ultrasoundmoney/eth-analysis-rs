@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    block_hash,\n                    block_number,\n                    balances_sum::TEXT\n                FROM\n                    execution_supply\n                WHERE\n                    block_number = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "block_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "block_number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "balances_sum",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "361e967512bda4b86666d32b04d5d5235faded41e5ae89d74acb4a4219a1f960"
+}

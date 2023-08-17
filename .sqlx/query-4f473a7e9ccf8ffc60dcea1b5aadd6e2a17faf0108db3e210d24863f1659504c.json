@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO execution_supply (block_hash, block_number, balances_sum)\n        SELECT * FROM UNNEST($1::text[], $2::int4[], $3::numeric[])\n        ON CONFLICT (block_hash) DO UPDATE SET\n            balances_sum = excluded.balances_sum,\n            block_number = excluded.block_number\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int4Array",
+        "NumericArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f473a7e9ccf8ffc60dcea1b5aadd6e2a17faf0108db3e210d24863f1659504c"
+}
