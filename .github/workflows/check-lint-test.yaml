@@ -18,12 +18,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - run: rustup toolchain install stable --profile minimal
 
       # check if this speeds anything up
       - uses: Swatinem/rust-cache@v2
@@ -40,12 +35,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - run: rustup toolchain install stable --profile minimal
 
       # check if this speeds anything up
       - uses: Swatinem/rust-cache@v2
@@ -69,13 +59,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
+      - run: rustup toolchain install stable --profile minimal
 
       # check if this speeds anything up
       - uses: Swatinem/rust-cache@v2
@@ -99,12 +83,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - run: rustup toolchain install stable --profile minimal
 
       # check if this speeds anything up
       - uses: Swatinem/rust-cache@v2
