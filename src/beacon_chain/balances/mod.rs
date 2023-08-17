@@ -69,7 +69,7 @@ pub async fn get_validator_balances_by_start_of_day(
         FROM
             beacon_validators_balance
         ORDER BY
-            DATE_TRUNC('day', timestamp), timestamp ASC
+            DATE_TRUNC('day', timestamp)
         "#
     )
     .fetch_all(executor)

@@ -105,7 +105,7 @@ pub async fn from_time_frame(
                 FROM
                     eth_supply
                 ORDER BY
-                    DATE_TRUNC('day', timestamp), timestamp ASC
+                    DATE_TRUNC('day', timestamp) ASC
                 ",
             )
             .fetch_all(executor)
@@ -131,7 +131,7 @@ pub async fn from_time_frame(
                 WHERE
                     timestamp >= $1
                 ORDER BY
-                    DATE_TRUNC('day', timestamp), timestamp ASC
+                    DATE_TRUNC('day', timestamp) ASC
                 ",
                 *eth_time::MERGE_HARD_FORK_TIMESTAMP
             )
@@ -186,7 +186,7 @@ pub async fn from_time_frame(
                 WHERE
                     timestamp >= NOW() - $1::INTERVAL
                 ORDER BY
-                    date_bin('384 seconds', timestamp, '2022-1-1'), timestamp ASC
+                    date_bin('384 seconds', timestamp, '2022-1-1') ASC
                 ",
                 Into::<PgInterval>::into(ltf)
             )
@@ -213,7 +213,7 @@ pub async fn from_time_frame(
                 WHERE
                     timestamp >= NOW() - $1::INTERVAL
                 ORDER BY
-                    DATE_BIN('5 minutes', timestamp, '2022-01-01'), timestamp ASC
+                    DATE_BIN('5 minutes', timestamp, '2022-01-01') ASC
                 ",
                 ltf.postgres_interval()
             )
@@ -240,7 +240,7 @@ pub async fn from_time_frame(
                 WHERE
                     timestamp >= NOW() - $1::INTERVAL
                 ORDER BY
-                    DATE_TRUNC('hour', timestamp), timestamp ASC
+                    DATE_TRUNC('hour', timestamp) ASC
                 ",
                 Into::<PgInterval>::into(ltf)
             )
