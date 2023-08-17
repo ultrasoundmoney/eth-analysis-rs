@@ -36,15 +36,15 @@ impl From<&GweiInTimeRow> for GweiInTime {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct InContractsDataPoint {
+pub struct TimestampValuePoint {
     pub t: u64,
     // fraction
     pub v: f64,
 }
 
-impl From<SupplyAtTime> for InContractsDataPoint {
+impl From<SupplyAtTime> for TimestampValuePoint {
     fn from(supply_at_time: SupplyAtTime) -> Self {
-        InContractsDataPoint {
+        TimestampValuePoint {
             t: supply_at_time.timestamp.timestamp() as u64,
             v: supply_at_time.supply.0,
         }
@@ -54,9 +54,9 @@ impl From<SupplyAtTime> for InContractsDataPoint {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SupplyProjectionInputs {
-    supply_by_day: Vec<InContractsDataPoint>,
-    in_contracts_by_day: Vec<InContractsDataPoint>,
-    in_beacon_validators_by_day: Vec<InContractsDataPoint>,
+    supply_by_day: Vec<TimestampValuePoint>,
+    in_contracts_by_day: Vec<TimestampValuePoint>,
+    in_beacon_validators_by_day: Vec<TimestampValuePoint>,
 }
 
 #[tokio::main]
@@ -76,8 +76,7 @@ pub async fn main() {
             .map_err(|e| anyhow!("failed to open supply_projection_inputs.json: {}", e))
             .unwrap();
     let json_value: Value = serde_json::from_reader(in_contracts_by_day_file).unwrap();
-    let in_contracts_by_day: Vec<InContractsDataPoint> =
-        serde_json::from_value(json_value).unwrap();
+    let in_contracts_by_day: Vec<TimestampValuePoint> = serde_json::from_value(json_value).unwrap();
 
     debug!(
         "got gwei in contracts by day, {} data points",
@@ -88,7 +87,7 @@ pub async fn main() {
         beacon_chain::get_validator_balances_by_start_of_day(&db_pool)
             .await
             .iter()
-            .map(|point| InContractsDataPoint {
+            .map(|point| TimestampValuePoint {
                 t: point.t,
                 v: point.v as f64 / GWEI_PER_ETH_F64,
             })
@@ -99,7 +98,7 @@ pub async fn main() {
         in_beacon_validators_by_day.len()
     );
 
-    let supply_by_day: Vec<InContractsDataPoint> = eth_supply::get_daily_supply(&db_pool)
+    let supply_by_day: Vec<TimestampValuePoint> = eth_supply::get_daily_supply(&db_pool)
         .await
         .into_iter()
         .filter(|point| point.timestamp >= *SUPPLY_LOWER_LIMIT_DATE_TIME)
