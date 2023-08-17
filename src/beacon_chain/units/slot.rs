@@ -146,8 +146,7 @@ impl From<Slot> for DateTime<Utc> {
 
 impl From<&Slot> for DateTime<Utc> {
     fn from(slot: &Slot) -> Self {
-        let seconds = slot.0 as i64 * Slot::SECONDS_PER_SLOT as i64;
-        *GENESIS_TIMESTAMP + Duration::seconds(seconds)
+        Into::<DateTime<Utc>>::into(*slot)
     }
 }
 
