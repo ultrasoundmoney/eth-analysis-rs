@@ -13,7 +13,6 @@ name: check-lint-test
 
 jobs:
   check:
-    name: Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -30,7 +29,6 @@ jobs:
           command: check
 
   check-schema:
-    name: Check Schema
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -55,7 +53,6 @@ jobs:
           args: prepare --check -- --all-targets
 
   lint:
-    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -79,7 +76,6 @@ jobs:
           args: -- -D warnings
 
   test:
-    name: Test Suite
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
