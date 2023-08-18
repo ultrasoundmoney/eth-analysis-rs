@@ -73,7 +73,7 @@ pub async fn main() {
     // anymore, so no more new data.
     let in_contracts_by_day_file =
         File::open("src/bin/update-supply-projection-inputs/in_contracts_by_day.json")
-            .map_err(|e| anyhow!("failed to open supply_projection_inputs.json: {}", e))
+            .map_err(|e| anyhow!("failed to open in_contracts_by_day.json: {}", e))
             .unwrap();
     let json_value: Value = serde_json::from_reader(in_contracts_by_day_file).unwrap();
     let in_contracts_by_day: Vec<TimestampValuePoint> = serde_json::from_value(json_value).unwrap();
