@@ -51,7 +51,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: sqlx
-          args: prepare --check
+          args: prepare --check -- --all-targets
 
   lint:
     name: Lint
