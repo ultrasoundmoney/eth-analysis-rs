@@ -29,29 +29,30 @@ jobs:
         with:
           command: check
 
-  # check-schema:
-  #   name: Check Schema
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout sources
-  #       uses: actions/checkout@v3
+  check-schema:
+    name: Check Schema
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
 
-  #     - run: rustup toolchain install stable --profile minimal
+      - run: rustup toolchain install stable --profile minimal
 
-  #     # check if this speeds anything up
-  #     - uses: Swatinem/rust-cache@v2
+      # check if this speeds anything up
+      - uses: Swatinem/rust-cache@v2
 
-  #     - name: Install sqlx-cli
-  #       uses: actions-rs/cargo@v1
-  #       with:
-  #         command: install
-  #         args: sqlx-cli
+      - name: Install sqlx-cli
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: sqlx-cli
 
-  #     - name: Run sqlx check
-  #       uses: actions-rs/cargo@v1
-  #       with:
-  #         command: sqlx
-  #         args: prepare --check -- --all-targets
+      - name: Run sqlx check
+        uses: actions-rs/cargo@v1
+        with:
+          command: sqlx
+          args: prepare --check -- --all-targets
 
   lint:
     name: Lint
