@@ -1,0 +1,8 @@
+address,etherscan_tag,name,details,twitter_handle,category
+0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD,Uniswap: Universal Router,Uniswap,Universal Router,Uniswap,defi
+0x1c479675ad559DC151F6Ec7ed3FbF8ceE79582B6,Arbitrum: Sequencer Inbox,Arbitrum,,arbitrum,l2
+0x000000000000Ad05Ccc4F10045630fb830B95127,Blur.io: Marketplace,,,blur_io,nft
+0x0a252663DBCc0b073063D6420a40319e438Cfa59,,XEN Crypto,,XEN_Crypto,meme
+0x6b75d8AF000000e20B7a7DDf000Ba900b4009A80,MEV Bot: 0x6b7...A80,,,,mev
+0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43,Coinbase 10,,,coinbase,cex
+0x902F09715B6303d4173037652FA7377e5b98089E,Layer Zero: Relayer V2,,,LayerZero_Labs,l1-bridge
