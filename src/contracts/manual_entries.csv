@@ -6,3 +6,4 @@ address,etherscan_tag,name,details,twitter_handle,category
 0x6b75d8AF000000e20B7a7DDf000Ba900b4009A80,MEV Bot: 0x6b7...A80,,,,mev
 0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43,Coinbase 10,,,coinbase,cex
 0x902F09715B6303d4173037652FA7377e5b98089E,Layer Zero: Relayer V2,,,LayerZero_Labs,l1-bridge
+0xFf00000000000000000000000000000000008453,Base: Sequencer Inbox,Base,,BuildOnBase,l2
