@@ -45,7 +45,7 @@ impl MevBlocksStore for MevBlocksStorePostgres {
         // We sometimes get multiple blocks with the same hash which breaks our insert. Use the
         // last.
         let unique_blocks = blocks
-            .into_iter()
+            .iter()
             .rev()
             .fold(Vec::new(), |mut acc, block| {
                 if !acc
