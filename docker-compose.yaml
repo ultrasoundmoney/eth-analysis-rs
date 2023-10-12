@@ -1,0 +1,25 @@
+version: "3.8"
+services:
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
+
+  postgresql:
+    image: postgres:latest
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=defaultdb
+
+  serve:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgresql:5432/defaultdb
+      - ENV=dev
+    depends_on:
+      - postgresql
