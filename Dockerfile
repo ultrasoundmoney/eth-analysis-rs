@@ -38,18 +38,18 @@ RUN cargo build --release --bin serve
 FROM gcr.io/distroless/cc-debian12 AS runtime
 WORKDIR /app
 
-COPY --from=builder /app/target/release/phoenix-service /usr/local/bin
-COPY --from=builder /app/target/release/record-eth-price /usr/local/bin
-COPY --from=builder /app/target/release/serve /usr/local/bin
-COPY --from=builder /app/target/release/sync-beacon-states /usr/local/bin
-COPY --from=builder /app/target/release/sync-execution-blocks /usr/local/bin
-COPY --from=builder /app/target/release/sync-execution-supply-deltas /usr/local/bin
-COPY --from=builder /app/target/release/update-effective-balance-sum /usr/local/bin
-COPY --from=builder /app/target/release/update-issuance-breakdown /usr/local/bin
-COPY --from=builder /app/target/release/update-issuance-estimate /usr/local/bin
+COPY --from=builder /app/target/release/phoenix-service /app
+COPY --from=builder /app/target/release/record-eth-price /app
+COPY --from=builder /app/target/release/serve /app
+COPY --from=builder /app/target/release/sync-beacon-states /app
+COPY --from=builder /app/target/release/sync-execution-blocks /app
+COPY --from=builder /app/target/release/sync-execution-supply-deltas /app
+COPY --from=builder /app/target/release/update-effective-balance-sum /app
+COPY --from=builder /app/target/release/update-issuance-breakdown /app
+COPY --from=builder /app/target/release/update-issuance-estimate /app
 COPY --from=builder /app/src/bin/update-supply-projection-inputs/in_contracts_by_day.json /app/src/bin/update-supply-projection-inputs/in_contracts_by_day.json
-COPY --from=builder /app/target/release/update-supply-projection-inputs /usr/local/bin
-COPY --from=builder /app/target/release/update-validator-rewards /usr/local/bin
+COPY --from=builder /app/target/release/update-supply-projection-inputs /app
+COPY --from=builder /app/target/release/update-validator-rewards /app
 
 EXPOSE 3002
-ENTRYPOINT ["/usr/local/bin/serve"]
+ENTRYPOINT ["/app/serve"]
