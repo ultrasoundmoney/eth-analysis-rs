@@ -42,11 +42,31 @@ impl MevBlocksStore for MevBlocksStorePostgres {
     }
 
     async fn store_blocks(&self, blocks: &[MevBlock]) {
-        let slots: Vec<i32> = blocks.iter().map(|b| b.slot).collect();
-        let block_numbers: Vec<i32> = blocks.iter().map(|b| b.block_number).collect();
-        let block_hashes: Vec<String> = blocks.iter().map(|b| b.block_hash.clone()).collect();
-        let timestamps: Vec<DateTime<Utc>> = blocks.iter().map(|b| Slot(b.slot).into()).collect();
-        let payments: Vec<String> = blocks.iter().map(|b| b.bid.to_string()).collect();
+        // We sometimes get multiple blocks with the same hash which breaks our insert. Use the
+        // last.
+        let unique_blocks = blocks
+            .into_iter()
+            .rev()
+            .fold(Vec::new(), |mut acc, block| {
+                if !acc
+                    .iter()
+                    .any(|b: &MevBlock| b.block_hash == block.block_hash)
+                {
+                    acc.push(block.clone());
+                }
+                acc
+            })
+            .into_iter()
+            .rev()
+            .collect::<Vec<MevBlock>>();
+
+        let slots: Vec<i32> = unique_blocks.iter().map(|b| b.slot).collect();
+        let block_numbers: Vec<i32> = unique_blocks.iter().map(|b| b.block_number).collect();
+        let block_hashes: Vec<String> =
+            unique_blocks.iter().map(|b| b.block_hash.clone()).collect();
+        let timestamps: Vec<DateTime<Utc>> =
+            unique_blocks.iter().map(|b| Slot(b.slot).into()).collect();
+        let payments: Vec<String> = unique_blocks.iter().map(|b| b.bid.to_string()).collect();
 
         sqlx::query!(
             "
