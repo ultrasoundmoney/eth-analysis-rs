@@ -16,12 +16,12 @@ pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState
     sqlx::query_as!(
         BeaconState,
         r#"
-            SELECT
-                beacon_states.state_root,
-                beacon_states.slot AS "slot: Slot"
-            FROM beacon_states
-            ORDER BY slot DESC
-            LIMIT 1
+        SELECT
+            beacon_states.state_root,
+            beacon_states.slot AS "slot: Slot"
+        FROM beacon_states
+        ORDER BY slot DESC
+        LIMIT 1
         "#,
     )
     .fetch_optional(executor)
