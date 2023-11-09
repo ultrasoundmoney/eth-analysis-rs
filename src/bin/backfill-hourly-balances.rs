@@ -15,7 +15,7 @@ pub async fn main() {
 
     let db_pool = db::get_db_pool("backfill-hourly-balances", 3).await;
 
-    backfill_balances(&db_pool, &Granularity::Hour, &Slot(0)).await;
+    backfill_balances(&db_pool, &Granularity::Hour, Slot(0)).await;
 
     info!("done backfilling hourly beacon balances");
 }

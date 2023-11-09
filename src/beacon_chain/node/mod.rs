@@ -30,9 +30,9 @@ pub enum BlockId {
     Slot(Slot),
 }
 
-impl From<&Slot> for BlockId {
-    fn from(slot: &Slot) -> Self {
-        BlockId::Slot(*slot)
+impl From<Slot> for BlockId {
+    fn from(slot: Slot) -> Self {
+        BlockId::Slot(slot)
     }
 }
 
@@ -151,7 +151,7 @@ struct StateRootFirstEnvelope {
     data: StateRootSecondEnvelope,
 }
 
-fn make_state_root_url(slot: &Slot) -> String {
+fn make_state_root_url(slot: Slot) -> String {
     format!(
         "{}/eth/v1/beacon/states/{}/root",
         ENV_CONFIG.beacon_url, slot
@@ -308,23 +308,23 @@ impl Default for BeaconNodeHttp {
 #[async_trait]
 pub trait BeaconNode {
     async fn get_block_by_block_root(&self, block_root: &str) -> Result<Option<BeaconBlock>>;
-    async fn get_block_by_slot(&self, slot: &Slot) -> Result<Option<BeaconBlock>>;
+    async fn get_block_by_slot(&self, slot: Slot) -> Result<Option<BeaconBlock>>;
     async fn get_header(&self, block_id: &BlockId) -> Result<Option<BeaconHeaderSignedEnvelope>>;
     async fn get_header_by_block_root(
         &self,
         block_root: &str,
     ) -> Result<Option<BeaconHeaderSignedEnvelope>>;
-    async fn get_header_by_slot(&self, slot: &Slot) -> Result<Option<BeaconHeaderSignedEnvelope>>;
+    async fn get_header_by_slot(&self, slot: Slot) -> Result<Option<BeaconHeaderSignedEnvelope>>;
     async fn get_header_by_state_root(
         &self,
         state_root: &str,
-        slot: &Slot,
+        slot: Slot,
     ) -> Result<Option<BeaconHeaderSignedEnvelope>>;
     async fn get_last_block(&self) -> Result<BeaconBlock>;
     async fn get_last_finality_checkpoint(&self) -> Result<FinalityCheckpoint>;
     async fn get_last_finalized_block(&self) -> Result<BeaconBlock>;
     async fn get_last_header(&self) -> Result<BeaconHeaderSignedEnvelope>;
-    async fn get_state_root_by_slot(&self, slot: &Slot) -> Result<Option<StateRoot>>;
+    async fn get_state_root_by_slot(&self, slot: Slot) -> Result<Option<StateRoot>>;
     async fn get_validator_balances(
         &self,
         state_root: &str,
@@ -366,7 +366,7 @@ impl BeaconNodeHttp {
 #[async_trait]
 impl BeaconNode for BeaconNodeHttp {
     #[allow(dead_code)]
-    async fn get_block_by_slot(&self, slot: &Slot) -> Result<Option<BeaconBlock>> {
+    async fn get_block_by_slot(&self, slot: Slot) -> Result<Option<BeaconBlock>> {
         self.get_block(&slot.into()).await
     }
 
@@ -396,7 +396,7 @@ impl BeaconNode for BeaconNodeHttp {
         Ok(block)
     }
 
-    async fn get_state_root_by_slot(&self, slot: &Slot) -> Result<Option<String>> {
+    async fn get_state_root_by_slot(&self, slot: Slot) -> Result<Option<String>> {
         let url = make_state_root_url(slot);
 
         let res = self.client.get(&url).send().await?;
@@ -466,12 +466,12 @@ impl BeaconNode for BeaconNodeHttp {
         }
     }
 
-    async fn get_header_by_slot(&self, slot: &Slot) -> Result<Option<BeaconHeaderSignedEnvelope>> {
+    async fn get_header_by_slot(&self, slot: Slot) -> Result<Option<BeaconHeaderSignedEnvelope>> {
         let slot_timestamp = slot.date_time();
         if slot_timestamp > Utc::now() {
             return Err(anyhow!(
                 "tried to fetch slot: {}, with expected timestamp: {}, but can't fetch slots from the future",
-                &slot,
+                slot,
                 slot_timestamp
             ));
         }
@@ -494,7 +494,7 @@ impl BeaconNode for BeaconNodeHttp {
     async fn get_header_by_state_root(
         &self,
         state_root: &str,
-        slot: &Slot,
+        slot: Slot,
     ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
         let block_id: BlockId = slot.into();
         let header = self.get_header(&block_id).await?;
@@ -610,7 +610,7 @@ pub mod tests {
     #[tokio::test]
     async fn header_by_slot_test() {
         let beacon_node = BeaconNodeHttp::new();
-        beacon_node.get_header_by_slot(&SLOT_1229).await.unwrap();
+        beacon_node.get_header_by_slot(SLOT_1229).await.unwrap();
     }
 
     #[tokio::test]
@@ -628,10 +628,7 @@ pub mod tests {
     #[tokio::test]
     async fn state_root_by_slot_test() {
         let beacon_node = BeaconNodeHttp::new();
-        beacon_node
-            .get_state_root_by_slot(&SLOT_1229)
-            .await
-            .unwrap();
+        beacon_node.get_state_root_by_slot(SLOT_1229).await.unwrap();
     }
 
     #[tokio::test]
@@ -663,7 +660,7 @@ pub mod tests {
     async fn get_header_by_slot_test() {
         let beacon_node = BeaconNodeHttp::new();
         beacon_node
-            .get_header_by_slot(&Slot(4_000_000))
+            .get_header_by_slot(Slot(4_000_000))
             .await
             .unwrap();
     }
@@ -691,7 +688,7 @@ pub mod tests {
         beacon_node
             .get_header_by_state_root(
                 "0x2e3df8cebeb66206d2b26e6a36a63105f78c22c3ab4b7abaa11b4056b4519588",
-                &Slot(5000000),
+                Slot(5000000),
             )
             .await
             .unwrap();
@@ -701,7 +698,7 @@ pub mod tests {
     async fn get_deposits() {
         let beacon_node = BeaconNodeHttp::new();
         let block = beacon_node
-            .get_block_by_slot(&Slot(1229))
+            .get_block_by_slot(Slot(1229))
             .await
             .unwrap()
             .unwrap();
@@ -713,7 +710,7 @@ pub mod tests {
     async fn get_withdrawals() {
         let beacon_node = BeaconNodeHttp::new();
         let block = beacon_node
-            .get_block_by_slot(&Slot(6212480))
+            .get_block_by_slot(Slot(6212480))
             .await
             .unwrap()
             .unwrap();

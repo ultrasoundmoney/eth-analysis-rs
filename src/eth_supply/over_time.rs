@@ -293,7 +293,7 @@ pub struct SupplyOverTime {
 
 pub async fn get_supply_over_time(
     executor: &PgPool,
-    slot: &Slot,
+    slot: Slot,
     block_number: BlockNumber,
 ) -> Result<SupplyOverTime> {
     debug!("updating supply over time");
@@ -325,7 +325,7 @@ pub async fn get_supply_over_time(
         m5,
         since_burn,
         since_merge,
-        slot: *slot,
+        slot,
         timestamp: slot.date_time(),
     };
 
@@ -392,7 +392,7 @@ mod tests {
             supply: EthNewtype(10.0),
         };
 
-        store_test_eth_supply(&mut *transaction, &test_slot, EthNewtype(10.0))
+        store_test_eth_supply(&mut *transaction, test_slot, EthNewtype(10.0))
             .await
             .unwrap();
 

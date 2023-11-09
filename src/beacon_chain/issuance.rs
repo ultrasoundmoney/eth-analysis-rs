@@ -28,7 +28,7 @@ use super::Slot;
 pub async fn store_issuance(
     executor: impl PgExecutor<'_>,
     state_root: &str,
-    slot: &Slot,
+    slot: Slot,
     gwei: &GweiNewtype,
 ) {
     let gwei: i64 = gwei.to_owned().into();
@@ -70,7 +70,7 @@ pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype 
     .unwrap()
 }
 
-pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
+pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_equal: Slot) {
     sqlx::query!(
         "
         DELETE FROM beacon_issuance
@@ -86,7 +86,7 @@ pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_e
     .unwrap();
 }
 
-pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: &Slot) {
+pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: Slot) {
     sqlx::query!(
         "
         DELETE FROM beacon_issuance
@@ -334,9 +334,9 @@ mod tests {
 
         let test_id = "timestamp_is_start_of_day";
 
-        store_state(&mut *transaction, test_id, &Slot(3599)).await;
+        store_state(&mut *transaction, test_id, Slot(3599)).await;
 
-        store_issuance(&mut *transaction, test_id, &Slot(3599), &GweiNewtype(100)).await;
+        store_issuance(&mut *transaction, test_id, Slot(3599), &GweiNewtype(100)).await;
 
         let validator_balances_by_day = get_issuance_by_start_of_day(&mut *transaction).await;
 
@@ -356,14 +356,14 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut *transaction, "0xtest_issuance_1", &Slot(3599)).await;
+        store_state(&mut *transaction, "0xtest_issuance_1", Slot(3599)).await;
 
-        store_state(&mut *transaction, "0xtest_issuance_2", &Slot(10799)).await;
+        store_state(&mut *transaction, "0xtest_issuance_2", Slot(10799)).await;
 
         store_issuance(
             &mut *transaction,
             "0xtest_issuance_1",
-            &Slot(3599),
+            Slot(3599),
             &GweiNewtype(100),
         )
         .await;
@@ -371,7 +371,7 @@ mod tests {
         store_issuance(
             &mut *transaction,
             "0xtest_issuance_2",
-            &Slot(10799),
+            Slot(10799),
             &GweiNewtype(110),
         )
         .await;
@@ -386,12 +386,12 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut *transaction, "0xtest_issuance", &Slot(3599)).await;
+        store_state(&mut *transaction, "0xtest_issuance", Slot(3599)).await;
 
         store_issuance(
             &mut *transaction,
             "0xtest_issuance",
-            &Slot(3599),
+            Slot(3599),
             &GweiNewtype(100),
         )
         .await;
@@ -400,7 +400,7 @@ mod tests {
 
         assert_eq!(issuance_by_day.len(), 1);
 
-        delete_issuances(&mut *transaction, &Slot(3599)).await;
+        delete_issuances(&mut *transaction, Slot(3599)).await;
 
         let issuance_by_day_after = get_issuance_by_start_of_day(&mut *transaction).await;
 
@@ -419,16 +419,16 @@ mod tests {
         store_state(
             &mut *transaction,
             "0xtest_issuance_1",
-            &now_min_seven_days_slot,
+            now_min_seven_days_slot,
         )
         .await;
 
-        store_state(&mut *transaction, "0xtest_issuance_2", &now_slot).await;
+        store_state(&mut *transaction, "0xtest_issuance_2", now_slot).await;
 
         store_issuance(
             &mut *transaction,
             "0xtest_issuance_1",
-            &now_min_seven_days_slot,
+            now_min_seven_days_slot,
             &GweiNewtype(100),
         )
         .await;
@@ -436,7 +436,7 @@ mod tests {
         store_issuance(
             &mut *transaction,
             "0xtest_issuance_2",
-            &now_slot,
+            now_slot,
             &GweiNewtype(110),
         )
         .await;

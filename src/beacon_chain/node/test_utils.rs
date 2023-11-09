@@ -99,8 +99,8 @@ impl BeaconHeaderSignedEnvelopeBuilder {
         }
     }
 
-    pub fn slot(mut self, slot: &Slot) -> Self {
-        self.slot = *slot;
+    pub fn slot(mut self, slot: Slot) -> Self {
+        self.slot = slot;
         self
     }
 

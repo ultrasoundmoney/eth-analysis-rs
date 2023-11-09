@@ -22,7 +22,7 @@ pub struct SupplyParts {
 
 impl SupplyParts {
     pub fn new(
-        slot: &Slot,
+        slot: Slot,
         block_number: &BlockNumber,
         execution_balances_sum: WeiNewtype,
         beacon_balances_sum: GweiNewtype,
@@ -33,7 +33,7 @@ impl SupplyParts {
             beacon_deposits_sum,
             block_number: *block_number,
             execution_balances_sum,
-            slot: *slot,
+            slot,
         }
     }
 
@@ -50,7 +50,7 @@ pub enum SupplyPartsError {
 
 async fn get_supply_parts(
     executor_acq: &mut PgConnection,
-    slot: &Slot,
+    slot: Slot,
 ) -> Result<SupplyParts, SupplyPartsError> {
     let state_root =
         beacon_chain::get_state_root_by_slot(executor_acq.acquire().await.unwrap(), slot)
@@ -82,7 +82,7 @@ async fn get_supply_parts(
         &state_root,
     )
     .await
-    .ok_or(SupplyPartsError::NoValidatorBalancesAvailable(*slot))?;
+    .ok_or(SupplyPartsError::NoValidatorBalancesAvailable(slot))?;
 
     debug!(
         %slot,
@@ -126,13 +126,13 @@ impl<'a> SupplyPartsStore<'a> {
     }
 
     /// Retrieves the three components that make up the eth supply for a given slot.
-    pub async fn get(&self, slot: &Slot) -> Result<SupplyParts, SupplyPartsError> {
+    pub async fn get(&self, slot: Slot) -> Result<SupplyParts, SupplyPartsError> {
         get_supply_parts(&mut self.db_pool.acquire().await.unwrap(), slot).await
     }
 
     pub async fn get_with_transaction(
         transaction: &mut PgConnection,
-        slot: &Slot,
+        slot: Slot,
     ) -> Result<SupplyParts, SupplyPartsError> {
         get_supply_parts(transaction, slot).await
     }

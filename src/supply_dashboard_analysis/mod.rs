@@ -43,7 +43,7 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     let supply_parts_store = SupplyPartsStore::new(db_pool);
 
     let supply_parts = {
-        let supply_parts = supply_parts_store.get(&limit_slot).await;
+        let supply_parts = supply_parts_store.get(limit_slot).await;
         match supply_parts {
             Ok(supply_parts) => supply_parts,
             Err(SupplyPartsError::NoValidatorBalancesAvailable(_)) => {
@@ -54,7 +54,7 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     };
 
     let supply_over_time =
-        eth_supply::get_supply_over_time(db_pool, &limit_slot, supply_parts.block_number())
+        eth_supply::get_supply_over_time(db_pool, limit_slot, supply_parts.block_number())
             .timed("get-supply-over-time")
             .await?;
     let supply_changes: SupplyChanges = (&supply_over_time).into();

@@ -121,7 +121,7 @@ pub async fn store_block(
     .unwrap();
 }
 
-pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
+pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal: Slot) {
     sqlx::query!(
         "
         DELETE FROM beacon_blocks
@@ -140,7 +140,7 @@ pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal:
     .unwrap();
 }
 
-pub async fn delete_block(executor: impl PgExecutor<'_>, slot: &Slot) {
+pub async fn delete_block(executor: impl PgExecutor<'_>, slot: Slot) {
     sqlx::query(
         "
         DELETE FROM beacon_blocks
@@ -159,7 +159,7 @@ pub async fn delete_block(executor: impl PgExecutor<'_>, slot: &Slot) {
     .unwrap();
 }
 
-pub async fn get_block_before_slot(executor: impl PgExecutor<'_>, less_than: &Slot) -> DbBlock {
+pub async fn get_block_before_slot(executor: impl PgExecutor<'_>, less_than: Slot) -> DbBlock {
     sqlx::query_as!(
         BlockDbRow,
         "
@@ -236,7 +236,7 @@ impl From<BlockDbRow> for DbBlock {
     }
 }
 
-pub async fn get_block_by_slot(executor: impl PgExecutor<'_>, slot: &Slot) -> Option<DbBlock> {
+pub async fn get_block_by_slot(executor: impl PgExecutor<'_>, slot: Slot) -> Option<DbBlock> {
     sqlx::query_as!(
         BlockDbRow,
         r#"
@@ -339,7 +339,7 @@ mod tests {
         let state_root = "0xblock_test_state_root".to_string();
         let slot = Slot(0);
 
-        store_state(&mut *transaction, &state_root, &slot).await;
+        store_state(&mut *transaction, &state_root, slot).await;
 
         store_block(
             &mut *transaction,
@@ -391,7 +391,7 @@ mod tests {
         let test_id = "last_block_number_some_test";
         let slot = Slot(5923);
         let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
-            .slot(&slot)
+            .slot(slot)
             .build();
         let test_block = Into::<BeaconBlockBuilder>::into(&test_header).build();
 
@@ -411,7 +411,7 @@ mod tests {
         let block_slot = get_last_block_slot(&mut *transaction).await;
         assert_eq!(block_slot, Some(Slot(0)));
 
-        delete_blocks(&mut *transaction, &Slot(0)).await;
+        delete_blocks(&mut *transaction, Slot(0)).await;
 
         let block_slot = get_last_block_slot(&mut *transaction).await;
         assert_eq!(block_slot, None);
@@ -436,7 +436,7 @@ mod tests {
 
         store_custom_test_block(&mut *transaction, &test_header_after, &test_block_after).await;
 
-        let last_block_before = get_block_before_slot(&mut *transaction, &Slot(1)).await;
+        let last_block_before = get_block_before_slot(&mut *transaction, Slot(1)).await;
 
         assert_eq!(test_header_before.root, last_block_before.block_root);
     }
@@ -460,11 +460,11 @@ mod tests {
         store_state(
             &mut *transaction,
             &test_header_after.state_root(),
-            &test_header_after.slot(),
+            test_header_after.slot(),
         )
         .await;
 
-        let last_block_before = get_block_before_slot(&mut *transaction, &Slot(1)).await;
+        let last_block_before = get_block_before_slot(&mut *transaction, Slot(1)).await;
 
         assert_eq!(test_header_before.root, last_block_before.block_root);
     }
@@ -502,7 +502,7 @@ mod tests {
 
         update_block_hash(&mut *transaction, &block_root, &block_hash_after).await;
 
-        let block = get_block_by_slot(&mut *transaction, &header.slot())
+        let block = get_block_by_slot(&mut *transaction, header.slot())
             .await
             .unwrap();
 
@@ -518,15 +518,13 @@ mod tests {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
         let block = Into::<BeaconBlockBuilder>::into(&header).build();
 
-        let block_not_there = get_block_by_slot(&mut *transaction, &Slot(0)).await;
+        let block_not_there = get_block_by_slot(&mut *transaction, Slot(0)).await;
 
         assert_eq!(None, block_not_there);
 
         store_custom_test_block(&mut *transaction, &header, &block).await;
 
-        let block_there = get_block_by_slot(&mut *transaction, &Slot(0))
-            .await
-            .unwrap();
+        let block_there = get_block_by_slot(&mut *transaction, Slot(0)).await.unwrap();
 
         assert_eq!(header.root, block_there.block_root);
     }

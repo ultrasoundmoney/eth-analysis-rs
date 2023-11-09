@@ -13,7 +13,7 @@ use super::SupplyPartsStore;
 
 pub async fn rollback_supply_from_slot(
     executor: &mut PgConnection,
-    greater_than_or_equal: &Slot,
+    greater_than_or_equal: Slot,
 ) -> sqlx::Result<PgQueryResult> {
     sqlx::query!(
         "
@@ -31,7 +31,7 @@ pub async fn rollback_supply_from_slot(
 
 pub async fn rollback_supply_slot(
     executor: &mut PgConnection,
-    greater_than_or_equal: &Slot,
+    greater_than_or_equal: Slot,
 ) -> sqlx::Result<PgQueryResult> {
     sqlx::query!(
         "
@@ -49,7 +49,7 @@ pub async fn rollback_supply_slot(
 
 pub async fn store(
     executor: impl PgExecutor<'_>,
-    slot: &Slot,
+    slot: Slot,
     block_number: &BlockNumber,
     execution_balances_sum: &WeiNewtype,
     beacon_balances_sum: &GweiNewtype,
@@ -84,7 +84,7 @@ pub async fn store(
 
 pub async fn get_supply_exists_by_slot(
     executor: impl PgExecutor<'_>,
-    slot: &Slot,
+    slot: Slot,
 ) -> sqlx::Result<bool> {
     sqlx::query!(
         "
@@ -118,7 +118,7 @@ pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Resul
     Ok(slot.map(Slot))
 }
 
-pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: &Slot) {
+pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) {
     let supply_parts =
         SupplyPartsStore::get_with_transaction(executor_acq.acquire().await.unwrap(), slot).await;
 
@@ -229,12 +229,8 @@ mod tests {
 
         execution_chain::store_block(&test_db.pool, &execution_test_block, 0.0).await;
 
-        beacon_chain::store_state(
-            &test_db.pool,
-            &test_header.state_root(),
-            &test_header.slot(),
-        )
-        .await;
+        beacon_chain::store_state(&test_db.pool, &test_header.state_root(), test_header.slot())
+            .await;
 
         beacon_chain::store_block(
             &test_db.pool,
@@ -250,7 +246,7 @@ mod tests {
         beacon_chain::store_validators_balance(
             &test_db.pool,
             &test_header.state_root(),
-            &test_header.slot(),
+            test_header.slot(),
             &GweiNewtype(20),
         )
         .await;
@@ -284,14 +280,14 @@ mod tests {
                 .unwrap();
 
         let supply_parts_test = SupplyParts::new(
-            &Slot(0),
+            Slot(0),
             &execution_balances_sum.block_number,
             execution_balances_sum.balances_sum,
             GweiNewtype(20),
             beacon_deposits_sum,
         );
 
-        let supply_parts = supply_parts_store.get(&test_header.slot()).await.unwrap();
+        let supply_parts = supply_parts_store.get(test_header.slot()).await.unwrap();
 
         assert_eq!(supply_parts, supply_parts_test);
     }
@@ -301,7 +297,7 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let eth_supply_exists = get_supply_exists_by_slot(&mut *transaction, &Slot(0)).await?;
+        let eth_supply_exists = get_supply_exists_by_slot(&mut *transaction, Slot(0)).await?;
 
         assert!(!eth_supply_exists);
 
@@ -319,10 +315,10 @@ mod tests {
 
         execution_chain::store_block(&mut *transaction, &test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut *transaction, state_root, &slot).await;
+        beacon_chain::store_state(&mut *transaction, state_root, slot).await;
 
         let supply_parts = SupplyParts::new(
-            &slot,
+            slot,
             &0,
             Into::<WeiNewtype>::into(GweiNewtype(10)),
             GweiNewtype(20),
@@ -331,7 +327,7 @@ mod tests {
 
         store(
             &mut *transaction,
-            &slot,
+            slot,
             &0,
             &supply_parts.execution_balances_sum,
             &supply_parts.beacon_balances_sum,
@@ -340,7 +336,7 @@ mod tests {
         .await
         .unwrap();
 
-        let eth_supply_exists = get_supply_exists_by_slot(&mut *transaction, &slot)
+        let eth_supply_exists = get_supply_exists_by_slot(&mut *transaction, slot)
             .await
             .unwrap();
 
@@ -359,10 +355,10 @@ mod tests {
 
         execution_chain::store_block(&mut *transaction, &test_block, 0.0).await;
 
-        beacon_chain::store_state(&mut *transaction, &state_root, &slot).await;
+        beacon_chain::store_state(&mut *transaction, &state_root, slot).await;
 
         let supply_parts = SupplyParts::new(
-            &slot,
+            slot,
             &0,
             GweiNewtype(10).into(),
             GweiNewtype(20),
@@ -371,7 +367,7 @@ mod tests {
 
         store(
             &mut *transaction,
-            &slot,
+            slot,
             &0,
             &supply_parts.execution_balances_sum,
             &supply_parts.beacon_balances_sum,

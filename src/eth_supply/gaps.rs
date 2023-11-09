@@ -46,11 +46,11 @@ pub async fn fill_gaps() -> Result<()> {
     let supply_parts_store = SupplyPartsStore::new(&db_pool);
 
     for slot in (FIRST_STORED_ETH_SUPPLY_SLOT.0..=last_slot.0).map(Slot) {
-        let stored_eth_supply = eth_supply::get_supply_exists_by_slot(&db_pool, &slot).await?;
+        let stored_eth_supply = eth_supply::get_supply_exists_by_slot(&db_pool, slot).await?;
         if !stored_eth_supply {
             info!(%slot, "missing eth_supply, filling gap");
 
-            let supply_parts = supply_parts_store.get(&slot).await;
+            let supply_parts = supply_parts_store.get(slot).await;
 
             match supply_parts {
                 Err(SupplyPartsError::NoValidatorBalancesAvailable(_)) => {
@@ -59,7 +59,7 @@ pub async fn fill_gaps() -> Result<()> {
                 Ok(supply_parts) => {
                     eth_supply::store(
                         &db_pool,
-                        &slot,
+                        slot,
                         &supply_parts.block_number(),
                         &supply_parts.execution_balances_sum,
                         &supply_parts.beacon_balances_sum,

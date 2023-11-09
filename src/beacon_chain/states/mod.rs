@@ -29,14 +29,14 @@ pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState
     .unwrap()
 }
 
-pub async fn store_state(executor: impl PgExecutor<'_>, state_root: &str, slot: &Slot) {
+pub async fn store_state(executor: impl PgExecutor<'_>, state_root: &str, slot: Slot) {
     sqlx::query!(
         "
-            INSERT INTO
-                beacon_states
-                (state_root, slot)
-            VALUES
-                ($1, $2)
+        INSERT INTO
+            beacon_states
+            (state_root, slot)
+        VALUES
+            ($1, $2)
         ",
         state_root,
         slot.0,
@@ -46,15 +46,15 @@ pub async fn store_state(executor: impl PgExecutor<'_>, state_root: &str, slot: 
     .unwrap();
 }
 
-pub async fn get_state_root_by_slot(executor: impl PgExecutor<'_>, slot: &Slot) -> Option<String> {
+pub async fn get_state_root_by_slot(executor: impl PgExecutor<'_>, slot: Slot) -> Option<String> {
     sqlx::query!(
         "
-            SELECT
-                state_root
-            FROM
-                beacon_states
-            WHERE
-                slot = $1
+        SELECT
+            state_root
+        FROM
+            beacon_states
+        WHERE
+            slot = $1
         ",
         slot.0
     )
@@ -64,11 +64,11 @@ pub async fn get_state_root_by_slot(executor: impl PgExecutor<'_>, slot: &Slot) 
     .map(|row| row.state_root)
 }
 
-pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
+pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal: Slot) {
     sqlx::query!(
         "
-            DELETE FROM beacon_states
-            WHERE slot >= $1
+        DELETE FROM beacon_states
+        WHERE slot >= $1
         ",
         greater_than_or_equal.0
     )
@@ -77,11 +77,11 @@ pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal:
     .unwrap();
 }
 
-pub async fn delete_state(executor: impl PgExecutor<'_>, slot: &Slot) {
+pub async fn delete_state(executor: impl PgExecutor<'_>, slot: Slot) {
     sqlx::query!(
         "
-            DELETE FROM beacon_states
-            WHERE slot = $1
+        DELETE FROM beacon_states
+        WHERE slot = $1
         ",
         slot.0
     )
@@ -102,7 +102,7 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut *transaction, "0xstate_root", &Slot(0)).await;
+        store_state(&mut *transaction, "0xstate_root", Slot(0)).await;
 
         let state = get_last_state(&mut *transaction).await.unwrap();
 
@@ -120,9 +120,9 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut *transaction, "0xstate_root_1", &Slot(0)).await;
+        store_state(&mut *transaction, "0xstate_root_1", Slot(0)).await;
 
-        store_state(&mut *transaction, "0xstate_root_2", &Slot(1)).await;
+        store_state(&mut *transaction, "0xstate_root_2", Slot(1)).await;
 
         let state = get_last_state(&mut *transaction).await.unwrap();
 
@@ -140,12 +140,12 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut *transaction, "0xstate_root", &Slot(0)).await;
+        store_state(&mut *transaction, "0xstate_root", Slot(0)).await;
 
         let state = get_last_state(&mut *transaction).await;
         assert!(state.is_some());
 
-        delete_states(&mut *transaction, &Slot(0)).await;
+        delete_states(&mut *transaction, Slot(0)).await;
 
         let state_after = get_last_state(&mut *transaction).await;
         assert!(state_after.is_none());
@@ -156,9 +156,9 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut *transaction, "0xtest", &Slot(0)).await;
+        store_state(&mut *transaction, "0xtest", Slot(0)).await;
 
-        let state_root = get_state_root_by_slot(&mut *transaction, &Slot(0))
+        let state_root = get_state_root_by_slot(&mut *transaction, Slot(0))
             .await
             .unwrap();
 

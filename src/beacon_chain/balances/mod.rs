@@ -20,7 +20,7 @@ pub fn sum_validator_balances(validator_balances: &[ValidatorBalance]) -> GweiNe
 pub async fn store_validators_balance(
     pool: impl PgExecutor<'_>,
     state_root: &str,
-    slot: &Slot,
+    slot: Slot,
     gwei: &GweiNewtype,
 ) {
     let gwei: i64 = gwei.to_owned().into();
@@ -86,7 +86,7 @@ pub async fn get_validator_balances_by_start_of_day(
     }).unwrap()
 }
 
-pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_or_equal: &Slot) {
+pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_or_equal: Slot) {
     sqlx::query!(
         "
         DELETE FROM beacon_validators_balance
@@ -102,7 +102,7 @@ pub async fn delete_validator_sums(executor: impl PgExecutor<'_>, greater_than_o
     .unwrap();
 }
 
-pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: &Slot) {
+pub async fn delete_validator_sum(executor: impl PgExecutor<'_>, slot: Slot) {
     sqlx::query!(
         "
         DELETE FROM beacon_validators_balance
@@ -167,12 +167,12 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut *transaction, "0xtest_balances", &Slot(17999)).await;
+        store_state(&mut *transaction, "0xtest_balances", Slot(17999)).await;
 
         store_validators_balance(
             &mut *transaction,
             "0xtest_balances",
-            &Slot(17999),
+            Slot(17999),
             &GweiNewtype(100),
         )
         .await;
@@ -196,12 +196,12 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_state(&mut *transaction, "0xtest_balances", &Slot(17999)).await;
+        store_state(&mut *transaction, "0xtest_balances", Slot(17999)).await;
 
         store_validators_balance(
             &mut *transaction,
             "0xtest_balances",
-            &Slot(17999),
+            Slot(17999),
             &GweiNewtype(100),
         )
         .await;
@@ -209,7 +209,7 @@ mod tests {
         let balances = get_validator_balances_by_start_of_day(&mut *transaction).await;
         assert_eq!(balances.len(), 1);
 
-        delete_validator_sums(&mut *transaction, &Slot(17999)).await;
+        delete_validator_sums(&mut *transaction, Slot(17999)).await;
 
         let balances = get_validator_balances_by_start_of_day(&mut *transaction).await;
         assert_eq!(balances.len(), 0);
@@ -225,7 +225,7 @@ mod tests {
 
         store_test_block(&mut *transaction, test_id).await;
 
-        store_validators_balance(&mut *transaction, &state_root, &Slot(0), &GweiNewtype(100)).await;
+        store_validators_balance(&mut *transaction, &state_root, Slot(0), &GweiNewtype(100)).await;
 
         let beacon_balances_sum = get_balances_by_state_root(&mut *transaction, &state_root)
             .await

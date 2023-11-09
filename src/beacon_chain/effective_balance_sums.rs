@@ -16,10 +16,10 @@ pub struct EffectiveBalanceSum {
 }
 
 impl EffectiveBalanceSum {
-    pub fn new(slot: &Slot, sum: GweiNewtype) -> Self {
+    pub fn new(slot: Slot, sum: GweiNewtype) -> Self {
         Self {
             sum: sum.into(),
-            slot: *slot,
+            slot,
             timestamp: slot.date_time(),
         }
     }
@@ -94,7 +94,7 @@ mod tests {
             Ok(None)
         }
 
-        async fn get_block_by_slot(&self, _slot: &Slot) -> Result<Option<BeaconBlock>> {
+        async fn get_block_by_slot(&self, _slot: Slot) -> Result<Option<BeaconBlock>> {
             Ok(None)
         }
 
@@ -114,7 +114,7 @@ mod tests {
 
         async fn get_header_by_slot(
             &self,
-            _slot: &Slot,
+            _slot: Slot,
         ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
             Ok(None)
         }
@@ -122,7 +122,7 @@ mod tests {
         async fn get_header_by_state_root(
             &self,
             _state_root: &str,
-            _slot: &Slot,
+            _slot: Slot,
         ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
             Ok(None)
         }
@@ -143,7 +143,7 @@ mod tests {
             Err(anyhow!("Not implemented in the MockBeaconNode"))
         }
 
-        async fn get_state_root_by_slot(&self, _slot: &Slot) -> Result<Option<StateRoot>> {
+        async fn get_state_root_by_slot(&self, _slot: Slot) -> Result<Option<StateRoot>> {
             Ok(None)
         }
 
@@ -193,7 +193,7 @@ mod tests {
         let state_root = SLOT_0_STATE_ROOT;
         let sum = GweiNewtype(9500000);
 
-        beacon_chain::store_state(&test_db.pool, state_root, &Slot(0)).await;
+        beacon_chain::store_state(&test_db.pool, state_root, Slot(0)).await;
 
         store_effective_balance_sum(&test_db.pool, state_root, &sum).await;
 

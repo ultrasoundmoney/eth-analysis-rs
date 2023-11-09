@@ -86,7 +86,7 @@ mod tests {
         store_state(
             &mut *transaction,
             &test_header.state_root(),
-            &test_header.slot(),
+            test_header.slot(),
         )
         .await;
 

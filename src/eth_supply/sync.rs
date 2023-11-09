@@ -8,7 +8,7 @@ use crate::beacon_chain::{Slot, FIRST_POST_MERGE_SLOT};
 use super::store;
 
 /// Stores an eth supply for a given slot.
-pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) {
+pub async fn sync_eth_supply(executor: &mut PgConnection, slot: Slot) {
     let last_stored_execution_balances_slot =
         store::get_last_stored_balances_slot(executor.acquire().await.unwrap()).await;
 
@@ -24,7 +24,7 @@ pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) {
                     .unwrap();
 
             // Don't exceed currently syncing slot. We wouldn't have the balances.
-            let sync_limit = last_stored_execution_balances_slot.min(*slot);
+            let sync_limit = last_stored_execution_balances_slot.min(slot);
 
             match last_stored_supply_slot {
                 None => {
@@ -63,7 +63,7 @@ pub async fn sync_eth_supply(executor: &mut PgConnection, slot: &Slot) {
                 %slot,
                 "storing eth supply for newly available execution balance slot"
             );
-            store::store_supply_for_slot(executor, &slot).await;
+            store::store_supply_for_slot(executor, slot).await;
         }
     }
 }

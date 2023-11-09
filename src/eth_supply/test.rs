@@ -24,7 +24,7 @@ pub fn make_test_block() -> ExecutionNodeBlock {
 
 pub async fn store_test_eth_supply(
     connection: &mut PgConnection,
-    slot: &Slot,
+    slot: Slot,
     eth_supply: EthNewtype,
 ) -> Result<()> {
     let test_block = make_test_block();
@@ -40,10 +40,10 @@ pub async fn store_test_eth_supply(
     };
     let beacon_balances_sum = BeaconBalancesSum {
         balances_sum: GweiNewtype(0),
-        slot: *slot,
+        slot,
     };
     let beacon_deposits_sum = BeaconDepositsSum {
-        slot: *slot,
+        slot,
         deposits_sum: GweiNewtype(0),
     };
 

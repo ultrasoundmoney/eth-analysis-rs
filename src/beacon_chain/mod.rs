@@ -104,7 +104,7 @@ pub mod tests {
         store_state(
             executor.acquire().await.unwrap(),
             &header.header.message.state_root,
-            &header.header.message.slot,
+            header.header.message.slot,
         )
         .await;
 

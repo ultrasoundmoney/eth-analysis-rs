@@ -94,7 +94,7 @@ mod tests {
         let mut mock_relay = MockRelayApi::new();
 
         let header = BeaconHeaderSignedEnvelopeBuilder::new("test_sync_mev_blocks")
-            .slot(&Slot(200))
+            .slot(Slot(200))
             .build();
         mock_node
             .expect_get_last_header()

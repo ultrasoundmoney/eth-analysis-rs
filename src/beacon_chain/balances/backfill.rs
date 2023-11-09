@@ -15,7 +15,7 @@ pub enum Granularity {
     Slot,
 }
 
-async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: &Slot) -> u64 {
+async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: Slot) -> u64 {
     let slots_count = sqlx::query!(
         "
         SELECT
@@ -46,7 +46,7 @@ async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: &
     .unwrap()
 }
 
-pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from: &Slot) {
+pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from: Slot) {
     let beacon_node = BeaconNodeHttp::new();
 
     debug!("estimating work to be done");
@@ -135,7 +135,7 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
 
         let balances_sum = balances::sum_validator_balances(&validator_balances);
 
-        balances::store_validators_balance(db_pool, &state_root, &slot.into(), &balances_sum).await;
+        balances::store_validators_balance(db_pool, &state_root, slot.into(), &balances_sum).await;
 
         progress.inc_work_done();
 

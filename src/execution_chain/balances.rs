@@ -77,7 +77,7 @@ mod tests {
         let test_id = "get_balances_by_hash";
         let block_hash = format!("0x{test_id}_block_hash");
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
-            .slot(&Slot(10))
+            .slot(Slot(10))
             .build();
         let block = Into::<BeaconBlockBuilder>::into(&header)
             .block_hash(&block_hash)

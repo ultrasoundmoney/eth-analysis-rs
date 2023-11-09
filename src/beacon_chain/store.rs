@@ -46,7 +46,7 @@ mod tests {
             state_root: "0xstate_root".to_string(),
         };
 
-        states::store_state(&test_db.pool, &test_state.state_root, &test_state.slot).await;
+        states::store_state(&test_db.pool, &test_state.state_root, test_state.slot).await;
 
         let state = beacon_store.get_last_state().await;
         assert_eq!(Some(test_state), state);

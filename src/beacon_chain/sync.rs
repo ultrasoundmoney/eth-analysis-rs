@@ -92,7 +92,7 @@ struct SyncData {
 async fn gather_sync_data(
     beacon_node: &BeaconNodeHttp,
     state_root: &StateRoot,
-    slot: &Slot,
+    slot: Slot,
     sync_lag: &Duration,
 ) -> Result<SyncData> {
     // The beacon node won't clearly tell us if a header is unavailable because the slot was missed
@@ -155,7 +155,7 @@ async fn gather_sync_data(
     Ok(sync_data)
 }
 
-async fn get_sync_lag(beacon_node: &BeaconNodeHttp, syncing_slot: &Slot) -> Result<Duration> {
+async fn get_sync_lag(beacon_node: &BeaconNodeHttp, syncing_slot: Slot) -> Result<Duration> {
     let last_header = beacon_node.get_last_header().await?;
     let last_on_chain_slot = last_header.header.message.slot;
     let last_on_chain_slot_date_time = last_on_chain_slot.date_time();
@@ -168,7 +168,7 @@ pub async fn sync_slot_by_state_root(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
     state_root: &StateRoot,
-    slot: &Slot,
+    slot: Slot,
 ) -> Result<()> {
     // If we are falling too far behind the head of the chain, skip storing validator balances.
     let sync_lag = get_sync_lag(beacon_node, slot).await?;
@@ -215,7 +215,7 @@ pub async fn sync_slot_by_state_root(
         ));
             }
 
-            states::store_state(&mut *transaction, &header.state_root(), &header.slot()).await;
+            states::store_state(&mut *transaction, &header.state_root(), header.slot()).await;
 
             blocks::store_block(
                 &mut *transaction,
@@ -363,7 +363,7 @@ async fn stream_slots(slot_to_follow: Slot) -> impl Stream<Item = Slot> {
     rx
 }
 
-async fn stream_slots_from(gte_slot: &Slot) -> impl Stream<Item = Slot> {
+async fn stream_slots_from(gte_slot: Slot) -> impl Stream<Item = Slot> {
     debug!("streaming slots from {gte_slot}");
 
     let beacon_node = BeaconNodeHttp::new();
@@ -383,7 +383,7 @@ async fn stream_slots_from(gte_slot: &Slot) -> impl Stream<Item = Slot> {
     // chain has advanced between these two calls.
     let slots_stream = stream_slots(last_slot_on_start).await;
 
-    let slot_range = SlotRange::new(*gte_slot, last_slot_on_start);
+    let slot_range = SlotRange::new(gte_slot, last_slot_on_start);
 
     let historic_slots_stream = stream::iter(slot_range);
 
@@ -393,12 +393,12 @@ async fn stream_slots_from(gte_slot: &Slot) -> impl Stream<Item = Slot> {
 async fn stream_slots_from_last(db_pool: &PgPool) -> impl Stream<Item = Slot> {
     let last_synced_state = states::get_last_state(db_pool).await;
     let next_slot_to_sync = last_synced_state.map_or(Slot(0), |state| state.slot + 1);
-    stream_slots_from(&next_slot_to_sync).await
+    stream_slots_from(next_slot_to_sync).await
 }
 
 pub async fn rollback_slots(
     executor: &mut PgConnection,
-    greater_than_or_equal: &Slot,
+    greater_than_or_equal: Slot,
 ) -> Result<()> {
     debug!("rolling back data based on slots gte {greater_than_or_equal}");
     let mut transaction = executor.begin().await?;
@@ -413,7 +413,7 @@ pub async fn rollback_slots(
     Ok(())
 }
 
-pub async fn rollback_slot(executor: &mut PgConnection, slot: &Slot) -> Result<()> {
+pub async fn rollback_slot(executor: &mut PgConnection, slot: Slot) -> Result<()> {
     debug!("rolling back data based on slot {slot}");
     let mut transaction = executor.begin().await?;
     eth_supply::rollback_supply_slot(&mut transaction, slot)
@@ -443,12 +443,12 @@ async fn estimate_slots_remaining(
 async fn find_last_matching_slot(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
-    starting_candidate: &Slot,
+    starting_candidate: Slot,
 ) -> Result<Slot> {
-    let mut candidate_slot = *starting_candidate;
-    let mut stored_state_root = states::get_state_root_by_slot(db_pool, &candidate_slot).await;
+    let mut candidate_slot = starting_candidate;
+    let mut stored_state_root = states::get_state_root_by_slot(db_pool, candidate_slot).await;
     let mut on_chain_state_root = beacon_node
-        .get_header_by_slot(&candidate_slot)
+        .get_header_by_slot(candidate_slot)
         .await?
         .map(|envelope| envelope.header.message.state_root);
 
@@ -465,9 +465,9 @@ async fn find_last_matching_slot(
             }
             _ => {
                 candidate_slot = candidate_slot - 1;
-                stored_state_root = states::get_state_root_by_slot(db_pool, &candidate_slot).await;
+                stored_state_root = states::get_state_root_by_slot(db_pool, candidate_slot).await;
                 on_chain_state_root = beacon_node
-                    .get_header_by_slot(&candidate_slot)
+                    .get_header_by_slot(candidate_slot)
                     .await?
                     .map(|envelope| envelope.header.message.state_root);
             }
@@ -509,7 +509,7 @@ pub async fn sync_beacon_states() -> Result<()> {
     );
 
     while let Some(slot_from_stream) = slots_stream.next().await {
-        if &slot_from_stream.0 % 100 == 0 {
+        if slot_from_stream.0 % 100 == 0 {
             info!("sync in progress, {}", progress.get_progress_string());
         }
 
@@ -522,24 +522,24 @@ pub async fn sync_beacon_states() -> Result<()> {
             debug!(%slot, "analyzing next slot on the queue");
 
             let on_chain_state_root = beacon_node
-                .get_state_root_by_slot(&slot)
+                .get_state_root_by_slot(slot)
                 .await?
                 .unwrap_or_else(|| {
                     panic!("expect state_root to exist for slot {slot} to sync from queue")
                 });
             let current_slot_stored_state_root =
-                states::get_state_root_by_slot(&db_pool, &slot).await;
+                states::get_state_root_by_slot(&db_pool, slot).await;
 
             let last_matches = if slot.0 == 0 {
                 true
             } else {
                 let last_stored_state_root =
-                    states::get_state_root_by_slot(&db_pool, &(slot - 1)).await;
+                    states::get_state_root_by_slot(&db_pool, slot - 1).await;
                 match last_stored_state_root {
                     None => false,
                     Some(last_stored_state_root) => {
                         let previous_on_chain_state_root = beacon_node
-                            .get_state_root_by_slot(&(slot - 1))
+                            .get_state_root_by_slot(slot - 1)
                             .await?
                             .expect("expect state slot before current head to exist");
                         last_stored_state_root == previous_on_chain_state_root
@@ -550,7 +550,7 @@ pub async fn sync_beacon_states() -> Result<()> {
             if current_slot_stored_state_root.is_none() && last_matches {
                 // 1. current slot is empty and last state_root matches.
                 debug!("no state stored for current slot and last slots state_root matches chain");
-                sync_slot_by_state_root(&db_pool, &beacon_node, &on_chain_state_root, &slot)
+                sync_slot_by_state_root(&db_pool, &beacon_node, &on_chain_state_root, slot)
                     .timed("sync_slot_by_state_root")
                     .await?;
             } else {
@@ -562,12 +562,12 @@ pub async fn sync_beacon_states() -> Result<()> {
                     "current slot should be empty, last stored slot state_root should match previous on-chain state_root"
                 );
                 let last_matching_slot =
-                    find_last_matching_slot(&db_pool, &beacon_node, &(slot - 1)).await?;
+                    find_last_matching_slot(&db_pool, &beacon_node, slot - 1).await?;
                 let first_invalid_slot = last_matching_slot + 1;
 
                 warn!(slot = last_matching_slot.0, "rolling back to slot");
 
-                rollback_slots(&mut *db_pool.acquire().await?, &first_invalid_slot).await?;
+                rollback_slots(&mut *db_pool.acquire().await?, first_invalid_slot).await?;
 
                 for invalid_slot in (first_invalid_slot.0..=slot.0).rev() {
                     slots_queue.push_front(invalid_slot.into());
@@ -596,7 +596,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn stream_slots_from_test() {
-        let slots_stream = stream_slots_from(&Slot(4_300_000)).await;
+        let slots_stream = stream_slots_from(Slot(4_300_000)).await;
         let slots = slots_stream.take(10).collect::<Vec<Slot>>().await;
         assert_eq!(slots.len(), 10);
     }

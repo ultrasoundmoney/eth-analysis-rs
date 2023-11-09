@@ -30,7 +30,7 @@ pub async fn main() {
     effective_balance_sums::store_effective_balance_sum(&db_pool, &last_state.state_root, &sum)
         .await;
 
-    let effective_balance_sum = EffectiveBalanceSum::new(&last_state.slot, sum);
+    let effective_balance_sum = EffectiveBalanceSum::new(last_state.slot, sum);
 
     debug!("effective balance sum updated {:?}", effective_balance_sum);
 

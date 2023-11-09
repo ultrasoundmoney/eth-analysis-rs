@@ -23,7 +23,7 @@ impl Slot {
     pub const SECONDS_PER_SLOT: i32 = 12;
 
     pub fn date_time(&self) -> DateTime<Utc> {
-        self.into()
+        (*self).into()
     }
 
     pub fn from_date_time(date_time: &DateTime<Utc>) -> Option<Self> {
@@ -144,14 +144,8 @@ impl From<Slot> for DateTime<Utc> {
     }
 }
 
-impl From<&Slot> for DateTime<Utc> {
-    fn from(slot: &Slot) -> Self {
-        Into::<DateTime<Utc>>::into(*slot)
-    }
-}
-
-impl From<&Slot> for i32 {
-    fn from(slot: &Slot) -> Self {
+impl From<Slot> for i32 {
+    fn from(slot: Slot) -> Self {
         slot.0
     }
 }
