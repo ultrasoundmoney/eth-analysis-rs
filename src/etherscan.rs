@@ -1,13 +1,8 @@
 use chrono::{TimeZone, Utc};
 use format_url::FormatUrl;
-use lazy_static::lazy_static;
 use serde::Deserialize;
 
-use crate::{env, units::WeiNewtype, usd_price::EthPrice};
-
-lazy_static! {
-    static ref ETHERSCAN_API_KEY: String = env::get_env_var_unsafe("ETHERSCAN_API_KEY");
-}
+use crate::{env::ENV_CONFIG, units::WeiNewtype, usd_price::EthPrice};
 
 const ETHERSCAN_API: &str = "https://api.etherscan.io/api";
 
@@ -31,7 +26,7 @@ pub async fn get_eth_supply_2() -> reqwest::Result<EthSupply2> {
         .with_query_params(vec![
             ("module", "stats"),
             ("action", "ethsupply2"),
-            ("api_key", &*ETHERSCAN_API_KEY),
+            ("api_key", &ENV_CONFIG.etherscan_api_key),
         ])
         .format_url();
 
@@ -58,7 +53,7 @@ struct EthPriceEnvelope {
 pub async fn get_eth_price() -> reqwest::Result<EthPrice> {
     reqwest::get(format!(
         "https://api.etherscan.io/api?module=stats&action=ethprice&apikey={}",
-        *ETHERSCAN_API_KEY
+        ENV_CONFIG.etherscan_api_key
     ))
     .await?
     .error_for_status()?

@@ -19,7 +19,7 @@ use super::sync;
 
 lazy_static! {
     // TODO: set to special GETH_DELTA_FORK_URL
-    static ref EXECUTION_URL: String = env::get_env_var_unsafe("GETH_URL");
+    static ref EXECUTION_URL: String = env::get_env_var("GETH_URL").unwrap();
 }
 
 // We started running supply delta analyzation with Geth months ago (V1). Since we started running this

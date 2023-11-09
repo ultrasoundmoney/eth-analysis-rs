@@ -20,7 +20,7 @@ use crate::{
 use crate::{eth_supply, supply_dashboard_analysis};
 
 use super::node::{BeaconBlock, BeaconNode, BeaconNodeHttp, StateRoot, ValidatorBalance};
-use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot, BEACON_URL};
+use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot};
 
 lazy_static! {
     static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(5);
@@ -317,7 +317,7 @@ impl From<BeaconHeaderSignedEnvelope> for HeadEvent {
 }
 
 async fn stream_slots(slot_to_follow: Slot) -> impl Stream<Item = Slot> {
-    let url_string = format!("{}/eth/v1/events/?topics=head", *BEACON_URL);
+    let url_string = format!("{}/eth/v1/events/?topics=head", ENV_CONFIG.beacon_url);
     let url = reqwest::Url::parse(&url_string).unwrap();
 
     let client = eventsource::reqwest::Client::new(url);

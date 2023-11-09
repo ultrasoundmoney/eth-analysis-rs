@@ -180,7 +180,7 @@ pub async fn update_and_publish(db_pool: &PgPool, cache_key: &CacheKey, value: i
 mod tests {
     use serde::{Deserialize, Serialize};
 
-    use crate::{db, key_value_store::KeyValueStorePostgres};
+    use crate::{db, env::ENV_CONFIG, key_value_store::KeyValueStorePostgres};
 
     use super::*;
 
@@ -194,7 +194,7 @@ mod tests {
     // notifications fire on the "cache-update" channel. Needs a test DB to work reliably.
     #[tokio::test]
     async fn test_publish_cache_update() {
-        let mut listener = sqlx::postgres::PgListener::connect(&db::tests::get_test_db_url())
+        let mut listener = sqlx::postgres::PgListener::connect(ENV_CONFIG.db_url.as_str())
             .await
             .unwrap();
         listener.listen("cache-update").await.unwrap();

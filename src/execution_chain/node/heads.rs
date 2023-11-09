@@ -5,8 +5,11 @@ use serde::Deserialize;
 use serde_json::json;
 use tracing::debug;
 
-use super::{blocks::ExecutionNodeBlock, decoders::*, ExecutionNode, EXECUTION_URL};
-use crate::execution_chain::{node::BlockNumber, BlockRange};
+use super::{blocks::ExecutionNodeBlock, decoders::*, ExecutionNode};
+use crate::{
+    env::ENV_CONFIG,
+    execution_chain::{node::BlockNumber, BlockRange},
+};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,7 +109,7 @@ pub fn stream_new_heads() -> impl Stream<Item = Head> {
     let (mut new_heads_tx, new_heads_rx) = mpsc::unbounded();
 
     tokio::spawn(async move {
-        let url = (*EXECUTION_URL).to_string();
+        let url = (ENV_CONFIG.geth_url).to_string();
         let mut ws = tungstenite::connect_async(&url).await.unwrap().0;
 
         ws.send(HeadsMessage::Subscribe.into()).await.unwrap();

@@ -14,16 +14,15 @@ use async_tungstenite::{
     tungstenite::Message,
     WebSocketStream,
 };
-use futures::stream::{FuturesOrdered, StreamExt};
-use futures::SinkExt;
 use futures::{channel::oneshot, stream::SplitStream};
-use lazy_static::lazy_static;
+use futures::{
+    stream::{FuturesOrdered, StreamExt},
+    SinkExt,
+};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use thiserror::Error;
 use tokio::{net::TcpStream, sync::mpsc};
-
-use crate::env;
 
 pub use blocks::BlockHash;
 pub use blocks::BlockNumber;
@@ -38,11 +37,9 @@ pub use heads::Head;
 #[cfg(test)]
 pub use blocks::tests::ExecutionNodeBlockBuilder;
 
-use self::transaction_receipts::TransactionReceipt;
+use crate::env::ENV_CONFIG;
 
-lazy_static! {
-    static ref EXECUTION_URL: String = env::get_env_var_unsafe("GETH_URL");
-}
+use self::transaction_receipts::TransactionReceipt;
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -165,8 +162,7 @@ impl ExecutionNode {
 
         let message_rx_map = Arc::new(Mutex::new(HashMap::with_capacity(u16::MAX.into())));
 
-        let url = (*EXECUTION_URL).to_string();
-        let (connected_socket, _) = connect_async(&url).await.unwrap();
+        let (connected_socket, _) = connect_async(&ENV_CONFIG.geth_url).await.unwrap();
         let (mut sink, stream) = connected_socket.split();
 
         // We'd like to read websocket messages concurrently so we read in a thread.

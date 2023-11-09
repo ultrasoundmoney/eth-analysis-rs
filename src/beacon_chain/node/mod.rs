@@ -13,11 +13,11 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 
 use crate::{
-    execution_chain::BlockHash, json_codecs::i32_from_string, performance::TimedExt,
-    units::GweiNewtype,
+    env::ENV_CONFIG, execution_chain::BlockHash, json_codecs::i32_from_string,
+    performance::TimedExt, units::GweiNewtype,
 };
 
-use super::{slot_from_string, Slot, BEACON_URL};
+use super::{slot_from_string, Slot};
 
 #[derive(Debug)]
 pub enum BlockId {
@@ -133,7 +133,10 @@ fn make_blocks_url(block_id: &BlockId) -> String {
         BlockId::Slot(slot) => slot.to_string(),
     };
 
-    format!("{}/eth/v2/beacon/blocks/{}", *BEACON_URL, block_id_text)
+    format!(
+        "{}/eth/v2/beacon/blocks/{}",
+        ENV_CONFIG.beacon_url, block_id_text
+    )
 }
 
 pub type StateRoot = String;
@@ -149,7 +152,10 @@ struct StateRootFirstEnvelope {
 }
 
 fn make_state_root_url(slot: &Slot) -> String {
-    format!("{}/eth/v1/beacon/states/{}/root", *BEACON_URL, slot)
+    format!(
+        "{}/eth/v1/beacon/states/{}/root",
+        ENV_CONFIG.beacon_url, slot
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -165,7 +171,7 @@ struct ValidatorBalancesEnvelope {
 fn make_validator_balances_by_state_url(state_root: &str) -> String {
     format!(
         "{}/eth/v1/beacon/states/{}/validator_balances",
-        *BEACON_URL, state_root
+        ENV_CONFIG.beacon_url, state_root
     )
 }
 
@@ -220,13 +226,16 @@ fn make_header_by_block_id_url(block_id: &BlockId) -> String {
         BlockId::Slot(slot) => slot.to_string(),
     };
 
-    format!("{}/eth/v1/beacon/headers/{}", *BEACON_URL, block_id_text)
+    format!(
+        "{}/eth/v1/beacon/headers/{}",
+        ENV_CONFIG.beacon_url, block_id_text
+    )
 }
 
 fn make_validators_by_state_url(state_root: &str) -> String {
     format!(
         "{}/eth/v1/beacon/states/{}/validators",
-        *BEACON_URL, state_root
+        ENV_CONFIG.beacon_url, state_root
     )
 }
 
@@ -261,7 +270,7 @@ struct ValidatorsEnvelope {
 fn make_finality_checkpoint_url() -> String {
     format!(
         "{}/eth/v1/beacon/states/head/finality_checkpoints",
-        *BEACON_URL,
+        ENV_CONFIG.beacon_url,
     )
 }
 

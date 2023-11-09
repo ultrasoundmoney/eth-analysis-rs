@@ -58,13 +58,10 @@ pub use units::Slot;
 use lazy_static::lazy_static;
 use serde::Serialize;
 
-use crate::env;
-
 pub const FIRST_POST_MERGE_SLOT: Slot = Slot(4700013);
 pub const FIRST_POST_LONDON_SLOT: Slot = Slot(1778566);
 
 lazy_static! {
-    static ref BEACON_URL: String = env::get_env_var_unsafe("BEACON_URL");
     pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = "2020-12-01T12:00:23Z".parse().unwrap();
     pub static ref SHAPELLA_SLOT: Slot = Slot(6209536);
 }

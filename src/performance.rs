@@ -1,4 +1,3 @@
-use lazy_static::lazy_static;
 use pin_project::pin_project;
 use std::future::Future;
 use std::pin::Pin;
@@ -6,11 +5,7 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 use tracing::debug;
 
-use crate::env;
-
-lazy_static! {
-    static ref LOG_PERF: bool = env::get_env_bool("LOG_PERF");
-}
+use crate::env::ENV_CONFIG;
 
 /// A wrapper around a Future which adds timing data.
 #[pin_project]
@@ -40,7 +35,7 @@ where
 
             // If the inner future is done, measure the elapsed time and finish this wrapper future.
             Poll::Ready(v) => {
-                if *LOG_PERF {
+                if ENV_CONFIG.log_perf {
                     let elapsed = start.elapsed();
                     debug!("{} took {:.2?}", this.name, elapsed);
                 }
