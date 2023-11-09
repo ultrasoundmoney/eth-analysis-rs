@@ -4,7 +4,7 @@ mod burn_sums;
 pub mod caching;
 mod data_integrity;
 pub mod db;
-mod env;
+pub mod env;
 pub mod eth_supply;
 mod eth_time;
 mod etherscan;
