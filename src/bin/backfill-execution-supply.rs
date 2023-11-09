@@ -52,7 +52,7 @@ async fn bulk_insert_execution_supplies(
 pub async fn main() {
     log::init_with_env();
 
-    let db_pool = db::get_db_pool("backfill-execution-supply").await;
+    let db_pool = db::get_db_pool("backfill-execution-supply", 3).await;
 
     let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
     let job_progress = JobProgress::new(BACKFILL_EXECUTION_SUPPLY_KEY, &key_value_store);

@@ -146,9 +146,7 @@ pub async fn sync_blocks() {
 
     info!("syncing execution blocks");
 
-    let db_pool = PgPool::connect(&db::get_db_url_with_name("sync-execution-blocks"))
-        .await
-        .unwrap();
+    let db_pool = db::get_db_pool("sync-execution-blocks", 3).await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 

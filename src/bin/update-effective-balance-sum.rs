@@ -14,7 +14,7 @@ pub async fn main() {
 
     info!("updating effective balance sum");
 
-    let db_pool = db::get_db_pool("update-effective-balance-sum").await;
+    let db_pool = db::get_db_pool("update-effective-balance-sum", 3).await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 

@@ -3,12 +3,13 @@ use chrono::Duration;
 use futures::{stream, SinkExt, Stream, StreamExt};
 use lazy_static::lazy_static;
 use serde::Deserialize;
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::PgPool;
 use sqlx::{Acquire, PgConnection, PgExecutor};
 use std::{cmp::Ordering, collections::VecDeque};
 use tracing::{debug, info, warn};
 
 use crate::beacon_chain::withdrawals;
+use crate::env::ENV_CONFIG;
 use crate::{
     beacon_chain::{balances, deposits, issuance, slot_from_string},
     db,
@@ -485,11 +486,7 @@ pub async fn sync_beacon_states() -> Result<()> {
 
     info!("syncing beacon states");
 
-    let db_pool = PgPoolOptions::new()
-        .max_connections(3)
-        .connect(&db::get_db_url_with_name("sync-beacon-states"))
-        .await
-        .unwrap();
+    let db_pool = db::get_db_pool("sync-beacon-states", 3).await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 

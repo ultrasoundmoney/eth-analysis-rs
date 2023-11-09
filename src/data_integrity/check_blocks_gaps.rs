@@ -1,7 +1,7 @@
 use anyhow::Result;
 use futures::{StreamExt, TryStreamExt};
 use pit_wall::Progress;
-use sqlx::{Connection, Row};
+use sqlx::Row;
 use tracing::{debug, error, info};
 
 use crate::{db, execution_chain::ExecutionNode, log};
@@ -11,8 +11,7 @@ pub async fn check_blocks_gaps() -> Result<()> {
 
     info!("checking for gaps in blocks");
 
-    let mut connection =
-        sqlx::PgConnection::connect(&db::get_db_url_with_name("check-block-gaps")).await?;
+    let mut connection = db::get_db_connection("check-block-gaps").await;
 
     // Store blocks fetched, we run through them twice.
     let mut blocks = vec![];
@@ -25,7 +24,7 @@ pub async fn check_blocks_gaps() -> Result<()> {
             "
             SELECT number, hash FROM blocks
             ORDER BY number ASC
-        ",
+            ",
         )
         .fetch(&mut connection)
         .map(|row| {

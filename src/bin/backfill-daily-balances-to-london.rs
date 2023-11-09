@@ -13,7 +13,7 @@ pub async fn main() {
 
     info!("backfilling daily beacon balances to london");
 
-    let db_pool = db::get_db_pool("backfill-daily-balances-to-london").await;
+    let db_pool = db::get_db_pool("backfill-daily-balances-to-london", 3).await;
 
     backfill_balances(&db_pool, &Granularity::Day, &FIRST_POST_LONDON_SLOT).await;
 

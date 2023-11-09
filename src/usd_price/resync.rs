@@ -58,7 +58,7 @@ pub async fn resync_all() {
         .and_then(|str| str.parse::<i64>().ok())
         .unwrap_or(10);
 
-    let db_pool = db::get_db_pool("resync-all-prices").await;
+    let db_pool = db::get_db_pool("resync-all-prices", 3).await;
     let eth_price_store = store::EthPriceStorePostgres::new(db_pool.clone());
 
     debug!("walking through all minutes since London hardfork");

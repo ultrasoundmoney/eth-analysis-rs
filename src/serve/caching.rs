@@ -19,7 +19,7 @@ use tracing::{debug, trace, warn};
 
 use crate::{
     caching::{self, CacheKey, ParseCacheKeyError},
-    db,
+    env::ENV_CONFIG,
     key_value_store::{KeyValueStore, KeyValueStorePostgres},
 };
 
@@ -117,10 +117,11 @@ pub async fn update_cache_from_notifications(
     state: Arc<State>,
     db_pool: &PgPool,
 ) -> JoinHandle<()> {
-    let mut listener =
-        sqlx::postgres::PgListener::connect(&db::get_db_url_with_name("serve-rs-cache-update"))
-            .await
-            .unwrap();
+    let db_url = format!(
+        "{}?application_name={}",
+        ENV_CONFIG.db_url, "serve-rs-cache-update"
+    );
+    let mut listener = sqlx::postgres::PgListener::connect(&db_url).await.unwrap();
     listener.listen("cache-update").await.unwrap();
     debug!("listening for cache updates");
 

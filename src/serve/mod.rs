@@ -42,9 +42,7 @@ pub async fn start_server() {
 
     let started_on = chrono::Utc::now();
 
-    let db_pool = PgPool::connect(&db::get_db_url_with_name("eth-analysis-serve"))
-        .await
-        .unwrap();
+    let db_pool = db::get_db_pool("eth-analysis-serve", 3).await;
 
     let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
 

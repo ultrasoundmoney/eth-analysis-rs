@@ -65,7 +65,7 @@ pub async fn main() {
 
     info!("updating supply projection inputs");
 
-    let db_pool = db::get_db_pool("supply-projection-inputs").await;
+    let db_pool = db::get_db_pool("supply-projection-inputs", 3).await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 

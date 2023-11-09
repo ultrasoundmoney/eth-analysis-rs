@@ -23,7 +23,7 @@ pub async fn update_issuance_breakdown() -> Result<()> {
 
     info!("updating issuance breakdown");
 
-    let db_pool = db::get_db_pool("update-issuance-breakdown").await;
+    let db_pool = db::get_db_pool("update-issuance-breakdown", 3).await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 

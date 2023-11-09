@@ -1,6 +1,5 @@
 use futures::TryStreamExt;
 use pit_wall::Progress;
-use sqlx::postgres::PgPoolOptions;
 use tracing::{debug, info};
 
 use crate::{
@@ -15,11 +14,7 @@ pub async fn heal_block_hashes() {
 
     info!("healing execution block hashes");
 
-    let db_pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&db::get_db_url_with_name("heal-beacon-states"))
-        .await
-        .unwrap();
+    let db_pool = db::get_db_pool("heal-beacon-states", 1).await;
     let key_value_store = key_value_store::KeyValueStorePostgres::new(db_pool.clone());
     let job_progress = job_progress::JobProgress::new(HEAL_BLOCK_HASHES_KEY, &key_value_store);
 

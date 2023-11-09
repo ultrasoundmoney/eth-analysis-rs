@@ -25,7 +25,7 @@ pub async fn fill_gaps() -> Result<()> {
 
     info!("syncing gaps in eth supply");
 
-    let db_pool = db::get_db_pool("sync-eth-supply-gaps").await;
+    let db_pool = db::get_db_pool("sync-eth-supply-gaps", 3).await;
     let beacon_store = BeaconStorePostgres::new(db_pool.clone());
 
     let last_slot = beacon_store

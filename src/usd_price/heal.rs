@@ -24,7 +24,7 @@ pub async fn heal_eth_prices() {
         .unwrap_or(10);
 
     info!("getting all eth prices");
-    let db_pool = db::get_db_pool("heal-eth-prices").await;
+    let db_pool = db::get_db_pool("heal-eth-prices", 3).await;
 
     let eth_price_store = store::EthPriceStorePostgres::new(db_pool.clone());
 

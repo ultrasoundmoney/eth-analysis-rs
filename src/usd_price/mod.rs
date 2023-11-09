@@ -114,7 +114,7 @@ pub async fn record_eth_price() -> Result<()> {
 
     info!("recording eth prices");
 
-    let db_pool = db::get_db_pool("record-eth-price").await;
+    let db_pool = db::get_db_pool("record-eth-price", 3).await;
     let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
     let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
 

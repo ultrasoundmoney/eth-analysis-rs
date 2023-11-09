@@ -147,7 +147,7 @@ pub async fn main() {
 
     info!("updating validator rewards");
 
-    let db_pool = db::get_db_pool("update-validator-rewards").await;
+    let db_pool = db::get_db_pool("update-validator-rewards", 3).await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 

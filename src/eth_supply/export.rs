@@ -50,7 +50,7 @@ const SLOTS_PER_EPOCH: i32 = 32;
 // export every thousandth epoch.
 // uses a combination of daily glassnode data, and our own eth_supply table
 pub async fn export_thousandth_epoch_supply() {
-    let db_pool = db::get_db_pool("export_thousandth_epoch").await;
+    let db_pool = db::get_db_pool("export_thousandth_epoch", 3).await;
 
     let recent_supply: Vec<SupplyAtSlot> = sqlx::query!(
         "
@@ -154,7 +154,7 @@ struct SupplyAtTimeRow {
 }
 
 pub async fn export_daily_supply_since_merge() {
-    let db_pool = db::get_db_pool("export_daily_supply_since_merge").await;
+    let db_pool = db::get_db_pool("export_daily_supply_since_merge", 3).await;
     let supply = super::over_time::from_time_frame(
         &db_pool,
         &TimeFrame::Growing(GrowingTimeFrame::SinceMerge),

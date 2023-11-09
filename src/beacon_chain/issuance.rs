@@ -251,7 +251,7 @@ pub async fn update_issuance_estimate() {
 
     info!("updating issuance estimate");
 
-    let db_pool = db::get_db_pool("update-issuance-estimate").await;
+    let db_pool = db::get_db_pool("update-issuance-estimate", 3).await;
     let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
 
     let issuance_per_slot_gwei = get_issuance_per_slot_estimate(&issuance_store).await;

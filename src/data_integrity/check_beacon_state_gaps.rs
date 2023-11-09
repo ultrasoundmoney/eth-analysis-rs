@@ -6,14 +6,14 @@ use futures::{StreamExt, TryStreamExt};
 use sqlx::{postgres::PgRow, PgConnection, Row};
 use tracing::info;
 
-use crate::{db::DB_URL, log};
+use crate::{db, log};
 
 pub async fn check_beacon_state_gaps() -> Result<()> {
     log::init_with_env();
 
     info!("checking for gaps in beacon states");
 
-    let mut connection: PgConnection = sqlx::Connection::connect(&DB_URL).await.unwrap();
+    let mut connection: PgConnection = db::get_db_connection("check-beacon-state-gaps").await;
 
     {
         let mut rows = sqlx::query!(

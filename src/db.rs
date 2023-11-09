@@ -1,20 +1,30 @@
-use lazy_static::lazy_static;
-use sqlx::PgPool;
+use sqlx::{postgres::PgPoolOptions, Connection, Executor, PgConnection, PgPool};
 
-use crate::env;
+use crate::env::ENV_CONFIG;
 
-lazy_static! {
-    pub static ref DB_URL: String = env::get_env_var_unsafe("DATABASE_URL");
-}
-
-pub fn get_db_url_with_name(name: &str) -> String {
-    format!("{}?application_name={name}", *DB_URL)
-}
-
-pub async fn get_db_pool(name: &str) -> PgPool {
-    PgPool::connect(&get_db_url_with_name(name))
+pub async fn get_db_pool(name: &str, max_connections: u32) -> PgPool {
+    let name_query = format!("SET application_name = '{}';", name);
+    PgPoolOptions::new()
+        .after_connect(move |conn, _meta| {
+            let name_query = name_query.clone();
+            Box::pin(async move {
+                conn.execute(name_query.as_ref()).await?;
+                Ok(())
+            })
+        })
+        .max_connections(max_connections)
+        .connect(&ENV_CONFIG.db_url)
         .await
         .expect("expect DB to be available to connect")
+}
+
+pub async fn get_db_connection(name: &str) -> sqlx::PgConnection {
+    let mut conn = PgConnection::connect(ENV_CONFIG.db_url.as_str())
+        .await
+        .expect("expect DB to be available to connect");
+    let query = format!("SET application_name = '{}'", name);
+    sqlx::query(&query).execute(&mut conn).await.unwrap();
+    conn
 }
 
 #[cfg(test)]
@@ -31,22 +41,11 @@ pub mod tests {
     ];
 
     pub async fn get_test_db_connection() -> sqlx::PgConnection {
-        use sqlx::Connection;
-
-        if !DB_URL.contains("testdb") {
+        if !ENV_CONFIG.db_url.contains("testdb") {
             panic!("tried to run tests against db that is not 'testdb'");
         }
 
-        Connection::connect(&DB_URL).await.unwrap()
-    }
-
-    pub fn get_test_db_url() -> String {
-        let url = get_db_url_with_name("testing");
-        if !url.contains("testdb") {
-            panic!("tried to run tests against db that is not 'testdb'");
-        }
-
-        url
+        get_db_connection("testing").await
     }
 
     pub struct TestDb {
@@ -82,7 +81,7 @@ pub mod tests {
 
             let pool = PgPoolOptions::new()
                 .max_connections(1)
-                .connect(&DB_URL.to_string().replace("testdb", &name))
+                .connect(&ENV_CONFIG.db_url.replace("testdb", &name))
                 .await
                 .unwrap();
 

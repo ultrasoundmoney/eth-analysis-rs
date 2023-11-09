@@ -341,10 +341,7 @@ pub async fn sync_deltas() {
 
     tracing::info!("syncing supply deltas");
 
-    let mut connection =
-        PgConnection::connect(&db::get_db_url_with_name("sync-execution-supply-deltas"))
-            .await
-            .unwrap();
+    let mut connection = db::get_db_connection("sync-execution-supply-deltas").await;
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
 
