@@ -34,7 +34,7 @@ async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber)
     transaction.commit().await.unwrap();
 }
 
-async fn sync_by_hash(
+pub async fn sync_by_hash(
     issuance_store: &impl IssuanceStore,
     eth_price_store: &impl EthPriceStore,
     execution_node: &ExecutionNode,

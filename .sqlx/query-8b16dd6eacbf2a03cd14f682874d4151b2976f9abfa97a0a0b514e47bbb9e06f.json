@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                beacon_states.state_root,\n                beacon_states.slot AS \"slot: Slot\"\n            FROM beacon_states\n            ORDER BY slot DESC\n            LIMIT 1\n        ",
+  "query": "\n        SELECT\n            beacon_states.state_root,\n            beacon_states.slot AS \"slot: Slot\"\n        FROM beacon_states\n        ORDER BY slot DESC\n        LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -22,5 +22,5 @@
       false
     ]
   },
-  "hash": "afc80a58058ec48b784e3e6fabb6a2aaffac18fe875c12c880c73c86690fb4be"
+  "hash": "8b16dd6eacbf2a03cd14f682874d4151b2976f9abfa97a0a0b514e47bbb9e06f"
 }

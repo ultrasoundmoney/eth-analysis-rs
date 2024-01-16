@@ -50,7 +50,7 @@ pub use states::store_state;
 
 pub use store::{BeaconStore, BeaconStorePostgres};
 
-pub use sync::sync_beacon_states;
+pub use sync::analyze_states_loop;
 
 pub use units::slot_from_string;
 pub use units::Slot;

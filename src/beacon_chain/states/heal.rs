@@ -84,7 +84,7 @@ pub async fn heal_beacon_states() {
                 sync::rollback_slot(&mut db_pool.acquire().await.unwrap(), slot.into())
                     .await
                     .unwrap();
-                sync::sync_slot_by_state_root(&db_pool, &beacon_node, &state_root, slot.into())
+                sync::sync_slot_by_state_root(&beacon_node, &db_pool, &state_root, slot.into())
                     .await
                     .unwrap();
                 info!(%slot, "healed state at slot");

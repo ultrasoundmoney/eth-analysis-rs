@@ -1,11 +1,15 @@
 use async_trait::async_trait;
 use sqlx::PgPool;
 
-use super::states::{self, BeaconState};
+use super::{
+    states::{self, BeaconState},
+    Slot,
+};
 
 #[async_trait]
 pub trait BeaconStore {
     async fn get_last_state(&self) -> Option<BeaconState>;
+    async fn get_state_root_by_slot(&self, slot: Slot) -> Option<String>;
 }
 
 pub struct BeaconStorePostgres {
@@ -22,6 +26,10 @@ impl BeaconStorePostgres {
 impl BeaconStore for BeaconStorePostgres {
     async fn get_last_state(&self) -> Option<BeaconState> {
         states::get_last_state(&self.db_pool).await
+    }
+
+    async fn get_state_root_by_slot(&self, slot: Slot) -> Option<String> {
+        states::get_state_root_by_slot(&self.db_pool, slot).await
     }
 }
 
