@@ -115,6 +115,8 @@ pub fn stream_new_heads() -> impl Stream<Item = Head> {
         ws.send(HeadsMessage::Subscribe.into()).await.unwrap();
 
         // We expect a subscription confirmation message first.
+        // We loop on None. Seems clippy is confused here.
+        #[allow(clippy::never_loop)]
         while let Some(message) = ws.try_next().await.unwrap() {
             let message_text = message.to_text().unwrap();
             let message: SubscriptionResponse = serde_json::from_str(message_text).unwrap();
