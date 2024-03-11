@@ -4,6 +4,7 @@ use futures::join;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 use tracing::warn;
+use super::barrier::Barrier;
 
 use crate::{
     caching::{self, CacheKey},
@@ -27,6 +28,7 @@ struct BaseFeeAtTime {
 #[derive(Serialize)]
 struct BaseFeeOverTime {
     barrier: WeiF64,
+    blob_barrier: WeiF64,
     block_number: BlockNumber,
     d1: Vec<BaseFeeAtTime>,
     d30: Vec<BaseFeeAtTime>,
@@ -208,7 +210,7 @@ async fn from_time_frame(
 
 pub async fn update_base_fee_over_time(
     executor: &PgPool,
-    barrier: f64,
+    barrier: &Barrier,
     block_number: &BlockNumber,
 ) {
     let (m5, h1, d1, d7, d30, since_merge, since_burn) = join!(
@@ -229,7 +231,8 @@ pub async fn update_base_fee_over_time(
     );
 
     let base_fee_over_time = BaseFeeOverTime {
-        barrier,
+        barrier: barrier.base_fee_barrier,
+        blob_barrier: barrier.blob_fee_barrier,
         block_number: *block_number,
         d1,
         d30,
