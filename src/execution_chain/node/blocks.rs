@@ -144,6 +144,8 @@ pub mod tests {
                 timestamp: self.timestamp,
                 total_difficulty: 1,
                 transactions: vec![],
+                blob_gas_used: None,
+                excess_blob_gas: None,
             }
         }
     }
