@@ -111,7 +111,15 @@ fn calc_blob_base_fee(excess_blob_gas: Option<i32>) -> Option<i64> {
     if let Some(excess_blob_gas) = excess_blob_gas {
         const MIN_BLOB_BASE_FEE: i128 = 1;
         const BLOB_BASE_FEE_UPDATE_FRACTION: i128 = 3338477;
-        Some(fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas.into(), BLOB_BASE_FEE_UPDATE_FRACTION).try_into().expect("Overflow of blob_base_fee"))
+        Some(
+            fake_exponential(
+                MIN_BLOB_BASE_FEE,
+                excess_blob_gas.into(),
+                BLOB_BASE_FEE_UPDATE_FRACTION,
+            )
+            .try_into()
+            .expect("Overflow of blob_base_fee"),
+        )
     } else {
         None
     }

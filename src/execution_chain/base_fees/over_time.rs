@@ -1,10 +1,10 @@
+use super::barrier::Barrier;
 use cached::proc_macro::cached;
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
 use sqlx::{postgres::PgRow, PgExecutor, PgPool, Row};
 use tracing::warn;
-use super::barrier::Barrier;
 
 use crate::{
     caching::{self, CacheKey},
@@ -22,7 +22,7 @@ struct BaseFeeAtTime {
     block_number: Option<BlockNumber>,
     timestamp: DateTime<Utc>,
     wei: WeiF64,
-    blob_wei: WeiF64
+    blob_wei: WeiF64,
 }
 
 #[derive(Serialize)]
@@ -273,7 +273,7 @@ mod tests {
             total_difficulty: 10,
             transactions: vec![],
             blob_gas_used: None,
-            excess_blob_gas: None
+            excess_blob_gas: None,
         }
     }
 
