@@ -45,9 +45,9 @@ impl BurnSumStore for BurnSumStorePostgres {
         let row = sqlx::query!(
             r#"
             SELECT
-                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78))::TEXT
+                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78) + COALESCE(blob_base_fee::NUMERIC(78) * blob_gas_used::NUMERIC(78), 0))::TEXT
                     AS "burn_sum_wei!",
-                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78) / 1e18 * eth_price)
+                SUM(base_fee_per_gas::NUMERIC(78) * gas_used::NUMERIC(78) + COALESCE(blob_base_fee::NUMERIC(78) * blob_gas_used::NUMERIC(78), 0) / 1e18 * eth_price)
                     AS "burn_sum_usd!"
             FROM
                 blocks_next
