@@ -7,6 +7,8 @@ struct ExecutionBlockRow {
     base_fee_per_gas: i64,
     difficulty: i64,
     gas_used: i32,
+    blob_gas_used: Option<i32>,
+    excess_blob_gas: Option<i32>,
     hash: String,
     number: i32,
     parent_hash: String,
@@ -20,6 +22,8 @@ impl From<ExecutionBlockRow> for ExecutionNodeBlock {
             base_fee_per_gas: row.base_fee_per_gas as u64,
             difficulty: row.difficulty as u64,
             gas_used: row.gas_used,
+            blob_gas_used: row.blob_gas_used,
+            excess_blob_gas: row.excess_blob_gas,
             hash: row.hash,
             number: row.number,
             parent_hash: row.parent_hash,
@@ -78,9 +82,11 @@ pub async fn store_block(
                 number,
                 parent_hash,
                 timestamp,
-                total_difficulty
+                total_difficulty,
+                blob_gas_used,
+                excess_blob_gas
             )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::NUMERIC)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::NUMERIC, $10, $11)
         ",
     )
     .bind(block.base_fee_per_gas as i64)
@@ -92,6 +98,8 @@ pub async fn store_block(
     .bind(block.parent_hash.clone())
     .bind(block.timestamp.trunc_subsecs(0))
     .bind(block.total_difficulty.to_string())
+    .bind(block.blob_gas_used)
+    .bind(block.excess_blob_gas)
     .execute(executor)
     .await
     .unwrap();
