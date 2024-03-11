@@ -169,6 +169,8 @@ mod tests {
             timestamp: Utc::now().duration_round(Duration::seconds(1)).unwrap(),
             total_difficulty: 0,
             transactions: vec![],
+            blob_gas_used: None,
+            excess_blob_gas: None,
         }
     }
 
@@ -187,7 +189,9 @@ mod tests {
                 number,
                 parent_hash,
                 timestamp,
-                total_difficulty::TEXT AS "total_difficulty!"
+                total_difficulty::TEXT AS "total_difficulty!",
+                blob_gas_used,
+                excess_blob_gas
             FROM
                 blocks_next
             WHERE
@@ -255,7 +259,9 @@ mod tests {
                 number,
                 parent_hash,
                 timestamp,
-                total_difficulty::TEXT AS "total_difficulty!"
+                total_difficulty::TEXT AS "total_difficulty!",
+                blob_gas_used,
+                excess_blob_gas
             FROM
                 blocks_next
             WHERE

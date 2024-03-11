@@ -172,6 +172,8 @@ mod tests {
                 timestamp: Utc::now(),
                 total_difficulty: 0,
                 transactions: vec![],
+                blob_gas_used: None,
+                excess_blob_gas: None,
             }
         }
     }
@@ -209,6 +211,8 @@ mod tests {
                 timestamp: Utc::now(),
                 total_difficulty: 0,
                 transactions: vec![],
+                blob_gas_used: None,
+                excess_blob_gas: None,
             },
             &TimeFrame::Limited(LimitedTimeFrame::Minute5),
         )
@@ -244,6 +248,8 @@ mod tests {
                 timestamp: Utc::now(),
                 total_difficulty: 0,
                 transactions: vec![],
+                blob_gas_used: None,
+                excess_blob_gas: None,
             },
             &TimeFrame::Limited(LimitedTimeFrame::Minute5),
         );
