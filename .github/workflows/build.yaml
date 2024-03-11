@@ -2,6 +2,8 @@ name: build
 
 on:
   push:
+    tags:
+      - "stag-*"
     branches:
       - main
       - "hotfix/*"
