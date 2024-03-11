@@ -259,7 +259,8 @@ impl BaseFeePerGasStats {
 #[derive(Serialize)]
 struct BaseFeePerGasStatsEnvelope {
     all: Option<BaseFeePerGasStats>,
-    barrier: Barrier,
+    barrier: f64,
+    blob_barrier: f64,
     base_fee_per_gas_stats: HashMap<TimeFrame, BaseFeePerGasStats>,
     block_number: BlockNumber,
     d1: BaseFeePerGasStats,
@@ -274,7 +275,7 @@ struct BaseFeePerGasStatsEnvelope {
 
 pub async fn update_base_fee_stats(
     executor: &PgPool,
-    barrier: Barrier,
+    barrier: &Barrier,
     block: &ExecutionNodeBlock,
 ) {
     use GrowingTimeFrame::*;
@@ -316,7 +317,8 @@ pub async fn update_base_fee_stats(
 
     let base_fee_per_gas_stats_envelope = BaseFeePerGasStatsEnvelope {
         all: Some(since_burn.clone()),
-        barrier,
+        barrier: barrier.base_fee_barrier,
+        blob_barrier: barrier.blob_fee_barrier,
         base_fee_per_gas_stats,
         block_number: block.number,
         d1,
