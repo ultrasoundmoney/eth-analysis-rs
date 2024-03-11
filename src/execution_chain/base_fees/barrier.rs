@@ -13,17 +13,29 @@ use crate::{
 
 /// Is the base fee per gas price in Gwei/gas at which burn is outpacing issuance. This is only true
 /// when blocks are half full, at 15M gas, which is true on average due to EIP-1559.
-pub type Barrier = f64;
+#[derive(Debug, Serialize)]
+pub struct Barrier {
+    pub base_fee_barrier: f64,
+    pub blob_fee_barrier: f64
+}
 
 #[derive(Debug, Serialize)]
 pub struct BarrierStats {
-    barrier: Barrier,
+    barrier: f64,
+    blob_barrier: f64,
     block_number: BlockNumber,
     timestamp: DateTime<Utc>,
 }
 
 const APPROXIMATE_GAS_USED_PER_BLOCK: u32 = 15_000_000u32;
 const APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK: i32 = 50400;
+const TARGET_BLOB_GAS_PER_BLOCK: i32 = 393216;
+
+pub fn estimate_blob_barrier_from_weekly_issuance(issuance: GweiNewtype) -> f64 {
+    issuance.0 as f64
+        / APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK as f64
+        / TARGET_BLOB_GAS_PER_BLOCK as f64
+}
 
 pub fn estimate_barrier_from_weekly_issuance(issuance: GweiNewtype) -> f64 {
     issuance.0 as f64
@@ -39,17 +51,20 @@ pub async fn get_barrier(issuance_store: &impl IssuanceStore) -> Barrier {
         .timed("get_last_week_issuance")
         .await;
 
-    let barrier = estimate_barrier_from_weekly_issuance(issuance);
-    debug!("base fee per gas (ultra sound) barrier: {barrier}");
+    let base_fee_barrier = estimate_barrier_from_weekly_issuance(issuance);
+    debug!("base fee per gas (ultra sound) barrier: {base_fee_barrier}");
+    let blob_fee_barrier = estimate_blob_barrier_from_weekly_issuance(issuance);
+    debug!("blob fee per gas (ultra sound) barrier: {blob_fee_barrier}");
 
-    barrier
+    Barrier {base_fee_barrier, blob_fee_barrier}
 }
 
 // Because other modules need the ultra sound barrier as an input, we calculate it first, then
 // update the cache.
-pub async fn on_new_barrier(db_pool: &PgPool, barrier: Barrier, block: &ExecutionNodeBlock) {
+pub async fn on_new_barrier(db_pool: &PgPool, barrier: &Barrier, block: &ExecutionNodeBlock) {
     let barrier_stats = BarrierStats {
-        barrier,
+        barrier: barrier.base_fee_barrier,
+        blob_barrier: barrier.blob_fee_barrier,
         block_number: block.number,
         timestamp: block.timestamp,
     };
