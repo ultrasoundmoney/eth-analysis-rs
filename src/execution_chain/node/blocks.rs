@@ -1,5 +1,5 @@
 use super::decoders::{
-    from_i32_hex_str, from_u128_hex_str, from_u64_hex_str, from_unix_timestamp_hex_str,
+    from_i32_hex_str, from_i32_opt_hex_str, from_u128_hex_str, from_u64_hex_str, from_unix_timestamp_hex_str,
 };
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -28,6 +28,12 @@ pub struct ExecutionNodeBlock {
     // Started at 8M, currently at 30M, seems to fit in 2^31 for the foreseeable future.
     #[serde(deserialize_with = "from_i32_hex_str")]
     pub gas_used: i32,
+    #[serde(default)]
+    #[serde(deserialize_with = "from_i32_opt_hex_str")]
+    pub blob_gas_used: Option<i32>,
+    #[serde(default)]
+    #[serde(deserialize_with = "from_i32_opt_hex_str")]
+    pub excess_blob_gas: Option<i32>,
     pub hash: BlockHash,
     #[serde(deserialize_with = "from_i32_hex_str")]
     pub number: BlockNumber,
