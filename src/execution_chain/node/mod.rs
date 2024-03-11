@@ -32,7 +32,7 @@ pub use blocks::TotalDifficulty;
 
 pub use heads::stream_heads_from;
 pub use heads::stream_new_heads;
-pub use heads::Head;
+
 
 #[cfg(test)]
 pub use blocks::tests::ExecutionNodeBlockBuilder;

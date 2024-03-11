@@ -34,8 +34,7 @@ pub async fn get_deposit_sum_from_block_root(
     .await
     .unwrap()
     .deposit_sum_aggregated
-    .try_into()
-    .unwrap()
+    .into()
 }
 
 pub async fn get_withdrawal_sum_from_block_root(
@@ -58,8 +57,7 @@ pub async fn get_withdrawal_sum_from_block_root(
     .unwrap()
     .withdrawal_sum_aggregated
     .unwrap_or_default()
-    .try_into()
-    .unwrap()
+    .into()
 }
 
 pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) -> bool {
@@ -228,8 +226,8 @@ impl From<BlockDbRow> for DbBlock {
         Self {
             block_hash: row.block_hash,
             block_root: row.block_root,
-            deposit_sum: row.deposit_sum.try_into().unwrap(),
-            deposit_sum_aggregated: row.deposit_sum_aggregated.try_into().unwrap(),
+            deposit_sum: row.deposit_sum.into(),
+            deposit_sum_aggregated: row.deposit_sum_aggregated.into(),
             parent_root: row.parent_root,
             state_root: row.state_root,
         }
