@@ -135,6 +135,8 @@ impl BlockStore for BlockStorePostgres {
                 number,
                 parent_hash,
                 timestamp,
+                blob_gas_used,
+                excess_blob_gas,
                 total_difficulty::TEXT AS "total_difficulty!"
             FROM
                 blocks_next
@@ -149,6 +151,8 @@ impl BlockStore for BlockStorePostgres {
             base_fee_per_gas: row.base_fee_per_gas as u64,
             difficulty: row.difficulty as u64,
             gas_used: row.gas_used,
+            blob_gas_used: row.blob_gas_used,
+            excess_blob_gas: row.excess_blob_gas,
             hash: row.hash,
             number: row.number,
             parent_hash: row.parent_hash,
