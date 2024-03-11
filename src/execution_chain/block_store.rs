@@ -84,9 +84,10 @@ pub async fn store_block(
                 timestamp,
                 total_difficulty,
                 blob_gas_used,
-                excess_blob_gas
+                excess_blob_gas,
+                blob_base_fee
             )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::NUMERIC, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::NUMERIC, $10, $11, $12)
         ",
     )
     .bind(block.base_fee_per_gas as i64)
@@ -100,9 +101,32 @@ pub async fn store_block(
     .bind(block.total_difficulty.to_string())
     .bind(block.blob_gas_used)
     .bind(block.excess_blob_gas)
+    .bind(calc_blob_base_fee(block.excess_blob_gas))
     .execute(executor)
     .await
     .unwrap();
+}
+
+fn calc_blob_base_fee(excess_blob_gas: Option<i32>) -> Option<i64> {
+    if let Some(excess_blob_gas) = excess_blob_gas {
+        const MIN_BLOB_BASE_FEE: i128 = 1;
+        const BLOB_BASE_FEE_UPDATE_FRACTION: i128 = 3338477;
+        Some(fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas.into(), BLOB_BASE_FEE_UPDATE_FRACTION).try_into().expect("Overflow of blob_base_fee"))
+    } else {
+        None
+    }
+}
+
+fn fake_exponential(factor: i128, numerator: i128, denominator: i128) -> i128 {
+    let mut i: i128 = 1;
+    let mut output: i128 = 0;
+    let mut numerator_accum: i128 = factor * denominator;
+    while numerator_accum > 0 {
+        output += numerator_accum;
+        numerator_accum = (numerator_accum * numerator) / (denominator * i);
+        i += 1;
+    }
+    output / denominator
 }
 
 #[cfg(test)]
