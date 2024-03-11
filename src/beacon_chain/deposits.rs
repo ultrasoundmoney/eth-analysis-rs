@@ -52,8 +52,7 @@ pub async fn get_deposits_sum_by_state_root(
     .bind(state_root)
     .map(|row: PgRow| {
         row.get::<i64, _>("deposit_sum_aggregated")
-            .try_into()
-            .unwrap()
+            .into()
     })
     .fetch_one(executor)
     .await?;
