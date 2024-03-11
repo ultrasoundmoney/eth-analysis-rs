@@ -16,7 +16,7 @@ use crate::{
 #[derive(Debug, Serialize)]
 pub struct Barrier {
     pub base_fee_barrier: f64,
-    pub blob_fee_barrier: f64
+    pub blob_fee_barrier: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -56,7 +56,10 @@ pub async fn get_barrier(issuance_store: &impl IssuanceStore) -> Barrier {
     let blob_fee_barrier = estimate_blob_barrier_from_weekly_issuance(issuance);
     debug!("blob fee per gas (ultra sound) barrier: {blob_fee_barrier}");
 
-    Barrier {base_fee_barrier, blob_fee_barrier}
+    Barrier {
+        base_fee_barrier,
+        blob_fee_barrier,
+    }
 }
 
 // Because other modules need the ultra sound barrier as an input, we calculate it first, then
