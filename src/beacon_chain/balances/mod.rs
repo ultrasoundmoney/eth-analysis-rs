@@ -145,7 +145,7 @@ pub async fn get_balances_by_state_root(
     .unwrap()
     .map(|row| {
         let gwei_i64: i64 = row.gwei;
-        let gwei: GweiNewtype = gwei_i64.try_into().unwrap();
+        let gwei: GweiNewtype = gwei_i64.into();
         gwei
     })
 }
