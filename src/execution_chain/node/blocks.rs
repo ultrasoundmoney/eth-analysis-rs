@@ -1,5 +1,6 @@
 use super::decoders::{
-    from_i32_hex_str, from_i32_opt_hex_str, from_u128_hex_str, from_u64_hex_str, from_unix_timestamp_hex_str,
+    from_i32_hex_str, from_i32_opt_hex_str, from_u128_hex_str, from_u64_hex_str,
+    from_unix_timestamp_hex_str,
 };
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
