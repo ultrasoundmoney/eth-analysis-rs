@@ -19,6 +19,8 @@ pub fn make_test_block() -> ExecutionNodeBlock {
         timestamp: Utc::now().trunc_subsecs(0),
         total_difficulty: 10,
         transactions: vec![],
+        blob_gas_used: None,
+        excess_blob_gas: None,
     }
 }
 

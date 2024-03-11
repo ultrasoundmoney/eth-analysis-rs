@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT effective_balance_sum\n            FROM beacon_states\n            WHERE state_root = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "effective_balance_sum",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ef2329172f104a7b8f2d29b25cbbdc65469a69fee24dfcbe918b646214b495c0"
+}

@@ -252,6 +252,8 @@ mod tests {
             timestamp: Utc::now(),
             total_difficulty: 0,
             transactions: vec![],
+            blob_gas_used: None,
+            excess_blob_gas: None,
         }
     }
 
