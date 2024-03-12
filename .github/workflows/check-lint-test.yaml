@@ -13,14 +13,15 @@ name: check-lint-test
 
 jobs:
   check:
+    strategy:
+      fail-fast: false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - run: rustup toolchain install stable --profile minimal
 
-      # check if this speeds anything up
       - uses: Swatinem/rust-cache@v2
 
       - name: Run cargo check
@@ -53,14 +54,15 @@ jobs:
   #         args: prepare --check -- --all-targets
 
   lint:
+    strategy:
+      fail-fast: false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - run: rustup toolchain install stable --profile minimal
 
-      # check if this speeds anything up
       - uses: Swatinem/rust-cache@v2
 
       - name: Run cargo fmt
@@ -76,14 +78,15 @@ jobs:
           args: -- -D warnings
 
   test:
+    strategy:
+      fail-fast: false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - run: rustup toolchain install stable --profile minimal
 
-      # check if this speeds anything up
       - uses: Swatinem/rust-cache@v2
 
       - name: Run cargo test
