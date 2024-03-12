@@ -15,6 +15,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Check architecture
+        run: uname -m
+
+      - name: Check release version
+        run: cat /etc/lsb-release
+
       - name: Checkout
         uses: actions/checkout@v3
 
