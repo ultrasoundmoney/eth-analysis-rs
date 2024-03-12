@@ -317,7 +317,11 @@ impl From<BeaconHeaderSignedEnvelope> for HeadEvent {
 }
 
 async fn stream_slots(slot_to_follow: Slot) -> impl Stream<Item = Slot> {
-    let url_string = format!("{}/eth/v1/events/?topics=head", ENV_CONFIG.beacon_url);
+    let beacon_url = ENV_CONFIG
+        .beacon_url
+        .as_ref()
+        .expect("BEACON_URL is required in env to stream beacon updates");
+    let url_string = format!("{beacon_url}/eth/v1/events/?topics=head",);
     let url = reqwest::Url::parse(&url_string).unwrap();
 
     let client = eventsource::reqwest::Client::new(url);
