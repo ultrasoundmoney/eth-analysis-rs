@@ -56,7 +56,12 @@ async fn from_time_frame(
                 SELECT
                     DATE_TRUNC('day', timestamp) AS "day_timestamp!",
                     SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS "base_fee_per_gas!",
-                    SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) AS "blob_fee_per_gas!"
+                    CASE 
+                        WHEN SUM(COALESCE(blob_gas_used::float8, 0)) = 0 
+                            THEN 0
+                        ELSE
+                            SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0))
+                    END AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -75,7 +80,7 @@ async fn from_time_frame(
                     block_number: None,
                     timestamp: row.day_timestamp,
                     wei: row.base_fee_per_gas,
-                    blob_wei: row.blob_fee_per_gas
+                    blob_wei: row.blob_fee_per_gas.expect("blob_fee_per_gas calculatin returned None"),
                 }
             }).collect()
         }
@@ -86,7 +91,7 @@ async fn from_time_frame(
                 SELECT
                     timestamp,
                     base_fee_per_gas::FLOAT8,
-                    COALESCE(blob_base_fee::FLOAT8,0),
+                    COALESCE(blob_base_fee::FLOAT8,0) as blob_base_fee,
                     number
                 FROM
                     blocks_next
@@ -118,7 +123,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_TRUNC('minute', timestamp) AS minute_timestamp,
                     SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
-                    SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) AS blob_fee_per_gas
+                    CASE WHEN SUM(COALESCE(blob_gas_used::float8, 0)) = 0 THEN 0 ELSE SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) END AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -149,7 +154,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
                     SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
-                    SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) AS blob_fee_per_gas
+                    CASE WHEN SUM(COALESCE(blob_gas_used::float8, 0)) = 0 THEN 0 ELSE SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) END AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -179,8 +184,8 @@ async fn from_time_frame(
                 "
                 SELECT
                     DATE_TRUNC('hour', timestamp) AS hour_timestamp,
-                    SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas
-                    SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) AS blob_fee_per_gas
+                    SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
+                    CASE WHEN SUM(COALESCE(blob_gas_used::float8, 0)) = 0 THEN 0 ELSE SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) END AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
