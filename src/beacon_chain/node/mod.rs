@@ -132,11 +132,12 @@ fn make_blocks_url(block_id: &BlockId) -> String {
         BlockId::Head => "head".to_string(),
         BlockId::Slot(slot) => slot.to_string(),
     };
+    let beacon_url = ENV_CONFIG
+        .beacon_url
+        .as_ref()
+        .expect("BEACON_URL is required in env to fetch blocks");
 
-    format!(
-        "{}/eth/v2/beacon/blocks/{}",
-        ENV_CONFIG.beacon_url, block_id_text
-    )
+    format!("{beacon_url}/eth/v2/beacon/blocks/{}", block_id_text)
 }
 
 pub type StateRoot = String;
@@ -152,10 +153,11 @@ struct StateRootFirstEnvelope {
 }
 
 fn make_state_root_url(slot: Slot) -> String {
-    format!(
-        "{}/eth/v1/beacon/states/{}/root",
-        ENV_CONFIG.beacon_url, slot
-    )
+    let beacon_url = ENV_CONFIG
+        .beacon_url
+        .as_ref()
+        .expect("BEACON_URL is required in env to fetch blocks");
+    format!("{beacon_url}/eth/v1/beacon/states/{}/root", slot)
 }
 
 #[derive(Debug, Deserialize)]
@@ -169,9 +171,13 @@ struct ValidatorBalancesEnvelope {
 }
 
 fn make_validator_balances_by_state_url(state_root: &str) -> String {
+    let beacon_url = ENV_CONFIG
+        .beacon_url
+        .as_ref()
+        .expect("BEACON_URL is required in env to fetch validator balances");
     format!(
-        "{}/eth/v1/beacon/states/{}/validator_balances",
-        ENV_CONFIG.beacon_url, state_root
+        "{beacon_url}/eth/v1/beacon/states/{}/validator_balances",
+        state_root
     )
 }
 
@@ -225,17 +231,21 @@ fn make_header_by_block_id_url(block_id: &BlockId) -> String {
         BlockId::Head => "head".to_string(),
         BlockId::Slot(slot) => slot.to_string(),
     };
-
-    format!(
-        "{}/eth/v1/beacon/headers/{}",
-        ENV_CONFIG.beacon_url, block_id_text
-    )
+    let beacon_url = ENV_CONFIG
+        .beacon_url
+        .as_ref()
+        .expect("BEACON_URL is required in env to fetch headers");
+    format!("{beacon_url}/eth/v1/beacon/headers/{}", block_id_text)
 }
 
 fn make_validators_by_state_url(state_root: &str) -> String {
+    let beacon_url = ENV_CONFIG
+        .beacon_url
+        .as_ref()
+        .expect("BEACON_URL is required in env to fetch validator balances");
     format!(
-        "{}/eth/v1/beacon/states/{}/validators",
-        ENV_CONFIG.beacon_url, state_root
+        "{beacon_url}/eth/v1/beacon/states/{}/validators",
+        state_root
     )
 }
 
@@ -268,10 +278,11 @@ struct ValidatorsEnvelope {
 }
 
 fn make_finality_checkpoint_url() -> String {
-    format!(
-        "{}/eth/v1/beacon/states/head/finality_checkpoints",
-        ENV_CONFIG.beacon_url,
-    )
+    let beacon_url = ENV_CONFIG
+        .beacon_url
+        .as_ref()
+        .expect("BEACON_URL is required in env to fetch validator balances");
+    format!("{beacon_url}/eth/v1/beacon/states/head/finality_checkpoints",)
 }
 
 #[derive(Deserialize)]
