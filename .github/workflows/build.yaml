@@ -5,11 +5,7 @@ on:
     tags:
       - "stag-*"
     branches:
-      - main
-      - "hotfix/*"
-  pull_request:
-    branches:
-      - main
+      - "*"
 
 env:
   CARGO_TERM_COLOR: always
