@@ -22,11 +22,15 @@ struct EthSupply2Response {
 }
 
 pub async fn get_eth_supply_2() -> reqwest::Result<EthSupply2> {
+    let etherscan_api_key = ENV_CONFIG
+        .etherscan_api_key
+        .as_ref()
+        .expect("expect ETHERSCAN_API_KEY in env in order to fetch eth supply 2");
     let url = FormatUrl::new(ETHERSCAN_API)
         .with_query_params(vec![
             ("module", "stats"),
             ("action", "ethsupply2"),
-            ("api_key", &ENV_CONFIG.etherscan_api_key),
+            ("api_key", etherscan_api_key),
         ])
         .format_url();
 
@@ -51,9 +55,13 @@ struct EthPriceEnvelope {
 
 #[allow(dead_code)]
 pub async fn get_eth_price() -> reqwest::Result<EthPrice> {
+    let etherscan_api_key = ENV_CONFIG
+        .etherscan_api_key
+        .as_ref()
+        .expect("expect ETHERSCAN_API_KEY in env in order to fetch eth price");
     reqwest::get(format!(
         "https://api.etherscan.io/api?module=stats&action=ethprice&apikey={}",
-        ENV_CONFIG.etherscan_api_key
+        etherscan_api_key
     ))
     .await?
     .error_for_status()?
