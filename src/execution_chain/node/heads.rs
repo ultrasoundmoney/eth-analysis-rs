@@ -109,7 +109,11 @@ pub fn stream_new_heads() -> impl Stream<Item = Head> {
     let (mut new_heads_tx, new_heads_rx) = mpsc::unbounded();
 
     tokio::spawn(async move {
-        let url = (ENV_CONFIG.geth_url).to_string();
+        let url = (ENV_CONFIG
+            .geth_url
+            .as_ref()
+            .expect("GETH_URL is required in env to stream new heads"))
+        .to_string();
         let mut ws = tungstenite::connect_async(&url).await.unwrap().0;
 
         ws.send(HeadsMessage::Subscribe.into()).await.unwrap();

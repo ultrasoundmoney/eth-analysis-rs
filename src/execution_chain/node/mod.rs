@@ -161,7 +161,14 @@ impl ExecutionNode {
 
         let message_rx_map = Arc::new(Mutex::new(HashMap::with_capacity(u16::MAX.into())));
 
-        let (connected_socket, _) = connect_async(&ENV_CONFIG.geth_url).await.unwrap();
+        let (connected_socket, _) = connect_async(
+            ENV_CONFIG
+                .geth_url
+                .as_ref()
+                .expect("GETH_URL is required in env to connect to execution node"),
+        )
+        .await
+        .unwrap();
         let (mut sink, stream) = connected_socket.split();
 
         // We'd like to read websocket messages concurrently so we read in a thread.
