@@ -56,7 +56,7 @@ pub struct EnvConfig {
     pub beacon_url: Option<String>,
     pub bind_public_interface: bool,
     pub db_url: String,
-    pub etherscan_api_key: String,
+    pub etherscan_api_key: Option<String>,
     // Separate out geth deltas fork URL.
     pub geth_url: String,
     pub log_json: bool,
@@ -68,7 +68,7 @@ pub fn get_env_config() -> EnvConfig {
         beacon_url: get_env_var("BEACON_URL"),
         bind_public_interface: get_env_bool("BIND_PUBLIC_INTERFACE").unwrap_or(true),
         db_url: get_env_var("DATABASE_URL").expect("DATABASE_URL is required"),
-        etherscan_api_key: get_env_var("ETHERSCAN_API_KEY").expect("ETHERSCAN_API_KEY is required"),
+        etherscan_api_key: get_env_var("ETHERSCAN_API_KEY"),
         geth_url: get_env_var("GETH_URL").expect("GETH_URL is required"),
         log_json: get_env_bool("LOG_JSON").unwrap_or(false),
         log_perf: get_env_bool("LOG_PERF").unwrap_or(false),
