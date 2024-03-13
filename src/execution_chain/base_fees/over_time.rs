@@ -56,7 +56,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_TRUNC('day', timestamp) AS "day_timestamp!",
                     SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS "base_fee_per_gas!",
-                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / SUM(blob_gas_used::float8) AS blob_fee_per_gas
+                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / NULLIF(SUM(blob_gas_used::float8), 0) AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -118,7 +118,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_TRUNC('minute', timestamp) AS minute_timestamp,
                     SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
-                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / SUM(blob_gas_used::float8) AS blob_fee_per_gas
+                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / NULLIF(SUM(blob_gas_used::float8), 0) AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -149,7 +149,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
                     SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
-                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / SUM(blob_gas_used::float8) AS blob_fee_per_gas
+                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / NULLIF(SUM(blob_gas_used::float8), 0) AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -180,7 +180,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_TRUNC('hour', timestamp) AS hour_timestamp,
                     SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
-                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / SUM(blob_gas_used::float8) AS blob_fee_per_gas
+                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / NULLIF(SUM(blob_gas_used::float8), 0) AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
