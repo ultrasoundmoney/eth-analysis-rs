@@ -116,6 +116,7 @@ impl FromStr for CacheKey {
             "base-fee-per-gas" => Ok(Self::BaseFeePerGas),
             "base-fee-per-gas-barrier" => Ok(Self::BaseFeePerGasBarrier),
             "base-fee-per-gas-stats" => Ok(Self::BaseFeePerGasStats),
+            "blob-fee-per-gas-stats" => Ok(Self::BlobFeePerGasStats),
             "block-lag" => Ok(Self::BlockLag),
             "burn-rates" => Ok(Self::BurnRates),
             "burn-sums" => Ok(Self::BurnSums),
