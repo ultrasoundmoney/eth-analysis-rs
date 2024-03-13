@@ -40,6 +40,8 @@ pub struct State {
 pub async fn start_server() {
     log::init_with_env();
 
+    info!("starting serve fees");
+
     let started_on = chrono::Utc::now();
 
     let db_pool = db::get_db_pool("eth-analysis-serve", 3).await;
