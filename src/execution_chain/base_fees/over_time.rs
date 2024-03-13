@@ -22,7 +22,7 @@ struct BaseFeeAtTime {
     block_number: Option<BlockNumber>,
     timestamp: DateTime<Utc>,
     wei: WeiF64,
-    blob_wei: WeiF64,
+    blob_wei: Option<WeiF64>,
 }
 
 #[derive(Serialize)]
@@ -56,12 +56,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_TRUNC('day', timestamp) AS "day_timestamp!",
                     SUM(base_fee_per_gas::float8 * gas_used::float8) / SUM(gas_used::float8) AS "base_fee_per_gas!",
-                    CASE 
-                        WHEN SUM(COALESCE(blob_gas_used::float8, 0)) = 0 
-                            THEN 0
-                        ELSE
-                            SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0))
-                    END AS blob_fee_per_gas
+                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / SUM(blob_gas_used::float8) AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -80,7 +75,7 @@ async fn from_time_frame(
                     block_number: None,
                     timestamp: row.day_timestamp,
                     wei: row.base_fee_per_gas,
-                    blob_wei: row.blob_fee_per_gas.expect("blob_fee_per_gas calculatin returned None"),
+                    blob_wei: row.blob_fee_per_gas,
                 }
             }).collect()
         }
@@ -105,7 +100,7 @@ async fn from_time_frame(
                 let block_number: BlockNumber = row.get::<i32, _>("number");
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");
-                let blob_wei = row.get::<f64, _>("blob_base_fee");
+                let blob_wei = row.get::<Option<f64>, _>("blob_base_fee");
                 BaseFeeAtTime {
                     block_number: Some(block_number),
                     timestamp,
@@ -123,7 +118,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_TRUNC('minute', timestamp) AS minute_timestamp,
                     SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
-                    CASE WHEN SUM(COALESCE(blob_gas_used::float8, 0)) = 0 THEN 0 ELSE SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) END AS blob_fee_per_gas
+                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / SUM(blob_gas_used::float8) AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -136,7 +131,7 @@ async fn from_time_frame(
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("minute_timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");
-                let blob_wei = row.get::<f64, _>("blob_fee_per_gas");
+                let blob_wei = row.get::<Option<f64>, _>("blob_fee_per_gas");
                 BaseFeeAtTime {
                     block_number: None,
                     timestamp,
@@ -154,7 +149,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_BIN('5 minutes', timestamp, '2022-01-01') AS five_minute_timestamp,
                     SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
-                    CASE WHEN SUM(COALESCE(blob_gas_used::float8, 0)) = 0 THEN 0 ELSE SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) END AS blob_fee_per_gas
+                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / SUM(blob_gas_used::float8) AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -167,7 +162,7 @@ async fn from_time_frame(
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("five_minute_timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");
-                let blob_wei = row.get::<f64, _>("blob_fee_per_gas");
+                let blob_wei = row.get::<Option<f64>, _>("blob_fee_per_gas");
                 BaseFeeAtTime {
                     block_number: None,
                     timestamp,
@@ -185,7 +180,7 @@ async fn from_time_frame(
                 SELECT
                     DATE_TRUNC('hour', timestamp) AS hour_timestamp,
                     SUM(base_fee_per_gas::FLOAT8 * gas_used::FLOAT8) / SUM(gas_used::FLOAT8) AS base_fee_per_gas,
-                    CASE WHEN SUM(COALESCE(blob_gas_used::float8, 0)) = 0 THEN 0 ELSE SUM(COALESCE(blob_base_fee::float8 * blob_gas_used::float8, 0)) / SUM(COALESCE(blob_gas_used::float8, 0)) END AS blob_fee_per_gas
+                    SUM(blob_base_fee::float8 * blob_gas_used::float8) / SUM(blob_gas_used::float8) AS blob_fee_per_gas
                 FROM
                     blocks_next
                 WHERE
@@ -198,7 +193,7 @@ async fn from_time_frame(
             .map(|row: PgRow| {
                 let timestamp: DateTime<Utc> = row.get::<DateTime<Utc>, _>("hour_timestamp");
                 let wei = row.get::<f64, _>("base_fee_per_gas");
-                let blob_wei = row.get::<f64, _>("blob_fee_per_gas");
+                let blob_wei = row.get::<Option<f64>, _>("blob_fee_per_gas");
                 BaseFeeAtTime {
                     block_number: None,
                     timestamp,
@@ -313,7 +308,7 @@ mod tests {
                 block_number: Some(included_block.number),
                 timestamp: included_block.timestamp,
                 wei: 1.0,
-                blob_wei: 0.0
+                blob_wei: None
             }]
         );
     }
@@ -344,13 +339,13 @@ mod tests {
                     wei: 1.0,
                     block_number: Some(0),
                     timestamp: test_block_1.timestamp,
-                    blob_wei: 0.0
+                    blob_wei: None
                 },
                 BaseFeeAtTime {
                     wei: 1.0,
                     block_number: Some(1),
                     timestamp: test_block_2.timestamp,
-                    blob_wei: 0.0
+                    blob_wei: None
                 }
             ]
         );
