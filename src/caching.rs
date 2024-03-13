@@ -21,6 +21,8 @@ pub enum CacheKey {
     BaseFeePerGasBarrier,
     BaseFeePerGasStats,
     BaseFeePerGasStatsTimeFrame(TimeFrame),
+    BlobFeePerGasStats,
+    BlobFeePerGasStatsTimeFrame(TimeFrame),
     BlockLag,
     BurnRates,
     BurnSums,
