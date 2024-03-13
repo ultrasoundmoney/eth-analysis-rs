@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        SUM(blob_base_fee::FLOAT8 * blob_gas_used::FLOAT8) / SUM(blob_gas_used::FLOAT8) AS average\n                    FROM\n                        blocks_next\n                    WHERE\n                        number >= $1\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "average",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ea022afcc8736e953e3075b9d268aa19ecaea8c49a977ce5d7fa71d93c0a2400"
+}

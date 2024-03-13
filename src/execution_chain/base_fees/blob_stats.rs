@@ -26,7 +26,7 @@ async fn blob_base_fee_average(executor: impl PgExecutor<'_>, time_frame: &TimeF
                 sqlx::query!(
                     r#"
                     SELECT
-                        SUM(blob_base_fee::FLOAT8 * blob_gas_used::FLOAT8) / SUM(blob_gas_used::FLOAT8) AS "average!"
+                        SUM(blob_base_fee::FLOAT8 * blob_gas_used::FLOAT8) / SUM(blob_gas_used::FLOAT8) AS average
                     FROM
                         blocks_next
                     WHERE
@@ -49,7 +49,7 @@ async fn blob_base_fee_average(executor: impl PgExecutor<'_>, time_frame: &TimeF
                 ",
             )
             .bind(limited_time_frame.postgres_interval())
-            .map(|row: PgRow| row.get::<f64, _>("average"))
+            .map(|row: PgRow| row.get::<Option<f64>, _>("average"))
             .fetch_one(executor)
             .await.unwrap()
         }
@@ -68,7 +68,7 @@ struct BlobFeePerGasMinMax {
 async fn blob_base_fee_min(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
-) -> (Option<BlockNumber>, Option<WeiF64>) {
+) -> Option<(BlockNumber, WeiF64)> {
     match time_frame {
         TimeFrame::Growing(SinceMerge) => sqlx::query!(
             r#"
@@ -79,6 +79,7 @@ async fn blob_base_fee_min(
                 blocks_next
             WHERE
                 timestamp >= '2022-09-15T06:42:42Z'::TIMESTAMPTZ
+                AND blob_base_fee IS NOT NULl
             ORDER BY blob_base_fee ASC
             LIMIT 1
             "#,
@@ -86,7 +87,7 @@ async fn blob_base_fee_min(
         .fetch_one(executor)
         .await
         .map(|row| (row.number, row.blob_base_fee as f64))
-        .unwrap(),
+        .ok(),
         TimeFrame::Growing(SinceBurn) => sqlx::query!(
             r#"
             SELECT
@@ -94,6 +95,7 @@ async fn blob_base_fee_min(
                 blob_base_fee AS "blob_base_fee!"
             FROM
                 blocks_next
+            WHERE blob_base_fee IS NOT NULL
             ORDER BY blob_base_fee ASC
             LIMIT 1
             "#,
@@ -101,7 +103,7 @@ async fn blob_base_fee_min(
         .fetch_one(executor)
         .await
         .map(|row| (row.number, row.blob_base_fee as f64))
-        .unwrap(),
+        .ok(),
         TimeFrame::Limited(limited_time_frame) => sqlx::query!(
             r#"
             SELECT
@@ -111,6 +113,7 @@ async fn blob_base_fee_min(
                 blocks_next
             WHERE
                 timestamp >= NOW() - $1::INTERVAL
+                AND blob_base_fee IS NOT NULL
             ORDER BY blob_base_fee ASC
             LIMIT 1
             "#,
@@ -119,7 +122,7 @@ async fn blob_base_fee_min(
         .fetch_one(executor)
         .await
         .map(|row| (row.number, row.blob_base_fee as f64))
-        .unwrap(),
+        .ok(),
     }
 }
 
@@ -127,7 +130,7 @@ async fn blob_base_fee_min(
 async fn blob_base_fee_max(
     executor: impl PgExecutor<'_>,
     time_frame: &TimeFrame,
-) -> (Option<BlockNumber>, Option<WeiF64>) {
+) -> Option<(BlockNumber, WeiF64)> {
     match time_frame {
         TimeFrame::Growing(growing_time_frame) => sqlx::query!(
             r#"
@@ -138,6 +141,7 @@ async fn blob_base_fee_max(
                 blocks_next
             WHERE
                 timestamp >= $1
+                AND blob_base_fee IS NOT NULL
             ORDER BY blob_base_fee DESC
             LIMIT 1
             "#,
@@ -145,8 +149,7 @@ async fn blob_base_fee_max(
         )
         .fetch_one(executor)
         .await
-        .map(|row| (row.number, row.blob_base_fee as f64))
-        .unwrap(),
+        .map(|row| (row.number, row.blob_base_fee as f64)).ok(),
         TimeFrame::Limited(limited_time_frame) => sqlx::query!(
             r#"
             SELECT
@@ -156,6 +159,7 @@ async fn blob_base_fee_max(
                 blocks_next
             WHERE
                 timestamp >= NOW() - $1::INTERVAL
+                AND blob_base_fee IS NOT NULL
             ORDER BY blob_base_fee DESC
             LIMIT 1
             "#,
@@ -163,8 +167,7 @@ async fn blob_base_fee_max(
         )
         .fetch_one(executor)
         .await
-        .map(|row| (row.number, row.blob_base_fee as f64))
-        .unwrap(),
+        .map(|row| (row.number, row.blob_base_fee as f64)).ok(),
     }
 }
 
@@ -203,7 +206,7 @@ impl BlobFeePerGasStats {
         time_frame: &TimeFrame,
         block: &ExecutionNodeBlock,
     ) -> Self {
-        let ((min_block_number, min), (max_block_number, max), average) = join!(
+        let (min_opt, max_opt, average) = join!(
             blob_base_fee_min(executor, time_frame)
                 .timed(&format!("blob_base_fee_min_{time_frame}")),
             blob_base_fee_max(executor, time_frame)
@@ -215,10 +218,10 @@ impl BlobFeePerGasStats {
         Self {
             average,
             block_number: block.number,
-            max,
-            max_block_number,
-            min,
-            min_block_number,
+            max: max_opt.map(|t| t.1),
+            max_block_number: max_opt.map(|t| t.0),
+            min: min_opt.map(|t| t.1),
+            min_block_number: min_opt.map(|t| t.0),
             timestamp: block.timestamp,
         }
     }
