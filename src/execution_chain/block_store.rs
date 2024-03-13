@@ -108,27 +108,25 @@ pub async fn store_block(
 }
 
 fn calc_blob_base_fee(excess_blob_gas: Option<i32>) -> Option<i64> {
-    if let Some(excess_blob_gas) = excess_blob_gas {
-        const MIN_BLOB_BASE_FEE: i128 = 1;
-        const BLOB_BASE_FEE_UPDATE_FRACTION: i128 = 3338477;
-        Some(
-            fake_exponential(
-                MIN_BLOB_BASE_FEE,
-                excess_blob_gas.into(),
-                BLOB_BASE_FEE_UPDATE_FRACTION,
-            )
-            .try_into()
-            .expect("Overflow of blob_base_fee"),
-        )
-    } else {
-        None
-    }
+    let excess_blob_gas: u128 = excess_blob_gas?
+        .try_into()
+        .expect("expect excess_blob_gas to be positive");
+    const MIN_BLOB_BASE_FEE: u128 = 1;
+    const BLOB_BASE_FEE_UPDATE_FRACTION: u128 = 3338477;
+    let blob_base_fee = fake_exponential(
+        MIN_BLOB_BASE_FEE,
+        excess_blob_gas,
+        BLOB_BASE_FEE_UPDATE_FRACTION,
+    )
+    .try_into()
+    .expect("overflow of blob_base_fee");
+    Some(blob_base_fee)
 }
 
-fn fake_exponential(factor: i128, numerator: i128, denominator: i128) -> i128 {
-    let mut i: i128 = 1;
-    let mut output: i128 = 0;
-    let mut numerator_accum: i128 = factor * denominator;
+fn fake_exponential(factor: u128, numerator: u128, denominator: u128) -> u128 {
+    let mut i: u128 = 1;
+    let mut output: u128 = 0;
+    let mut numerator_accum: u128 = factor * denominator;
     while numerator_accum > 0 {
         output += numerator_accum;
         numerator_accum = (numerator_accum * numerator) / (denominator * i);
