@@ -303,7 +303,7 @@ mod tests {
                     .map(|row| {
                         GweiInTime {
                             t: row.day_timestamp.duration_trunc(Duration::days(1) ).unwrap().timestamp() as u64,
-                            v: row.gwei
+                            v: row.gwei.unwrap()
                         }
                     })
                 .collect()
