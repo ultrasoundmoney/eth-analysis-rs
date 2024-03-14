@@ -321,7 +321,7 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_test_block(&mut *transaction, "is_hash_known_test").await;
+        store_test_block(&mut transaction, "is_hash_known_test").await;
 
         let is_hash_known =
             get_is_hash_known(&mut *transaction, "0xis_hash_known_test_block_root").await;
@@ -393,7 +393,7 @@ mod tests {
             .build();
         let test_block = Into::<BeaconBlockBuilder>::into(&test_header).build();
 
-        store_custom_test_block(&mut *transaction, &test_header, &test_block).await;
+        store_custom_test_block(&mut transaction, &test_header, &test_block).await;
 
         let last_block_slot = get_last_block_slot(&mut *transaction).await;
         assert_eq!(last_block_slot, Some(slot));
@@ -404,7 +404,7 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        store_test_block(&mut *transaction, "delete_block_test").await;
+        store_test_block(&mut transaction, "delete_block_test").await;
 
         let block_slot = get_last_block_slot(&mut *transaction).await;
         assert_eq!(block_slot, Some(Slot(0)));
@@ -430,9 +430,9 @@ mod tests {
             .build();
         let test_block_after = Into::<BeaconBlockBuilder>::into(&test_header_after).build();
 
-        store_custom_test_block(&mut *transaction, &test_header_before, &test_block_before).await;
+        store_custom_test_block(&mut transaction, &test_header_before, &test_block_before).await;
 
-        store_custom_test_block(&mut *transaction, &test_header_after, &test_block_after).await;
+        store_custom_test_block(&mut transaction, &test_header_after, &test_block_after).await;
 
         let last_block_before = get_block_before_slot(&mut *transaction, Slot(1)).await;
 
@@ -453,7 +453,7 @@ mod tests {
             .parent_header(&test_header_before)
             .build();
 
-        store_custom_test_block(&mut *transaction, &test_header_before, &test_block_before).await;
+        store_custom_test_block(&mut transaction, &test_header_before, &test_block_before).await;
 
         store_state(
             &mut *transaction,
@@ -481,7 +481,7 @@ mod tests {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
 
         store_custom_test_block(
-            &mut *transaction,
+            &mut transaction,
             &header,
             &BeaconBlock {
                 body: BeaconBlockBody {
@@ -520,7 +520,7 @@ mod tests {
 
         assert_eq!(None, block_not_there);
 
-        store_custom_test_block(&mut *transaction, &header, &block).await;
+        store_custom_test_block(&mut transaction, &header, &block).await;
 
         let block_there = get_block_by_slot(&mut *transaction, Slot(0)).await.unwrap();
 
