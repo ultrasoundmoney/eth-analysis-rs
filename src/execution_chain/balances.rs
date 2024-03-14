@@ -83,7 +83,7 @@ mod tests {
             .block_hash(&block_hash)
             .build();
 
-        store_custom_test_block(&mut *transaction, &header, &block).await;
+        store_custom_test_block(&mut transaction, &header, &block).await;
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -96,7 +96,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut *transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
 
         let balances = get_execution_balances_by_hash(&mut *transaction, &block_hash)
             .await

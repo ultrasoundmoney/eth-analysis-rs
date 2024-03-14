@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                number,\n                blob_base_fee AS \"blob_base_fee!\"\n            FROM\n                blocks_next\n            WHERE blob_base_fee IS NOT NULL\n            ORDER BY blob_base_fee ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "blob_base_fee!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "247d595ede37245175efbf6979b96d63a09a618c5fd194ef7c86d5fdf8edfc74"
+}

@@ -252,7 +252,7 @@ mod tests {
 
         block_store.add(&test_block, 0.0).await;
 
-        let last_block = (&block_store).last().await;
+        let last_block = block_store.last().await;
 
         assert_eq!(last_block, test_block);
     }
@@ -272,7 +272,7 @@ mod tests {
 
         block_store.add(&test_block, 0.0).await;
 
-        let hash = (&block_store)
+        let hash = block_store
             .hash_from_number(&test_block.number)
             .await
             .unwrap();

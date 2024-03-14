@@ -45,6 +45,31 @@ lazy_static! {
     };
 }
 
+pub async fn blob_fee_per_gas_stats(
+    state: StateExtension,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    match params.get("time_frame") {
+        Some(time_frame_param) => match time_frame_param.parse::<TimeFrame>() {
+            Ok(time_frame) => serve::cached_get_with_custom_duration(
+                state,
+                &CacheKey::BlobFeePerGasStatsTimeFrame(time_frame),
+                &CACHE_DURATION_MAP[&time_frame].max_age,
+                &CACHE_DURATION_MAP[&time_frame].stale_while_revalidate,
+            )
+            .await
+            .into_response(),
+            Err(_) => {
+                warn!("Invalid time_frame parameter: {}", time_frame_param);
+                StatusCode::BAD_REQUEST.into_response()
+            }
+        },
+        None => serve::cached_get(state, &CacheKey::BlobFeePerGasStats)
+            .await
+            .into_response(),
+    }
+}
+
 pub async fn base_fee_per_gas_stats(
     state: StateExtension,
     Query(params): Query<HashMap<String, String>>,

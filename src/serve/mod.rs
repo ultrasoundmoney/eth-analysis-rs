@@ -96,6 +96,10 @@ pub async fn start_server() {
             get(execution_chain::routes::base_fee_per_gas_stats),
         )
         .route(
+            "/api/v2/fees/blob-fee-per-gas-stats",
+            get(execution_chain::routes::blob_fee_per_gas_stats),
+        )
+        .route(
             "/api/v2/fees/block-lag",
             get(
                 |state: StateExtension| async move { cached_get(state, &CacheKey::BlockLag).await },

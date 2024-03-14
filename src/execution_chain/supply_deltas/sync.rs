@@ -403,7 +403,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut *transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
         let is_hash_known =
             get_is_hash_known(&mut *transaction, &supply_delta_test.block_hash).await;
 
@@ -436,7 +436,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut *transaction, &supply_delta).await;
+        add_delta(&mut transaction, &supply_delta).await;
         let is_block_number_known =
             get_is_block_number_known(&mut *transaction, &supply_delta.block_number).await;
 
@@ -459,7 +459,7 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut *transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
         let balances_sum =
             get_balances_at_hash(&mut *transaction, &supply_delta_test.block_hash).await;
 
@@ -482,13 +482,13 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut *transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
         let balances_sum =
             get_balances_at_hash(&mut *transaction, &supply_delta_test.block_hash).await;
 
         assert_eq!(balances_sum, 1);
 
-        drop_supply_deltas_from(&mut *transaction, &0).await;
+        drop_supply_deltas_from(&mut transaction, &0).await;
     }
 
     #[ignore]
@@ -542,14 +542,14 @@ mod tests {
 
         // Sync a delta.
         sync_delta(
-            &mut *transaction,
+            &mut transaction,
             deltas_queue.clone(),
             DeltaToSync::Fetched(delta_b),
         )
         .await;
         // Fork that delta.
         sync_delta(
-            &mut *transaction,
+            &mut transaction,
             deltas_queue.clone(),
             DeltaToSync::Fetched(delta_b_prime.clone()),
         )
@@ -563,11 +563,11 @@ mod tests {
         // accepting building on B. We force insert B' as 15_082_719.
         // real 15_082_719.
         deltas_queue.lock().unwrap().pop_front();
-        add_delta(&mut *transaction, &delta_b_prime).await;
+        add_delta(&mut transaction, &delta_b_prime).await;
 
         // Now try to process C which depends on B which we've dropped.
         sync_delta(
-            &mut *transaction,
+            &mut transaction,
             deltas_queue.clone(),
             DeltaToSync::Fetched(delta_c),
         )

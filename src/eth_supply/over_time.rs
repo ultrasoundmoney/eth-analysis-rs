@@ -392,7 +392,7 @@ mod tests {
             supply: EthNewtype(10.0),
         };
 
-        store_test_eth_supply(&mut *transaction, test_slot, EthNewtype(10.0))
+        store_test_eth_supply(&mut transaction, test_slot, EthNewtype(10.0))
             .await
             .unwrap();
 

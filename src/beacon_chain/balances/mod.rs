@@ -223,7 +223,7 @@ mod tests {
         let test_id = "get_balances_by_state_root";
         let state_root = format!("0x{test_id}_state_root");
 
-        store_test_block(&mut *transaction, test_id).await;
+        store_test_block(&mut transaction, test_id).await;
 
         store_validators_balance(&mut *transaction, &state_root, Slot(0), &GweiNewtype(100)).await;
 

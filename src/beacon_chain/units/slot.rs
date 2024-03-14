@@ -316,21 +316,21 @@ mod tests {
         let slot2 = Slot(64);
         let slot3 = Slot(96);
 
-        assert_eq!(slot1.is_first_of_epoch(), true);
-        assert_eq!(slot2.is_first_of_epoch(), true);
-        assert_eq!(slot3.is_first_of_epoch(), true);
+        assert!(slot1.is_first_of_epoch());
+        assert!(slot2.is_first_of_epoch());
+        assert!(slot3.is_first_of_epoch());
 
         // Slots not divisible by 32 should not be the first of their epoch
         let slot4 = Slot(33);
         let slot5 = Slot(65);
         let slot6 = Slot(97);
 
-        assert_eq!(slot4.is_first_of_epoch(), false);
-        assert_eq!(slot5.is_first_of_epoch(), false);
-        assert_eq!(slot6.is_first_of_epoch(), false);
+        assert!(!slot4.is_first_of_epoch());
+        assert!(!slot5.is_first_of_epoch());
+        assert!(!slot6.is_first_of_epoch());
 
         // For Slot 0
         let slot7 = Slot::GENESIS;
-        assert_eq!(slot7.is_first_of_epoch(), true);
+        assert!(slot7.is_first_of_epoch());
     }
 }

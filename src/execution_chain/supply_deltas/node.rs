@@ -334,10 +334,10 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut *transaction, &supply_delta_test).await;
+        add_delta(&mut transaction, &supply_delta_test).await;
 
         let latest_synced_supply_delta_number =
-            sync::get_last_synced_supply_delta_number(&mut *transaction).await;
+            sync::get_last_synced_supply_delta_number(&mut transaction).await;
 
         assert_eq!(latest_synced_supply_delta_number, Some(0));
     }
@@ -348,7 +348,7 @@ mod tests {
         let mut transaction = connection.begin().await.unwrap();
 
         let latest_synced_supply_delta_number =
-            sync::get_last_synced_supply_delta_number(&mut *transaction).await;
+            sync::get_last_synced_supply_delta_number(&mut transaction).await;
 
         assert_eq!(latest_synced_supply_delta_number, None);
     }
