@@ -1,9 +1,9 @@
 mod barrier;
+mod blob_stats;
 mod last;
 mod over_time;
 pub mod routes;
 mod stats;
-mod blob_stats;
 
 use chrono::{DateTime, Utc};
 use futures::join;

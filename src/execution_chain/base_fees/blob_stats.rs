@@ -19,7 +19,10 @@ use GrowingTimeFrame::*;
 
 use super::barrier::Barrier;
 
-async fn blob_base_fee_average(executor: impl PgExecutor<'_>, time_frame: &TimeFrame) -> Option<WeiF64> {
+async fn blob_base_fee_average(
+    executor: impl PgExecutor<'_>,
+    time_frame: &TimeFrame,
+) -> Option<WeiF64> {
     match time_frame {
         TimeFrame::Growing(growing_time_frame) => {
                 warn!(time_frame = %growing_time_frame, "getting average fee for growing time frame is slow");
@@ -149,7 +152,8 @@ async fn blob_base_fee_max(
         )
         .fetch_one(executor)
         .await
-        .map(|row| (row.number, row.blob_base_fee as f64)).ok(),
+        .map(|row| (row.number, row.blob_base_fee as f64))
+        .ok(),
         TimeFrame::Limited(limited_time_frame) => sqlx::query!(
             r#"
             SELECT
@@ -167,7 +171,8 @@ async fn blob_base_fee_max(
         )
         .fetch_one(executor)
         .await
-        .map(|row| (row.number, row.blob_base_fee as f64)).ok(),
+        .map(|row| (row.number, row.blob_base_fee as f64))
+        .ok(),
     }
 }
 
