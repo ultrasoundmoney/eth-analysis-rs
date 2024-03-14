@@ -34,7 +34,7 @@ use crate::{
 lazy_static! {
     static ref OPSGENIE_AUTH_HEADER: String = {
         let opsgenie_api_key = env::get_env_var("OPSGENIE_API_KEY").unwrap();
-        format!("OpsgenieKey {opsgenie_api_key}")
+        format!("GenieKey {opsgenie_api_key}")
     };
     static ref MIN_ALARM_WAIT: Duration = Duration::minutes(30);
 }
