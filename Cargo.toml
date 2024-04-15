@@ -12,7 +12,7 @@ name = "serve"
 path = "src/bin/serve.rs"
 
 [dependencies]
-anyhow = { version = "1.0.75", features = ["backtrace"] }
+anyhow = { version = "1.0.82", features = ["backtrace"] }
 axum = "0.6.20"
 async-trait = "0.1.73"
 async-tungstenite = { version = "0.23.0", features = ["tokio-native-tls"] }
