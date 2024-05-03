@@ -1,10 +1,15 @@
 // Generated from: https://transform.tools/json-to-rust-serde
 use serde::Deserialize;
 use serde::Serialize;
+use crate::env::ENV_CONFIG;
+use format_url::FormatUrl;
+use anyhow::Result;
+
+const DUNE_API: &str = "https://api.dune.com/api/v1/query/3686915/results";
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DuneEthInContractsResponse {
+pub struct DuneResponse<Row> {
     #[serde(rename = "execution_id")]
     pub execution_id: String,
     #[serde(rename = "query_id")]
@@ -20,19 +25,19 @@ pub struct DuneEthInContractsResponse {
     pub execution_started_at: String,
     #[serde(rename = "execution_ended_at")]
     pub execution_ended_at: String,
-    pub result: Result,
+    pub result: DuneResult<Row>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Result {
+pub struct DuneResult<Row> {
     pub rows: Vec<Row>,
     pub metadata: Metadata,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Row {
+pub struct EthInContractsRow {
     #[serde(rename = "block_date")]
     pub block_date: String,
     #[serde(rename = "cumulative_sum")]
@@ -62,3 +67,22 @@ pub struct Metadata {
     pub execution_time_millis: i64,
 }
 
+
+pub async fn get_eth_in_contracts() -> Result<Vec<EthInContractsRow>> {
+    let dune_api_key = ENV_CONFIG
+        .dune_api_key
+        .as_ref()
+        .expect("expect DUNE_API_KEY in env in order to fetch eth in smart contracts");
+    let url = FormatUrl::new(DUNE_API)
+        .format_url();
+
+    let client = reqwest::Client::new();
+    Ok(client.get(url)
+        .header("X-Dune-API-Key", dune_api_key)
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<DuneResponse<EthInContractsRow>>()
+        .await
+        .map(|body| body.result.rows)?)
+}
