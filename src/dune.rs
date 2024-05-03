@@ -1,9 +1,9 @@
 // Generated from: https://transform.tools/json-to-rust-serde
+use crate::env::ENV_CONFIG;
+use anyhow::Result;
+use format_url::FormatUrl;
 use serde::Deserialize;
 use serde::Serialize;
-use crate::env::ENV_CONFIG;
-use format_url::FormatUrl;
-use anyhow::Result;
 
 const DUNE_ETH_IN_CONTRACTS_QUERY_URL: &str = "https://api.dune.com/api/v1/query/3686915/results";
 
@@ -45,17 +45,16 @@ pub struct Metadata {
     pub execution_time_millis: i64,
 }
 
-
 pub async fn get_eth_in_contracts() -> Result<Vec<EthInContractsRow>> {
     let dune_api_key = ENV_CONFIG
         .dune_api_key
         .as_ref()
         .expect("expect DUNE_API_KEY in env in order to fetch eth in smart contracts");
-    let url = FormatUrl::new(DUNE_ETH_IN_CONTRACTS_QUERY_URL)
-        .format_url();
+    let url = FormatUrl::new(DUNE_ETH_IN_CONTRACTS_QUERY_URL).format_url();
 
     let client = reqwest::Client::new();
-    Ok(client.get(url)
+    Ok(client
+        .get(url)
         .header("X-Dune-API-Key", dune_api_key)
         .send()
         .await?
