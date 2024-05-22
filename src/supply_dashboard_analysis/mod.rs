@@ -2,29 +2,24 @@
 //! current eth supply, eth supply over time, fee burn, and average eth price.
 
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use futures::join;
-use serde::Serialize;
 use sqlx::PgPool;
 use tracing::warn;
 
 use crate::{
-    beacon_chain::Slot,
     caching::{self, CacheKey},
-    eth_supply::{
-        self, SupplyChanges, SupplyOverTime, SupplyParts, SupplyPartsError, SupplyPartsStore,
-    },
+    eth_supply::{self, SupplyChanges, SupplyPartsError, SupplyPartsStore},
     performance::TimedExt,
 };
 
-#[derive(Serialize)]
-struct SupplyDashboardAnalysis {
-    supply_parts: SupplyParts,
-    fees_burned: Option<()>,
-    slot: Slot,
-    supply_over_time: SupplyOverTime,
-    timestamp: DateTime<Utc>,
-}
+// #[derive(Serialize)]
+// struct SupplyDashboardAnalysis {
+//     supply_parts: SupplyParts,
+//     fees_burned: Option<()>,
+//     slot: Slot,
+//     supply_over_time: SupplyOverTime,
+//     timestamp: DateTime<Utc>,
+// }
 
 pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     // Our limit is whatever the youngest of the table we depend on has stored, currently that is

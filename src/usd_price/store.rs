@@ -27,6 +27,7 @@ pub trait EthPriceStore {
     ) -> UsdNewtype;
     async fn get_most_recent_price(&self) -> sqlx::Result<EthPrice>;
     async fn store_price(&self, timestamp: &DateTime<Utc>, usd: f64);
+    #[allow(dead_code)]
     async fn get_h24_average(&self) -> f64;
     async fn get_price_h24_ago(&self, duration: &Duration) -> Option<EthPrice>;
     async fn get_eth_price_by_minute(&self, minute: DateTime<Utc>) -> Option<f64>;

@@ -191,11 +191,6 @@ where
         .map(Slot)
 }
 
-#[derive(Debug)]
-pub struct FirstOfDaySlotWithBlock(pub Slot);
-
-impl FirstOfDaySlotWithBlock {}
-
 #[cfg(test)]
 mod tests {
     use crate::execution_chain::LONDON_HARD_FORK_TIMESTAMP;
