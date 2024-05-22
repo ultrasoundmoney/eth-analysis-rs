@@ -1,17 +1,16 @@
-use std::fs::File;
-
-use anyhow::anyhow;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use eth_analysis::{
     beacon_chain::{self, GweiInTime},
     caching::{self, CacheKey},
-    db, eth_supply, log,
+    db,
+    dune::get_eth_in_contracts,
+    eth_supply, log,
     units::GWEI_PER_ETH_F64,
     SupplyAtTime,
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+
 use sqlx::Decode;
 use tracing::{debug, info};
 
@@ -69,17 +68,21 @@ pub async fn main() {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    // We originally got this data from the Glassnode API when we paid for it. We don't pay
-    // anymore, so no more new data.
-    let in_contracts_by_day_file =
-        File::open("src/bin/update-supply-projection-inputs/in_contracts_by_day.json")
-            .map_err(|e| anyhow!("failed to open in_contracts_by_day.json: {}", e))
-            .unwrap();
-    let json_value: Value = serde_json::from_reader(in_contracts_by_day_file).unwrap();
-    let in_contracts_by_day: Vec<TimestampValuePoint> = serde_json::from_value(json_value).unwrap();
+    let raw_dune_data = get_eth_in_contracts().await.unwrap();
+    let in_contracts_by_day = raw_dune_data
+        .into_iter()
+        .map(|row| TimestampValuePoint {
+            t: NaiveDate::parse_from_str(&row.block_date, "%Y-%m-%d")
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .timestamp() as u64,
+            v: row.cumulative_sum,
+        })
+        .collect::<Vec<TimestampValuePoint>>();
 
     debug!(
-        "got gwei in contracts by day, {} data points",
+        "got eth in contracts by day, {} data points",
         in_contracts_by_day.len()
     );
 

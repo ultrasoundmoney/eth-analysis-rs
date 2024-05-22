@@ -4,6 +4,7 @@ mod burn_sums;
 pub mod caching;
 mod data_integrity;
 pub mod db;
+pub mod dune;
 pub mod env;
 pub mod eth_supply;
 mod eth_time;
