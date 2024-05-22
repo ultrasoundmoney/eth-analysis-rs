@@ -59,14 +59,6 @@ async fn blob_base_fee_average(
     }
 }
 
-#[derive(Debug, PartialEq)]
-struct BlobFeePerGasMinMax {
-    max: Option<WeiF64>,
-    max_block_number: Option<BlockNumber>,
-    min: Option<WeiF64>,
-    min_block_number: Option<BlockNumber>,
-}
-
 // This fn expects to be called after the `blocks` table is in sync.
 async fn blob_base_fee_min(
     executor: impl PgExecutor<'_>,

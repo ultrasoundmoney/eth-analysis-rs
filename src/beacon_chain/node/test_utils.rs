@@ -106,7 +106,7 @@ impl BeaconHeaderSignedEnvelopeBuilder {
 
     pub fn parent_header(mut self, parent_header: &BeaconHeaderSignedEnvelope) -> Self {
         self.slot = parent_header.slot() + 1;
-        self.parent_root = parent_header.root.to_owned();
+        parent_header.root.clone_into(&mut self.parent_root);
         self
     }
 

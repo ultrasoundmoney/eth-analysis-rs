@@ -56,14 +56,6 @@ async fn base_fee_per_gas_average(executor: impl PgExecutor<'_>, time_frame: &Ti
     }
 }
 
-#[derive(Debug, PartialEq)]
-struct BaseFeePerGasMinMax {
-    max: WeiF64,
-    max_block_number: BlockNumber,
-    min: WeiF64,
-    min_block_number: BlockNumber,
-}
-
 // This fn expects to be called after the `blocks` table is in sync.
 async fn base_fee_per_gas_min(
     executor: impl PgExecutor<'_>,

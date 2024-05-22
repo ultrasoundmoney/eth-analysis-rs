@@ -26,12 +26,6 @@ use crate::{
 
 use self::store::BurnSumStorePostgres;
 
-#[derive(Debug, PartialEq)]
-struct WeiUsdAmount {
-    wei: WeiNewtype,
-    usd: UsdNewtype,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct EthUsdAmount {
     pub eth: EthNewtype,
