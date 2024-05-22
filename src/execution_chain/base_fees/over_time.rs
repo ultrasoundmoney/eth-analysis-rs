@@ -308,7 +308,7 @@ mod tests {
                 block_number: Some(included_block.number),
                 timestamp: included_block.timestamp,
                 wei: 1.0,
-                blob_wei: None
+                blob_wei: Some(0.0)
             }]
         );
     }
@@ -339,13 +339,13 @@ mod tests {
                     wei: 1.0,
                     block_number: Some(0),
                     timestamp: test_block_1.timestamp,
-                    blob_wei: None
+                    blob_wei: Some(0.0)
                 },
                 BaseFeeAtTime {
                     wei: 1.0,
                     block_number: Some(1),
                     timestamp: test_block_2.timestamp,
-                    blob_wei: None
+                    blob_wei: Some(0.0)
                 }
             ]
         );
