@@ -8,9 +8,7 @@ use tracing::warn;
 
 use crate::{
     caching::{self, CacheKey},
-    eth_supply::{
-        self, SupplyChanges, SupplyPartsError, SupplyPartsStore,
-    },
+    eth_supply::{self, SupplyChanges, SupplyPartsError, SupplyPartsStore},
     performance::TimedExt,
 };
 
