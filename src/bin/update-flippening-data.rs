@@ -52,7 +52,7 @@ impl From<SupplyAtTime> for TimestampValuePoint {
     }
 }
 
-fn forward_fill(data: &mut Vec<FlippeningDatapointPartial>) {
+fn forward_fill(data: &mut [FlippeningDatapointPartial]) {
     let mut last_eth_price: Option<f64> = None;
     let mut last_eth_supply: Option<f64> = None;
     let mut last_btc_price: Option<f64> = None;
@@ -129,7 +129,9 @@ pub async fn main() {
     } else {
         get_flippening_data().await.unwrap()
     };
-    if !read_from_file {
+
+    let write_to_file = std::env::var("CACHE_DUNE_RESPONSE").is_ok();
+    if write_to_file {
         // Write to json file
         let file = File::create(OUTPUT_FILE_RAW_DATA).unwrap();
         let mut writer = BufWriter::new(file);
@@ -200,12 +202,6 @@ pub async fn main() {
             }
         })
         .collect();
-
-    // Write to Json
-    let file = File::create("flippening_data_combined.json").unwrap();
-    let mut writer = BufWriter::new(file);
-    serde_json::to_writer(&mut writer, &flippening_data).unwrap();
-    writer.flush().unwrap();
 
     caching::update_and_publish(
         &db_pool,
