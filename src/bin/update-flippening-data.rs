@@ -7,8 +7,7 @@ use eth_analysis::{
     caching::{self, CacheKey},
     db,
     dune::get_flippening_data,
-    eth_supply, log,
-    SupplyAtTime,
+    eth_supply, log, SupplyAtTime,
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -82,7 +81,6 @@ fn forward_fill(data: &mut [FlippeningDatapointPartial]) {
         } else {
             last_bitcoin_supply = entry.bitcoin_supply;
         }
-
     }
 }
 
@@ -137,7 +135,6 @@ pub async fn main() {
         let mut writer = BufWriter::new(file);
         serde_json::to_writer(&mut writer, &raw_dune_data).unwrap();
         writer.flush().unwrap();
-
     }
 
     info!(
@@ -153,7 +150,10 @@ pub async fn main() {
         .collect();
 
     let first_supply_datapoint = &supply_by_day[0];
-    info!("got first supply data point at: {:}", first_supply_datapoint.t);
+    info!(
+        "got first supply data point at: {:}",
+        first_supply_datapoint.t
+    );
 
     let eth_supply_map: HashMap<u64, f64> = supply_by_day
         .iter()
@@ -168,8 +168,17 @@ pub async fn main() {
                 .unwrap()
                 .timestamp() as u64;
             let is_presale_period = t < first_supply_datapoint.t;
-            let eth_supply = if is_presale_period { Some(first_supply_datapoint.v) } else { eth_supply_map.get(&t).copied() };
-            let eth_price = if is_presale_period { row.btc_price.map(|btc_price| btc_price / PRESALE_ETH_BTC_RATIO)} else { row.eth_price };
+            let eth_supply = if is_presale_period {
+                Some(first_supply_datapoint.v)
+            } else {
+                eth_supply_map.get(&t).copied()
+            };
+            let eth_price = if is_presale_period {
+                row.btc_price
+                    .map(|btc_price| btc_price / PRESALE_ETH_BTC_RATIO)
+            } else {
+                row.eth_price
+            };
             FlippeningDatapointPartial {
                 t,
                 eth_price,
@@ -186,9 +195,15 @@ pub async fn main() {
     let flippening_data: Vec<FlippeningDatapoint> = flippening_data
         .into_iter()
         .map(|row| {
-            let eth_marketcap = row.eth_price.zip(row.eth_supply).map(|(price, supply)| price*supply);
-            let btc_marketcap = row.btc_price.zip(row.bitcoin_supply).map(|(price, supply)| price*supply);
-            let marketcap_ratio = eth_marketcap.zip(btc_marketcap).map(|(eth, btc)| eth/btc);
+            let eth_marketcap = row
+                .eth_price
+                .zip(row.eth_supply)
+                .map(|(price, supply)| price * supply);
+            let btc_marketcap = row
+                .btc_price
+                .zip(row.bitcoin_supply)
+                .map(|(price, supply)| price * supply);
+            let marketcap_ratio = eth_marketcap.zip(btc_marketcap).map(|(eth, btc)| eth / btc);
             FlippeningDatapoint {
                 t: row.t,
                 marketcap_ratio,
@@ -203,12 +218,7 @@ pub async fn main() {
         })
         .collect();
 
-    caching::update_and_publish(
-        &db_pool,
-        &CacheKey::FlippeningData,
-        &flippening_data,
-    )
-    .await;
+    caching::update_and_publish(&db_pool, &CacheKey::FlippeningData, &flippening_data).await;
 
     info!("done updating flippening data");
 }
