@@ -1,21 +1,20 @@
 use std::io::{BufWriter, Write};
 use std::{collections::HashMap, fs::File};
 
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use eth_analysis::{
-    beacon_chain::{self, GweiInTime},
+    beacon_chain::GweiInTime,
     caching::{self, CacheKey},
     db,
     dune::get_flippening_data,
     eth_supply, log,
-    units::GWEI_PER_ETH_F64,
     SupplyAtTime,
 };
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
 use sqlx::Decode;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 lazy_static! {
     static ref SUPPLY_LOWER_LIMIT_DATE_TIME: DateTime<Utc> =
@@ -53,9 +52,55 @@ impl From<SupplyAtTime> for TimestampValuePoint {
     }
 }
 
+fn forward_fill(data: &mut Vec<FlippeningDatapointPartial>) {
+    let mut last_eth_price: Option<f64> = None;
+    let mut last_eth_supply: Option<f64> = None;
+    let mut last_btc_price: Option<f64> = None;
+    let mut last_bitcoin_supply: Option<f64> = None;
+
+    for entry in data.iter_mut() {
+        if entry.eth_price.is_none() {
+            entry.eth_price = last_eth_price;
+        } else {
+            last_eth_price = entry.eth_price;
+        }
+
+        if entry.eth_supply.is_none() {
+            entry.eth_supply = last_eth_supply;
+        } else {
+            last_eth_supply = entry.eth_supply;
+        }
+
+        if entry.btc_price.is_none() {
+            entry.btc_price = last_btc_price;
+        } else {
+            last_btc_price = entry.btc_price;
+        }
+
+        if entry.bitcoin_supply.is_none() {
+            entry.bitcoin_supply = last_bitcoin_supply;
+        } else {
+            last_bitcoin_supply = entry.bitcoin_supply;
+        }
+
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FlippeningDatapoint {
+    pub t: u64,
+    pub marketcap_ratio: Option<f64>,
+    pub eth_price: Option<f64>,
+    pub eth_marketcap: Option<f64>,
+    pub btc_price: Option<f64>,
+    pub btc_marketcap: Option<f64>,
+    pub bitcoin_supply: Option<f64>,
+    pub eth_supply: Option<f64>,
+    pub is_presale_period: bool,
+}
+
+struct FlippeningDatapointPartial {
     pub t: u64,
     pub eth_price: Option<f64>,
     pub btc_price: Option<f64>,
@@ -64,6 +109,8 @@ struct FlippeningDatapoint {
     pub is_presale_period: bool,
 }
 
+const OUTPUT_FILE_RAW_DATA: &str = "raw_dune_values.json";
+const PRESALE_ETH_BTC_RATIO: f64 = 1337.0;
 #[tokio::main]
 pub async fn main() {
     log::init_with_env();
@@ -77,11 +124,19 @@ pub async fn main() {
     let read_from_file = std::env::var("MOCK_DUNE_API").is_ok();
     let raw_dune_data = if read_from_file {
         warn!("Reading from file instead of DUNE API");
-        let data = std::fs::read_to_string("raw_dune_values.json").expect("Unable to read file");
+        let data = std::fs::read_to_string(OUTPUT_FILE_RAW_DATA).expect("Unable to read file");
         serde_json::from_str(&data).expect("JSON does not have correct format.")
     } else {
         get_flippening_data().await.unwrap()
     };
+    if !read_from_file {
+        // Write to json file
+        let file = File::create(OUTPUT_FILE_RAW_DATA).unwrap();
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer(&mut writer, &raw_dune_data).unwrap();
+        writer.flush().unwrap();
+
+    }
 
     info!(
         "got flippening data from dune, {} data points",
@@ -95,28 +150,53 @@ pub async fn main() {
         .map(Into::into)
         .collect();
 
-    let first_supply_datapoint = supply_by_day[0].t;
-    info!("got first supply data point at: {:}", supply_by_day[0].t);
+    let first_supply_datapoint = &supply_by_day[0];
+    info!("got first supply data point at: {:}", first_supply_datapoint.t);
 
     let eth_supply_map: HashMap<u64, f64> = supply_by_day
-        .into_iter()
+        .iter()
         .map(|point| (point.t, point.v))
         .collect();
     info!("got supply by day, {} data points", eth_supply_map.len());
 
-    let flippening_data: Vec<FlippeningDatapoint> = raw_dune_data
+    let mut flippening_data: Vec<FlippeningDatapointPartial> = raw_dune_data
         .into_iter()
         .map(|row| {
             let t = NaiveDateTime::parse_from_str(&row.time, "%Y-%m-%d %H:%M:%S%.f UTC")
                 .unwrap()
                 .timestamp() as u64;
-            FlippeningDatapoint {
+            let is_presale_period = t < first_supply_datapoint.t;
+            let eth_supply = if is_presale_period { Some(first_supply_datapoint.v) } else { eth_supply_map.get(&t).copied() };
+            let eth_price = if is_presale_period { row.btc_price.map(|btc_price| btc_price / PRESALE_ETH_BTC_RATIO)} else { row.eth_price };
+            FlippeningDatapointPartial {
                 t,
-                eth_price: row.eth_price,
+                eth_price,
                 btc_price: row.btc_price,
                 bitcoin_supply: row.bitcoin_supply,
-                eth_supply: eth_supply_map.get(&t).copied(),
-                is_presale_period: t < first_supply_datapoint,
+                eth_supply,
+                is_presale_period,
+            }
+        })
+        .collect();
+    flippening_data.sort_by_key(|row| row.t);
+    forward_fill(&mut flippening_data);
+
+    let flippening_data: Vec<FlippeningDatapoint> = flippening_data
+        .into_iter()
+        .map(|row| {
+            let eth_marketcap = row.eth_price.zip(row.eth_supply).map(|(price, supply)| price*supply);
+            let btc_marketcap = row.btc_price.zip(row.bitcoin_supply).map(|(price, supply)| price*supply);
+            let marketcap_ratio = eth_marketcap.zip(btc_marketcap).map(|(eth, btc)| eth/btc);
+            FlippeningDatapoint {
+                t: row.t,
+                marketcap_ratio,
+                eth_price: row.eth_price,
+                eth_marketcap,
+                btc_price: row.btc_price,
+                btc_marketcap,
+                bitcoin_supply: row.bitcoin_supply,
+                eth_supply: row.eth_supply,
+                is_presale_period: row.is_presale_period,
             }
         })
         .collect();
@@ -127,17 +207,12 @@ pub async fn main() {
     serde_json::to_writer(&mut writer, &flippening_data).unwrap();
     writer.flush().unwrap();
 
-    // // Deprecate supplyData, lockedData, stakedData after prod frontend has switched to new flippening data.
-    // let flippening_data = FlippeningData {
-    //     supply_by_day,
-    // };
-
-    // caching::update_and_publish(
-    //     &db_pool,
-    //     &CacheKey::FlippeningData,
-    //     &flippening_data,
-    // )
-    // .await;
+    caching::update_and_publish(
+        &db_pool,
+        &CacheKey::FlippeningData,
+        &flippening_data,
+    )
+    .await;
 
     info!("done updating flippening data");
 }

@@ -149,6 +149,12 @@ pub async fn start_server() {
             }),
         )
         .route(
+            "/api/v2/fees/flippening-data",
+            get(|state: StateExtension| async move {
+                cached_get(state, &CacheKey::FlippeningData).await
+            }),
+        )
+        .route(
             "/api/v2/fees/issuance-estimate",
             get(|state: StateExtension| async move {
                 cached_get(state, &CacheKey::IssuanceEstimate).await
