@@ -36,11 +36,10 @@ pub struct EthInContractsRow {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlippeningDataRow {
     pub time: String,
-    pub eth_price: f64,
-    pub btc_price: f64,
-    pub bitcoin_supply: f64,
+    pub eth_price: Option<f64>,
+    pub btc_price: Option<f64>,
+    pub bitcoin_supply: Option<f64>,
 }
-
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Metadata {
@@ -63,7 +62,7 @@ pub async fn get_flippening_data() -> Result<Vec<FlippeningDataRow>> {
     get_dune_data(DUNE_FLIPPENING_DATA_QUERY_URL).await
 }
 
-async fn get_dune_data<Row>(url: &str) -> Result<Vec<Row>> 
+async fn get_dune_data<Row>(url: &str) -> Result<Vec<Row>>
 where
     Row: for<'a> Deserialize<'a>,
 {
@@ -84,4 +83,3 @@ where
         .await
         .map(|body| body.result.rows)?)
 }
-
