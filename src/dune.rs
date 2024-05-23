@@ -5,8 +5,8 @@ use format_url::FormatUrl;
 use serde::Deserialize;
 use serde::Serialize;
 
-const DUNE_ETH_IN_CONTRACTS_QUERY_URL: &str = "https://api.dune.com/api/v1/query/3686915/results";
-const DUNE_FLIPPENING_DATA_QUERY_URL: &str = "https://api.dune.com/api/v1/query/3751774/results";
+const DUNE_ETH_IN_CONTRACTS_QUERY_URL: &str = "https://api.dune.com/api/v1/query/3751774/results";
+const DUNE_FLIPPENING_DATA_QUERY_URL: &str = "https://api.dune.com/api/v1/query/3758140/results";
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DuneResponse<Row> {
