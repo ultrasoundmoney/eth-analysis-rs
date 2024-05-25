@@ -28,6 +28,12 @@ use super::{State, StateExtension};
 #[derive(Debug)]
 pub struct Cache(RwLock<HashMap<CacheKey, Value>>);
 
+impl Default for Cache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Cache {
     pub fn new() -> Self {
         Self(RwLock::new(HashMap::new()))
