@@ -52,7 +52,7 @@ pub async fn start_server() {
 
     debug!("warming cache");
 
-    let cache = Cache::new(&key_value_store).await;
+    let cache = Cache::new_with_data(&key_value_store).await;
 
     info!("cache ready");
 
