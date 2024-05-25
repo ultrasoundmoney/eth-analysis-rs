@@ -124,6 +124,7 @@ impl FromStr for CacheKey {
             "burn-sums" => Ok(Self::BurnSums),
             "effective-balance-sum" => Ok(Self::EffectiveBalanceSum),
             "eth-price" => Ok(Self::EthPrice),
+            "flippening-data" => Ok(Self::FlippeningData),
             "gauge-rates" => Ok(Self::GaugeRates),
             "issuance-breakdown" => Ok(Self::IssuanceBreakdown),
             "issuance-estimate" => Ok(Self::IssuanceEstimate),
