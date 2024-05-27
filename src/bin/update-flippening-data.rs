@@ -89,13 +89,6 @@ fn forward_fill(data: &mut [FlippeningDatapointPartial]) {
 struct FlippeningDatapoint {
     pub t: u64,
     pub marketcap_ratio: Option<f64>,
-    pub eth_price: Option<f64>,
-    pub eth_marketcap: Option<f64>,
-    pub btc_price: Option<f64>,
-    pub btc_marketcap: Option<f64>,
-    pub bitcoin_supply: Option<f64>,
-    pub eth_supply: Option<f64>,
-    pub is_presale_period: bool,
 }
 
 struct FlippeningDatapointPartial {
@@ -104,7 +97,6 @@ struct FlippeningDatapointPartial {
     pub btc_price: Option<f64>,
     pub bitcoin_supply: Option<f64>,
     pub eth_supply: Option<f64>,
-    pub is_presale_period: bool,
 }
 
 const OUTPUT_FILE_RAW_DATA: &str = "raw_dune_values.json";
@@ -185,7 +177,6 @@ pub async fn main() {
                 btc_price: row.btc_price,
                 bitcoin_supply: row.bitcoin_supply,
                 eth_supply,
-                is_presale_period,
             }
         })
         .collect();
@@ -207,13 +198,6 @@ pub async fn main() {
             FlippeningDatapoint {
                 t: row.t,
                 marketcap_ratio,
-                eth_price: row.eth_price,
-                eth_marketcap,
-                btc_price: row.btc_price,
-                btc_marketcap,
-                bitcoin_supply: row.bitcoin_supply,
-                eth_supply: row.eth_supply,
-                is_presale_period: row.is_presale_period,
             }
         })
         .collect();
