@@ -52,7 +52,7 @@ pub async fn start_server() {
 
     debug!("warming cache");
 
-    let cache = Cache::new(&key_value_store).await;
+    let cache = Cache::new_with_data(&key_value_store).await;
 
     info!("cache ready");
 
@@ -146,6 +146,12 @@ pub async fn start_server() {
             "/api/v2/fees/eth-supply-parts",
             get(|state: StateExtension| async move {
                 cached_get(state, &CacheKey::SupplyParts).await
+            }),
+        )
+        .route(
+            "/api/v2/fees/flippening-data",
+            get(|state: StateExtension| async move {
+                cached_get(state, &CacheKey::FlippeningData).await
             }),
         )
         .route(

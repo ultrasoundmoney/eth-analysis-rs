@@ -27,6 +27,7 @@ RUN cargo build --release --bin sync-beacon-states
 RUN cargo build --release --bin sync-execution-blocks
 RUN cargo build --release --bin sync-execution-supply-deltas
 RUN cargo build --release --bin update-effective-balance-sum
+RUN cargo build --release --bin update-flippening-data
 RUN cargo build --release --bin update-issuance-breakdown
 RUN cargo build --release --bin update-issuance-estimate
 RUN cargo build --release --bin update-supply-projection-inputs
@@ -45,6 +46,7 @@ COPY --from=builder /app/target/release/sync-beacon-states /app
 COPY --from=builder /app/target/release/sync-execution-blocks /app
 COPY --from=builder /app/target/release/sync-execution-supply-deltas /app
 COPY --from=builder /app/target/release/update-effective-balance-sum /app
+COPY --from=builder /app/target/release/update-flippening-data /app
 COPY --from=builder /app/target/release/update-issuance-breakdown /app
 COPY --from=builder /app/target/release/update-issuance-estimate /app
 COPY --from=builder /app/src/bin/update-supply-projection-inputs/in_contracts_by_day.json /app/src/bin/update-supply-projection-inputs/in_contracts_by_day.json

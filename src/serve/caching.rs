@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use tokio::task::JoinHandle;
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::{
     caching::{self, CacheKey, ParseCacheKeyError},
@@ -28,19 +28,41 @@ use super::{State, StateExtension};
 #[derive(Debug)]
 pub struct Cache(RwLock<HashMap<CacheKey, Value>>);
 
-impl Cache {
-    pub async fn new(key_value_store: &impl KeyValueStore) -> Self {
-        let map = RwLock::new(HashMap::new());
+impl Default for Cache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-        // Tries to fetch a value from the key value store for every cached analysis value.
+impl Cache {
+    pub fn new() -> Self {
+        Self(RwLock::new(HashMap::new()))
+    }
+
+    async fn load_from_db(&self, key_value_store: &impl KeyValueStore) {
+        info!("loading cache from DB");
+
         for key in all::<CacheKey>().collect::<Vec<_>>() {
             let value = caching::get_serialized_caching_value(key_value_store, &key).await;
-            if let Some(value) = value {
-                map.write().unwrap().insert(key, value);
+            match value {
+                Some(value) => {
+                    let length = serde_json::to_string(&value)
+                        .expect("expect db cache value to be convertable to string")
+                        .len();
+                    debug!(%key, %length, "loaded from DB");
+                    self.0.write().unwrap().insert(key, value);
+                }
+                None => {
+                    warn!(%key, "no value found in DB");
+                }
             }
         }
+    }
 
-        Self(map)
+    pub async fn new_with_data(key_value_store: &impl KeyValueStore) -> Self {
+        let cache = Self::new();
+        cache.load_from_db(key_value_store).await;
+        cache
     }
 }
 

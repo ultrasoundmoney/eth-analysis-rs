@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{PgExecutor, PgPool};
-use tracing::debug;
+use tracing::trace;
 
 pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> Option<Value> {
-    debug!(key = key, "getting key value pair");
+    trace!(key = key, "getting key value pair");
 
     sqlx::query!(
         "
@@ -21,7 +21,7 @@ pub async fn get_value(executor: impl PgExecutor<'_>, key: &str) -> Option<Value
 }
 
 pub async fn set_value(executor: impl PgExecutor<'_>, key: &str, value: &Value) {
-    debug!("storing key: {}", &key,);
+    trace!("storing key: {}", &key,);
 
     sqlx::query!(
         "
