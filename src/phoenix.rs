@@ -208,7 +208,21 @@ async fn run_alarm_loop(last_checked: Arc<Mutex<DateTime<Utc>>>) {
 
     loop {
         for phoenix in phoenixes.iter_mut() {
-            if phoenix.is_age_over_limit() {
+            if phoenix.name == "eth-price-stats" {
+                let limit = Duration::minutes(12);
+                let age = Utc::now() - phoenix.last_seen;
+                debug!(
+                    name = "eth-price-stats",
+                    age = age.num_seconds(),
+                    limit = limit.num_seconds(),
+                    "checking age"
+                );
+                if age >= limit {
+                    alarm.fire_dashboard_stalled("eth-price-stats").await;
+                }
+            }
+
+            if phoenix.name != "eth-price-stats" && phoenix.is_age_over_limit() {
                 alarm.fire_dashboard_stalled(phoenix.name).await;
             }
 
