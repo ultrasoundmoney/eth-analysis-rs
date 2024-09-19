@@ -12,7 +12,9 @@ pub struct EthSupply2 {
     /// eth_supply is calculated before adding ETH minted as Eth2Staking rewards and subtracting BurntFees from EIP-1559.
     #[serde(rename = "EthSupply")]
     pub eth_supply_min_beacon_issuance_plus_burn: WeiNewtype,
+    #[allow(dead_code)]
     pub eth2_staking: WeiNewtype,
+    #[allow(dead_code)]
     pub burnt_fees: WeiNewtype,
 }
 
