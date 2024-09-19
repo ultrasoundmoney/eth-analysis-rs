@@ -9,10 +9,11 @@ use tracing::{debug, info, warn};
 
 use super::EthPrice;
 
+/// Parses a fixed array of len 5 into a `BybitCandle`
 #[derive(Debug, Deserialize)]
 struct BybitCandle {
     timestamp: String,
-    usd: String,
+    open: String,
     #[allow(unused)]
     high: String,
     #[allow(unused)]
@@ -49,9 +50,8 @@ async fn get_eth_candles(
     end: DateTime<Utc>,
 ) -> Result<Vec<EthPrice>> {
     let url = FormatUrl::new(BYBIT_API)
-        .with_path_template("/derivatives/v3/public/index-price-kline")
+        .with_path_template("/v5/market/index-price-kline")
         .with_query_params(vec![
-            ("category", "inverse"),
             ("symbol", "ETHUSD"),
             ("interval", "1"),
             ("start", &start.timestamp_millis().to_string()),
@@ -98,7 +98,7 @@ pub async fn send_eth_price_request(client: &reqwest::Client, url: &str) -> Resu
                 .earliest()
                 .expect("expect bybit candles to contain millisecond timestamps");
             let usd = c
-                .usd
+                .open
                 .parse::<f64>()
                 .expect("expect bybit candles to contain float usd prices");
             EthPrice { timestamp, usd }
