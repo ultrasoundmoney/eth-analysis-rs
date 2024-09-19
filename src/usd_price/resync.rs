@@ -51,6 +51,8 @@ async fn set_last_synced_minute(executor: impl PgExecutor<'_>, minute: u32) {
 pub async fn resync_all() {
     log::init_with_env();
 
+    let client = reqwest::Client::new();
+
     info!("resyncing all eth prices");
     let max_distance_in_minutes: i64 = std::env::args()
         .collect::<Vec<String>>()
@@ -95,6 +97,7 @@ pub async fn resync_all() {
         let timestamp_date_time = Utc.timestamp_opt(timestamp.into(), 0).unwrap();
 
         let usd = bybit::get_closest_price_by_minute(
+            &client,
             timestamp_date_time,
             Duration::minutes(max_distance_in_minutes),
         )

@@ -51,12 +51,13 @@ fn calc_h24_change(current_price: &EthPrice, price_h24_ago: &EthPrice) -> f64 {
 }
 
 async fn update_eth_price_with_most_recent(
+    client: &reqwest::Client,
     db_pool: &PgPool,
     key_value_store: &impl KeyValueStore,
     eth_price_store: &impl EthPriceStore,
     last_price: &mut EthPrice,
 ) -> Result<()> {
-    let most_recent_price = bybit::get_eth_price().await?;
+    let most_recent_price = bybit::get_eth_price(client).await?;
     if last_price == &most_recent_price {
         debug!(
             price = last_price.usd,
@@ -114,6 +115,7 @@ pub async fn record_eth_price() -> Result<()> {
 
     info!("recording eth prices");
 
+    let client = reqwest::Client::new();
     let db_pool = db::get_db_pool("record-eth-price", 3).await;
     let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
     let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
@@ -122,6 +124,7 @@ pub async fn record_eth_price() -> Result<()> {
 
     loop {
         update_eth_price_with_most_recent(
+            &client,
             &db_pool,
             &key_value_store,
             &eth_price_store,
@@ -145,6 +148,7 @@ mod tests {
     #[test_context(TestDb)]
     #[tokio::test]
     async fn update_eth_price_with_most_recent_test(test_db: &TestDb) {
+        let client = reqwest::Client::new();
         let key_value_store = KeyValueStorePostgres::new(test_db.pool.clone());
         let eth_price_store = EthPriceStorePostgres::new(test_db.pool.clone());
         let test_price = EthPrice {
@@ -159,6 +163,7 @@ mod tests {
         let mut last_price = test_price.clone();
 
         update_eth_price_with_most_recent(
+            &client,
             &test_db.pool,
             &key_value_store,
             &eth_price_store,

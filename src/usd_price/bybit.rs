@@ -43,7 +43,11 @@ struct BybitPriceResponse {
 const BYBIT_API: &str = "https://api.bybit.com";
 
 // 1min candles of index price made up of of Kraken, Coinbase, Bitstamp & Bitfinex spot price
-async fn get_eth_candles(start: DateTime<Utc>, end: DateTime<Utc>) -> Result<Vec<EthPrice>> {
+async fn get_eth_candles(
+    client: &reqwest::Client,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+) -> Result<Vec<EthPrice>> {
     let url = FormatUrl::new(BYBIT_API)
         .with_path_template("/derivatives/v3/public/index-price-kline")
         .with_query_params(vec![
@@ -56,7 +60,7 @@ async fn get_eth_candles(start: DateTime<Utc>, end: DateTime<Utc>) -> Result<Vec
         .format_url();
 
     backoff::future::retry(ExponentialBackoff::default(), || async {
-        let candles = send_eth_price_request(&url).await.map_err(|err| {
+        let candles = send_eth_price_request(client, &url).await.map_err(|err| {
             info!(%err, "error sending request to bybit, retrying");
             Error::transient(err)
         })?;
@@ -69,10 +73,12 @@ async fn get_eth_candles(start: DateTime<Utc>, end: DateTime<Utc>) -> Result<Vec
     .await
 }
 
-pub async fn send_eth_price_request(url: &str) -> Result<Vec<EthPrice>> {
+pub async fn send_eth_price_request(client: &reqwest::Client, url: &str) -> Result<Vec<EthPrice>> {
     debug!("sending request to {}", url);
 
-    let body = reqwest::get(url)
+    let body = client
+        .get(url)
+        .send()
         .await?
         .json::<BybitPriceResponse>()
         .await?;
@@ -103,10 +109,10 @@ pub async fn send_eth_price_request(url: &str) -> Result<Vec<EthPrice>> {
 }
 
 // Return current 1min candle open price
-pub async fn get_eth_price() -> Result<EthPrice> {
+pub async fn get_eth_price(client: &reqwest::Client) -> Result<EthPrice> {
     let end = Utc::now();
     let start = end.sub(Duration::minutes(1));
-    get_eth_candles(start, end).await.and_then(|cs| {
+    get_eth_candles(client, start, end).await.and_then(|cs| {
         cs.into_iter()
             .last()
             .context("tried to retrieve last element in empty array")
@@ -148,6 +154,7 @@ fn find_closest_price(prices: &[EthPrice], target_minute_rounded: DateTime<Utc>)
 }
 
 pub async fn get_closest_price_by_minute(
+    client: &reqwest::Client,
     target_minute_rounded: DateTime<Utc>,
     max_distance: Duration,
 ) -> Option<f64> {
@@ -155,7 +162,9 @@ pub async fn get_closest_price_by_minute(
     let start = target_minute_rounded - max_distance;
     let end = target_minute_rounded + max_distance;
 
-    let candles = get_eth_candles(start, end).await.unwrap_or(Vec::new());
+    let candles = get_eth_candles(client, start, end)
+        .await
+        .unwrap_or(Vec::new());
 
     if candles.is_empty() {
         None
@@ -174,17 +183,20 @@ mod tests {
     #[ignore = "failing in CI, probably temporary, try re-enabling"]
     #[tokio::test]
     async fn get_closest_price_by_minute_test() {
+        let client = &reqwest::Client::new();
         let existing_plus_two = "2021-10-22T07:37:00Z".parse::<DateTime<Utc>>().unwrap();
-        let usd = get_closest_price_by_minute(existing_plus_two, Duration::minutes(2)).await;
+        let usd =
+            get_closest_price_by_minute(client, existing_plus_two, Duration::minutes(2)).await;
         assert_eq!(usd, Some(4134.16));
     }
 
     #[ignore = "failing in CI, probably temporary, try re-enabling"]
     #[tokio::test]
     async fn includes_end_timestamp_test() {
+        let client = &reqwest::Client::new();
         let start = "2022-10-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
         let end = "2022-10-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
-        let result = get_eth_candles(start, end).await.unwrap();
+        let result = get_eth_candles(client, start, end).await.unwrap();
         assert_eq!(result[0].timestamp, start);
     }
 
@@ -251,9 +263,10 @@ mod tests {
     #[ignore = "failing in CI, probably temporary, try re-enabling"]
     #[tokio::test]
     async fn returns_in_progress_candle_test() {
+        let client = &reqwest::Client::new();
         let now = Utc::now();
         let rounded_down = now.duration_trunc(Duration::minutes(1)).unwrap();
-        let result = get_eth_price().await.unwrap();
+        let result = get_eth_price(client).await.unwrap();
         assert_eq!(result.timestamp, rounded_down);
     }
 }

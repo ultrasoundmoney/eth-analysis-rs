@@ -44,6 +44,8 @@ pub async fn heal_eth_prices() {
         warn!("no eth prices found, are you running against a DB with prices?")
     }
 
+    let client = reqwest::Client::new();
+
     info!("building set of known minutes");
     let mut known_minutes = HashSet::new();
 
@@ -69,29 +71,33 @@ pub async fn heal_eth_prices() {
 
     info!("found {} missing minutes", missing_minutes_timestamps.len());
     let mut missing_minutes_stream = stream::iter(missing_minutes_timestamps)
-        .map(|timestamp| async move {
-            let timestamp_date_time = Utc.timestamp_opt(timestamp, 0).unwrap();
-            debug!(minute = timestamp_date_time.to_string(), "missing minute");
-            let usd = bybit::get_closest_price_by_minute(
-                timestamp_date_time,
-                Duration::minutes(max_distance_in_minutes),
-            )
-            .await;
-            match usd {
-                None => {
-                    panic!(
-                        "no Bybit price available for timestamp: {}",
-                        timestamp_date_time,
-                    );
-                }
-                Some(usd) => {
-                    info!(
-                        "found a price on Bybit for timestamp: {} - {}",
-                        timestamp, usd
-                    );
-                }
-            };
-            (usd, timestamp_date_time)
+        .map(|timestamp| {
+            let client_handle = client.clone();
+            async move {
+                let timestamp_date_time = Utc.timestamp_opt(timestamp, 0).unwrap();
+                debug!(minute = timestamp_date_time.to_string(), "missing minute");
+                let usd = bybit::get_closest_price_by_minute(
+                    &client_handle,
+                    timestamp_date_time,
+                    Duration::minutes(max_distance_in_minutes),
+                )
+                .await;
+                match usd {
+                    None => {
+                        panic!(
+                            "no Bybit price available for timestamp: {}",
+                            timestamp_date_time,
+                        );
+                    }
+                    Some(usd) => {
+                        info!(
+                            "found a price on Bybit for timestamp: {} - {}",
+                            timestamp, usd
+                        );
+                    }
+                };
+                (usd, timestamp_date_time)
+            }
         })
         .buffer_unordered(CONCURRENT_REQUESTS);
 
