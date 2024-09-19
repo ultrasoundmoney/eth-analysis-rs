@@ -75,7 +75,7 @@ impl Default for RelayApiHttp {
 impl RelayApi for RelayApiHttp {
     async fn fetch_mev_blocks(&self, start_slot: i32, end_slot: i32) -> Vec<MevBlock> {
         self.client
-            .get(&format!(
+            .get(format!(
                 "{}/api/block-production?start_slot={}&end_slot={}",
                 self.server_url, start_slot, end_slot
             ))
