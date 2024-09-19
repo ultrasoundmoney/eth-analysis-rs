@@ -80,6 +80,7 @@ pub async fn send_eth_price_request(client: &reqwest::Client, url: &str) -> Resu
         .get(url)
         .send()
         .await?
+        .error_for_status()?
         .json::<BybitPriceResponse>()
         .await?;
 
