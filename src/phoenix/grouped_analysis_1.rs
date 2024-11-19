@@ -35,12 +35,17 @@ impl GroupedAnalysis1Monitor {
     }
 
     pub async fn get_current_timestamp(&self) -> Result<DateTime<Utc>> {
-        GroupedAnalysis1::get_current()
-            .await?
+        let grouped_analysis = GroupedAnalysis1::get_current().await?;
+        let mut timestamps = grouped_analysis
             .latest_block_fees
-            .first()
-            .context("need at least one block fee to get a timestamp")
+            .into_iter()
             .map(|block_fee| block_fee.mined_at)
+            .collect::<Vec<_>>();
+        timestamps.sort();
+        let newest = timestamps
+            .last()
+            .context("need at least one block fee to get a timestamp")?;
+        Ok(*newest)
     }
 }
 

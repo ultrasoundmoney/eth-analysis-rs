@@ -105,9 +105,9 @@ impl Alarm {
 
     async fn fire_dashboard_stalled(&mut self, name: &str) {
         let message = format!(
-            "{} hasn't updated for more than {} seconds!",
+            "{} hasn't updated for more than {} minutes!",
             name,
-            MAX_WAIT.num_seconds()
+            MAX_WAIT.num_minutes()
         );
 
         self.fire(&message).await
@@ -115,7 +115,7 @@ impl Alarm {
 }
 
 lazy_static! {
-    static ref MAX_WAIT: Duration = Duration::minutes(8);
+    static ref MAX_WAIT: Duration = Duration::minutes(16);
 }
 
 struct Phoenix {
