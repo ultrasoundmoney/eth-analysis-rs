@@ -32,7 +32,7 @@ pub async fn get_eth_supply_2() -> reqwest::Result<EthSupply2> {
         .with_query_params(vec![
             ("module", "stats"),
             ("action", "ethsupply2"),
-            ("api_key", etherscan_api_key),
+            ("apikey", etherscan_api_key),
         ])
         .format_url();
 
