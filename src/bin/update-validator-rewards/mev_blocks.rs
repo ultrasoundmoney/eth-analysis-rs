@@ -23,15 +23,15 @@ pub async fn sync_mev_blocks(
     let mut start_slot = last_synced_slot.map_or(EARLIEST_AVAILABLE_SLOT, |slot| slot.0 + 1);
 
     while start_slot < last_header.slot().0 {
-        let end_slot = start_slot + 199;
+        let end_slot = start_slot + 200;
 
-        let blocks = relay_api.fetch_mev_blocks(start_slot, end_slot).await;
+        let blocks = relay_api.fetch_mev_blocks(start_slot..end_slot).await;
 
         debug!(start_slot, end_slot, "got {} blocks", blocks.len());
 
         mev_blocks_store.store_blocks(&blocks).await;
 
-        start_slot = end_slot + 1;
+        start_slot = end_slot;
     }
 
     info!(start_slot, "no more blocks to process");
@@ -117,9 +117,9 @@ mod tests {
 
         mock_relay
             .expect_fetch_mev_blocks()
-            .with(eq(1), eq(1 + 199))
+            .with(eq(1..(1 + 200)))
             .times(1)
-            .return_once(move |_start, _end| fetched_blocks);
+            .return_once(move |_slots| fetched_blocks);
 
         mock_store
             .expect_store_blocks()
