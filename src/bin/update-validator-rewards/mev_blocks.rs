@@ -5,6 +5,7 @@ use eth_analysis::{
     units::{EthNewtype, GweiNewtype, WeiNewtype},
 };
 use sqlx::PgExecutor;
+use sqlx::Row;
 use tracing::{debug, info};
 
 use crate::{ValidatorReward, SLOTS_PER_YEAR};
@@ -45,18 +46,18 @@ pub async fn calc_mev_reward(
     executor: impl PgExecutor<'_>,
     effective_balance_sum: GweiNewtype,
 ) -> Result<ValidatorReward> {
-    let mev_per_slot: EthNewtype = sqlx::query!(
+    let mev_per_slot: EthNewtype = sqlx::query(
         "
-        SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bid_wei)::TEXT AS median_bid_wei
+        -- median bid in the last 6 months
+        SELECT
+            (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bid_wei))::NUMERIC::TEXT AS median_bid_wei
         FROM mev_blocks
         WHERE timestamp > NOW() - INTERVAL '6 months'
-        "
+        ",
     )
     .fetch_one(executor)
-    .await
-    .unwrap()
-    .median_bid_wei
-    .context("expect at least one block in mev_blocks table before computing MEV reward")?
+    .await?
+    .get::<String, _>("median_bid_wei")
     .parse::<WeiNewtype>()
     .context("failed to parse MEV per slot as Wei")?
     .into();
