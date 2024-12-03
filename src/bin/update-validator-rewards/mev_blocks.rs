@@ -47,7 +47,7 @@ pub async fn calc_mev_reward(
 ) -> Result<ValidatorReward> {
     let mev_per_slot: EthNewtype = sqlx::query!(
         "
-        SELECT AVG(bid_wei)::TEXT
+        SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bid_wei)::TEXT AS median_bid_wei
         FROM mev_blocks
         WHERE timestamp > NOW() - INTERVAL '6 months'
         "
@@ -55,7 +55,7 @@ pub async fn calc_mev_reward(
     .fetch_one(executor)
     .await
     .unwrap()
-    .avg
+    .median_bid_wei
     .context("expect at least one block in mev_blocks table before computing MEV reward")?
     .parse::<WeiNewtype>()
     .context("failed to parse MEV per slot as Wei")?
