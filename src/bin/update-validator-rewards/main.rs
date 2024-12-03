@@ -43,14 +43,21 @@ async fn get_tips_since_london<'a>(pool: impl PgExecutor<'a>) -> sqlx::Result<Gw
     .map(|row| GweiNewtype(row.tips_since_london.round() as i64))
 }
 
-async fn get_tips_reward<'a>(
+// Tips and MEV rewards overlap. Whenever a validator is paid MEV rewards they are not paid
+// tips, or rather they are included in the MEV bid already. We estimate roughly 90% of slots are
+// handled by mev blocks. Therefore we estimate only 10% of tips paid on-chain are tips earned by
+// validators.
+const TIPS_REWARD_FACTOR: f64 = 0.1;
+
+async fn calc_tips_reward<'a>(
     executor: impl PgExecutor<'a>,
     effective_balance_sum: GweiNewtype,
 ) -> sqlx::Result<ValidatorReward> {
     let GweiNewtype(tips_since_london) = get_tips_since_london(executor).await?;
     debug!("tips since london {}", tips_since_london);
 
-    let tips_per_year = tips_since_london as f64 / get_days_since_london() as f64 * 365.25;
+    let tips_per_year =
+        tips_since_london as f64 / get_days_since_london() as f64 * 365.25 * TIPS_REWARD_FACTOR;
     let single_validator_share =
         (32_f64 * EthNewtype::GWEI_PER_ETH as f64) / effective_balance_sum.0 as f64;
     debug!("single validator share {}", tips_since_london);
@@ -81,7 +88,7 @@ const EPOCHS_PER_YEAR: f64 = 365.25 * EPOCHS_PER_DAY;
 const BASE_REWARD_FACTOR: u8 = 64;
 
 // Consider staying in Gwei until the last moment instead of converting early.
-pub fn get_issuance_reward(GweiNewtype(effective_balance_sum): GweiNewtype) -> ValidatorReward {
+pub fn calc_issuance_reward(GweiNewtype(effective_balance_sum): GweiNewtype) -> ValidatorReward {
     let active_validators = effective_balance_sum as f64 / GWEI_PER_ETH_F64 / 32f64;
 
     // Balance at stake (Gwei)
@@ -126,11 +133,11 @@ struct ValidatorRewards {
 async fn get_validator_rewards(db_pool: &PgPool, beacon_node: &BeaconNodeHttp) -> ValidatorRewards {
     let last_effective_balance_sum =
         balances::get_last_effective_balance_sum(db_pool, beacon_node).await;
-    let issuance_reward = get_issuance_reward(last_effective_balance_sum);
-    let tips_reward = get_tips_reward(db_pool, last_effective_balance_sum)
+    let issuance_reward = calc_issuance_reward(last_effective_balance_sum);
+    let tips_reward = calc_tips_reward(db_pool, last_effective_balance_sum)
         .await
         .unwrap();
-    let mev = mev_blocks::get_mev_reward(db_pool, last_effective_balance_sum)
+    let mev = mev_blocks::calc_mev_reward(db_pool, last_effective_balance_sum)
         .await
         .unwrap();
 

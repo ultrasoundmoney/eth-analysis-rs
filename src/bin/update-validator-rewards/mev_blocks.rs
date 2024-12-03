@@ -37,7 +37,11 @@ pub async fn sync_mev_blocks(
     info!(start_slot, "no more blocks to process");
 }
 
-pub async fn get_mev_reward(
+// MEV rewards include tips, in order to avoid double counting we estimate 90% of slots use
+// mev-boost and therefore only 90% of slots see the average MEV bid paid out to them.
+const MEV_REWARD_FACTOR: f64 = 0.9;
+
+pub async fn calc_mev_reward(
     executor: impl PgExecutor<'_>,
     effective_balance_sum: GweiNewtype,
 ) -> Result<ValidatorReward> {
@@ -59,7 +63,7 @@ pub async fn get_mev_reward(
 
     let effective_balance_sum_eth: EthNewtype = effective_balance_sum.into();
     let active_validators: f64 = (effective_balance_sum_eth.0 / 32.0).floor();
-    let annual_reward_eth = mev_per_slot.0 * SLOTS_PER_YEAR / active_validators;
+    let annual_reward_eth = mev_per_slot.0 * SLOTS_PER_YEAR * MEV_REWARD_FACTOR / active_validators;
     let annual_reward = EthNewtype(annual_reward_eth).into();
     let apr = annual_reward_eth / 32f64;
 
