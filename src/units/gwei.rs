@@ -116,7 +116,7 @@ impl From<EthNewtype> for GweiImprecise {
 
 struct GweiAmountVisitor;
 
-impl<'de> Visitor<'de> for GweiAmountVisitor {
+impl Visitor<'_> for GweiAmountVisitor {
     type Value = GweiNewtype;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
