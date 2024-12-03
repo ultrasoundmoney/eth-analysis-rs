@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use mockall::{automock, predicate::*};
 use serde::Deserialize;
 
+use crate::json_codecs::i32_from_string;
 use crate::units::WeiNewtype;
 
 use super::MevBlock;
@@ -14,7 +15,9 @@ pub const EARLIEST_AVAILABLE_SLOT: i32 = 5616303;
 // These are accepted blocks only.
 #[derive(Deserialize)]
 pub struct MaybeMevBlock {
+    #[serde(deserialize_with = "i32_from_string")]
     slot: i32,
+    #[serde(deserialize_with = "i32_from_string")]
     block_number: i32,
     block_hash: String,
     #[serde(rename = "value")]
@@ -123,8 +126,8 @@ mod tests {
             .with_status(200)
             .with_body(
                 json!([{
-                    "slot": 0,
-                    "block_number": 9191911,
+                    "slot": "0",
+                    "block_number": "9191911",
                     "block_hash": "abc",
                     "value": "100"
                 }])
