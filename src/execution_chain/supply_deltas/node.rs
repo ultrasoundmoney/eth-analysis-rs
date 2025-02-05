@@ -194,7 +194,7 @@ pub fn stream_supply_deltas_from(
     rx
 }
 
-pub async fn stream_supply_deltas_from_last<'a>(
+pub async fn stream_supply_deltas_from_last(
     executor: &mut PgConnection,
 ) -> impl Stream<Item = SupplyDelta> {
     let last_synced_supply_delta_number = sync::get_last_synced_supply_delta_number(executor)

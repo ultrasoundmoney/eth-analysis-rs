@@ -182,7 +182,7 @@ pub async fn add_delta(connection: &mut PgConnection, supply_delta: &SupplyDelta
     transaction.commit().await.unwrap();
 }
 
-async fn drop_supply_deltas_from<'a>(executor: &mut PgConnection, gte_block_number: &BlockNumber) {
+async fn drop_supply_deltas_from(executor: &mut PgConnection, gte_block_number: &BlockNumber) {
     let mut transaction = executor.begin().await.unwrap();
 
     sqlx::query(
