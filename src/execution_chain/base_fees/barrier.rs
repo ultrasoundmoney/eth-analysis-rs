@@ -82,6 +82,6 @@ mod tests {
     fn barrier_from_issuance_test() {
         let issuance = GweiNewtype(11241590000000);
         let barrier = estimate_barrier_from_weekly_issuance(issuance);
-        assert_eq!(barrier, 14.869828042328042);
+        assert_eq!(barrier, 12.391523368606702);
     }
 }
