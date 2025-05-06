@@ -41,6 +41,7 @@ pub struct ExecutionNodeBlock {
     pub parent_hash: String,
     #[serde(deserialize_with = "from_unix_timestamp_hex_str")]
     pub timestamp: DateTime<Utc>,
+    #[serde(default)]
     #[serde(deserialize_with = "from_u128_hex_str")]
     pub total_difficulty: TotalDifficulty,
     // Types for blocks coming from the node and from our DB should be split.
