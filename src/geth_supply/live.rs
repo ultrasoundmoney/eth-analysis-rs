@@ -58,10 +58,10 @@ fn convert_to_supply_delta(geth_delta: &GethSupplyDelta) -> Result<SupplyDelta> 
         parent_hash: geth_delta.parent_hash.clone(),
         block_hash: geth_delta.hash.clone(),
         supply_delta: supply_delta_val,
-        self_destruct: self_destruct,
-        fee_burn: fee_burn,
-        fixed_reward: withdrawals, // As per previous logic
-        uncles_reward: 0,          // As per previous logic
+        self_destruct,
+        fee_burn,
+        fixed_reward: reward,
+        uncles_reward: 0,
     })
 }
 
@@ -113,14 +113,13 @@ impl LiveSupplyReader {
             files_to_process.push(latest_historic.clone());
         }
 
-        // Add the current live file
         let current_live_file = self.data_dir.join("supply.jsonl");
         if current_live_file.exists() {
-            // Avoid adding live file if it's the same as the latest historic (e.g. after rotation just happened)
-            if files_to_process
-                .last()
-                .map_or(true, |f| f != &current_live_file)
-            {
+            let should_add_live_file = match files_to_process.last() {
+                Some(last_file) => last_file != &current_live_file,
+                None => true, // Add if the list is empty
+            };
+            if should_add_live_file {
                 files_to_process.push(current_live_file);
             }
         }

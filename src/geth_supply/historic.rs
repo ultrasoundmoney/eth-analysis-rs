@@ -1,6 +1,6 @@
 use anyhow::Result;
 use glob::glob;
-use std::path::PathBuf;
+use std::path::Path;
 use tokio::fs;
 use tracing::{error, info};
 
@@ -9,7 +9,7 @@ use crate::execution_chain::SupplyDelta;
 
 use super::GethSupplyDelta;
 
-pub async fn backfill_historic_deltas(data_dir: &PathBuf) -> Result<()> {
+pub async fn backfill_historic_deltas(data_dir: &Path) -> Result<()> {
     let db_pool = get_db_pool("backfill-historic-supply", 3).await;
 
     // Find all timestamped supply files
@@ -33,7 +33,7 @@ pub async fn backfill_historic_deltas(data_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-async fn process_supply_file(db_pool: &sqlx::PgPool, file: &PathBuf) -> Result<()> {
+async fn process_supply_file(db_pool: &sqlx::PgPool, file: &Path) -> Result<()> {
     let content = fs::read_to_string(file).await?;
     let mut transaction = db_pool.begin().await?;
 
@@ -104,14 +104,14 @@ async fn store_supply_delta(
         ON CONFLICT (block_number) DO NOTHING
         "#,
     )
-    .bind(delta.block_number as i32)
+    .bind(delta.block_number)
     .bind(&delta.block_hash)
     .bind(&delta.parent_hash)
-    .bind(delta.supply_delta.to_string()) // Convert to string for NUMERIC
-    .bind(delta.self_destruct.to_string()) // Convert to string for NUMERIC
-    .bind(delta.fee_burn.to_string()) // Convert to string for NUMERIC
-    .bind(delta.fixed_reward.to_string()) // Convert to string for NUMERIC
-    .bind(delta.uncles_reward.to_string()) // Convert to string for NUMERIC
+    .bind(delta.supply_delta.to_string())
+    .bind(delta.self_destruct.to_string())
+    .bind(delta.fee_burn.to_string())
+    .bind(delta.fixed_reward.to_string())
+    .bind(delta.uncles_reward.to_string())
     .execute(&mut **transaction)
     .await?;
 

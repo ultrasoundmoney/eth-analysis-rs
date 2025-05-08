@@ -115,7 +115,7 @@ pub async fn get_eth_price(client: &reqwest::Client) -> Result<EthPrice> {
     let start = end.sub(Duration::minutes(1));
     get_eth_candles(client, start, end).await.and_then(|cs| {
         cs.into_iter()
-            .last()
+            .next_back()
             .context("tried to retrieve last element in empty array")
     })
 }
