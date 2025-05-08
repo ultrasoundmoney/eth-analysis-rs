@@ -11,6 +11,7 @@ mod eth_time;
 mod etherscan;
 pub mod execution_chain;
 mod gauges;
+pub mod geth_supply;
 mod health;
 mod issuance_breakdown;
 pub mod job_progress;

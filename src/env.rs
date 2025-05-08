@@ -55,6 +55,7 @@ pub fn get_env_bool(key: &str) -> Option<bool> {
 pub struct EnvConfig {
     pub beacon_url: Option<String>,
     pub bind_public_interface: bool,
+    pub data_dir_geth_supply: Option<String>,
     pub db_url: String,
     pub etherscan_api_key: Option<String>,
     pub dune_api_key: Option<String>,
@@ -68,6 +69,7 @@ pub fn get_env_config() -> EnvConfig {
     EnvConfig {
         beacon_url: get_env_var("BEACON_URL"),
         bind_public_interface: get_env_bool("BIND_PUBLIC_INTERFACE").unwrap_or(true),
+        data_dir_geth_supply: get_env_var("DATA_DIR_GETH_SUPPLY"),
         db_url: get_env_var("DATABASE_URL").expect("DATABASE_URL is required"),
         etherscan_api_key: get_env_var("ETHERSCAN_API_KEY"),
         dune_api_key: get_env_var("DUNE_API_KEY"),
