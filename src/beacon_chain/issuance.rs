@@ -66,7 +66,7 @@ pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype 
     )
     .fetch_one(executor)
     .await
-    .map(|row| GweiNewtype(row.gwei.expect("gwei is none")))
+    .map(|row| GweiNewtype(row.gwei))
     .unwrap()
 }
 
@@ -136,7 +136,7 @@ pub async fn get_n_days_ago_issuance(executor: impl PgExecutor<'_>, n: i32) -> G
     )
     .fetch_one(executor)
     .await
-    .map(|row| GweiNewtype(row.gwei.expect("gwei is none")))
+    .map(|row| GweiNewtype(row.gwei))
     .unwrap()
 }
 
@@ -303,7 +303,7 @@ mod tests {
                     .map(|row| {
                         GweiInTime {
                             t: row.day_timestamp.duration_trunc(Duration::days(1) ).unwrap().timestamp() as u64,
-                            v: row.gwei.unwrap()
+                            v: row.gwei
                         }
                     })
                 .collect()
