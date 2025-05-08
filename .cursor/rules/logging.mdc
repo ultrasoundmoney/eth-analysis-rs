@@ -1,0 +1,6 @@
+---
+description: describes rules around code that logs messages
+globs: 
+alwaysApply: false
+---
+1. when using tracing lib to log things use lowercase to make searching logs simpler and reading them more consistent visually.
