@@ -98,7 +98,7 @@ impl LiveSupplyReader {
     async fn get_initial_supply_files(&self) -> Result<Vec<PathBuf>> {
         let mut files_to_process = Vec::new();
 
-        // Find the most recent timestamped historic file
+        // Find all timestamped historic files
         let pattern = self
             .data_dir
             .join("supply_*.jsonl")
@@ -107,24 +107,27 @@ impl LiveSupplyReader {
             .to_string();
 
         let mut historic_files: Vec<_> = glob::glob(&pattern)?.filter_map(Result::ok).collect();
-        historic_files.sort(); // Sorts alphabetically, which works for timestamped names
+        historic_files.sort(); // Sorts alphabetically/chronologically
 
-        if let Some(latest_historic) = historic_files.last() {
-            files_to_process.push(latest_historic.clone());
-        }
+        // Add all historic files to the list
+        files_to_process.extend(historic_files);
 
+        // Add the current live file if it exists and is not already the last one in the list
         let current_live_file = self.data_dir.join("supply.jsonl");
         if current_live_file.exists() {
-            let should_add_live_file = match files_to_process.last() {
-                Some(last_file) => last_file != &current_live_file,
-                None => true, // Add if the list is empty
-            };
-            if should_add_live_file {
+            if files_to_process
+                .last()
+                .map_or(true, |f| f != &current_live_file)
+            {
                 files_to_process.push(current_live_file);
             }
         }
 
-        info!("Initial files to read: {:?}", files_to_process);
+        info!(
+            "Found {} initial files to potentially process: {:?}",
+            files_to_process.len(),
+            files_to_process
+        );
         Ok(files_to_process)
     }
 
@@ -138,24 +141,40 @@ impl LiveSupplyReader {
     }
 
     async fn initial_load_and_tail(&self) -> Result<()> {
-        // 1. Load initial files
         let initial_files = self.get_initial_supply_files().await?;
+        info!("Processing {} initial supply files until cache limit ({}) is reached or all files are read.", initial_files.len(), MAX_CACHED_DELTAS);
+
         for file_path in initial_files {
-            if file_path.exists() {
-                self.read_supply_file(&file_path).await?;
-            } else {
-                warn!("Initial supply file not found, skipping: {:?}", file_path);
+            if !file_path.exists() {
+                warn!(
+                    "Initial supply file not found during processing, skipping: {:?}",
+                    file_path
+                );
+                continue;
             }
+
+            // Check cache size BEFORE reading the next file
+            // We acquire a read lock first to check size without blocking writes for long
+            let current_cache_size = self.deltas.read().await.len();
+            if current_cache_size >= MAX_CACHED_DELTAS {
+                info!(
+                    "Cache limit ({}) reached or exceeded (current size: {}). Stopping initial file load. Will proceed to tailing.", 
+                    MAX_CACHED_DELTAS, current_cache_size
+                );
+                break; // Stop processing more historic files
+            }
+
+            self.read_supply_file(&file_path).await?;
         }
 
-        // 2. Start tailing the live file
         let live_file_path = self.data_dir.join("supply.jsonl");
         if live_file_path.exists() {
             self.tail_supply_file(&live_file_path).await?;
         } else {
-            warn!("Live supply file ({:?}) not found. Tailing will not start. The service might only serve historic data if any was loaded.", live_file_path);
-            // We might want to periodically check if it appears later, or just error.
-            // For now, it just won't tail.
+            warn!(
+                "Live supply file ({:?}) not found. Tailing will not start.",
+                live_file_path
+            );
         }
         Ok(())
     }
