@@ -166,10 +166,9 @@ impl LiveSupplyReader {
         let mut files_to_process = self.find_historic_files_in_dir()?;
 
         let current_live_file = self.data_dir.join("supply.jsonl");
-        if current_live_file.exists() {
-            if files_to_process.last().map_or(true, |f| f != &current_live_file) {
-                 files_to_process.push(current_live_file);
-            }
+        if current_live_file.exists() && 
+           (files_to_process.last() != Some(&current_live_file)) {
+            files_to_process.push(current_live_file);
         }
         
         debug!(

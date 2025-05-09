@@ -2,7 +2,7 @@ use anyhow::Result;
 use glob::glob;
 use std::path::Path;
 use tokio::fs;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use crate::db::get_db_pool;
 use crate::execution_chain::SupplyDelta;
