@@ -2,7 +2,7 @@ use anyhow::Result;
 use glob::glob;
 use std::path::Path;
 use tokio::fs;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::db::get_db_pool;
 use crate::execution_chain::SupplyDelta;
@@ -12,7 +12,6 @@ use super::GethSupplyDelta;
 pub async fn backfill_historic_deltas(data_dir: &Path) -> Result<()> {
     let db_pool = get_db_pool("backfill-historic-supply", 3).await;
 
-    // Find all timestamped supply files
     let pattern = data_dir
         .join("supply_*.jsonl")
         .to_str()
@@ -20,13 +19,16 @@ pub async fn backfill_historic_deltas(data_dir: &Path) -> Result<()> {
         .to_string();
     let mut files: Vec<_> = glob(&pattern)?.filter_map(Result::ok).collect();
 
-    // Sort by name (which includes timestamp)
     files.sort();
 
-    info!("Found {} historic supply files", files.len());
+    debug!(
+        "found {} historic supply files to process: {:?}",
+        files.len(),
+        files
+    );
 
     for file in files {
-        info!("Processing historic file: {:?}", file);
+        debug!("processing historic file: {:?}", file);
         process_supply_file(&db_pool, &file).await?;
     }
 
@@ -40,42 +42,57 @@ async fn process_supply_file(db_pool: &sqlx::PgPool, file: &Path) -> Result<()> 
     for line in content.lines() {
         match serde_json::from_str::<GethSupplyDelta>(line) {
             Ok(delta) => {
-                // Convert hex strings to numbers
                 let withdrawals = delta
                     .issuance
                     .as_ref()
                     .and_then(|i| i.withdrawals.as_ref())
                     .map_or(Ok(0i128), |s| i128::from_str_radix(&s[2..], 16))?;
-                let fee_burn = delta
-                    .burn
+                let reward = delta
+                    .issuance
                     .as_ref()
-                    .and_then(|b| b.eip1559.as_ref())
-                    .map(|h| i128::from_str_radix(&h[2..], 16))
-                    .transpose()?
-                    .unwrap_or(0);
-                let misc = delta
+                    .and_then(|i| i.reward.as_ref())
+                    .map_or(Ok(0i128), |s| i128::from_str_radix(&s[2..], 16))?;
+                let genesis_allocation = delta
+                    .issuance
+                    .as_ref()
+                    .and_then(|i| i.genesis_allocation.as_ref())
+                    .map_or(Ok(0i128), |s| i128::from_str_radix(&s[2..], 16))?;
+
+                let mut fee_burn_val = 0i128;
+                if let Some(burn) = &delta.burn {
+                    if let Some(eip1559) = &burn.eip1559 {
+                        fee_burn_val += i128::from_str_radix(&eip1559[2..], 16)?;
+                    }
+                    if let Some(blob) = &burn.blob {
+                        fee_burn_val += i128::from_str_radix(&blob[2..], 16)?;
+                    }
+                }
+                let self_destruct_val = delta
                     .burn
                     .as_ref()
                     .and_then(|b| b.misc.as_ref())
-                    .map(|h| i128::from_str_radix(&h[2..], 16))
-                    .transpose()?
-                    .unwrap_or(0);
+                    .map_or(Ok(0i128), |s| i128::from_str_radix(&s[2..], 16))?;
 
-                let supply_delta = SupplyDelta {
+                let supply_delta_val =
+                    withdrawals + reward + genesis_allocation - fee_burn_val - self_destruct_val;
+
+                let supply_delta_to_store = SupplyDelta {
                     block_number: delta.block_number,
-                    parent_hash: delta.parent_hash,
-                    block_hash: delta.hash,
-                    supply_delta: withdrawals,
-                    self_destruct: misc,
-                    fee_burn,
-                    fixed_reward: 0,  // Not present in new schema
-                    uncles_reward: 0, // Not present in new schema
+                    parent_hash: delta.parent_hash.clone(),
+                    block_hash: delta.hash.clone(),
+                    supply_delta: supply_delta_val,
+                    self_destruct: self_destruct_val,
+                    fee_burn: fee_burn_val,
+                    fixed_reward: reward,
+                    uncles_reward: 0,
                 };
-
-                store_supply_delta(&mut transaction, &supply_delta).await?;
+                store_supply_delta(&mut transaction, &supply_delta_to_store).await?;
             }
             Err(e) => {
-                error!("Failed to parse supply delta line: {}", e);
+                error!(
+                    "failed to parse supply delta line in file {:?}: {}",
+                    file, e
+                );
             }
         }
     }
@@ -114,8 +131,6 @@ async fn store_supply_delta(
     .bind(delta.uncles_reward.to_string())
     .execute(&mut **transaction)
     .await?;
-
-    // dbg!("store delta", delta); // Keep or remove dbg! as preferred
 
     Ok(())
 }

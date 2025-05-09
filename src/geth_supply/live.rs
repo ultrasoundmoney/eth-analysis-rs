@@ -7,7 +7,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncSeekExt, BufReader, SeekFrom},
     sync::RwLock,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use super::GethSupplyDelta;
 use crate::execution_chain::{BlockNumber, SupplyDelta};
@@ -95,37 +95,86 @@ impl LiveSupplyReader {
         }
     }
 
-    async fn get_initial_supply_files(&self) -> Result<Vec<PathBuf>> {
-        let mut files_to_process = Vec::new();
+    // New private helper function to find and sort historic files
+    fn find_historic_files_in_dir(&self) -> Result<Vec<PathBuf>> {
+        let mut historic_files: Vec<PathBuf> = Vec::new();
+        
+        let canonical_data_dir = match self.data_dir.canonicalize() {
+            Ok(path) => path,
+            Err(e) => {
+                warn!(
+                    "failed to canonicalize data_dir {:?}: {}. using original path for scan.", 
+                    self.data_dir, e
+                );
+                self.data_dir.clone()
+            }
+        };
 
-        // Find all timestamped historic files
-        let pattern = self
-            .data_dir
-            .join("supply_*.jsonl")
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Invalid path pattern for historic files"))?
-            .to_string();
+        debug!(
+            "scanning directory {:?} for historic supply files (supply-*.jsonl excluding supply.jsonl).",
+            canonical_data_dir
+        );
 
-        let mut historic_files: Vec<_> = glob::glob(&pattern)?.filter_map(Result::ok).collect();
-        historic_files.sort(); // Sorts alphabetically/chronologically
-
-        // Add all historic files to the list
-        files_to_process.extend(historic_files);
-
-        // Add the current live file if it exists and is not already the last one in the list
-        let current_live_file = self.data_dir.join("supply.jsonl");
-        if current_live_file.exists() {
-            if files_to_process
-                .last()
-                .map_or(true, |f| f != &current_live_file)
-            {
-                files_to_process.push(current_live_file);
+        match std::fs::read_dir(&canonical_data_dir) {
+            Ok(entries) => {
+                for entry_result in entries {
+                    match entry_result {
+                        Ok(entry) => {
+                            let path = entry.path();
+                            if path.is_file() {
+                                if let Some(filename_osstr) = path.file_name() {
+                                    if let Some(filename_str) = filename_osstr.to_str() {
+                                        if filename_str.starts_with("supply-")
+                                            && filename_str.ends_with(".jsonl")
+                                            && filename_str != "supply.jsonl"
+                                        {
+                                            historic_files.push(path.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                "error reading a directory entry in {:?}: {}",
+                                canonical_data_dir,
+                                e
+                            );
+                        }
+                    }
+                }
+                debug!(
+                    "found {} historic files by manual scan: {:?}",
+                    historic_files.len(),
+                    historic_files
+                );
+                historic_files.sort();
+                Ok(historic_files)
+            }
+            Err(e) => {
+                error!(
+                    "failed to read directory {:?}: {}. no historic files will be loaded.",
+                    canonical_data_dir,
+                    e
+                );
+                Ok(Vec::new()) 
             }
         }
+    }
 
-        info!(
-            "Found {} initial files to potentially process: {:?}",
-            files_to_process.len(),
+    async fn get_initial_supply_files(&self) -> Result<Vec<PathBuf>> {
+        let mut files_to_process = self.find_historic_files_in_dir()?;
+
+        let current_live_file = self.data_dir.join("supply.jsonl");
+        if current_live_file.exists() {
+            if files_to_process.last().map_or(true, |f| f != &current_live_file) {
+                 files_to_process.push(current_live_file);
+            }
+        }
+        
+        debug!(
+            "total initial files to potentially process after manual scan and adding live file: {} -> {:?}", 
+            files_to_process.len(), 
             files_to_process
         );
         Ok(files_to_process)
@@ -133,37 +182,32 @@ impl LiveSupplyReader {
 
     pub fn start_background_tailing(self: Arc<Self>) {
         tokio::spawn(async move {
-            info!("Background supply reading task started.");
+            info!("background supply reading task started.");
             if let Err(e) = self.initial_load_and_tail().await {
-                error!("Error in live supply reading process: {}", e);
+                error!("error in live supply reading process: {}", e);
             }
         });
     }
 
     async fn initial_load_and_tail(&self) -> Result<()> {
         let initial_files = self.get_initial_supply_files().await?;
-        info!("Processing {} initial supply files until cache limit ({}) is reached or all files are read.", initial_files.len(), MAX_CACHED_DELTAS);
+        info!("processing {} initial supply files until cache limit ({}) is reached or all files are read.", initial_files.len(), MAX_CACHED_DELTAS);
 
         for file_path in initial_files {
             if !file_path.exists() {
-                warn!(
-                    "Initial supply file not found during processing, skipping: {:?}",
-                    file_path
-                );
+                warn!("initial supply file not found during processing, skipping: {:?}", file_path);
                 continue;
             }
 
-            // Check cache size BEFORE reading the next file
-            // We acquire a read lock first to check size without blocking writes for long
             let current_cache_size = self.deltas.read().await.len();
             if current_cache_size >= MAX_CACHED_DELTAS {
                 info!(
-                    "Cache limit ({}) reached or exceeded (current size: {}). Stopping initial file load. Will proceed to tailing.", 
+                    "cache limit ({}) reached or exceeded (current size: {}). stopping initial file load. will proceed to tailing.", 
                     MAX_CACHED_DELTAS, current_cache_size
                 );
-                break; // Stop processing more historic files
+                break; 
             }
-
+            
             self.read_supply_file(&file_path).await?;
         }
 
@@ -171,16 +215,13 @@ impl LiveSupplyReader {
         if live_file_path.exists() {
             self.tail_supply_file(&live_file_path).await?;
         } else {
-            warn!(
-                "Live supply file ({:?}) not found. Tailing will not start.",
-                live_file_path
-            );
+            warn!("live supply file ({:?}) not found. tailing will not start.", live_file_path);
         }
         Ok(())
     }
 
     async fn read_supply_file(&self, file_path: &PathBuf) -> Result<()> {
-        info!("Reading supply data from: {:?}", file_path);
+        debug!("reading supply data from: {:?}", file_path);
         let file = File::open(file_path).await?;
         let reader = BufReader::new(file);
         let mut lines = reader.lines();
@@ -194,23 +235,22 @@ impl LiveSupplyReader {
                     }
                     Err(e) => {
                         error!(
-                            "Failed to convert GethSupplyDelta (block: {}): {} from file: {:?}",
+                            "failed to convert gethsupplydelta (block: {}): {} from file: {:?}",
                             geth_delta.block_number, e, file_path
                         );
                     }
                 },
                 Err(e) => {
                     error!(
-                        "Failed to parse GethSupplyDelta line from file {:?}: {} -- Line: {}",
+                        "failed to parse gethsupplydelta line from file {:?}: {} -- line: {}",
                         file_path, e, line_result
                     );
                 }
             }
         }
-        // Apply cache limit after processing the whole file
         Self::ensure_cache_limit(&mut deltas_guard);
-        info!(
-            "Finished reading {:?}. Cache size: {}",
+        debug!(
+            "finished reading {:?}. cache size: {}",
             file_path,
             deltas_guard.len()
         );
@@ -218,12 +258,11 @@ impl LiveSupplyReader {
     }
 
     async fn tail_supply_file(&self, file_path: &PathBuf) -> Result<()> {
-        info!("Starting to tail live supply file: {:?}", file_path);
+        info!("starting to tail live supply file: {:?}", file_path);
         let mut file = File::open(file_path).await?;
-        // Start reading from the end of the file, as initial_load_and_tail should have processed existing content.
         let mut current_position = file.seek(SeekFrom::End(0)).await?;
-        info!(
-            "Initial position for tailing {:?}: {}",
+        debug!(
+            "initial position for tailing {:?}: {}",
             file_path, current_position
         );
 
@@ -235,26 +274,23 @@ impl LiveSupplyReader {
 
             if file_size < current_position {
                 warn!(
-                    "File {:?} appears to have been truncated or rotated (size: {} < last_pos: {}). Resetting position to 0.",
+                    "file {:?} appears to have been truncated or rotated (size: {} < last_pos: {}). resetting position to 0.",
                     file_path,
                     file_size,
                     current_position
                 );
                 current_position = 0;
-                // It might be prudent to re-read the entire file here if we suspect full rotation,
-                // but for simple truncation, just resetting and continuing might be okay for append-only.
-                // For a robust solution, one might re-trigger a full read or compare with latest historic.
             }
 
             if file_size > current_position {
-                info!(
-                    "File {:?} has grown from {} to {}. Reading new lines.",
+                debug!(
+                    "file {:?} has grown from {} to {}. reading new lines.",
                     file_path, current_position, file_size
                 );
                 file.seek(SeekFrom::Start(current_position)).await?;
-                let reader = BufReader::new(&mut file); // Re-create reader for the mutable file reference
+                let reader = BufReader::new(&mut file);
                 let mut lines = reader.lines();
-
+                
                 let mut deltas_guard = self.deltas.write().await;
                 let mut new_lines_processed = 0;
 
@@ -266,23 +302,21 @@ impl LiveSupplyReader {
                                 deltas_guard.insert(supply_delta.block_number, supply_delta);
                             }
                             Err(e) => {
-                                error!("Tail: Failed to convert GethSupplyDelta (block: {}): {} from file: {:?}", geth_delta.block_number, e, file_path);
+                                error!("tail: failed to convert gethsupplydelta (block: {}): {} from file: {:?}", geth_delta.block_number, e, file_path);
                             }
                         },
                         Err(e) => {
-                            error!("Tail: Failed to parse GethSupplyDelta line from file {:?}: {} -- Line: {}", file_path, e, line_result);
+                            error!("tail: failed to parse gethsupplydelta line from file {:?}: {} -- line: {}", file_path, e, line_result);
                         }
                     }
                 }
-
-                // Update current_position to the new end of what we've read.
-                // This relies on lines.next_line() consuming the reader until EOF for the current read op.
+                
                 current_position = file.seek(SeekFrom::Current(0)).await?;
 
                 if new_lines_processed > 0 {
                     Self::ensure_cache_limit(&mut deltas_guard);
-                    info!(
-                        "Tail: Processed {} new lines from {:?}. New position: {}. Cache size: {}",
+                    debug!(
+                        "tail: processed {} new lines from {:?}. new position: {}. cache size: {}",
                         new_lines_processed,
                         file_path,
                         current_position,
@@ -291,7 +325,6 @@ impl LiveSupplyReader {
                 }
             }
         }
-        // Unreachable loop, Ok(()) if we decide to make it finite.
     }
 
     pub async fn get_supply_delta(&self, block_number: BlockNumber) -> Option<SupplyDelta> {
@@ -306,8 +339,7 @@ struct SupplyDeltaQuery {
 
 pub async fn start_live_api(data_dir: PathBuf, port: u16) -> Result<()> {
     let reader = Arc::new(LiveSupplyReader::new(data_dir));
-
-    // Start the background processing (initial load and tailing)
+    
     reader.clone().start_background_tailing();
 
     let app = Router::new()
@@ -315,7 +347,7 @@ pub async fn start_live_api(data_dir: PathBuf, port: u16) -> Result<()> {
         .with_state(reader);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    info!("Starting live supply API on {}", addr);
+    info!("starting live supply api on {}", addr);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
