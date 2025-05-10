@@ -60,19 +60,18 @@ pub async fn get_execution_balances_by_hash(
 
 #[cfg(test)]
 mod tests {
-    use sqlx::Connection;
-
     use super::*;
     use crate::beacon_chain::tests::store_custom_test_block;
     use crate::beacon_chain::{BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder, Slot};
-    use crate::db;
+    use crate::db::tests::TestDb;
     use crate::execution_chain::supply_deltas::add_delta;
     use crate::execution_chain::SupplyDelta;
+    use test_context::test_context;
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn get_execution_supply_by_hash_test() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn get_execution_supply_by_hash_test(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let test_id = "get_balances_by_hash";
         let block_hash = format!("0x{test_id}_block_hash");
@@ -83,7 +82,7 @@ mod tests {
             .block_hash(&block_hash)
             .build();
 
-        store_custom_test_block(&mut transaction, &header, &block).await;
+        store_custom_test_block(&mut connection, &header, &block).await;
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -96,9 +95,9 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut connection, &supply_delta_test).await;
 
-        let balances = get_execution_balances_by_hash(&mut *transaction, &block_hash)
+        let balances = get_execution_balances_by_hash(&ctx.pool, &block_hash)
             .await
             .unwrap();
 

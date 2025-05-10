@@ -158,9 +158,10 @@ pub async fn get_supply_delta_by_block_number(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db;
+    use crate::db::tests::TestDb;
     use crate::execution_chain::supply_deltas::add_delta;
-    use sqlx::Connection;
+
+    use test_context::test_context;
 
     #[ignore]
     #[tokio::test]
@@ -172,13 +173,14 @@ mod tests {
         if let Ok(delta) = result {
             assert_eq!(delta.block_number, 15_000_000);
         } else {
+            // Consider asserting an error type or message if appropriate for a real endpoint
         }
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_latest_synced_supply_delta_number() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn test_get_latest_synced_supply_delta_number(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -186,63 +188,50 @@ mod tests {
             block_hash: "0xtest_node_1".to_string(),
             fee_burn: 0,
             fixed_reward: 0,
-            parent_hash: "0xtestparent_node_1".to_string(),
+            parent_hash: "0xtestparent".to_string(),
             self_destruct: 0,
             uncles_reward: 0,
         };
-        add_delta(&mut transaction, &supply_delta_test).await;
-        transaction.commit().await.unwrap();
+        add_delta(&mut connection, &supply_delta_test).await;
 
         let latest_synced = sync::get_last_synced_supply_delta_number(&mut connection).await;
         assert_eq!(latest_synced, Some(0));
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_latest_synced_supply_delta_number_empty() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        sqlx::migrate!("./migrations")
-            .run(&mut connection)
-            .await
-            .unwrap();
+    async fn test_get_latest_synced_supply_delta_number_empty(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let latest_synced = sync::get_last_synced_supply_delta_number(&mut connection).await;
         assert_eq!(latest_synced, None);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_latest_synced_supply_delta_number_in_node_scope() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        sqlx::migrate!("./migrations")
-            .run(&mut connection)
-            .await
-            .unwrap();
-
-        let mut transaction = connection.begin().await.unwrap();
+    async fn test_get_latest_synced_supply_delta_number_in_node_scope(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
-            block_number: 0,
-            block_hash: "0xtest_node_sync_0_in_node".to_string(),
+            block_number: 1,
+            block_hash: "0xtest_node_sync_1_in_node".to_string(),
             fee_burn: 0,
             fixed_reward: 0,
-            parent_hash: "0xtestparent_node_sync_0_in_node".to_string(),
+            parent_hash: "0xtestparent".to_string(),
             self_destruct: 0,
             uncles_reward: 0,
         };
-        add_delta(&mut transaction, &supply_delta_test).await;
-        transaction.commit().await.unwrap();
+        add_delta(&mut connection, &supply_delta_test).await;
 
         let latest_synced = sync::get_last_synced_supply_delta_number(&mut connection).await;
-        assert_eq!(latest_synced, Some(0));
+        assert_eq!(latest_synced, Some(1));
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_latest_synced_supply_delta_number_empty_in_node_scope() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        sqlx::migrate!("./migrations")
-            .run(&mut connection)
-            .await
-            .unwrap();
+    async fn test_get_latest_synced_supply_delta_number_empty_in_node_scope(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let latest_synced = sync::get_last_synced_supply_delta_number(&mut connection).await;
         assert_eq!(latest_synced, None);

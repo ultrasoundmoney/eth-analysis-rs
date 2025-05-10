@@ -385,21 +385,24 @@ pub async fn sync_deltas() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_context::test_context;
 
+    use crate::db::tests::TestDb;
+
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_is_hash_not_known() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn test_get_is_hash_not_known(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
-        let is_hash_known = get_is_hash_known(&mut *transaction, "0xnot_there").await;
+        let is_hash_known = get_is_hash_known(&mut *connection, "0xnot_there").await;
 
         assert!(!is_hash_known);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_is_hash_known() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn test_get_is_hash_known(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 0,
@@ -412,27 +415,27 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut connection, &supply_delta_test).await;
         let is_hash_known =
-            get_is_hash_known(&mut *transaction, &supply_delta_test.block_hash).await;
+            get_is_hash_known(&mut *connection, &supply_delta_test.block_hash).await;
 
         assert!(is_hash_known);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_is_block_number_not_known() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn test_get_is_block_number_not_known(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
-        let is_block_number_known = get_is_block_number_known(&mut *transaction, &0).await;
+        let is_block_number_known = get_is_block_number_known(&mut *connection, &0).await;
 
         assert!(!is_block_number_known);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_is_block_number_known() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn test_get_is_block_number_known(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let supply_delta = SupplyDelta {
             supply_delta: 0,
@@ -445,17 +448,17 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut transaction, &supply_delta).await;
+        add_delta(&mut connection, &supply_delta).await;
         let is_block_number_known =
-            get_is_block_number_known(&mut *transaction, &supply_delta.block_number).await;
+            get_is_block_number_known(&mut *connection, &supply_delta.block_number).await;
 
         assert!(is_block_number_known);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_get_balances_at_hash() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn test_get_balances_at_hash(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -468,17 +471,17 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut connection, &supply_delta_test).await;
         let balances_sum =
-            get_balances_at_hash(&mut *transaction, &supply_delta_test.block_hash).await;
+            get_balances_at_hash(&mut *connection, &supply_delta_test.block_hash).await;
 
         assert_eq!(balances_sum, 1);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_drop_supply_deltas() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn test_drop_supply_deltas(ctx: &mut TestDb) {
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -491,18 +494,24 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut transaction, &supply_delta_test).await;
+        add_delta(&mut connection, &supply_delta_test).await;
         let balances_sum =
-            get_balances_at_hash(&mut *transaction, &supply_delta_test.block_hash).await;
+            get_balances_at_hash(&mut *connection, &supply_delta_test.block_hash).await;
 
         assert_eq!(balances_sum, 1);
 
-        drop_supply_deltas_from(&mut transaction, &0).await;
+        drop_supply_deltas_from(&mut connection, &0).await;
+        // We need to assert something here, e.g. that the data is actually gone.
+        // For now, let's check if the block number is no longer known.
+        let is_block_number_known_after_drop =
+            get_is_block_number_known(&mut *connection, &supply_delta_test.block_number).await;
+        assert!(!is_block_number_known_after_drop);
     }
 
     #[ignore]
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn test_reverted_fork() {
+    async fn test_reverted_fork(ctx: &mut TestDb) {
         log::init_with_env();
         // We test:
         // A -> B ---> C
@@ -544,21 +553,20 @@ mod tests {
             uncles_reward: 0,
         };
 
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+        let mut connection = ctx.pool.acquire().await.unwrap();
 
         let deltas_queue: DeltasQueue = Arc::new(Mutex::new(VecDeque::new()));
 
         // Sync a delta.
         sync_delta(
-            &mut transaction,
+            &mut connection,
             deltas_queue.clone(),
             DeltaToSync::Fetched(delta_b),
         )
         .await;
         // Fork that delta.
         sync_delta(
-            &mut transaction,
+            &mut connection,
             deltas_queue.clone(),
             DeltaToSync::Fetched(delta_b_prime.clone()),
         )
@@ -572,11 +580,11 @@ mod tests {
         // accepting building on B. We force insert B' as 15_082_719.
         // real 15_082_719.
         deltas_queue.lock().unwrap().pop_front();
-        add_delta(&mut transaction, &delta_b_prime).await;
+        add_delta(&mut connection, &delta_b_prime).await;
 
         // Now try to process C which depends on B which we've dropped.
         sync_delta(
-            &mut transaction,
+            &mut connection,
             deltas_queue.clone(),
             DeltaToSync::Fetched(delta_c),
         )
