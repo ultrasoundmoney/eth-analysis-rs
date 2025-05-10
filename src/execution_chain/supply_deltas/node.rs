@@ -10,7 +10,7 @@ use tracing::{debug, error, warn};
 
 use crate::{
     env::ENV_CONFIG,
-    execution_chain::{BlockNumber, SupplyDelta},
+    execution_chain::{BlockNumber, ExecutionNode, SupplyDelta},
 };
 
 use super::sync;
@@ -32,7 +32,7 @@ async fn fetch_supply_delta_http(block_number: BlockNumber) -> Result<SupplyDelt
         "{}/supply/delta?block_number={}",
         *GETH_SUPPLY_LIVE_API_URL, block_number
     );
-    debug!(%url, "fetching supply delta");
+    debug!(%url, "fetching supply delta(s)");
 
     let response = HTTP_CLIENT
         .get(&url)
@@ -45,12 +45,66 @@ async fn fetch_supply_delta_http(block_number: BlockNumber) -> Result<SupplyDelt
         .error_for_status()
         .context(format!("server returned error for url: {}", url))?;
 
-    let delta = response
-        .json::<SupplyDelta>()
-        .await
-        .context(format!("failed to parse json response from url: {}", url))?;
+    let deltas_vec = response.json::<Vec<SupplyDelta>>().await.context(format!(
+        "failed to parse json response (Vec<SupplyDelta>) from url: {}",
+        url
+    ))?;
 
-    Ok(delta)
+    if deltas_vec.len() > 1 {
+        debug!(
+            block_number,
+            count = deltas_vec.len(),
+            "received multiple supply deltas for block, attempting to disambiguate via execution node"
+        );
+
+        let execution_node = ExecutionNode::connect().await;
+        match execution_node.get_block_by_number(&block_number).await {
+            Some(canonical_block) => {
+                let canonical_hash = canonical_block.hash;
+                debug!(%block_number, %canonical_hash, "found canonical hash for block");
+                for delta in &deltas_vec {
+                    if delta.block_hash == canonical_hash {
+                        debug!(%block_number, selected_hash = %delta.block_hash, "selected matching delta");
+                        return Ok(delta.clone());
+                    }
+                }
+                error!(
+                    %block_number,
+                    %canonical_hash,
+                    num_deltas_received = deltas_vec.len(),
+                    "no supply delta matched canonical hash for block after disambiguation attempt. deltas: {:?}",
+                    deltas_vec
+                );
+                anyhow::bail!(
+                    "no supply delta matched canonical hash {} for block {}. received {} deltas.",
+                    canonical_hash,
+                    block_number,
+                    deltas_vec.len()
+                )
+            }
+            None => {
+                error!(
+                    %block_number,
+                    num_deltas_received = deltas_vec.len(),
+                    "failed to get canonical block from execution node to disambiguate supply deltas. deltas: {:?}",
+                    deltas_vec
+                );
+                anyhow::bail!(
+                    "failed to get canonical block for number {} to disambiguate {} supply deltas",
+                    block_number,
+                    deltas_vec.len()
+                )
+            }
+        }
+    } else if deltas_vec.len() == 1 {
+        Ok(deltas_vec.into_iter().next().unwrap())
+    } else {
+        anyhow::bail!(
+            "no supply delta found for block {} from url: {}",
+            block_number,
+            url
+        )
+    }
 }
 
 pub fn stream_supply_deltas_from(

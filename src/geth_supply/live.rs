@@ -67,7 +67,7 @@ fn convert_to_supply_delta(geth_delta: &GethSupplyDelta) -> Result<SupplyDelta> 
 
 pub struct LiveSupplyReader {
     data_dir: PathBuf,
-    deltas: Arc<RwLock<BTreeMap<BlockNumber, SupplyDelta>>>,
+    deltas: Arc<RwLock<BTreeMap<BlockNumber, Vec<SupplyDelta>>>>,
 }
 
 impl LiveSupplyReader {
@@ -78,7 +78,7 @@ impl LiveSupplyReader {
         }
     }
 
-    fn ensure_cache_limit(deltas: &mut BTreeMap<BlockNumber, SupplyDelta>) {
+    fn ensure_cache_limit(deltas: &mut BTreeMap<BlockNumber, Vec<SupplyDelta>>) {
         if deltas.len() > MAX_CACHED_DELTAS {
             let mut num_to_remove = deltas.len() - MAX_CACHED_DELTAS;
             // BTreeMap keys are sorted, so first_key_value gives the smallest (oldest) block
@@ -238,7 +238,10 @@ impl LiveSupplyReader {
             match serde_json::from_str::<GethSupplyDelta>(&line_result) {
                 Ok(geth_delta) => match convert_to_supply_delta(&geth_delta) {
                     Ok(supply_delta) => {
-                        deltas_guard.insert(supply_delta.block_number, supply_delta);
+                        deltas_guard
+                            .entry(supply_delta.block_number)
+                            .or_insert_with(Vec::new)
+                            .push(supply_delta);
                     }
                     Err(e) => {
                         error!(
@@ -306,7 +309,10 @@ impl LiveSupplyReader {
                     match serde_json::from_str::<GethSupplyDelta>(&line_result) {
                         Ok(geth_delta) => match convert_to_supply_delta(&geth_delta) {
                             Ok(supply_delta) => {
-                                deltas_guard.insert(supply_delta.block_number, supply_delta);
+                                deltas_guard
+                                    .entry(supply_delta.block_number)
+                                    .or_insert_with(Vec::new)
+                                    .push(supply_delta);
                             }
                             Err(e) => {
                                 error!("tail: failed to convert gethsupplydelta (block: {}): {} from file: {:?}", geth_delta.block_number, e, file_path);
@@ -334,7 +340,7 @@ impl LiveSupplyReader {
         }
     }
 
-    pub async fn get_supply_delta(&self, block_number: BlockNumber) -> Option<SupplyDelta> {
+    pub async fn get_supply_delta(&self, block_number: BlockNumber) -> Option<Vec<SupplyDelta>> {
         self.deltas.read().await.get(&block_number).cloned()
     }
 }
@@ -368,8 +374,8 @@ async fn get_supply_delta_handler(
     axum::extract::State(reader): axum::extract::State<Arc<LiveSupplyReader>>,
 ) -> impl IntoResponse {
     match reader.get_supply_delta(query.block_number).await {
-        Some(delta) => (StatusCode::OK, Json(delta)).into_response(),
-        None => StatusCode::NOT_FOUND.into_response(),
+        Some(deltas_vec) => (StatusCode::OK, Json(deltas_vec)).into_response(),
+        None => (StatusCode::OK, Json(Vec::<SupplyDelta>::new())).into_response(), // Return 200 OK with empty array
     }
 }
 
@@ -406,31 +412,37 @@ mod tests {
         let (_data_dir, reader) = setup_test_server_and_reader().await;
         reader.initial_load_and_tail().await.unwrap();
 
-        let deltas = reader.deltas.read().await;
-        assert_eq!(deltas.len(), 4, "Should load data from both files");
-        assert!(deltas.contains_key(&1));
-        assert!(deltas.contains_key(&2));
-        assert!(deltas.contains_key(&3));
-        assert!(deltas.contains_key(&4));
+        let deltas_map = reader.deltas.read().await;
+        assert_eq!(
+            deltas_map.len(),
+            4,
+            "Should load data for 4 distinct block numbers"
+        );
+        assert_eq!(deltas_map.get(&1).map(|v| v.len()), Some(1));
+        assert_eq!(deltas_map.get(&2).map(|v| v.len()), Some(1));
+        assert_eq!(deltas_map.get(&3).map(|v| v.len()), Some(1));
+        assert_eq!(deltas_map.get(&4).map(|v| v.len()), Some(1));
+
+        // Example of how to check content if needed
+        // let block1_deltas = deltas_map.get(&1).unwrap();
+        // assert_eq!(block1_deltas[0].supply_delta, 16); // 0x10
     }
 
     #[tokio::test]
     async fn test_ensure_cache_limit() {
-        let mut deltas: BTreeMap<BlockNumber, SupplyDelta> = BTreeMap::new();
+        let mut deltas: BTreeMap<BlockNumber, Vec<SupplyDelta>> = BTreeMap::new();
         for i in 1..(MAX_CACHED_DELTAS + 5) {
-            deltas.insert(
-                i as BlockNumber,
-                SupplyDelta {
-                    block_number: i as BlockNumber,
-                    block_hash: format!("0x{}", i),
-                    parent_hash: format!("0xp{}", i),
-                    supply_delta: i as i128,
-                    self_destruct: 0,
-                    fee_burn: 0,
-                    fixed_reward: 0,
-                    uncles_reward: 0,
-                },
-            );
+            let supply_delta_entry = SupplyDelta {
+                block_number: i as BlockNumber,
+                block_hash: format!("0x{}", i),
+                parent_hash: format!("0xp{}", i),
+                supply_delta: i as i128,
+                self_destruct: 0,
+                fee_burn: 0,
+                fixed_reward: 0,
+                uncles_reward: 0,
+            };
+            deltas.insert(i as BlockNumber, vec![supply_delta_entry]);
         }
         assert_eq!(deltas.len(), MAX_CACHED_DELTAS + 4);
         LiveSupplyReader::ensure_cache_limit(&mut deltas);
