@@ -700,6 +700,7 @@ pub mod tests {
             .unwrap();
     }
 
+    #[ignore = "failing because we lack a beacon node with history"]
     #[tokio::test]
     async fn get_deposits() {
         let beacon_node = BeaconNodeHttp::new();
@@ -712,6 +713,7 @@ pub mod tests {
         assert_eq!(deposits.len(), 16);
     }
 
+    #[ignore = "failing because we lack a beacon node with history"]
     #[tokio::test]
     async fn get_withdrawals() {
         let beacon_node = BeaconNodeHttp::new();
