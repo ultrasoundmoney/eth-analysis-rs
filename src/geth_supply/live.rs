@@ -98,24 +98,13 @@ impl LiveSupplyReader {
     // New private helper function to find and sort historic files
     fn find_historic_files_in_dir(&self) -> Result<Vec<PathBuf>> {
         let mut historic_files: Vec<PathBuf> = Vec::new();
-        
-        let canonical_data_dir = match self.data_dir.canonicalize() {
-            Ok(path) => path,
-            Err(e) => {
-                warn!(
-                    "failed to canonicalize data_dir {:?}: {}. using original path for scan.", 
-                    self.data_dir, e
-                );
-                self.data_dir.clone()
-            }
-        };
 
         debug!(
             "scanning directory {:?} for historic supply files (supply-*.jsonl excluding supply.jsonl).",
-            canonical_data_dir
+            self.data_dir
         );
 
-        match std::fs::read_dir(&canonical_data_dir) {
+        match std::fs::read_dir(&self.data_dir) {
             Ok(entries) => {
                 for entry_result in entries {
                     match entry_result {
@@ -137,16 +126,14 @@ impl LiveSupplyReader {
                         Err(e) => {
                             warn!(
                                 "error reading a directory entry in {:?}: {}",
-                                canonical_data_dir,
-                                e
+                                self.data_dir, e
                             );
                         }
                     }
                 }
                 debug!(
-                    "found {} historic files by manual scan: {:?}",
-                    historic_files.len(),
-                    historic_files
+                    "found {} historic files by manual scan.",
+                    historic_files.len()
                 );
                 historic_files.sort();
                 Ok(historic_files)
@@ -154,26 +141,41 @@ impl LiveSupplyReader {
             Err(e) => {
                 error!(
                     "failed to read directory {:?}: {}. no historic files will be loaded.",
-                    canonical_data_dir,
-                    e
+                    self.data_dir, e
                 );
-                Ok(Vec::new()) 
+                Ok(Vec::new())
             }
         }
     }
 
     async fn get_initial_supply_files(&self) -> Result<Vec<PathBuf>> {
-        let mut files_to_process = self.find_historic_files_in_dir()?;
+        let mut historic_files = self.find_historic_files_in_dir()?;
+        // Reverse sort historic files to process newest first
+        historic_files.reverse();
 
+        let mut files_to_process: Vec<PathBuf> = Vec::new();
+
+        // 1. Add the current live file first, if it exists.
         let current_live_file = self.data_dir.join("supply.jsonl");
-        if current_live_file.exists() && 
-           (files_to_process.last() != Some(&current_live_file)) {
-            files_to_process.push(current_live_file);
+        if current_live_file.exists() {
+            files_to_process.push(current_live_file.clone());
         }
-        
-        debug!(
-            "total initial files to potentially process after manual scan and adding live file: {} -> {:?}", 
-            files_to_process.len(), 
+
+        // 2. Add historic files (newest first), ensuring no duplicates if live file was also a historic one (e.g. just rotated)
+        for historic_file in historic_files {
+            // Check if this historic file is the same as the live file we might have already added.
+            // This check is mainly for the scenario where supply.jsonl was the *only* file found by find_historic_files_in_dir
+            // if it was named supply_....jsonl, which our current find_historic_files_in_dir excludes.
+            // More robustly, ensure we don't add a file path that's already in files_to_process.
+            if !files_to_process.contains(&historic_file) {
+                // Avoid duplicates
+                files_to_process.push(historic_file);
+            }
+        }
+
+        info!(
+            "initial files to process (most recent first): {} -> {:?}",
+            files_to_process.len(),
             files_to_process
         );
         Ok(files_to_process)
@@ -194,7 +196,10 @@ impl LiveSupplyReader {
 
         for file_path in initial_files {
             if !file_path.exists() {
-                warn!("initial supply file not found during processing, skipping: {:?}", file_path);
+                warn!(
+                    "initial supply file not found during processing, skipping: {:?}",
+                    file_path
+                );
                 continue;
             }
 
@@ -204,9 +209,9 @@ impl LiveSupplyReader {
                     "cache limit ({}) reached or exceeded (current size: {}). stopping initial file load. will proceed to tailing.", 
                     MAX_CACHED_DELTAS, current_cache_size
                 );
-                break; 
+                break;
             }
-            
+
             self.read_supply_file(&file_path).await?;
         }
 
@@ -214,7 +219,10 @@ impl LiveSupplyReader {
         if live_file_path.exists() {
             self.tail_supply_file(&live_file_path).await?;
         } else {
-            warn!("live supply file ({:?}) not found. tailing will not start.", live_file_path);
+            warn!(
+                "live supply file ({:?}) not found. tailing will not start.",
+                live_file_path
+            );
         }
         Ok(())
     }
@@ -289,7 +297,7 @@ impl LiveSupplyReader {
                 file.seek(SeekFrom::Start(current_position)).await?;
                 let reader = BufReader::new(&mut file);
                 let mut lines = reader.lines();
-                
+
                 let mut deltas_guard = self.deltas.write().await;
                 let mut new_lines_processed = 0;
 
@@ -309,7 +317,7 @@ impl LiveSupplyReader {
                         }
                     }
                 }
-                
+
                 current_position = file.seek(SeekFrom::Current(0)).await?;
 
                 if new_lines_processed > 0 {
@@ -338,7 +346,7 @@ struct SupplyDeltaQuery {
 
 pub async fn start_live_api(data_dir: PathBuf, port: u16) -> Result<()> {
     let reader = Arc::new(LiveSupplyReader::new(data_dir));
-    
+
     reader.clone().start_background_tailing();
 
     let app = Router::new()
