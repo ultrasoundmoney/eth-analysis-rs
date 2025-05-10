@@ -1,35 +1,85 @@
 use anyhow::Result;
-use glob::glob;
 use std::path::Path;
 use tokio::fs;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::db::get_db_pool;
 use crate::execution_chain::SupplyDelta;
 
 use super::GethSupplyDelta;
 
+// New function similar to the one in live.rs
+fn find_historic_supply_files_in_dir(data_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
+    let mut historic_files: Vec<std::path::PathBuf> = Vec::new();
+
+    debug!(
+        "scanning directory {:?} for historic supply files (supply_*.jsonl).",
+        data_dir
+    );
+
+    match std::fs::read_dir(data_dir) {
+        Ok(entries) => {
+            for entry_result in entries {
+                match entry_result {
+                    Ok(entry) => {
+                        let path = entry.path();
+                        if path.is_file() {
+                            if let Some(filename_osstr) = path.file_name() {
+                                if let Some(filename_str) = filename_osstr.to_str() {
+                                    // In historic.rs, we are looking for "supply_*.jsonl"
+                                    // and NOT excluding "supply.jsonl" as it won't match "supply_*"
+                                    if filename_str.starts_with("supply_")
+                                        && filename_str.ends_with(".jsonl")
+                                    {
+                                        historic_files.push(path.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // Using warn! as in live.rs, though error! could also be justified
+                        // if we want to be stricter about directory reading issues.
+                        warn!("error reading a directory entry in {:?}: {}", data_dir, e);
+                    }
+                }
+            }
+            debug!(
+                "found {} historic files by manual scan.",
+                historic_files.len()
+            );
+            historic_files.sort(); // Sorting is important for processing order
+            Ok(historic_files)
+        }
+        Err(e) => {
+            error!(
+                "failed to read directory {:?}: {}. no historic files will be loaded.",
+                data_dir, e
+            );
+            Ok(Vec::new()) // Return an empty vec on error, consistent with original glob behavior
+        }
+    }
+}
+
 pub async fn backfill_historic_deltas(data_dir: &Path) -> Result<()> {
     let db_pool = get_db_pool("backfill-historic-supply", 3).await;
 
-    let pattern = data_dir
-        .join("supply_*.jsonl")
-        .to_str()
-        .unwrap()
-        .to_string();
-    let mut files: Vec<_> = glob(&pattern)?.filter_map(Result::ok).collect();
+    // Replace glob with the new function
+    let files = find_historic_supply_files_in_dir(data_dir)?;
 
-    files.sort();
+    // The original glob pattern was "supply_*.jsonl",
+    // our new function find_historic_supply_files_in_dir already implements this logic.
+    // Sorting is also handled inside the new function.
 
     debug!(
-        "found {} historic supply files to process: {:?}",
-        files.len(),
-        files
+        "found {} historic supply files to process.", // Simplified log
+        files.len()
     );
 
-    for file in files {
-        debug!("processing historic file: {:?}", file);
-        process_supply_file(&db_pool, &file).await?;
+    for file_path in files {
+        // Renamed 'file' to 'file_path' for clarity
+        debug!("processing historic file: {:?}", file_path);
+        process_supply_file(&db_pool, &file_path).await?;
     }
 
     Ok(())

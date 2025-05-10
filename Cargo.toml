@@ -64,7 +64,6 @@ tokio-native-tls = "0.3.0"
 backoff = { version = "0.4.0", features = ["tokio"] }
 mockall = "0.11.4"
 tempfile = "3.8.1"
-glob = "0.3.1"
 
 [dev-dependencies]
 mockito = "1.2.0"
