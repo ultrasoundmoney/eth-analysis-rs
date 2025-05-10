@@ -232,7 +232,7 @@ mod tests {
                 .unwrap()
                 .parse::<i128>()
                 .unwrap(),
-            0x3b7cc750fca7400
+            0x3b7cc750fca7400i128 - 0x3182cbb2c587217i128
         );
         assert_eq!(
             deltas[0]
