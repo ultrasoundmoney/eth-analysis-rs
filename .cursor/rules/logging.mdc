@@ -1,6 +1,6 @@
 ---
-description: describes rules around code that logs messages
+description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
-1. when using tracing lib to log things use lowercase to make searching logs simpler and reading them more consistent visually.
+when writing logs, errors, or panics use lowercase to make searching logs simpler and reading them more consistent visually.
