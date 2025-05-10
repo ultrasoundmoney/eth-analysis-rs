@@ -1,5 +1,5 @@
 use anyhow::Result;
-use axum::{extract::Query, routing::get, Json, Router};
+use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use serde::Deserialize;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
@@ -366,8 +366,11 @@ pub async fn start_live_api(data_dir: PathBuf, port: u16) -> Result<()> {
 async fn get_supply_delta_handler(
     Query(query): Query<SupplyDeltaQuery>,
     axum::extract::State(reader): axum::extract::State<Arc<LiveSupplyReader>>,
-) -> Json<Option<SupplyDelta>> {
-    Json(reader.get_supply_delta(query.block_number).await)
+) -> impl IntoResponse {
+    match reader.get_supply_delta(query.block_number).await {
+        Some(delta) => (StatusCode::OK, Json(delta)).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 #[cfg(test)]

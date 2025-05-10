@@ -6,22 +6,20 @@ mod sync;
 
 pub use export::export_deltas;
 pub use export::summary_from_deltas_csv;
-
 pub use logs::write_deltas_log;
-
 pub use node::stream_supply_delta_chunks;
 pub use node::stream_supply_deltas_from;
-
 pub use sync::add_delta;
 pub use sync::sync_deltas;
 
+use serde::Deserialize;
 use serde::Serialize;
 
 use crate::units::Wei;
 
 use super::node::BlockNumber;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct SupplyDelta {
     pub block_hash: String,
     pub block_number: BlockNumber,

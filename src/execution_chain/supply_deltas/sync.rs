@@ -4,6 +4,7 @@ use sqlx::{Connection, PgExecutor, Row};
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use tracing::{debug, info, warn};
 
 use super::node::{get_supply_delta_by_block_number, stream_supply_deltas_from_last};
 use super::snapshot::SUPPLY_SNAPSHOT_15082718;
@@ -274,7 +275,12 @@ async fn sync_delta(
             get_supply_delta_by_block_number(supply_delta_number)
                 .timed("get supply delta by block number")
                 .await
-                .unwrap()
+                .unwrap_or_else(|e: anyhow::Error| {
+                    panic!(
+                        "failed to fetch supply delta for block {}: {:#?}. halting sync.",
+                        supply_delta_number, e
+                    )
+                })
         }
     };
 
@@ -283,9 +289,10 @@ async fn sync_delta(
         // have to rollback our deltas table one by one, until we hit a delta with a known parent,
         // at which point we'll be able to make progress again.
         NextStep::HandleGap => {
-            tracing::warn!(
-                "parent of delta {} is missing, dropping min(our last delta, new delta) and queuing all blocks gte the received delta",
-                supply_delta.block_number
+            warn!(
+                parent_hash = %supply_delta.parent_hash,
+                block_number = supply_delta.block_number,
+                "parent of delta is missing, dropping min(our last delta, new delta) and queuing all blocks gte the received delta"
             );
 
             let last_supply_delta_number = get_last_synced_supply_delta_number(connection)
@@ -295,20 +302,23 @@ async fn sync_delta(
             // Supply delta block number may be lower than our last synced. Roll back to the
             // lowest of the two.
             let lowest_block_number = last_supply_delta_number.min(supply_delta.block_number);
-            tracing::debug!("dropping supply deltas gte {lowest_block_number}");
+            debug!("dropping supply deltas gte {}", lowest_block_number);
             drop_supply_deltas_from(connection, &lowest_block_number).await;
-            for block_number in (lowest_block_number..=supply_delta.block_number).rev() {
-                tracing::debug!("queuing {block_number} for sync after dropping");
+            for block_number_to_requeue in (lowest_block_number..=supply_delta.block_number).rev() {
+                debug!(
+                    "queuing {} for sync after dropping",
+                    block_number_to_requeue
+                );
                 deltas_queue
                     .lock()
                     .unwrap()
-                    .push_front(DeltaToSync::Refetch(block_number));
+                    .push_front(DeltaToSync::Refetch(block_number_to_requeue));
             }
         }
         NextStep::HandleHeadFork => {
-            tracing::info!(
-                "delta {} creates a fork, rolling back our last block",
-                &supply_delta.block_number
+            info!(
+                block_number = supply_delta.block_number,
+                "delta creates a fork, rolling back our last block"
             );
 
             drop_supply_deltas_from(connection, &supply_delta.block_number).await;
@@ -319,8 +329,7 @@ async fn sync_delta(
                 .push_front(DeltaToSync::Fetched(supply_delta));
         }
         NextStep::AddToExisting => {
-            // Progress as usual.
-            tracing::debug!("storing supply delta {}", supply_delta.block_number);
+            debug!("storing supply delta {}", supply_delta.block_number);
             add_delta(connection, &supply_delta)
                 .timed("add delta")
                 .await;
@@ -339,7 +348,7 @@ type DeltasQueue = Arc<Mutex<VecDeque<DeltaToSync>>>;
 pub async fn sync_deltas() {
     log::init_with_env();
 
-    tracing::info!("syncing supply deltas");
+    info!("syncing supply deltas");
 
     let mut connection = db::get_db_connection("sync-execution-supply-deltas").await;
 

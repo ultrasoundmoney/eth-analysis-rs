@@ -61,6 +61,7 @@ pub struct EnvConfig {
     pub dune_api_key: Option<String>,
     // Separate out geth deltas fork URL.
     pub geth_url: Option<String>,
+    pub geth_supply_live_api_url: Option<String>,
     pub log_json: bool,
     pub log_perf: bool,
 }
@@ -74,6 +75,7 @@ pub fn get_env_config() -> EnvConfig {
         etherscan_api_key: get_env_var("ETHERSCAN_API_KEY"),
         dune_api_key: get_env_var("DUNE_API_KEY"),
         geth_url: get_env_var("GETH_URL"),
+        geth_supply_live_api_url: get_env_var("GETH_SUPPLY_LIVE_API_URL"),
         log_json: get_env_bool("LOG_JSON").unwrap_or(false),
         log_perf: get_env_bool("LOG_PERF").unwrap_or(false),
     }
