@@ -142,23 +142,25 @@ fn make_blocks_url(block_id: &BlockId) -> String {
 
 pub type StateRoot = String;
 
-#[derive(Debug, Deserialize)]
-struct StateRootSecondEnvelope {
-    root: StateRoot,
-}
+// Old structs for direct state root fetching, kept for posterity.
+// #[derive(Debug, Deserialize)]
+// struct StateRootSecondEnvelope {
+//     root: StateRoot,
+// }
 
-#[derive(Debug, Deserialize)]
-struct StateRootFirstEnvelope {
-    data: StateRootSecondEnvelope,
-}
+// #[derive(Debug, Deserialize)]
+// struct StateRootFirstEnvelope {
+//     data: StateRootSecondEnvelope,
+// }
 
-fn make_state_root_url(slot: Slot) -> String {
-    let beacon_url = ENV_CONFIG
-        .beacon_url
-        .as_ref()
-        .expect("BEACON_URL is required in env to fetch blocks");
-    format!("{beacon_url}/eth/v1/beacon/states/{}/root", slot)
-}
+// Old helper for direct state root fetching, kept for posterity.
+// fn make_state_root_url(slot: Slot) -> String {
+//     let beacon_url = ENV_CONFIG
+//         .beacon_url
+//         .as_ref()
+//         .expect("BEACON_URL is required in env to fetch blocks");
+//     format!("{beacon_url}/eth/v1/beacon/states/{}/root", slot)
+// }
 
 #[derive(Debug, Deserialize)]
 pub struct ValidatorBalance {
@@ -407,26 +409,17 @@ impl BeaconNode for BeaconNodeHttp {
         Ok(block)
     }
 
-    async fn get_state_root_by_slot(&self, slot: Slot) -> Result<Option<String>> {
-        let url = make_state_root_url(slot);
-
-        let res = self.client.get(&url).send().await?;
-
-        match res.status() {
-            StatusCode::NOT_FOUND => Ok(None),
-            StatusCode::OK => {
-                let state_root = res
-                    .json::<StateRootFirstEnvelope>()
-                    .await
-                    .map(|envelope| envelope.data.root)?;
-                Ok(Some(state_root))
-            }
-            status => Err(anyhow!(
-                "failed to fetch state_root by slot. slot = {} status = {} url = {}",
-                slot,
-                status,
-                res.url()
-            )),
+    async fn get_state_root_by_slot(&self, slot: Slot) -> Result<Option<StateRoot>> {
+        // Old implementation was requesting /eth/v1/beacon/states/{slot}/root directly.
+        // Lighthouse is responding not found for whatever reason.
+        // New temporary implementation: rely on fetching the header from /eth/v1/beacon/headers/{slot}
+        match self.get_header_by_slot(slot).await {
+            Ok(Some(header_envelope)) => Ok(Some(header_envelope.state_root())),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e.context(format!(
+                "failed to retrieve header for slot {} while attempting to get state_root",
+                slot
+            ))),
         }
     }
 
