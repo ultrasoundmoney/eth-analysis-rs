@@ -1,5 +1,5 @@
 use axum::{
-    http::{HeaderMap, HeaderValue},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
     Extension, Json,
 };
@@ -7,7 +7,6 @@ use chrono::Duration;
 use enum_iterator::all;
 use futures::{Stream, TryStreamExt};
 use lazy_static::lazy_static;
-use reqwest::{header, StatusCode};
 use serde_json::Value;
 use sqlx::{postgres::PgNotification, PgPool};
 use std::{

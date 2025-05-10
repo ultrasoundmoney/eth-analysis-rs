@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
-use axum::{extract::Query, response::IntoResponse};
+use axum::{extract::Query, http::StatusCode, response::IntoResponse};
 use chrono::Duration;
 use enum_iterator::all;
 use lazy_static::lazy_static;
-use reqwest::StatusCode;
 use tracing::warn;
 
 use crate::{

@@ -1,12 +1,11 @@
 use axum::{
     body::HttpBody,
-    http::{header, HeaderValue, Request},
+    http::{header, HeaderValue, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use bytes::BufMut;
 use etag::EntityTag;
-use reqwest::StatusCode;
 use tracing::{error, trace};
 
 pub async fn middleware_fn<B: std::fmt::Debug>(

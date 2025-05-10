@@ -8,15 +8,12 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use axum::{routing::get, Router, Server};
+use axum::{http::StatusCode, routing::get, Router, Server};
 use chrono::{DateTime, Duration, Utc};
 
 use futures::try_join;
 use lazy_static::lazy_static;
-use reqwest::{
-    header::{HeaderMap, HeaderValue},
-    StatusCode,
-};
+use reqwest::header::{HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::json;
 use tokio::time::sleep;

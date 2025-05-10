@@ -1,8 +1,8 @@
 use axum::{
+    http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
-use reqwest::StatusCode;
 use serde_json::json;
 
 pub enum HealthStatus {
