@@ -25,6 +25,7 @@ lazy_static! {
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_NO_DELTA_DURATION: Duration = Duration::from_secs(10 * 60); // 10 minutes
 
 async fn fetch_supply_delta_http(block_number: BlockNumber) -> Result<SupplyDelta, anyhow::Error> {
     let url = format!(
@@ -60,6 +61,7 @@ pub fn stream_supply_deltas_from(
 
     tokio::spawn(async move {
         let mut current_block_number = greater_than_or_equal_to;
+        let mut last_successful_fetch_time = tokio::time::Instant::now();
         loop {
             match fetch_supply_delta_http(current_block_number).await {
                 Ok(delta) => {
@@ -68,6 +70,7 @@ pub fn stream_supply_deltas_from(
                         break;
                     }
                     current_block_number += 1;
+                    last_successful_fetch_time = tokio::time::Instant::now();
                 }
                 Err(e) => {
                     warn!(
@@ -75,6 +78,19 @@ pub fn stream_supply_deltas_from(
                         error = %e,
                         "failed to fetch supply delta for block {}. retrying after delay.", current_block_number
                     );
+                    if last_successful_fetch_time.elapsed() > MAX_NO_DELTA_DURATION {
+                        error!(
+                            "no supply delta received for over {} seconds. Crashing.",
+                            MAX_NO_DELTA_DURATION.as_secs()
+                        );
+                        // Using panic here as requested to crash the application.
+                        // In a production system, a more graceful shutdown or alert might be preferred.
+                        panic!(
+                            "No supply delta received for over {} seconds for block_number: {}",
+                            MAX_NO_DELTA_DURATION.as_secs(),
+                            current_block_number
+                        );
+                    }
                     sleep(POLL_INTERVAL).await;
                 }
             }
