@@ -122,10 +122,8 @@ pub fn stream_supply_delta_chunks(
                             }
                         }
                         None => {
-                            if !supply_delta_buffer.is_empty() {
-                                if tx.unbounded_send(supply_delta_buffer.clone()).is_err() {
-                                    error!("failed to send final delta chunk, receiver dropped");
-                                }
+                            if !supply_delta_buffer.is_empty() && tx.unbounded_send(supply_delta_buffer.clone()).is_err() {
+                                error!("failed to send final delta chunk, receiver dropped");
                             }
                             debug!("supply delta stream ended");
                             break;
