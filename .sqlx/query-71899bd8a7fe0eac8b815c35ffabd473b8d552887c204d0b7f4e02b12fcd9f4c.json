@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            bs.slot AS \"slot: Slot\",\n            bb.block_root\n        FROM beacon_blocks bb\n        JOIN beacon_states bs ON bb.state_root = bs.state_root\n        ORDER BY bs.slot DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slot: Slot",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "block_root",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "71899bd8a7fe0eac8b815c35ffabd473b8d552887c204d0b7f4e02b12fcd9f4c"
+}

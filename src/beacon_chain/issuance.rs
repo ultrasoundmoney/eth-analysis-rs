@@ -6,6 +6,7 @@
 //! This module looks up issuance by time, regardless of the block it's done for. It'd be healthy
 //! to change this to looking up by slots and blocks, or alternatively time relative to the current
 //! block.
+use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
@@ -70,36 +71,24 @@ pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype 
     .unwrap()
 }
 
-pub async fn delete_issuances(connection: impl PgExecutor<'_>, greater_than_or_equal: Slot) {
+pub async fn delete_issuances(executor: impl PgExecutor<'_>, greater_than_or_equal: Slot) {
     sqlx::query!(
-        "
-        DELETE FROM beacon_issuance
-        WHERE state_root IN (
-            SELECT state_root FROM beacon_states
-            WHERE slot >= $1
-        )
-        ",
+        "DELETE FROM beacon_issuance WHERE state_root IN (SELECT state_root FROM beacon_states WHERE slot >= $1)",
         greater_than_or_equal.0
     )
-    .execute(connection)
+    .execute(executor)
     .await
     .unwrap();
 }
 
-pub async fn delete_issuance(connection: impl PgExecutor<'_>, slot: Slot) {
+pub async fn delete_issuance_by_slot(executor: impl PgExecutor<'_>, slot: Slot) -> Result<()> {
     sqlx::query!(
-        "
-        DELETE FROM beacon_issuance
-        WHERE state_root IN (
-            SELECT state_root FROM beacon_states
-            WHERE slot = $1
-        )
-        ",
+        "DELETE FROM beacon_issuance WHERE state_root IN (SELECT state_root FROM beacon_states WHERE slot = $1)",
         slot.0
     )
-    .execute(connection)
-    .await
-    .unwrap();
+    .execute(executor)
+    .await?;
+    Ok(())
 }
 
 pub async fn get_n_days_ago_issuance(executor: impl PgExecutor<'_>, n: i32) -> GweiNewtype {

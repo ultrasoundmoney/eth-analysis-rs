@@ -150,6 +150,20 @@ pub async fn get_balances_by_state_root(
     })
 }
 
+// New function to delete validator balance sum for a single specific slot
+pub async fn delete_validator_sum_by_slot(
+    executor: impl PgExecutor<'_>,
+    slot: Slot,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "DELETE FROM beacon_validators_balance WHERE state_root IN (SELECT state_root FROM beacon_states WHERE slot = $1)",
+        slot.0
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, DurationRound, TimeZone, Utc};

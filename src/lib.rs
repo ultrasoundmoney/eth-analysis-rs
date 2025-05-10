@@ -32,7 +32,7 @@ mod usd_price;
 pub use beacon_chain::effective_balance_sums;
 pub use beacon_chain::heal_beacon_states;
 pub use beacon_chain::heal_block_hashes;
-pub use beacon_chain::sync_beacon_states;
+pub use beacon_chain::sync_beacon_states_slot_by_slot;
 pub use beacon_chain::update_issuance_estimate;
 
 pub use data_integrity::check_beacon_state_gaps;

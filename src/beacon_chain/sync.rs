@@ -1,20 +1,14 @@
 use anyhow::{anyhow, Result};
 use chrono::Duration;
-use futures::{stream, SinkExt, Stream, StreamExt};
 use lazy_static::lazy_static;
-use serde::Deserialize;
 use sqlx::PgPool;
-use sqlx::{Acquire, PgConnection, PgExecutor};
-use std::{cmp::Ordering, collections::VecDeque};
+use sqlx::{PgConnection, PgExecutor};
 use tracing::{debug, info, warn};
 
 use crate::beacon_chain::withdrawals;
-use crate::env::ENV_CONFIG;
 use crate::{
-    beacon_chain::{balances, deposits, issuance, slot_from_string},
-    db,
-    json_codecs::i32_from_string,
-    log,
+    beacon_chain::{balances, deposits, issuance},
+    db, log,
     performance::TimedExt,
 };
 use crate::{eth_supply, supply_dashboard_analysis};
@@ -24,64 +18,6 @@ use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot};
 
 lazy_static! {
     static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(5);
-}
-
-#[derive(Clone)]
-pub struct SlotRange {
-    greater_than_or_equal: Slot,
-    less_than_or_equal: Slot,
-}
-
-impl SlotRange {
-    pub fn new(greater_than_or_equal: Slot, less_than_or_equal: Slot) -> Self {
-        if greater_than_or_equal > less_than_or_equal {
-            panic!("tried to create slot range with negative range")
-        }
-
-        Self {
-            greater_than_or_equal,
-            less_than_or_equal,
-        }
-    }
-}
-
-pub struct SlotRangeIntoIterator {
-    slot_range: SlotRange,
-    index: usize,
-}
-
-impl IntoIterator for SlotRange {
-    type Item = Slot;
-    type IntoIter = SlotRangeIntoIterator;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Self::IntoIter {
-            slot_range: self,
-            index: 0,
-        }
-    }
-}
-
-impl Iterator for SlotRangeIntoIterator {
-    type Item = Slot;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match (self.slot_range.greater_than_or_equal + self.index as i32)
-            .cmp(&(self.slot_range.less_than_or_equal))
-        {
-            Ordering::Less => {
-                let current = self.slot_range.greater_than_or_equal + self.index as i32;
-                self.index += 1;
-                Some(current)
-            }
-            Ordering::Equal => {
-                let current = self.slot_range.greater_than_or_equal + self.index as i32;
-                self.index += 1;
-                Some(current)
-            }
-            Ordering::Greater => None,
-        }
-    }
 }
 
 struct SyncData {
@@ -288,320 +224,281 @@ async fn update_deferrable_analysis(db_pool: &PgPool) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-struct FinalizedCheckpointEvent {
-    block: String,
-    state: String,
-    #[serde(deserialize_with = "i32_from_string")]
-    epoch: i32,
-}
+use crate::beacon_chain::blocks::GENESIS_PARENT_ROOT;
+use crate::beacon_chain::node::BlockRoot; // Assuming BlockRoot is a type alias for String
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-struct HeadEvent {
-    #[serde(deserialize_with = "slot_from_string")]
-    slot: Slot,
-    /// block_root
-    block: String,
-    state: String,
-}
+const SYNC_V2_POLLING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3);
+const SYNC_V2_MAX_SLOTS_PER_CYCLE: usize = 64; // Sync up to N slots at a time.
+const SYNC_V2_ERROR_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
 
-impl From<BeaconHeaderSignedEnvelope> for HeadEvent {
-    fn from(envelope: BeaconHeaderSignedEnvelope) -> Self {
-        Self {
-            state: envelope.header.message.state_root,
-            block: envelope.root,
-            slot: envelope.header.message.slot,
-        }
-    }
-}
-
-async fn stream_slots(slot_to_follow: Slot) -> impl Stream<Item = Slot> {
-    let beacon_url = ENV_CONFIG
-        .beacon_url
-        .as_ref()
-        .expect("BEACON_URL is required in env to stream beacon updates");
-    let url_string = format!("{beacon_url}/eth/v1/events/?topics=head",);
-    let url = reqwest::Url::parse(&url_string).unwrap();
-
-    let client = eventsource::reqwest::Client::new(url);
-    let (mut tx, rx) = futures::channel::mpsc::unbounded();
-
-    tokio::spawn(async move {
-        let mut last_slot = slot_to_follow;
-
-        for event in client {
-            let event = event.unwrap();
-            match event.event_type {
-                Some(ref event_type) if event_type == "head" => {
-                    let head = serde_json::from_str::<HeadEvent>(&event.data).unwrap();
-
-                    debug!(?head, "received new head");
-
-                    // Detect forward gaps in received slots, and fill them in.
-                    if head.slot > last_slot && head.slot != last_slot + 1 {
-                        debug!(
-                            head_slot = head.slot.to_string(),
-                            %last_slot, "head slot is more than one ahead of last_slot"
-                        );
-
-                        for missing_slot in (last_slot + 1).0..head.slot.0 {
-                            debug!(missing_slot, "adding missing slot to slots stream");
-                            tx.send(Slot(missing_slot)).await.unwrap();
-                        }
-                    }
-
-                    last_slot = head.slot;
-                    tx.send(head.slot).await.unwrap();
-                }
-                Some(event) => {
-                    warn!(event, "received a server event that was not a head");
-                }
-                None => {
-                    debug!("received an empty server event");
-                }
-            }
-        }
-    });
-
-    rx
-}
-
-async fn stream_slots_from(gte_slot: Slot) -> impl Stream<Item = Slot> {
-    debug!("streaming slots from {gte_slot}");
-
-    let beacon_node = BeaconNodeHttp::new();
-    let last_slot_on_start = beacon_node
-        .get_last_header()
-        .await
-        .unwrap()
-        .header
-        .message
-        .slot;
-    debug!("last slot on chain: {}", &last_slot_on_start);
-
-    // We stream heads as requested until caught up with the chain and then pass heads as they come
-    // in from our node. The only way to be sure how high we should stream, is to wait for the
-    // first head from the node to come in. We don't want to wait. So ask for the latest head, take
-    // this as the max, and immediately start listening for new heads. Running the small risk the
-    // chain has advanced between these two calls.
-    let slots_stream = stream_slots(last_slot_on_start).await;
-
-    let slot_range = SlotRange::new(gte_slot, last_slot_on_start);
-
-    let historic_slots_stream = stream::iter(slot_range);
-
-    historic_slots_stream.chain(slots_stream)
-}
-
-async fn stream_slots_from_last(db_pool: &PgPool) -> impl Stream<Item = Slot> {
-    let last_synced_state = states::get_last_state(db_pool).await;
-    let next_slot_to_sync = last_synced_state.map_or(Slot(0), |state| state.slot + 1);
-    stream_slots_from(next_slot_to_sync).await
-}
-
-pub async fn rollback_slots(
-    executor: &mut PgConnection,
-    greater_than_or_equal: Slot,
-) -> Result<()> {
-    debug!("rolling back data based on slots gte {greater_than_or_equal}");
-    let mut transaction = executor.begin().await?;
-    eth_supply::rollback_supply_from_slot(&mut transaction, greater_than_or_equal)
-        .await
-        .unwrap();
-    blocks::delete_blocks(&mut *transaction, greater_than_or_equal).await;
-    issuance::delete_issuances(&mut *transaction, greater_than_or_equal).await;
-    balances::delete_validator_sums(&mut *transaction, greater_than_or_equal).await;
-    states::delete_states(&mut *transaction, greater_than_or_equal).await;
-    transaction.commit().await?;
-    Ok(())
-}
-
-pub async fn rollback_slot(executor: &mut PgConnection, slot: Slot) -> Result<()> {
-    debug!("rolling back data based on slot {slot}");
-    let mut transaction = executor.begin().await?;
-    eth_supply::rollback_supply_slot(&mut transaction, slot)
-        .await
-        .unwrap();
-    blocks::delete_block(&mut *transaction, slot).await;
-    issuance::delete_issuance(&mut *transaction, slot).await;
-    balances::delete_validator_sum(&mut *transaction, slot).await;
-    states::delete_state(&mut *transaction, slot).await;
-    transaction.commit().await?;
-    Ok(())
-}
-
-async fn estimate_slots_remaining(
+/// Gets the highest slot and its block_root from beacon_blocks.
+/// This serves both for startup and for finding the current DB tip during sync.
+async fn get_highest_stored_block_in_db(
     executor: impl PgExecutor<'_>,
-    beacon_node: &BeaconNodeHttp,
-) -> i32 {
-    let last_on_chain = beacon_node.get_last_header().await.unwrap();
-    let last_synced_slot = states::get_last_state(executor)
-        .await
-        .map_or(Slot(0), |state| state.slot);
-    last_on_chain.slot().0 - last_synced_slot.0
+) -> Result<Option<(Slot, BlockRoot)>> {
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            bs.slot AS "slot: Slot",
+            bb.block_root
+        FROM beacon_blocks bb
+        JOIN beacon_states bs ON bb.state_root = bs.state_root
+        ORDER BY bs.slot DESC
+        LIMIT 1
+        "#
+    )
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(row.map(|r| (r.slot, r.block_root)))
 }
 
-/// Searches backwards from the starting candidate to find a slot where stored and on-chain
-/// state_roots match.
-async fn find_last_matching_slot(
+/// Gets the block_root for a specific slot from the database.
+async fn get_block_root_for_slot_from_db(
+    executor: impl PgExecutor<'_>,
+    slot: Slot,
+) -> Result<Option<BlockRoot>> {
+    let row = sqlx::query!(
+        r#"
+        SELECT bb.block_root
+        FROM beacon_blocks bb
+        JOIN beacon_states bs ON bb.state_root = bs.state_root
+        WHERE bs.slot = $1
+        "#,
+        slot.0
+    )
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(row.map(|r| r.block_root))
+}
+
+/// Rolls back a single slot from all relevant tables.
+pub async fn rollback_slot(transaction: &mut PgConnection, slot: Slot) -> Result<()> {
+    debug!(%slot, "rolling back slot completely from db");
+
+    eth_supply::rollback_supply_slot(&mut *transaction, slot).await?;
+    issuance::delete_issuance_by_slot(&mut *transaction, slot).await?;
+    balances::delete_validator_sum_by_slot(&mut *transaction, slot).await?;
+    blocks::delete_block(&mut *transaction, slot).await;
+    states::delete_state(&mut *transaction, slot).await;
+
+    Ok(())
+}
+
+/// Rolls back all slots greater than the given slot from all relevant tables.
+pub async fn rollback_slots(transaction: &mut PgConnection, slot: Slot) -> Result<()> {
+    debug!(%slot, "rolling back slots > {} completely from db", slot);
+    let gte_slot = slot + 1;
+    eth_supply::rollback_supply_from_slot(&mut *transaction, gte_slot).await?;
+    issuance::delete_issuances(&mut *transaction, gte_slot).await;
+    balances::delete_validator_sums(&mut *transaction, gte_slot).await;
+    blocks::delete_blocks(&mut *transaction, gte_slot).await;
+    states::delete_states(&mut *transaction, gte_slot).await;
+    Ok(())
+}
+
+/// Finds the last slot in the DB that is consistent with the canonical chain.
+/// Rolls back any inconsistent slots from the DB.
+/// Returns the next slot that should be processed (i.e., consistent_slot + 1).
+async fn find_last_valid_slot_after_rollback(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
-    starting_candidate: Slot,
+    mut current_check_slot: Slot,
 ) -> Result<Slot> {
-    let mut candidate_slot = starting_candidate;
-    let mut stored_state_root = states::get_state_root_by_slot(db_pool, candidate_slot).await;
-    let mut on_chain_state_root = beacon_node
-        .get_header_by_slot(candidate_slot)
-        .await?
-        .map(|envelope| envelope.header.message.state_root);
-
+    info!(%current_check_slot, "starting validation and rollback procedure.");
     loop {
-        match (stored_state_root, on_chain_state_root) {
-            (Some(stored_state_root), Some(on_chain_state_root))
-                if stored_state_root == on_chain_state_root =>
-            {
-                debug!(
-                    stored_state_root,
-                    on_chain_state_root, "stored and on-chain state_root match"
-                );
-                break;
+        if current_check_slot < Slot(0) {
+            warn!(
+                "rollback check went below slot 0. ensuring db is empty and syncing from genesis."
+            );
+            let mut conn = db_pool.acquire().await?;
+            rollback_slots(&mut conn, Slot(0)).await?; // Wipe all
+            return Ok(Slot(0));
+        }
+
+        let db_block_root_for_check_slot =
+            get_block_root_for_slot_from_db(db_pool, current_check_slot).await?;
+
+        match beacon_node.get_header_by_slot(current_check_slot).await {
+            Ok(Some(on_chain_header)) => {
+                if db_block_root_for_check_slot.as_ref() == Some(&on_chain_header.root) {
+                    info!(slot = %current_check_slot, "found consistent block in db.");
+                    return Ok(current_check_slot + 1);
+                } else {
+                    warn!(slot = %current_check_slot, db_root = ?db_block_root_for_check_slot, chain_root = %on_chain_header.root, "mismatch or db missing chain block. rolling back this slot.");
+                    let mut conn = db_pool.acquire().await?;
+                    rollback_slots(&mut conn, current_check_slot).await?;
+                }
             }
-            _ => {
-                candidate_slot = candidate_slot - 1;
-                stored_state_root = states::get_state_root_by_slot(db_pool, candidate_slot).await;
-                on_chain_state_root = beacon_node
-                    .get_header_by_slot(candidate_slot)
-                    .await?
-                    .map(|envelope| envelope.header.message.state_root);
+            Ok(None) => {
+                if db_block_root_for_check_slot.is_some() {
+                    warn!(slot = %current_check_slot, "db has block, chain says slot missed. rolling back this slot.");
+                    let mut conn = db_pool.acquire().await?;
+                    rollback_slots(&mut conn, current_check_slot).await?;
+                } else {
+                    debug!(slot = %current_check_slot, "slot consistently empty on db and chain. continuing search.");
+                }
+            }
+            Err(e) => {
+                warn!(slot = %current_check_slot, "error fetching header during rollback: {}. retrying after delay.", e);
+                tokio::time::sleep(SYNC_V2_ERROR_RETRY_DELAY).await;
+                continue;
             }
         }
+        current_check_slot = current_check_slot - 1;
     }
-
-    debug!(
-        slot = candidate_slot.0,
-        "found a state match between stored and on-chain"
-    );
-    Ok(candidate_slot)
 }
 
-pub async fn sync_beacon_states() -> Result<()> {
+pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
     log::init_with_env();
+    info!("starting slot-by-slot beacon state sync (v2)");
 
-    info!("syncing beacon states");
-
-    let db_pool = db::get_db_pool("sync-beacon-states", 3).await;
-
+    let db_pool = db::get_db_pool("sync-beacon-states-v2", 5).await;
     sqlx::migrate!().run(&db_pool).await.unwrap();
-
     let beacon_node = BeaconNodeHttp::new();
 
-    let mut slots_stream = stream_slots_from_last(&db_pool).await;
+    let mut next_slot_to_process: Slot = match get_highest_stored_block_in_db(&db_pool).await? {
+        Some((s_db, _r_db)) => {
+            info!(db_tip_slot = %s_db, "db has existing blocks. starting from slot after tip.");
+            s_db + 1
+        }
+        None => {
+            info!("db is empty of blocks. starting from genesis (slot 0).");
+            Slot(0)
+        }
+    };
+    info!("initial next_slot_to_process: {}", next_slot_to_process);
 
-    // This queue allows us to queue slots to sync as we need between processing new head events.
-    // The two expected scenarios are:
-    // 1. A slot was missed, and the next head is more than one slot ahead.
-    // 2. We've diverged, and need to roll back one or more slots.
-    let mut slots_queue = VecDeque::<Slot>::new();
+    loop {
+        let on_chain_head_header_envelope = match beacon_node.get_last_header().await {
+            Ok(header_env) => header_env,
+            Err(e) => {
+                warn!(
+                    "failed to get on-chain head header: {}. retrying after delay.",
+                    e
+                );
+                tokio::time::sleep(SYNC_V2_POLLING_INTERVAL).await;
+                continue;
+            }
+        };
+        let target_sync_slot = on_chain_head_header_envelope.slot();
 
-    let mut progress = pit_wall::Progress::new(
-        "sync beacon states",
-        estimate_slots_remaining(&db_pool, &beacon_node)
-            .await
-            .try_into()
-            .unwrap(),
-    );
+        debug!(
+            "loop iteration: next_slot_to_process = {}, target_sync_slot = {}",
+            next_slot_to_process, target_sync_slot
+        );
 
-    while let Some(slot_from_stream) = slots_stream.next().await {
-        if slot_from_stream.0 % 100 == 0 {
-            info!("sync in progress, {}", progress.get_progress_string());
+        if next_slot_to_process > target_sync_slot {
+            debug!("caught up to target slot. waiting for new slots.");
+            tokio::time::sleep(SYNC_V2_POLLING_INTERVAL).await;
+            continue;
         }
 
-        slots_queue.push_back(slot_from_stream);
+        let mut slots_processed_this_cycle = 0;
+        let end_slot_for_this_cycle = std::cmp::min(
+            target_sync_slot,
+            next_slot_to_process + (SYNC_V2_MAX_SLOTS_PER_CYCLE as i32) - 1,
+        );
 
-        // Work through the slots queue until it's empty and we're ready to move the next head from
-        // the stream to the queue.
-        // To be able to push things onto the queue during the loop, the lock should not be held.
-        while let Some(slot) = slots_queue.pop_front() {
-            debug!(%slot, "analyzing next slot on the queue");
+        while next_slot_to_process <= end_slot_for_this_cycle {
+            let current_processing_slot = next_slot_to_process;
+            debug!("attempting to process slot: {}", current_processing_slot);
 
-            let on_chain_state_root = beacon_node
-                .get_state_root_by_slot(slot)
-                .await?
-                .unwrap_or_else(|| {
-                    panic!("expect state_root to exist for slot {slot} to sync from queue")
-                });
-            let current_slot_stored_state_root =
-                states::get_state_root_by_slot(&db_pool, slot).await;
+            let db_highest_block_details: Option<(Slot, BlockRoot)> =
+                get_highest_stored_block_in_db(&db_pool).await?;
 
-            let last_matches = if slot.0 == 0 {
-                true
+            let db_parent_block_root_expected: BlockRoot = if current_processing_slot == Slot(0) {
+                GENESIS_PARENT_ROOT.to_string()
             } else {
-                let last_stored_state_root =
-                    states::get_state_root_by_slot(&db_pool, slot - 1).await;
-                match last_stored_state_root {
-                    None => false,
-                    Some(last_stored_state_root) => {
-                        let previous_on_chain_state_root = beacon_node
-                            .get_state_root_by_slot(slot - 1)
-                            .await?
-                            .expect("expect state slot before current head to exist");
-                        last_stored_state_root == previous_on_chain_state_root
+                match &db_highest_block_details {
+                    Some((highest_db_slot, highest_db_root)) => {
+                        if *highest_db_slot >= current_processing_slot {
+                            warn!(%current_processing_slot, %highest_db_slot, "consistency issue: current slot not ahead of db tip. triggering rollback.");
+                            next_slot_to_process = find_last_valid_slot_after_rollback(
+                                &db_pool,
+                                &beacon_node,
+                                *highest_db_slot,
+                            )
+                            .await?;
+                            break;
+                        }
+                        highest_db_root.clone()
+                    }
+                    None => {
+                        warn!(%current_processing_slot, "no blocks found in db while processing slot > 0. expecting genesis_parent_root. this will likely trigger a rollback to genesis if inconsistent.");
+                        GENESIS_PARENT_ROOT.to_string()
                     }
                 }
             };
 
-            if current_slot_stored_state_root.is_none() && last_matches {
-                // 1. current slot is empty and last state_root matches.
-                debug!("no state stored for current slot and last slots state_root matches chain");
-                sync_slot_by_state_root(&db_pool, &beacon_node, &on_chain_state_root, slot)
-                    .timed("sync_slot_by_state_root")
-                    .await?;
-            } else {
-                // 2. roll back to last matching state_root, queue all slots up to and including
-                //    current for sync.
-                debug!(
-                    ?current_slot_stored_state_root,
-                    last_matches,
-                    "current slot should be empty, last stored slot state_root should match previous on-chain state_root"
-                );
-                let last_matching_slot =
-                    find_last_matching_slot(&db_pool, &beacon_node, slot - 1).await?;
-                let first_invalid_slot = last_matching_slot + 1;
+            match beacon_node
+                .get_header_by_slot(current_processing_slot)
+                .await
+            {
+                Ok(Some(on_chain_header_for_current_slot)) => {
+                    let on_chain_parent_root = on_chain_header_for_current_slot.parent_root();
 
-                warn!(slot = last_matching_slot.0, "rolling back to slot");
+                    if on_chain_parent_root == db_parent_block_root_expected {
+                        debug!(slot = %current_processing_slot, "parent match. syncing slot.");
+                        let state_root_for_current_slot =
+                            on_chain_header_for_current_slot.state_root();
 
-                rollback_slots(&mut *db_pool.acquire().await?, first_invalid_slot).await?;
-
-                for invalid_slot in (first_invalid_slot.0..=slot.0).rev() {
-                    slots_queue.push_front(invalid_slot.into());
+                        match sync_slot_by_state_root(
+                            &db_pool,
+                            &beacon_node,
+                            &state_root_for_current_slot,
+                            current_processing_slot,
+                        )
+                        .await
+                        {
+                            Ok(_) => {
+                                info!("successfully synced slot: {}", current_processing_slot);
+                                next_slot_to_process = current_processing_slot + 1;
+                            }
+                            Err(e) => {
+                                warn!("error during sync_slot_by_state_root for slot {}: {}. breaking cycle.", current_processing_slot, e);
+                                tokio::time::sleep(SYNC_V2_ERROR_RETRY_DELAY).await;
+                                break;
+                            }
+                        }
+                    } else {
+                        warn!(slot = %current_processing_slot, expected_parent = %db_parent_block_root_expected, actual_parent = %on_chain_parent_root, "reorg detected. parent mismatch.");
+                        let slot_to_start_rollback_from = match db_highest_block_details {
+                            Some((s, _)) => s,
+                            None => (current_processing_slot - 1).max(Slot(0)),
+                        };
+                        next_slot_to_process = find_last_valid_slot_after_rollback(
+                            &db_pool,
+                            &beacon_node,
+                            slot_to_start_rollback_from,
+                        )
+                        .await?;
+                        break;
+                    }
+                }
+                Ok(None) => {
+                    info!(slot = %current_processing_slot, "slot appears to be skipped on-chain (no header). advancing.");
+                    next_slot_to_process = current_processing_slot + 1;
+                }
+                Err(e) => {
+                    warn!(slot = %current_processing_slot, "error fetching header: {}. retrying cycle after delay.", e);
+                    tokio::time::sleep(SYNC_V2_ERROR_RETRY_DELAY).await;
+                    break;
                 }
             }
+            slots_processed_this_cycle += 1;
         }
 
-        progress.inc_work_done();
-    }
-
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[test]
-    fn slot_range_iterable_test() {
-        let range = (SlotRange::new(Slot(1), Slot(4)))
-            .into_iter()
-            .collect::<Vec<Slot>>();
-        assert_eq!(range, vec![Slot(1), Slot(2), Slot(3), Slot(4)]);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn stream_slots_from_test() {
-        let slots_stream = stream_slots_from(Slot(4_300_000)).await;
-        let slots = slots_stream.take(10).collect::<Vec<Slot>>().await;
-        assert_eq!(slots.len(), 10);
+        if next_slot_to_process <= target_sync_slot
+            && slots_processed_this_cycle < SYNC_V2_MAX_SLOTS_PER_CYCLE
+        {
+            if slots_processed_this_cycle == 0 {
+                debug!("inner loop made no progress, delaying before next cycle.");
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+        } else if next_slot_to_process > target_sync_slot {
+            tokio::time::sleep(SYNC_V2_POLLING_INTERVAL).await;
+        }
     }
 }
