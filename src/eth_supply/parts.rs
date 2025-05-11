@@ -1,7 +1,7 @@
+use anyhow::{bail, Context, Result};
 use serde::Serialize;
-use sqlx::{Acquire, PgConnection, PgPool};
-use thiserror::Error;
-use tracing::debug;
+use sqlx::{PgConnection, PgPool};
+use tracing::{debug, error};
 
 use crate::{
     beacon_chain::{self, Slot},
@@ -42,78 +42,100 @@ impl SupplyParts {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum SupplyPartsError {
-    #[error("no validator balances available for slot {0}")]
-    NoValidatorBalancesAvailable(Slot),
-}
-
+// Our parent callers take care to try not to call us when beacon and execution have not both been synced.
+// This is bad. Let's try to slowly work towards taking what we need as arguments.
+// This way the caller is explicitly responsible for gathering what we need.
 async fn get_supply_parts(
-    executor_acq: &mut PgConnection,
-    slot: Slot,
-) -> Result<SupplyParts, SupplyPartsError> {
-    let state_root =
-        beacon_chain::get_state_root_by_slot(executor_acq.acquire().await.unwrap(), slot)
-            .await
-            .expect("expect state_root to exist when getting supply parts for slot");
-
-    // Most slots have a block, empty slots do not. In the case of an empty slot we use the most
-    // recent block instead to have an eth supply for every slot.
-    let block = match beacon_chain::get_block_by_slot(executor_acq.acquire().await.unwrap(), slot)
-        .await
-    {
-        None => {
-            debug!(
-                %slot,
-                state_root,
-                "no block available for slot, using most recent block before this slot"
-            );
-            beacon_chain::get_block_before_slot(executor_acq.acquire().await.unwrap(), slot).await
-        }
-        Some(block) => block,
-    };
-
-    let block_hash = block
-        .block_hash
-        .expect("expect block hash to be available when getting supply parts");
-
-    let beacon_balances_sum = beacon_chain::get_balances_by_state_root(
-        executor_acq.acquire().await.unwrap(),
-        &state_root,
-    )
-    .await
-    .ok_or(SupplyPartsError::NoValidatorBalancesAvailable(slot))?;
+    executor: &mut PgConnection,
+    target_slot: Slot,
+) -> Result<Option<SupplyParts>> {
+    // 1. Get state_root for the target_slot.
+    // None found is acceptable for empty slots.
+    let state_root_for_balances =
+        match beacon_chain::get_state_root_by_slot(&mut *executor, target_slot).await? {
+            Some(root) => root,
+            None => {
+                debug!(%target_slot, "no state_root found for slot, cannot compute supply parts");
+                return Ok(None);
+            }
+        };
 
     debug!(
-        %slot,
-        state_root,
-        block_hash,
-        "looking up execution balances by hash"
+        %target_slot,
+        %state_root_for_balances,
+        "found state_root for balances"
     );
 
-    let execution_balances = execution_chain::get_execution_balances_by_hash(
-        executor_acq.acquire().await.unwrap(),
-        &block_hash,
-    )
-    .await
-    .unwrap();
+    // 2. Find a block for the `target_slot`.
+    // None found is acceptable for empty slots.
+    let block = match beacon_chain::get_block_by_slot(&mut *executor, target_slot).await? {
+        Some(b) => b,
+        None => {
+            debug!(%target_slot, "no block found for slot, cannot compute supply parts");
+            return Ok(None);
+        }
+    };
 
-    let beacon_deposits_sum = beacon_chain::get_deposits_sum_by_state_root(
-        executor_acq.acquire().await.unwrap(),
+    // For very old slots, pre-merge, no block hash is available.
+    // We don't currently support these slots.
+    let block_hash = block.block_hash.ok_or(anyhow::anyhow!(
+        "no block hash found for slot, cannot compute supply parts"
+    ))?;
+
+    debug!(
+        %target_slot,
+        %block_hash,
+        "found block for supply parts calculation"
+    );
+
+    // 3. Get beacon balances. If missing, bail.
+    let beacon_balances_sum =
+        beacon_chain::get_balances_by_state_root(&mut *executor, &state_root_for_balances)
+            .await?
+            .ok_or(anyhow::anyhow!(
+                "no beacon balances found for state root {}",
+                state_root_for_balances
+            ))?;
+
+    // 4. Get execution balances. If missing, bail.
+    let execution_balances_data =
+        execution_chain::get_execution_balances_by_hash(&mut *executor, &block_hash)
+            .await?
+            .ok_or(anyhow::anyhow!(
+                "failed to get execution balances for block hash {}",
+                block_hash
+            ))?;
+
+    // 5. Get beacon deposits sum. If missing, bail.
+    // Assumes get_deposits_sum_by_state_root returns Result<Option<GweiNewtype>, sqlx::Error>
+    let beacon_deposits_sum = match beacon_chain::get_deposits_sum_by_state_root(
+        &mut *executor,
         &block.state_root,
-    )
+    ) // Use block's state_root for deposits
     .await
-    .unwrap();
+    .context(format!(
+        "failed to get beacon deposits for state root {}",
+        block.state_root
+    ))? {
+        Some(sum) => sum,
+        None => {
+            error!(%target_slot, block_state_root = %block.state_root, "no beacon deposits sum found for block's state_root");
+            bail!(
+                "no beacon deposits sum found for block's state_root: {}",
+                block.state_root
+            );
+        }
+    };
 
     let supply_parts = SupplyParts::new(
-        slot,
-        &execution_balances.block_number,
-        execution_balances.balances_sum,
+        target_slot,
+        &execution_balances_data.block_number,
+        execution_balances_data.balances_sum,
         beacon_balances_sum,
         beacon_deposits_sum,
     );
 
-    Ok(supply_parts)
+    Ok(Some(supply_parts))
 }
 
 pub struct SupplyPartsStore<'a> {
@@ -125,15 +147,19 @@ impl<'a> SupplyPartsStore<'a> {
         Self { db_pool }
     }
 
-    /// Retrieves the three components that make up the eth supply for a given slot.
-    pub async fn get(&self, slot: Slot) -> Result<SupplyParts, SupplyPartsError> {
-        get_supply_parts(&mut self.db_pool.acquire().await.unwrap(), slot).await
+    pub async fn get(&self, slot: Slot) -> Result<Option<SupplyParts>> {
+        let mut conn = self
+            .db_pool
+            .acquire()
+            .await
+            .context("failed to acquire db connection for get supply parts")?;
+        get_supply_parts(&mut conn, slot).await
     }
 
     pub async fn get_with_transaction(
         transaction: &mut PgConnection,
         slot: Slot,
-    ) -> Result<SupplyParts, SupplyPartsError> {
+    ) -> Result<Option<SupplyParts>> {
         get_supply_parts(transaction, slot).await
     }
 }

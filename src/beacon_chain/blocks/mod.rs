@@ -1,6 +1,7 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
 mod heal;
 
+use anyhow::Context;
 use sqlx::{PgExecutor, Row};
 
 use crate::units::GweiNewtype;
@@ -157,7 +158,10 @@ pub async fn delete_block(executor: impl PgExecutor<'_>, slot: Slot) {
     .unwrap();
 }
 
-pub async fn get_block_before_slot(executor: impl PgExecutor<'_>, less_than: Slot) -> DbBlock {
+pub async fn get_block_before_slot(
+    executor: impl PgExecutor<'_>,
+    less_than: Slot,
+) -> BeaconBlockFromDb {
     sqlx::query_as!(
         BlockDbRow,
         "
@@ -185,7 +189,7 @@ pub async fn get_block_before_slot(executor: impl PgExecutor<'_>, less_than: Slo
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct DbBlock {
+pub struct BeaconBlockFromDb {
     block_root: String,
     deposit_sum: GweiNewtype,
     deposit_sum_aggregated: GweiNewtype,
@@ -221,7 +225,7 @@ struct BlockDbRow {
     pub state_root: String,
 }
 
-impl From<BlockDbRow> for DbBlock {
+impl From<BlockDbRow> for BeaconBlockFromDb {
     fn from(row: BlockDbRow) -> Self {
         Self {
             block_hash: row.block_hash,
@@ -234,8 +238,11 @@ impl From<BlockDbRow> for DbBlock {
     }
 }
 
-pub async fn get_block_by_slot(executor: impl PgExecutor<'_>, slot: Slot) -> Option<DbBlock> {
-    sqlx::query_as!(
+pub async fn get_block_by_slot(
+    executor: impl PgExecutor<'_>,
+    slot: Slot,
+) -> anyhow::Result<Option<BeaconBlockFromDb>> {
+    let row = sqlx::query_as!(
         BlockDbRow,
         r#"
         SELECT
@@ -256,8 +263,9 @@ pub async fn get_block_by_slot(executor: impl PgExecutor<'_>, slot: Slot) -> Opt
     )
     .fetch_optional(executor)
     .await
-    .unwrap()
-    .map(|row| row.into())
+    .context(format!("failed to get block for slot {}", slot))?;
+
+    Ok(row.map(|row| row.into()))
 }
 
 #[cfg(test)]
@@ -345,6 +353,7 @@ mod tests {
                 body: BeaconBlockBody {
                     deposits: vec![],
                     execution_payload: None,
+                    execution_requests: None,
                 },
                 parent_root: GENESIS_PARENT_ROOT.to_string(),
                 slot,
@@ -490,6 +499,7 @@ mod tests {
                         block_hash: block_hash.clone(),
                         withdrawals: None,
                     }),
+                    execution_requests: None,
                 },
                 parent_root: GENESIS_PARENT_ROOT.to_string(),
                 slot,
@@ -502,6 +512,7 @@ mod tests {
 
         let block = get_block_by_slot(&mut *transaction, header.slot())
             .await
+            .unwrap()
             .unwrap();
 
         assert_eq!(block_hash_after, block.block_hash.unwrap());
@@ -516,13 +527,16 @@ mod tests {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
         let block = Into::<BeaconBlockBuilder>::into(&header).build();
 
-        let block_not_there = get_block_by_slot(&mut *transaction, Slot(0)).await;
+        let block_not_there = get_block_by_slot(&mut *transaction, Slot(0)).await.unwrap();
 
         assert_eq!(None, block_not_there);
 
         store_custom_test_block(&mut transaction, &header, &block).await;
 
-        let block_there = get_block_by_slot(&mut *transaction, Slot(0)).await.unwrap();
+        let block_there = get_block_by_slot(&mut *transaction, Slot(0))
+            .await
+            .unwrap()
+            .unwrap();
 
         assert_eq!(header.root, block_there.block_root);
     }

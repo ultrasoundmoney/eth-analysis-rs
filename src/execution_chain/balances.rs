@@ -27,7 +27,7 @@ pub struct ExecutionSupply {
 pub async fn get_execution_balances_by_hash(
     executor: impl PgExecutor<'_>,
     block_hash: &str,
-) -> Result<ExecutionSupply> {
+) -> Result<Option<ExecutionSupply>> {
     let row = sqlx::query(
         "
             SELECT
@@ -52,7 +52,7 @@ pub async fn get_execution_balances_by_hash(
             block_number,
         }
     })
-    .fetch_one(executor)
+    .fetch_optional(executor)
     .await?;
 
     Ok(row)
@@ -99,6 +99,7 @@ mod tests {
 
         let balances = get_execution_balances_by_hash(&ctx.pool, &block_hash)
             .await
+            .unwrap()
             .unwrap();
 
         assert_eq!(

@@ -1,14 +1,13 @@
 use anyhow::Result;
 use sqlx::postgres::PgQueryResult;
 use sqlx::{Acquire, PgConnection, PgExecutor};
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::beacon_chain::Slot;
 use crate::units::{GweiNewtype, WeiNewtype};
 
 use crate::execution_chain::BlockNumber;
 
-use super::parts::SupplyPartsError;
 use super::SupplyPartsStore;
 
 pub async fn rollback_supply_from_slot(
@@ -31,7 +30,7 @@ pub async fn rollback_supply_from_slot(
 
 pub async fn rollback_supply_slot(
     executor: &mut PgConnection,
-    greater_than_or_equal: Slot,
+    slot: Slot,
 ) -> sqlx::Result<PgQueryResult> {
     sqlx::query!(
         "
@@ -41,7 +40,7 @@ pub async fn rollback_supply_slot(
             deposits_slot = $1
             OR balances_slot = $1
         ",
-        greater_than_or_equal.0
+        slot.0
     )
     .execute(executor)
     .await
@@ -119,15 +118,12 @@ pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Resul
 }
 
 pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) {
-    let supply_parts =
-        SupplyPartsStore::get_with_transaction(executor_acq.acquire().await.unwrap(), slot).await;
+    let supply_parts_result =
+        SupplyPartsStore::get_with_transaction(executor_acq.acquire().await.unwrap(), slot).await?;
 
-    match supply_parts {
-        Err(SupplyPartsError::NoValidatorBalancesAvailable(_)) => {
-            debug!(%slot, "supply parts unavailable skipping");
-        }
-        Ok(supply_parts) => {
-            store(
+    match supply_parts_result {
+        Ok(Some(supply_parts)) => {
+            match store(
                 executor_acq.acquire().await.unwrap(),
                 slot,
                 &supply_parts.block_number(),
@@ -136,7 +132,16 @@ pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) 
                 &supply_parts.beacon_deposits_sum,
             )
             .await
-            .unwrap();
+            {
+                Ok(_) => debug!(%slot, "successfully stored eth supply"),
+                Err(e) => warn!(%slot, "failed to store eth supply after computing parts: {}", e),
+            }
+        }
+        Ok(None) => {
+            debug!(%slot, "supply parts not computed (e.g., no block/state for slot), skipping store");
+        }
+        Err(e) => {
+            warn!(%slot, "error retrieving supply parts: {:?}, skipping store", e);
         }
     };
 }
@@ -190,11 +195,11 @@ mod tests {
     use sqlx::Acquire;
 
     use crate::{
-        beacon_chain::{self, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder},
+        beacon_chain::{self, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder, Slot},
         db,
         eth_supply::SupplyParts,
         execution_chain::{self, add_delta, ExecutionNodeBlock, SupplyDelta},
-        units::GweiNewtype,
+        units::{GweiNewtype, WeiNewtype},
     };
 
     use super::*;
@@ -222,7 +227,10 @@ mod tests {
         let supply_parts_store = SupplyPartsStore::new(&test_db.pool);
 
         let test_id = "get_supply_parts";
-        let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
+        let slot = Slot(0);
+        let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
+            .slot(slot)
+            .build();
         let test_block = Into::<BeaconBlockBuilder>::into(&test_header)
             .block_hash(&format!("0x{test_id}_block_hash"))
             .build();
@@ -231,8 +239,7 @@ mod tests {
 
         execution_chain::store_block(&test_db.pool, &execution_test_block, 0.0).await;
 
-        beacon_chain::store_state(&test_db.pool, &test_header.state_root(), test_header.slot())
-            .await;
+        beacon_chain::store_state(&test_db.pool, &test_header.state_root(), slot).await;
 
         beacon_chain::store_block(
             &test_db.pool,
@@ -248,7 +255,7 @@ mod tests {
         beacon_chain::store_validators_balance(
             &test_db.pool,
             &test_header.state_root(),
-            test_header.slot(),
+            slot,
             &GweiNewtype(20),
         )
         .await;
@@ -270,28 +277,31 @@ mod tests {
         )
         .await;
 
-        let execution_balances_sum = execution_chain::get_execution_balances_by_hash(
+        let execution_balances = execution_chain::get_execution_balances_by_hash(
             &test_db.pool,
             test_block.block_hash().unwrap(),
         )
         .await
+        .unwrap()
         .unwrap();
+
         let beacon_deposits_sum =
-            beacon_chain::get_deposits_sum_by_state_root(&test_db.pool, &test_header.state_root())
+            beacon_chain::get_deposits_sum_by_state_root(&test_db.pool, &test_block.state_root)
                 .await
+                .unwrap()
                 .unwrap();
 
-        let supply_parts_test = SupplyParts::new(
-            Slot(0),
-            &execution_balances_sum.block_number,
-            execution_balances_sum.balances_sum,
+        let expected_supply_parts = SupplyParts::new(
+            slot,
+            &execution_balances.block_number,
+            execution_balances.balances_sum,
             GweiNewtype(20),
             beacon_deposits_sum,
         );
 
-        let supply_parts = supply_parts_store.get(test_header.slot()).await.unwrap();
+        let result_option_supply_parts = supply_parts_store.get(slot).await.unwrap();
 
-        assert_eq!(supply_parts, supply_parts_test);
+        assert_eq!(result_option_supply_parts, Some(expected_supply_parts));
     }
 
     #[tokio::test]

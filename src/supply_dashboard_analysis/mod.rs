@@ -8,7 +8,7 @@ use tracing::warn;
 
 use crate::{
     caching::{self, CacheKey},
-    eth_supply::{self, SupplyChanges, SupplyPartsError, SupplyPartsStore},
+    eth_supply::{self, SupplyChanges, SupplyPartsStore},
     performance::TimedExt,
 };
 
@@ -38,10 +38,10 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     let supply_parts_store = SupplyPartsStore::new(db_pool);
 
     let supply_parts = {
-        let supply_parts = supply_parts_store.get(limit_slot).await;
+        let supply_parts = supply_parts_store.get(limit_slot).await?;
         match supply_parts {
-            Ok(supply_parts) => supply_parts,
-            Err(SupplyPartsError::NoValidatorBalancesAvailable(_)) => {
+            Some(supply_parts) => supply_parts,
+            None => {
                 warn!(%limit_slot, "no supply parts available for slot, skipping supply dashboard update");
                 return Ok(());
             }

@@ -13,7 +13,7 @@ use crate::beacon_chain::{BeaconStore, BeaconStorePostgres};
 use crate::{
     beacon_chain::Slot,
     db,
-    eth_supply::{self, SupplyPartsError, SupplyPartsStore},
+    eth_supply::{self, SupplyPartsStore},
     log,
 };
 
@@ -50,13 +50,13 @@ pub async fn fill_gaps() -> Result<()> {
         if !stored_eth_supply {
             info!(%slot, "missing eth_supply, filling gap");
 
-            let supply_parts = supply_parts_store.get(slot).await;
+            let supply_parts = supply_parts_store.get(slot).await?;
 
             match supply_parts {
-                Err(SupplyPartsError::NoValidatorBalancesAvailable(_)) => {
+                None => {
                     warn!(%slot, "eth supply parts unavailable for slot");
                 }
-                Ok(supply_parts) => {
+                Some(supply_parts) => {
                     eth_supply::store(
                         &db_pool,
                         slot,

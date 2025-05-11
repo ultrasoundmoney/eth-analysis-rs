@@ -21,7 +21,6 @@ pub use over_time::SupplyAtTime;
 pub use over_time::SupplyOverTime;
 
 pub use parts::SupplyParts;
-pub use parts::SupplyPartsError;
 pub use parts::SupplyPartsStore;
 
 pub use store::get_last_stored_supply_slot;

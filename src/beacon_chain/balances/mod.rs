@@ -1,5 +1,6 @@
 pub mod backfill;
 
+use anyhow::Context;
 use chrono::{Duration, DurationRound};
 use serde::{Deserialize, Serialize};
 use sqlx::PgExecutor;
@@ -128,8 +129,8 @@ pub struct BeaconBalancesSum {
 pub async fn get_balances_by_state_root(
     executor: impl PgExecutor<'_>,
     state_root: &str,
-) -> Option<GweiNewtype> {
-    sqlx::query!(
+) -> anyhow::Result<Option<GweiNewtype>> {
+    let row = sqlx::query!(
         "
         SELECT
             gwei
@@ -142,12 +143,16 @@ pub async fn get_balances_by_state_root(
     )
     .fetch_optional(executor)
     .await
-    .unwrap()
-    .map(|row| {
+    .context(format!(
+        "failed to get balances by state root {}",
+        state_root
+    ))?;
+
+    Ok(row.map(|row| {
         let gwei_i64: i64 = row.gwei;
         let gwei: GweiNewtype = gwei_i64.into();
         gwei
-    })
+    }))
 }
 
 // New function to delete validator balance sum for a single specific slot
@@ -243,6 +248,7 @@ mod tests {
 
         let beacon_balances_sum = get_balances_by_state_root(&mut *transaction, &state_root)
             .await
+            .unwrap()
             .unwrap();
 
         assert_eq!(GweiNewtype(100), beacon_balances_sum);

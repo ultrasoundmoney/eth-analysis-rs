@@ -38,7 +38,7 @@ pub struct BeaconDepositsSum {
 pub async fn get_deposits_sum_by_state_root(
     executor: impl PgExecutor<'_>,
     state_root: &str,
-) -> Result<GweiNewtype> {
+) -> Result<Option<GweiNewtype>> {
     let deposit_sum_aggregated = sqlx::query(
         "
             SELECT
@@ -51,7 +51,7 @@ pub async fn get_deposits_sum_by_state_root(
     )
     .bind(state_root)
     .map(|row: PgRow| row.get::<i64, _>("deposit_sum_aggregated").into())
-    .fetch_one(executor)
+    .fetch_optional(executor)
     .await?;
 
     Ok(deposit_sum_aggregated)
@@ -100,6 +100,7 @@ mod tests {
         let deposits_sum =
             get_deposits_sum_by_state_root(&mut *transaction, &test_header.state_root())
                 .await
+                .unwrap()
                 .unwrap();
 
         assert_eq!(GweiNewtype(1), deposits_sum);

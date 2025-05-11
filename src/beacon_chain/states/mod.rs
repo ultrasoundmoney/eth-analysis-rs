@@ -1,5 +1,6 @@
 mod heal;
 
+use anyhow::Context;
 use sqlx::PgExecutor;
 
 use super::Slot;
@@ -46,8 +47,11 @@ pub async fn store_state(executor: impl PgExecutor<'_>, state_root: &str, slot: 
     .unwrap();
 }
 
-pub async fn get_state_root_by_slot(executor: impl PgExecutor<'_>, slot: Slot) -> Option<String> {
-    sqlx::query!(
+pub async fn get_state_root_by_slot(
+    executor: impl PgExecutor<'_>,
+    slot: Slot,
+) -> anyhow::Result<Option<String>> {
+    let row = sqlx::query!(
         "
         SELECT
             state_root
@@ -60,8 +64,9 @@ pub async fn get_state_root_by_slot(executor: impl PgExecutor<'_>, slot: Slot) -
     )
     .fetch_optional(executor)
     .await
-    .unwrap()
-    .map(|row| row.state_root)
+    .context(format!("failed to get state root for slot {}", slot))?;
+
+    Ok(row.map(|row| row.state_root))
 }
 
 pub async fn delete_states(executor: impl PgExecutor<'_>, greater_than_or_equal: Slot) {
@@ -160,6 +165,7 @@ mod tests {
 
         let state_root = get_state_root_by_slot(&mut *transaction, Slot(0))
             .await
+            .unwrap()
             .unwrap();
 
         assert_eq!(state_root, "0xtest");
