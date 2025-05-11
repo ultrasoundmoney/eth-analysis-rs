@@ -2,8 +2,8 @@ use anyhow::Context;
 use anyhow::{anyhow, Result};
 use chrono::Duration;
 use lazy_static::lazy_static;
+use sqlx::PgExecutor;
 use sqlx::PgPool;
-use sqlx::{PgConnection, PgExecutor};
 use tracing::{debug, info, warn};
 
 use crate::beacon_chain::withdrawals;
@@ -325,18 +325,19 @@ async fn get_block_root_for_slot_from_db(
 }
 
 /// Rolls back all slots greater than or equal to the given slot from all relevant tables.
-pub async fn rollback_slots(transaction: &mut PgConnection, slot_gte: Slot) -> Result<()> {
+pub async fn rollback_slots(db_pool: &PgPool, slot_gte: Slot) -> Result<()> {
     debug!(%slot_gte, "rolling back slots >= {} completely from db", slot_gte);
-    // The passed slot_gte is now the first slot to be rolled back (inclusive).
-    // All component rollback/delete functions are assumed to take a slot
-    // and delete data for that slot AND ANY HIGHER SLOTS (or just >= slot provided to them).
-    // If they delete strictly greater than, this logic would be slightly different,
-    // but `rollback_supply_from_slot` suggests >= behavior.
+
+    let mut transaction = db_pool.begin().await?;
+
     eth_supply::rollback_supply_from_slot(&mut *transaction, slot_gte).await?;
     issuance::delete_issuances(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
     balances::delete_validator_sums(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
     blocks::delete_blocks(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
     states::delete_states(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
+
+    transaction.commit().await?;
+
     Ok(())
 }
 
@@ -376,15 +377,13 @@ async fn rollback_to_last_common_ancestor(
                     return Ok(current_check_slot + 1);
                 } else {
                     warn!(slot = %current_check_slot, db_root = ?db_block_root_for_check_slot, chain_root = %on_chain_header.root, "mismatch or db missing chain block. rolling back this slot and any above it.");
-                    let mut conn = db_pool.acquire().await?;
-                    rollback_slots(&mut conn, current_check_slot).await?;
+                    rollback_slots(&db_pool, current_check_slot).await?;
                 }
             }
             Ok(None) => {
                 if db_block_root_for_check_slot.is_some() {
                     warn!(slot = %current_check_slot, "db has block, chain says slot missed. rolling back this slot and any above it.");
-                    let mut conn = db_pool.acquire().await?;
-                    rollback_slots(&mut conn, current_check_slot).await?;
+                    rollback_slots(&db_pool, current_check_slot).await?;
                 } else {
                     debug!(slot = %current_check_slot, "slot consistently empty on db and chain. continuing search.");
                 }

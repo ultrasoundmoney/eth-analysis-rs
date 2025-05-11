@@ -118,13 +118,15 @@ pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Resul
 }
 
 pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) -> Result<()> {
+    let mut transaction = executor_acq.begin().await?;
+
     let supply_parts_result =
-        SupplyPartsStore::get_with_transaction(executor_acq.acquire().await.unwrap(), slot).await?;
+        SupplyPartsStore::get_with_transaction(&mut *transaction, slot).await?;
 
     match supply_parts_result {
         Some(supply_parts) => {
             match store(
-                executor_acq.acquire().await.unwrap(),
+                &mut *transaction,
                 slot,
                 &supply_parts.block_number(),
                 &supply_parts.execution_balances_sum,
@@ -141,6 +143,8 @@ pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) 
             debug!(%slot, "supply parts not computed (e.g., no block/state for slot), skipping store");
         }
     };
+
+    transaction.commit().await?;
 
     Ok(())
 }

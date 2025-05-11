@@ -32,6 +32,7 @@ pub async fn main() {
                 .unwrap()
                 .and_hms_opt(0, 0, 0)
                 .unwrap()
+                .and_utc()
                 .timestamp() as u64,
             v: row.cumulative_sum,
         })

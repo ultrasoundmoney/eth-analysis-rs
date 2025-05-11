@@ -158,6 +158,7 @@ pub async fn main() {
         .map(|row| {
             let t = NaiveDateTime::parse_from_str(&row.time, "%Y-%m-%d %H:%M:%S%.f UTC")
                 .unwrap()
+                .and_utc()
                 .timestamp() as u64;
             let is_presale_period = t < first_supply_datapoint.t;
             let eth_supply = if is_presale_period {
