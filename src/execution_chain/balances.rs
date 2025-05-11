@@ -70,9 +70,7 @@ mod tests {
 
     #[test_context(TestDb)]
     #[tokio::test]
-    async fn get_execution_supply_by_hash_test(ctx: &mut TestDb) {
-        let mut connection = ctx.pool.acquire().await.unwrap();
-
+    async fn get_execution_supply_by_hash_test(ctx: &TestDb) {
         let test_id = "get_balances_by_hash";
         let block_hash = format!("0x{test_id}_block_hash");
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
@@ -82,7 +80,8 @@ mod tests {
             .block_hash(&block_hash)
             .build();
 
-        store_custom_test_block(&mut connection, &header, &block).await;
+        let mut conn = ctx.pool.acquire().await.unwrap();
+        store_custom_test_block(&mut conn, &header, &block).await;
 
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
@@ -95,9 +94,9 @@ mod tests {
             uncles_reward: 0,
         };
 
-        add_delta(&mut connection, &supply_delta_test).await;
+        add_delta(&mut conn, &supply_delta_test).await;
 
-        let balances = get_execution_balances_by_hash(&ctx.pool, &block_hash)
+        let balances = get_execution_balances_by_hash(&mut *conn, &block_hash)
             .await
             .unwrap()
             .unwrap();
