@@ -74,16 +74,16 @@ pub async fn heal_beacon_states() {
 
         for slot in *first..=*last {
             let stored_state_root = stored_states.get(&slot).unwrap();
-            let state_root = beacon_node
-                .get_state_root_by_slot(slot.into())
+            let header = beacon_node
+                .get_header_by_slot(slot.into())
                 .await
                 .unwrap()
                 .expect("expect state_root to exist for historic slots");
 
-            if *stored_state_root != state_root {
+            if *stored_state_root != header.state_root() {
                 warn!("state root mismatch, rolling back stored and resyncing");
                 sync::rollback_slots(&db_pool, slot.into()).await.unwrap();
-                sync::sync_slot_by_state_root(&db_pool, &beacon_node, &state_root, slot.into())
+                sync::sync_slot_by_state_root(&db_pool, &beacon_node, header)
                     .await
                     .unwrap();
                 info!(%slot, "healed state at slot");

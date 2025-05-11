@@ -221,7 +221,7 @@ fn make_validator_balances_by_state_url(state_root: &str) -> String {
     )
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct BeaconHeader {
     #[serde(deserialize_with = "slot_from_string")]
     pub slot: Slot,
@@ -229,7 +229,7 @@ pub struct BeaconHeader {
     pub state_root: StateRoot,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct BeaconHeaderEnvelope {
     pub message: BeaconHeader,
 }
@@ -237,7 +237,7 @@ pub struct BeaconHeaderEnvelope {
 /// Keccak hash of a beacon block.
 pub type BlockRoot = String;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct BeaconHeaderSignedEnvelope {
     /// Root (hash) of the block this header is about.
     pub root: BlockRoot,

@@ -10,11 +10,10 @@ use crate::beacon_chain::withdrawals;
 use crate::{
     beacon_chain::{balances, deposits, issuance},
     db, log,
-    performance::TimedExt,
 };
 use crate::{eth_supply, supply_dashboard_analysis};
 
-use super::node::{BeaconBlock, BeaconNode, BeaconNodeHttp, StateRoot, ValidatorBalance};
+use super::node::{BeaconBlock, BeaconNode, BeaconNodeHttp, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot};
 
 lazy_static! {
@@ -22,102 +21,69 @@ lazy_static! {
 }
 
 struct SyncData {
-    header_block_tuple: Option<(BeaconHeaderSignedEnvelope, BeaconBlock)>,
+    block: BeaconBlock,
     validator_balances: Option<Vec<ValidatorBalance>>,
 }
 
 async fn gather_sync_data(
     beacon_node: &BeaconNodeHttp,
-    state_root: &StateRoot,
-    slot: Slot,
+    header: &BeaconHeaderSignedEnvelope,
     sync_lag: &Duration,
 ) -> Result<SyncData> {
-    // The beacon node won't clearly tell us if a header is unavailable because the slot was missed
-    // or because the state_root we have got dropped. To determine which, we ask to identify the
-    // state_root after we got the header. If the state_root still matches, the slot was missed.
-    let header = beacon_node
-        .get_header_by_slot(slot)
-        .await
-        .with_context(|| format!("failed to get header by slot {} from beacon node", slot))?;
+    let block_root = header.root.clone();
+    let slot = header.slot();
 
-    let state_root_check = beacon_node
-        .get_state_root_by_slot(slot)
+    let block = beacon_node
+        .get_block_by_block_root(&block_root)
         .await
-        .with_context(|| format!("failed to get state_root by slot {} from beacon node", slot))?
+        .with_context(|| {
+            format!(
+                "failed to get block by block_root {} (for slot {}) from beacon node",
+                block_root, slot
+            )
+        })?
         .ok_or_else(|| {
             anyhow!(
-                "beacon node reported no state_root for slot {} when one was expected",
+                "beacon node reported no block for block_root {} (slot {}) when one was expected",
+                block_root,
                 slot
             )
         })?;
 
-    if *state_root != state_root_check {
-        return Err(anyhow!(
-            "slot reorged during gather_sync_data for slot {}: initial state_root ({}) != chain state_root ({})",
-            slot,
-            state_root,
-            state_root_check
-        ));
-    }
-
-    let header_block_tuple = match header {
-        None => None,
-        Some(header) => {
-            let block = beacon_node
-                .get_block_by_block_root(&header.root)
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to get block by block_root {} (for slot {}) from beacon node",
-                        header.root, slot
-                    )
-                })?
-                .ok_or_else(|| {
-                    anyhow!(
-                        "beacon node reported no block for block_root {} (slot {}) when one was expected",
-                        header.root,
-                        slot
-                    )
-                })?;
-            Some((header, block))
-        }
-    };
-
     // Whenever we fall behind, getting validator balances for older slots from lighthouse takes a
     // long time. This means if we fall behind too far we never catch up, as syncing one slot now
     // takes longer than it takes for a new slot to appear (12 seconds).
-    let validator_balances = {
-        if sync_lag > &BLOCK_LAG_LIMIT {
-            warn!(
-                %slot,
-                %state_root,
-                %sync_lag,
-                "block lag over limit, skipping get_validator_balances"
-            );
-            None
-        } else {
-            let validator_balances = beacon_node
-                .get_validator_balances(state_root)
+    let validator_balances = if sync_lag > &BLOCK_LAG_LIMIT {
+        warn!(
+            %slot,
+            %block_root,
+            %sync_lag,
+            "block lag over limit, skipping get_validator_balances"
+        );
+        None
+    } else {
+        let validator_balances = beacon_node
+                .get_validator_balances(&header.state_root())
                 .await
                 .with_context(|| {
                     format!(
                         "failed to get validator balances for state_root {} (slot {}) from beacon node",
-                        state_root, slot
+                        header.state_root(),
+                        slot
                     )
                 })?
                 .ok_or_else(|| {
                     anyhow!(
                         "beacon node reported no validator balances for state_root {} (slot {}) when they were expected",
-                        state_root,
+                        header.state_root(),
                         slot
                     )
                 })?;
-            Some(validator_balances)
-        }
+        Some(validator_balances)
     };
 
     let sync_data = SyncData {
-        header_block_tuple,
+        block,
         validator_balances,
     };
 
@@ -141,77 +107,66 @@ async fn get_sync_lag(beacon_node: &BeaconNodeHttp, syncing_slot: Slot) -> Resul
 pub async fn sync_slot_by_state_root(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
-    state_root: &StateRoot,
-    slot: Slot,
+    header: BeaconHeaderSignedEnvelope,
 ) -> Result<()> {
     // If we are falling too far behind the head of the chain, skip storing validator balances.
-    let sync_lag = get_sync_lag(beacon_node, slot)
+    let sync_lag = get_sync_lag(beacon_node, header.slot())
         .await
-        .with_context(|| format!("failed to get sync lag for slot {}", slot))?;
+        .with_context(|| format!("failed to get sync lag for slot {}", header.slot()))?;
     debug!(%sync_lag, "beacon sync lag");
 
     let SyncData {
-        header_block_tuple,
+        block,
         validator_balances,
-    } = gather_sync_data(beacon_node, state_root, slot, &sync_lag)
+    } = gather_sync_data(beacon_node, &header, &sync_lag)
         .await
         .with_context(|| {
             format!(
-                "failed to gather sync data for slot {}, state_root {}",
-                slot, state_root
+                "failed to gather sync data for slot {}, block_root {}",
+                header.slot(),
+                header.root
             )
         })?;
 
     // Now that we have all the data, we start storing it.
     let mut transaction = db_pool.begin().await?;
 
-    match header_block_tuple {
-        None => {
-            debug!(
-                "storing slot without block, slot: {:?}, state_root: {}",
-                slot, state_root
-            );
-            states::store_state(&mut *transaction, state_root, slot)
-                .timed("store state without block")
-                .await;
-        }
-        Some((ref header, ref block)) => {
-            let deposit_sum_aggregated =
-                deposits::get_deposit_sum_aggregated(&mut *transaction, block).await;
+    let deposit_sum_aggregated =
+        deposits::get_deposit_sum_aggregated(&mut *transaction, &block).await;
 
-            let withdrawal_sum_aggregated =
-                withdrawals::get_withdrawal_sum_aggregated(&mut *transaction, block).await;
+    let withdrawal_sum_aggregated =
+        withdrawals::get_withdrawal_sum_aggregated(&mut *transaction, &block).await;
 
-            debug!(
-                %slot,
-                state_root,
-                block_root = header.root,
-                "storing slot with block"
-            );
-            let is_parent_known =
-                blocks::get_is_hash_known(&mut *transaction, &header.parent_root()).await;
-            if !is_parent_known {
-                return Err(anyhow!(
+    let slot = header.slot();
+    let state_root = &header.state_root();
+    let block_root = header.root.clone();
+    debug!(
+        %slot,
+        state_root,
+        block_root,
+        "storing slot with block"
+    );
+    let is_parent_known = blocks::get_is_hash_known(&mut *transaction, &header.parent_root()).await;
+    if !is_parent_known {
+        return Err(anyhow!(
             "trying to insert beacon block with missing parent, block_root: {}, parent_root: {:?}",
             header.root,
             header.header.message.parent_root
         ));
-            }
-
-            states::store_state(&mut *transaction, &header.state_root(), header.slot()).await;
-
-            blocks::store_block(
-                &mut *transaction,
-                block,
-                &deposits::get_deposit_sum_from_block(block),
-                &deposit_sum_aggregated,
-                &withdrawals::get_withdrawal_sum_from_block(block),
-                &withdrawal_sum_aggregated,
-                header,
-            )
-            .await;
-        }
     }
+
+    states::store_state(&mut *transaction, &header.state_root(), header.slot()).await;
+
+    blocks::store_block(
+        &mut *transaction,
+        &block,
+        &deposits::get_deposit_sum_from_block(&block),
+        &deposit_sum_aggregated,
+        &withdrawals::get_withdrawal_sum_from_block(&block),
+        &withdrawal_sum_aggregated,
+        &header,
+    )
+    .await;
 
     if let Some(ref validator_balances) = validator_balances {
         debug!("validator balances present");
@@ -224,24 +179,22 @@ pub async fn sync_slot_by_state_root(
         )
         .await;
 
-        if let Some((_, block)) = header_block_tuple {
-            let deposit_sum_aggregated =
-                deposits::get_deposit_sum_aggregated(&mut *transaction, &block).await;
-            let withdrawal_sum_aggregated =
-                withdrawals::get_withdrawal_sum_aggregated(&mut *transaction, &block).await;
+        let deposit_sum_aggregated =
+            deposits::get_deposit_sum_aggregated(&mut *transaction, &block).await;
+        let withdrawal_sum_aggregated =
+            withdrawals::get_withdrawal_sum_aggregated(&mut *transaction, &block).await;
 
-            issuance::store_issuance(
-                &mut *transaction,
-                state_root,
-                slot,
-                &issuance::calc_issuance(
-                    &validator_balances_sum,
-                    &withdrawal_sum_aggregated,
-                    &deposit_sum_aggregated,
-                ),
-            )
-            .await;
-        }
+        issuance::store_issuance(
+            &mut *transaction,
+            state_root,
+            slot,
+            &issuance::calc_issuance(
+                &validator_balances_sum,
+                &withdrawal_sum_aggregated,
+                &deposit_sum_aggregated,
+            ),
+        )
+        .await;
 
         let result = eth_supply::sync_eth_supply(&mut transaction, slot).await;
         if let Err(e) = result {
@@ -480,14 +433,10 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
 
                     if on_chain_parent_root == db_parent_block_root_expected {
                         debug!(slot = %current_processing_slot, "parent match. syncing slot.");
-                        let state_root_for_current_slot =
-                            on_chain_header_for_current_slot.state_root();
-
                         match sync_slot_by_state_root(
                             &db_pool,
                             &beacon_node,
-                            &state_root_for_current_slot,
-                            current_processing_slot,
+                            on_chain_header_for_current_slot,
                         )
                         .await
                         {
