@@ -73,6 +73,7 @@ pub struct ExecutionDeposit {
     pub withdrawal_credentials: String,
     pub amount: GweiNewtype,
     pub signature: String,
+    #[serde(deserialize_with = "i32_from_string")]
     pub index: i32,
 }
 
@@ -588,6 +589,7 @@ impl BeaconNode for BeaconNodeHttp {
 
 #[cfg(test)]
 pub mod tests {
+    use std::fs;
     use std::{fs::File, io::BufReader};
 
     use super::*;
@@ -625,6 +627,32 @@ pub mod tests {
         let reader = BufReader::new(file);
 
         serde_json::from_reader::<BufReader<File>, ValidatorsEnvelope>(reader).unwrap();
+    }
+
+    #[test]
+    fn test_decode_problematic_json() {
+        // Test decoding for the block
+        let block_data_path = "src/beacon_chain/data_samples/block-11678488.json";
+        let block_json_str = fs::read_to_string(block_data_path).expect(&format!(
+            "failed to read block data from {}",
+            block_data_path
+        ));
+
+        serde_json::from_str::<super::BeaconBlockVersionedEnvelope>(&block_json_str).expect(
+            &format!("failed to decode block JSON from {}", block_data_path),
+        );
+
+        // Test decoding for the header
+        let header_data_path = "src/beacon_chain/data_samples/header-11678488.json";
+        let header_json_str = fs::read_to_string(header_data_path).expect(&format!(
+            "failed to read header data from {}",
+            header_data_path
+        ));
+
+        serde_json::from_str::<super::HeaderEnvelope>(&header_json_str).expect(&format!(
+            "failed to decode header JSON from {}",
+            header_data_path
+        ));
     }
 
     const SLOT_1229: Slot = Slot(1229);
