@@ -11,6 +11,7 @@ use chrono::Utc;
 use mockall::automock;
 use reqwest::StatusCode;
 use serde::Deserialize;
+use tracing::instrument;
 
 use crate::{
     env::ENV_CONFIG, execution_chain::BlockHash, json_codecs::i32_from_string,
@@ -421,6 +422,7 @@ impl BeaconNode for BeaconNodeHttp {
         self.get_block(&slot.into()).await
     }
 
+    #[instrument(skip(self))]
     async fn get_block_by_block_root(&self, block_root: &str) -> Result<Option<BeaconBlock>> {
         self.get_block(&BlockId::BlockRoot(block_root.to_string()))
             .timed("get_block_by_block_root")
@@ -461,6 +463,7 @@ impl BeaconNode for BeaconNodeHttp {
         }
     }
 
+    #[instrument(skip(self))]
     async fn get_validator_balances(
         &self,
         state_root: &str,

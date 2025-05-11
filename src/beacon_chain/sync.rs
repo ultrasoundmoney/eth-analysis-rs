@@ -445,7 +445,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                                 next_slot_to_process = current_processing_slot + 1;
                             }
                             Err(e) => {
-                                warn!("error during sync_slot_by_state_root for slot {}: {}. breaking cycle.", current_processing_slot, e);
+                                warn!(slot = %current_processing_slot, error = ?e, "error during sync_slot_by_state_root. breaking cycle.");
                                 tokio::time::sleep(SYNC_V2_ERROR_RETRY_DELAY).await;
                                 break;
                             }
