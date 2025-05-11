@@ -10,7 +10,7 @@ TARGET_ENV_NAME="" # Will be dev, stag, or prod
 # --- Configuration ---
 ETH_ANALYSIS_RS_DIR="/Users/alextes/code/ultra-sound/eth-analysis-rs"
 WEB_INFRA_DIR="/Users/alextes/code/ultra-sound/web-infra"
-IMAGE_BASE_NAME="rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs"
+IMAGE_BASE_NAME="ultrasoundorg/eth-analysis-rs"
 VALID_SERVICES=("sync-beacon-states" "sync-execution-blocks" "sync-execution-supply-deltas" "geth-supply-live") # Add other backend services as needed
 # --- End Configuration ---
 
