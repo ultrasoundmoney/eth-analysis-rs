@@ -58,6 +58,7 @@ impl BeaconBlockBuilder {
             body: BeaconBlockBody {
                 deposits,
                 execution_payload,
+                execution_requests: None,
             },
             parent_root: self.parent_root,
             slot: self.slot,

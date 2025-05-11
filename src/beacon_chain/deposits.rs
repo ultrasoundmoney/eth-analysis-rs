@@ -9,10 +9,17 @@ use super::node::BeaconBlock;
 use super::{blocks, Slot};
 
 pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
-    block
+    let consensus_deposits_sum = block
         .deposits()
         .iter()
-        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount)
+        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
+
+    let execution_deposits_sum = block
+        .execution_request_deposits()
+        .iter()
+        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
+
+    consensus_deposits_sum + execution_deposits_sum
 }
 
 pub async fn get_deposit_sum_aggregated(

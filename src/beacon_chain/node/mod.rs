@@ -68,15 +68,38 @@ pub struct Withdrawal {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ExecutionDeposit {
+    pub pubkey: String,
+    pub withdrawal_credentials: String,
+    pub amount: GweiNewtype,
+    pub signature: String,
+    pub index: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExecutionWithdrawal {
+    pub index: i32,
+    pub address: String,
+    pub amount: GweiNewtype,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ExecutionPayload {
     pub block_hash: BlockHash,
     pub withdrawals: Option<Vec<Withdrawal>>,
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ExecutionRequests {
+    pub deposits: Vec<ExecutionDeposit>,
+    pub withdrawals: Vec<ExecutionWithdrawal>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct BeaconBlockBody {
     pub deposits: Vec<Deposit>,
     pub execution_payload: Option<ExecutionPayload>,
+    pub execution_requests: Option<ExecutionRequests>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -102,6 +125,20 @@ impl BeaconBlock {
             .iter()
             .map(|deposit| &deposit.data)
             .collect()
+    }
+
+    pub fn execution_request_deposits(&self) -> Vec<&ExecutionDeposit> {
+        self.body
+            .execution_requests
+            .as_ref()
+            .map_or(vec![], |req| req.deposits.iter().collect())
+    }
+
+    pub fn execution_request_withdrawals(&self) -> Vec<&ExecutionWithdrawal> {
+        self.body
+            .execution_requests
+            .as_ref()
+            .map_or(vec![], |req| req.withdrawals.iter().collect())
     }
 
     pub fn withdrawals(&self) -> Option<&Vec<Withdrawal>> {
