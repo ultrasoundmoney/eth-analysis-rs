@@ -67,7 +67,7 @@ tempfile = "3.8.1"
 
 [dev-dependencies]
 mockito = "1.2.0"
-test-context = "0.1.4"
+test-context = "0.1.6"
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3
