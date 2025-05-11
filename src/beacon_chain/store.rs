@@ -5,7 +5,7 @@ use super::states::{self, BeaconState};
 
 #[async_trait]
 pub trait BeaconStore {
-    async fn get_last_state(&self) -> Option<BeaconState>;
+    async fn last_stored_state(&self) -> Option<BeaconState>;
 }
 
 pub struct BeaconStorePostgres {
@@ -20,8 +20,8 @@ impl BeaconStorePostgres {
 
 #[async_trait]
 impl BeaconStore for BeaconStorePostgres {
-    async fn get_last_state(&self) -> Option<BeaconState> {
-        states::get_last_state(&self.db_pool).await
+    async fn last_stored_state(&self) -> Option<BeaconState> {
+        states::last_stored_state(&self.db_pool).await.unwrap()
     }
 }
 
@@ -35,10 +35,10 @@ mod tests {
 
     #[test_context(TestDb)]
     #[tokio::test]
-    async fn get_last_state_test(test_db: &TestDb) {
+    async fn last_stored_state_test(test_db: &TestDb) {
         let beacon_store = BeaconStorePostgres::new(test_db.pool.clone());
 
-        let state = beacon_store.get_last_state().await;
+        let state = beacon_store.last_stored_state().await;
         assert!(state.is_none());
 
         let test_state = BeaconState {
@@ -48,7 +48,7 @@ mod tests {
 
         states::store_state(&test_db.pool, &test_state.state_root, test_state.slot).await;
 
-        let state = beacon_store.get_last_state().await;
+        let state = beacon_store.last_stored_state().await;
         assert_eq!(Some(test_state), state);
     }
 }

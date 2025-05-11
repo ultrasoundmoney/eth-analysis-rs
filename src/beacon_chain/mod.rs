@@ -43,9 +43,9 @@ pub use node::BlockId;
 pub use node::MockBeaconNode;
 pub use node::StateRoot;
 
-pub use states::get_last_state;
 pub use states::get_state_root_by_slot;
 pub use states::heal_beacon_states;
+pub use states::last_stored_state;
 pub use states::store_state;
 
 pub use store::{BeaconStore, BeaconStorePostgres};

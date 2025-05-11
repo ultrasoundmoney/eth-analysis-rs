@@ -19,8 +19,9 @@ pub async fn main() {
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
     let beacon_node = BeaconNodeHttp::new();
-    let last_state = beacon_chain::get_last_state(&db_pool)
+    let last_state = beacon_chain::last_stored_state(&db_pool)
         .await
+        .expect("expect db to be available")
         .expect("expect at least one beacon slot to be synced before updating effective balances");
 
     let sum =

@@ -29,7 +29,7 @@ pub async fn fill_gaps() -> Result<()> {
     let beacon_store = BeaconStorePostgres::new(db_pool.clone());
 
     let last_slot = beacon_store
-        .get_last_state()
+        .last_stored_state()
         .await
         .expect("a beacon state should be stored before trying to fill any gaps")
         .slot;

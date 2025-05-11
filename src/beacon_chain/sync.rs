@@ -304,16 +304,28 @@ pub async fn rollback_slots(transaction: &mut PgConnection, slot: Slot) -> Resul
 async fn find_last_valid_slot_after_rollback(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
-    mut current_check_slot: Slot,
 ) -> Result<Slot> {
-    info!(%current_check_slot, "starting validation and rollback procedure.");
+    let last_state_opt = crate::beacon_chain::states::last_stored_state(db_pool).await?;
+
+    let mut current_check_slot: Slot = match last_state_opt {
+        Some(last_state) => last_state.slot,
+        None => {
+            info!(
+                "no states found in db; validation will start effectively from genesis (slot 0)."
+            );
+            Slot(0)
+        }
+    };
+
+    info!(%current_check_slot, "starting validation and rollback procedure from highest known state slot in db.");
+
     loop {
         if current_check_slot < Slot(0) {
             warn!(
                 "rollback check went below slot 0. ensuring db is empty and syncing from genesis."
             );
             let mut conn = db_pool.acquire().await?;
-            rollback_slots(&mut conn, Slot(0)).await?; // Wipe all
+            rollback_slots(&mut conn, Slot(-1)).await?;
             return Ok(Slot(0));
         }
 
@@ -328,14 +340,14 @@ async fn find_last_valid_slot_after_rollback(
                 } else {
                     warn!(slot = %current_check_slot, db_root = ?db_block_root_for_check_slot, chain_root = %on_chain_header.root, "mismatch or db missing chain block. rolling back this slot.");
                     let mut conn = db_pool.acquire().await?;
-                    rollback_slots(&mut conn, current_check_slot).await?;
+                    rollback_slot(&mut conn, current_check_slot).await?;
                 }
             }
             Ok(None) => {
                 if db_block_root_for_check_slot.is_some() {
                     warn!(slot = %current_check_slot, "db has block, chain says slot missed. rolling back this slot.");
                     let mut conn = db_pool.acquire().await?;
-                    rollback_slots(&mut conn, current_check_slot).await?;
+                    rollback_slot(&mut conn, current_check_slot).await?;
                 } else {
                     debug!(slot = %current_check_slot, "slot consistently empty on db and chain. continuing search.");
                 }
@@ -358,17 +370,13 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
     sqlx::migrate!().run(&db_pool).await.unwrap();
     let beacon_node = BeaconNodeHttp::new();
 
-    let mut next_slot_to_process: Slot = match get_highest_stored_block_in_db(&db_pool).await? {
-        Some((s_db, _r_db)) => {
-            info!(db_tip_slot = %s_db, "db has existing blocks. starting from slot after tip.");
-            s_db + 1
-        }
-        None => {
-            info!("db is empty of blocks. starting from genesis (slot 0).");
-            Slot(0)
-        }
-    };
-    info!("initial next_slot_to_process: {}", next_slot_to_process);
+    info!("performing startup validation and potential rollback to determine sync start slot.");
+    let mut next_slot_to_process =
+        find_last_valid_slot_after_rollback(&db_pool, &beacon_node).await?;
+    info!(
+        "startup validation complete. initial next_slot_to_process: {}",
+        next_slot_to_process
+    );
 
     loop {
         let on_chain_head_header_envelope = match beacon_node.get_last_header().await {
@@ -415,12 +423,8 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                     Some((highest_db_slot, highest_db_root)) => {
                         if *highest_db_slot >= current_processing_slot {
                             warn!(%current_processing_slot, %highest_db_slot, "consistency issue: current slot not ahead of db tip. triggering rollback.");
-                            next_slot_to_process = find_last_valid_slot_after_rollback(
-                                &db_pool,
-                                &beacon_node,
-                                *highest_db_slot,
-                            )
-                            .await?;
+                            next_slot_to_process =
+                                find_last_valid_slot_after_rollback(&db_pool, &beacon_node).await?;
                             break;
                         }
                         highest_db_root.clone()
@@ -464,16 +468,8 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                         }
                     } else {
                         warn!(slot = %current_processing_slot, expected_parent = %db_parent_block_root_expected, actual_parent = %on_chain_parent_root, "reorg detected. parent mismatch.");
-                        let slot_to_start_rollback_from = match db_highest_block_details {
-                            Some((s, _)) => s,
-                            None => (current_processing_slot - 1).max(Slot(0)),
-                        };
-                        next_slot_to_process = find_last_valid_slot_after_rollback(
-                            &db_pool,
-                            &beacon_node,
-                            slot_to_start_rollback_from,
-                        )
-                        .await?;
+                        next_slot_to_process =
+                            find_last_valid_slot_after_rollback(&db_pool, &beacon_node).await?;
                         break;
                     }
                 }

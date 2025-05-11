@@ -117,12 +117,12 @@ pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Resul
     Ok(slot.map(Slot))
 }
 
-pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) {
+pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) -> Result<()> {
     let supply_parts_result =
         SupplyPartsStore::get_with_transaction(executor_acq.acquire().await.unwrap(), slot).await?;
 
     match supply_parts_result {
-        Ok(Some(supply_parts)) => {
+        Some(supply_parts) => {
             match store(
                 executor_acq.acquire().await.unwrap(),
                 slot,
@@ -137,13 +137,12 @@ pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) 
                 Err(e) => warn!(%slot, "failed to store eth supply after computing parts: {}", e),
             }
         }
-        Ok(None) => {
+        None => {
             debug!(%slot, "supply parts not computed (e.g., no block/state for slot), skipping store");
         }
-        Err(e) => {
-            warn!(%slot, "error retrieving supply parts: {:?}, skipping store", e);
-        }
     };
+
+    Ok(())
 }
 
 pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Option<Slot> {

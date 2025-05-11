@@ -7,8 +7,9 @@ use sqlx::PgExecutor;
 
 use crate::units::GweiNewtype;
 
-use super::node::{BeaconNode, BeaconNodeHttp, ValidatorBalance};
-use super::{get_last_state, GweiInTime, Slot};
+use super::{
+    last_stored_state, node::ValidatorBalance, BeaconNode, BeaconNodeHttp, GweiInTime, Slot,
+};
 
 pub fn sum_validator_balances(validator_balances: &[ValidatorBalance]) -> GweiNewtype {
     validator_balances
@@ -43,8 +44,9 @@ pub async fn get_last_effective_balance_sum(
     executor: impl PgExecutor<'_>,
     beacon_node: &BeaconNodeHttp,
 ) -> GweiNewtype {
-    let last_state_root = get_last_state(executor)
+    let last_state_root = last_stored_state(executor)
         .await
+        .unwrap()
         .expect("can't calculate a last effective balance with an empty beacon_states table")
         .state_root;
 

@@ -25,8 +25,9 @@ pub async fn heal_beacon_states() {
     let job_progress = JobProgress::new(HEAL_BEACON_STATES_KEY, &key_value_store);
 
     let beacon_node = BeaconNodeHttp::new();
-    let last_slot = beacon_chain::get_last_state(&db_pool)
+    let last_slot = beacon_chain::last_stored_state(&db_pool)
         .await
+        .unwrap()
         .expect("a beacon state should be stored before trying to heal any")
         .slot
         .0;

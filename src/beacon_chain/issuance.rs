@@ -245,8 +245,9 @@ pub async fn update_issuance_estimate() {
 
     let issuance_per_slot_gwei = get_issuance_per_slot_estimate(&issuance_store).await;
     debug!("issuance per slot estimate: {}", issuance_per_slot_gwei);
-    let slot = super::get_last_state(&db_pool)
+    let slot = super::last_stored_state(&db_pool)
         .await
+        .unwrap()
         .expect("expect last state to exist in order to update issuance estimate")
         .slot;
 

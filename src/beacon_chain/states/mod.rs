@@ -13,8 +13,10 @@ pub struct BeaconState {
     pub state_root: String,
 }
 
-pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState> {
-    sqlx::query_as!(
+pub async fn last_stored_state(
+    executor: impl PgExecutor<'_>,
+) -> anyhow::Result<Option<BeaconState>, sqlx::Error> {
+    let row = sqlx::query_as!(
         BeaconState,
         r#"
         SELECT
@@ -26,8 +28,9 @@ pub async fn get_last_state(executor: impl PgExecutor<'_>) -> Option<BeaconState
         "#,
     )
     .fetch_optional(executor)
-    .await
-    .unwrap()
+    .await?;
+
+    Ok(row)
 }
 
 pub async fn store_state(executor: impl PgExecutor<'_>, state_root: &str, slot: Slot) {
@@ -109,7 +112,7 @@ mod tests {
 
         store_state(&mut *transaction, "0xstate_root", Slot(0)).await;
 
-        let state = get_last_state(&mut *transaction).await.unwrap();
+        let state = last_stored_state(&mut *transaction).await.unwrap().unwrap();
 
         assert_eq!(
             BeaconState {
@@ -121,7 +124,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_last_state_test() {
+    async fn last_stored_state_test() {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
@@ -129,7 +132,7 @@ mod tests {
 
         store_state(&mut *transaction, "0xstate_root_2", Slot(1)).await;
 
-        let state = get_last_state(&mut *transaction).await.unwrap();
+        let state = last_stored_state(&mut *transaction).await.unwrap().unwrap();
 
         assert_eq!(
             state,
@@ -147,12 +150,12 @@ mod tests {
 
         store_state(&mut *transaction, "0xstate_root", Slot(0)).await;
 
-        let state = get_last_state(&mut *transaction).await;
+        let state = last_stored_state(&mut *transaction).await.unwrap();
         assert!(state.is_some());
 
         delete_states(&mut *transaction, Slot(0)).await;
 
-        let state_after = get_last_state(&mut *transaction).await;
+        let state_after = last_stored_state(&mut *transaction).await.unwrap();
         assert!(state_after.is_none());
     }
 
