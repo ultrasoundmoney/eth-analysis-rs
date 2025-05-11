@@ -121,7 +121,7 @@ pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) 
     let mut transaction = executor_acq.begin().await?;
 
     let supply_parts_result =
-        SupplyPartsStore::get_with_transaction(&mut *transaction, slot).await?;
+        SupplyPartsStore::get_with_transaction(&mut transaction, slot).await?;
 
     match supply_parts_result {
         Some(supply_parts) => {

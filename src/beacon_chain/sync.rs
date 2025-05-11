@@ -283,7 +283,7 @@ pub async fn rollback_slots(db_pool: &PgPool, slot_gte: Slot) -> Result<()> {
 
     let mut transaction = db_pool.begin().await?;
 
-    eth_supply::rollback_supply_from_slot(&mut *transaction, slot_gte).await?;
+    eth_supply::rollback_supply_from_slot(&mut transaction, slot_gte).await?;
     issuance::delete_issuances(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
     balances::delete_validator_sums(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
     blocks::delete_blocks(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
@@ -330,13 +330,13 @@ async fn rollback_to_last_common_ancestor(
                     return Ok(current_check_slot + 1);
                 } else {
                     warn!(slot = %current_check_slot, db_root = ?db_block_root_for_check_slot, chain_root = %on_chain_header.root, "mismatch or db missing chain block. rolling back this slot and any above it.");
-                    rollback_slots(&db_pool, current_check_slot).await?;
+                    rollback_slots(db_pool, current_check_slot).await?;
                 }
             }
             Ok(None) => {
                 if db_block_root_for_check_slot.is_some() {
                     warn!(slot = %current_check_slot, "db has block, chain says slot missed. rolling back this slot and any above it.");
-                    rollback_slots(&db_pool, current_check_slot).await?;
+                    rollback_slots(db_pool, current_check_slot).await?;
                 } else {
                     debug!(slot = %current_check_slot, "slot consistently empty on db and chain. continuing search.");
                 }
