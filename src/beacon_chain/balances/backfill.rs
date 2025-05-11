@@ -3,9 +3,13 @@ use pit_wall::Progress;
 use sqlx::PgPool;
 use tracing::{debug, info, warn};
 
-use crate::beacon_chain::{balances, node::BeaconNodeHttp, BeaconNode, Slot};
+use crate::beacon_chain::{
+    balances,
+    node::{BeaconNodeHttp, ValidatorBalance},
+    BeaconNode, Slot,
+};
 
-const GET_BALANCES_CONCURRENCY_LIMIT: usize = 32;
+const GET_BALANCES_CONCURRENCY_LIMIT: usize = 16;
 const SLOTS_PER_EPOCH: i64 = 32;
 
 pub enum Granularity {
@@ -46,12 +50,23 @@ async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: S
     .unwrap()
 }
 
+// Define an outcome enum for processing each item
+enum BackfillItemOutcome {
+    StoreBalances(String, i32, Vec<ValidatorBalance>), // state_root_from_header, slot, balances
+    HeaderExistsNoBalances(String, i32),               // state_root_from_header, slot
+    SkippedMissedSlot(i32),                            // slot
+    SkippedError(i32, String),                         // slot, error details
+}
+
 pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from: Slot) {
     let beacon_node = BeaconNodeHttp::new();
 
-    debug!("estimating work to be done");
+    debug!("estimating work to be done for backfill");
     let work_todo = estimate_work_todo(db_pool, granularity, from).await;
-    debug!("estimated work to be done: {} slots", work_todo);
+    debug!(
+        "estimated work to be done for backfill: {} slots",
+        work_todo
+    );
     let mut progress = Progress::new("backfill-beacon-balances", work_todo);
 
     let rows = sqlx::query!(
@@ -73,45 +88,79 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
     )
     .fetch(db_pool);
 
-    let rows_filtered = rows.filter_map(|row| async move {
-        if let Ok(row) = row {
-            match granularity {
-                Granularity::Slot => Some(row),
-                Granularity::Epoch => {
-                    if Slot(row.slot).is_first_of_epoch() {
-                        Some(row)
-                    } else {
-                        None
+    // filter_map closure must return a Future<Output = Option<Item>>
+    let rows_filtered = rows.filter_map(|row_result| async move {
+        match row_result {
+            Ok(row) => {
+                let slot_for_filter = Slot(row.slot);
+                match granularity {
+                    Granularity::Slot => Some(row),
+                    Granularity::Epoch => {
+                        if slot_for_filter.is_first_of_epoch() {
+                            Some(row)
+                        } else {
+                            None
+                        }
                     }
-                }
-                Granularity::Hour => {
-                    if Slot(row.slot).is_first_of_hour() {
-                        Some(row)
-                    } else {
-                        None
+                    Granularity::Hour => {
+                        if slot_for_filter.is_first_of_hour() {
+                            Some(row)
+                        } else {
+                            None
+                        }
                     }
-                }
-                Granularity::Day => {
-                    if Slot(row.slot).is_first_of_day() {
-                        Some(row)
-                    } else {
-                        None
+                    Granularity::Day => {
+                        if slot_for_filter.is_first_of_day() {
+                            Some(row)
+                        } else {
+                            None
+                        }
                     }
                 }
             }
-        } else {
-            None
+            Err(e) => {
+                warn!("error fetching row for backfill: {:?}", e);
+                None
+            }
         }
     });
 
-    let tasks = rows_filtered.map(|row| {
+    // rows_filtered is now Stream<Item = Record>
+    // .map closure takes Record and returns Future<Output = BackfillItemOutcome>
+    let tasks = rows_filtered.map(move |row| {
+        // row is { state_root: String (original from DB), slot: i64 }
         let beacon_node_clone = beacon_node.clone();
         async move {
-            let validator_balances = beacon_node_clone
-                .get_validator_balances(&row.state_root)
-                .await
-                .unwrap();
-            (row.state_root, row.slot, validator_balances)
+            let current_slot_val_i32 = row.slot;
+            let slot_obj = Slot(current_slot_val_i32);
+            match beacon_node_clone.get_header_by_slot(slot_obj).await {
+                Ok(Some(header_envelope)) => {
+                    debug!(slot = %slot_obj, "backfill: header found.");
+                    let state_root_from_header = header_envelope.state_root();
+                    match beacon_node_clone.get_validator_balances(&state_root_from_header).await {
+                        Ok(Some(validator_balances)) => {
+                            debug!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: validator balances successfully fetched.");
+                            BackfillItemOutcome::StoreBalances(state_root_from_header.clone(), current_slot_val_i32, validator_balances)
+                        }
+                        Ok(None) => {
+                            warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: beacon node reported no validator balances for state_root (from header).");
+                            BackfillItemOutcome::HeaderExistsNoBalances(state_root_from_header.clone(), current_slot_val_i32)
+                        }
+                        Err(e) => {
+                            warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: failed to get validator balances: {}", e.to_string());
+                            BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting balances for slot {}: {}", slot_obj, e))
+                        }
+                    }
+                }
+                Ok(None) => {
+                    debug!(slot = %slot_obj, "backfill: slot missed (no header found), skipping.");
+                    BackfillItemOutcome::SkippedMissedSlot(current_slot_val_i32)
+                }
+                Err(e) => {
+                    warn!(slot = %slot_obj, "backfill: failed to get header: {}. skipping slot.", e.to_string());
+                    BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting header for slot {}: {}", slot_obj, e))
+                }
+            }
         }
     });
 
@@ -119,26 +168,47 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
 
     pin_mut!(buffered_tasks);
 
-    while let Some((state_root, slot, balances_result)) = buffered_tasks.next().await {
-        debug!(slot, "fetching validator balances");
-
-        let validator_balances = {
-            match balances_result {
-                Some(validator_balances) => validator_balances,
-                None => {
-                    warn!(state_root, slot, "state_root without validator balances",);
-                    progress.inc_work_done();
-                    continue;
-                }
+    while let Some(outcome) = buffered_tasks.next().await {
+        match outcome {
+            BackfillItemOutcome::StoreBalances(
+                state_root_to_store,
+                slot_val,
+                validator_balances,
+            ) => {
+                let slot_obj = Slot(slot_val);
+                debug!(slot = %slot_obj, state_root = %state_root_to_store, "backfill: attempting to store balances");
+                let balances_sum = balances::sum_validator_balances(&validator_balances);
+                balances::store_validators_balance(
+                    db_pool,
+                    &state_root_to_store,
+                    slot_obj,
+                    &balances_sum,
+                )
+                .await;
+                info!(slot = %slot_obj, state_root = %state_root_to_store, "backfill: successfully stored validator balances");
             }
-        };
-
-        let balances_sum = balances::sum_validator_balances(&validator_balances);
-
-        balances::store_validators_balance(db_pool, &state_root, slot.into(), &balances_sum).await;
+            BackfillItemOutcome::HeaderExistsNoBalances(state_root_ref, slot_val) => {
+                let slot_obj = Slot(slot_val);
+                info!(slot = %slot_obj, state_root = %state_root_ref, "backfill: header existed but no balances found; skipped storage.");
+            }
+            BackfillItemOutcome::SkippedMissedSlot(slot_val) => {
+                let slot_obj = Slot(slot_val);
+                info!(slot = %slot_obj, "backfill: slot was missed on-chain; skipped.");
+            }
+            BackfillItemOutcome::SkippedError(slot_val, err_msg) => {
+                let slot_obj = Slot(slot_val);
+                warn!(slot = %slot_obj, error = %err_msg, "backfill: slot skipped due to error.");
+            }
+        }
 
         progress.inc_work_done();
-
-        info!("{}", progress.get_progress_string());
+        // Log progress periodically or when done.
+        if progress.work_done % 100 == 0 || progress.work_done >= work_todo {
+            info!("backfill progress: {}", progress.get_progress_string());
+        }
     }
+    info!(
+        "beacon balances backfill process finished. Final progress: {}",
+        progress.get_progress_string()
+    );
 }
