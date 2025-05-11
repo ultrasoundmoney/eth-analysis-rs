@@ -19,7 +19,7 @@ struct IssuanceBreakdown {
 }
 
 pub async fn update_issuance_breakdown() -> Result<()> {
-    log::init_with_env();
+    log::init();
 
     info!("updating issuance breakdown");
 

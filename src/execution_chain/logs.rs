@@ -19,7 +19,7 @@ struct HeadLog {
 }
 
 pub async fn write_heads_log() {
-    log::init_with_env();
+    log::init();
 
     let timestamp = chrono::offset::Utc::now().timestamp();
 

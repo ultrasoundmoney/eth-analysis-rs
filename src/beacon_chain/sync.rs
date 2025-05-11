@@ -352,7 +352,7 @@ async fn rollback_to_last_common_ancestor(
 }
 
 pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
-    log::init_with_env();
+    log::init();
     info!("starting slot-by-slot beacon state sync (v2)");
 
     let db_pool = db::get_db_pool("sync-beacon-states-v2", 5).await;

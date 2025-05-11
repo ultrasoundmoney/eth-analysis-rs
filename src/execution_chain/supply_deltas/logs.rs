@@ -18,7 +18,7 @@ struct SupplyDeltaLog {
 }
 
 pub async fn write_deltas_log() {
-    log::init_with_env();
+    log::init();
 
     let timestamp = chrono::offset::Utc::now().timestamp();
 

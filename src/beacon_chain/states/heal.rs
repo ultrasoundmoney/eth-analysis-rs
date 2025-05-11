@@ -16,7 +16,7 @@ const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = Slot(0);
 const HEAL_BEACON_STATES_KEY: &str = "heal-beacon-states";
 
 pub async fn heal_beacon_states() {
-    log::init_with_env();
+    log::init();
 
     info!("healing reorged states");
 

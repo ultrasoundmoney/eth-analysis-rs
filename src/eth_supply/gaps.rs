@@ -21,7 +21,7 @@ use crate::{
 const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = Slot(4697813);
 
 pub async fn fill_gaps() -> Result<()> {
-    log::init_with_env();
+    log::init();
 
     info!("syncing gaps in eth supply");
 

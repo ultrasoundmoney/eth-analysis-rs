@@ -7,7 +7,7 @@ use tracing::{debug, error, info};
 use crate::{db, execution_chain::ExecutionNode, log};
 
 pub async fn check_blocks_gaps() -> Result<()> {
-    log::init_with_env();
+    log::init();
 
     info!("checking for gaps in blocks");
 

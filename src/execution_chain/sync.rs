@@ -142,7 +142,7 @@ async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = BlockNumber> 
 type HeadsQueue = VecDeque<BlockNumber>;
 
 pub async fn sync_blocks() {
-    log::init_with_env();
+    log::init();
 
     info!("syncing execution blocks");
 

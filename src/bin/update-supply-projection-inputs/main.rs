@@ -60,7 +60,7 @@ struct SupplyProjectionInputs {
 
 #[tokio::main]
 pub async fn main() {
-    log::init_with_env();
+    log::init();
 
     info!("updating supply projection inputs");
 

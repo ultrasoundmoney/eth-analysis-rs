@@ -38,7 +38,7 @@ pub struct State {
 }
 
 pub async fn start_server() {
-    log::init_with_env();
+    log::init();
 
     info!("starting serve fees");
 

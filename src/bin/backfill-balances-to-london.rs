@@ -9,7 +9,7 @@ use tracing::info;
 
 #[tokio::main]
 pub async fn main() {
-    log::init_with_env();
+    log::init();
 
     info!("backfilling beacon balances to london");
 

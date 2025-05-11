@@ -232,7 +232,7 @@ async fn run_alarm_loop(last_checked: Arc<Mutex<DateTime<Utc>>>) {
 }
 
 pub async fn monitor_critical_services() {
-    log::init_with_env();
+    log::init();
 
     // Used to share when we last checked with the health check endpoint.
     let last_checked = Arc::new(Mutex::new(Utc::now()));

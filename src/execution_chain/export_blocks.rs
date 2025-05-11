@@ -196,7 +196,7 @@ async fn export_blocks_from(gte_block_number: BlockNumber, to_path: &str) -> Res
 }
 
 pub async fn export_blocks_from_august() -> Result<()> {
-    log::init_with_env();
+    log::init();
 
     info!(
         august_block_number = EXECUTION_BLOCK_NUMBER_AUG_1ST,
@@ -218,7 +218,7 @@ pub async fn export_blocks_from_august() -> Result<()> {
 }
 
 pub async fn export_blocks_from_london() -> Result<()> {
-    log::init_with_env();
+    log::init();
 
     info!(
         earliest_stored = EARLIEST_STORED_DB_BLOCK_NUMBER,

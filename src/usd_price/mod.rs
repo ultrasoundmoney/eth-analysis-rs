@@ -111,7 +111,7 @@ async fn update_eth_price_with_most_recent(
 }
 
 pub async fn record_eth_price() -> Result<()> {
-    log::init_with_env();
+    log::init();
 
     info!("recording eth prices");
 

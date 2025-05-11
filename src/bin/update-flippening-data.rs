@@ -103,7 +103,7 @@ const OUTPUT_FILE_RAW_DATA: &str = "raw_dune_values.json";
 const PRESALE_ETH_BTC_RATIO: f64 = 1337.0;
 #[tokio::main]
 pub async fn main() {
-    log::init_with_env();
+    log::init();
 
     info!("updating flippening data");
 

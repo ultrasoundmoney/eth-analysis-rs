@@ -226,7 +226,7 @@ async fn get_issuance_per_slot_estimate(issuance_store: &impl IssuanceStore) -> 
 }
 
 pub async fn update_issuance_estimate() {
-    log::init_with_env();
+    log::init();
 
     info!("updating issuance estimate");
 

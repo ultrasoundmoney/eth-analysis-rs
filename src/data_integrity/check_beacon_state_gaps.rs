@@ -9,7 +9,7 @@ use tracing::info;
 use crate::{db, log};
 
 pub async fn check_beacon_state_gaps() -> Result<()> {
-    log::init_with_env();
+    log::init();
 
     info!("checking for gaps in beacon states");
 

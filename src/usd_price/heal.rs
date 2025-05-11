@@ -14,7 +14,7 @@ use tracing::warn;
 const CONCURRENT_REQUESTS: usize = 8;
 
 pub async fn heal_eth_prices() {
-    log::init_with_env();
+    log::init();
 
     info!("healing missing eth prices");
     let max_distance_in_minutes: i64 = std::env::args()

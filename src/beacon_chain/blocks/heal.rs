@@ -10,7 +10,7 @@ use crate::{
 const HEAL_BLOCK_HASHES_KEY: &str = "heal-block-hashes";
 
 pub async fn heal_block_hashes() {
-    log::init_with_env();
+    log::init();
 
     info!("healing execution block hashes");
 

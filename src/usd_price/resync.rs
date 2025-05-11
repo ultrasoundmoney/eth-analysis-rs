@@ -49,7 +49,7 @@ async fn set_last_synced_minute(executor: impl PgExecutor<'_>, minute: u32) {
 }
 
 pub async fn resync_all() {
-    log::init_with_env();
+    log::init();
 
     let client = reqwest::Client::new();
 

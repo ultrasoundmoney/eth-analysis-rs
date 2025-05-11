@@ -10,7 +10,7 @@ use eth_analysis::{
 
 #[tokio::main]
 pub async fn main() {
-    log::init_with_env();
+    log::init();
 
     info!("updating effective balance sum");
 

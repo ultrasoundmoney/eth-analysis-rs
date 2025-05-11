@@ -50,7 +50,7 @@ async fn bulk_insert_execution_supplies(
 
 #[tokio::main]
 pub async fn main() {
-    log::init_with_env();
+    log::init();
 
     let db_pool = db::get_db_pool("backfill-execution-supply", 3).await;
 

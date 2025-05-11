@@ -7,7 +7,7 @@ use crate::{execution_chain::supply_deltas, log};
 const SUPPLY_DELTA_BUFFER_SIZE: usize = 10_000;
 
 pub async fn export_deltas() {
-    log::init_with_env();
+    log::init();
 
     let timestamp = crate::time::get_timestamp();
 
@@ -55,7 +55,7 @@ struct SupplyDeltaRowV1 {
 pub const GENESIS_ETH_BALANCE: i128 = 72009990499480000000000000i128;
 
 pub async fn summary_from_deltas_csv() {
-    log::init_with_env();
+    log::init();
 
     tracing::info!("generating summary from deltas csv");
 

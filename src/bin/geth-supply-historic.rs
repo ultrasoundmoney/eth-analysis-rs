@@ -5,7 +5,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    log::init_with_env();
+    log::init();
 
     let data_dir = PathBuf::from(
         ENV_CONFIG

@@ -346,7 +346,7 @@ enum DeltaToSync {
 type DeltasQueue = Arc<Mutex<VecDeque<DeltaToSync>>>;
 
 pub async fn sync_deltas() {
-    log::init_with_env();
+    log::init();
 
     info!("syncing supply deltas");
 
@@ -512,7 +512,7 @@ mod tests {
     #[test_context(TestDb)]
     #[tokio::test]
     async fn test_reverted_fork(ctx: &mut TestDb) {
-        log::init_with_env();
+        log::init();
         // We test:
         // A -> B ---> C
         //   \--> B'
