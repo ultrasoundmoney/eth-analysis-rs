@@ -596,6 +596,7 @@ pub mod tests {
     use std::{fs::File, io::BufReader};
 
     use super::*;
+    use crate::units::GweiNewtype;
 
     #[test]
     fn decode_beacon_block_versioned_envelope() {
@@ -785,5 +786,35 @@ pub mod tests {
             .unwrap();
         let withdrawals = block.withdrawals().unwrap();
         assert_eq!(withdrawals.len(), 16);
+    }
+
+    #[test]
+    fn decode_execution_withdrawal() {
+        let json_str = r#"
+        [
+            {
+              "source_address": "0x0f4e76669fe1edb20380df975f1f6f1a36f95d06",
+              "validator_pubkey": "0x901bb45707558e5e96859818a6e8eb3a67116ff2d56f2a46dd4e6f335e237b49481c4c5761d678f2638bdc26123cea29",
+              "amount": "0"
+            }
+        ]
+        "#;
+
+        let withdrawals_vec: Vec<ExecutionWithdrawal> =
+            serde_json::from_str(json_str).expect("failed to deserialize executionwithdrawal JSON");
+
+        assert_eq!(withdrawals_vec.len(), 1);
+        let withdrawal = &withdrawals_vec[0];
+
+        assert_eq!(
+            withdrawal.source_address,
+            "0x0f4e76669fe1edb20380df975f1f6f1a36f95d06"
+        );
+        assert_eq!(
+            withdrawal.validator_pubkey,
+            "0x901bb45707558e5e96859818a6e8eb3a67116ff2d56f2a46dd4e6f335e237b49481c4c5761d678f2638bdc26123cea29"
+        );
+        // Assuming GweiNewtype can be constructed as GweiNewtype(0) and implements PartialEq
+        assert_eq!(withdrawal.amount, GweiNewtype(0));
     }
 }
