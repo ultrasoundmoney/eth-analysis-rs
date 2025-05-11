@@ -1,5 +1,4 @@
-use anyhow::Context;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use chrono::Duration;
 use lazy_static::lazy_static;
 use sqlx::PgExecutor;
@@ -110,23 +109,13 @@ pub async fn sync_slot_by_state_root(
     header: BeaconHeaderSignedEnvelope,
 ) -> Result<()> {
     // If we are falling too far behind the head of the chain, skip storing validator balances.
-    let sync_lag = get_sync_lag(beacon_node, header.slot())
-        .await
-        .with_context(|| format!("failed to get sync lag for slot {}", header.slot()))?;
+    let sync_lag = get_sync_lag(beacon_node, header.slot()).await?;
     debug!(%sync_lag, "beacon sync lag");
 
     let SyncData {
         block,
         validator_balances,
-    } = gather_sync_data(beacon_node, &header, &sync_lag)
-        .await
-        .with_context(|| {
-            format!(
-                "failed to gather sync data for slot {}, block_root {}",
-                header.slot(),
-                header.root
-            )
-        })?;
+    } = gather_sync_data(beacon_node, &header, &sync_lag).await?;
 
     // Now that we have all the data, we start storing it.
     let mut transaction = db_pool.begin().await?;
@@ -148,11 +137,11 @@ pub async fn sync_slot_by_state_root(
     );
     let is_parent_known = blocks::get_is_hash_known(&mut *transaction, &header.parent_root()).await;
     if !is_parent_known {
-        return Err(anyhow!(
+        bail!(
             "trying to insert beacon block with missing parent, block_root: {}, parent_root: {:?}",
             header.root,
             header.header.message.parent_root
-        ));
+        );
     }
 
     states::store_state(&mut *transaction, &header.state_root(), header.slot()).await;
