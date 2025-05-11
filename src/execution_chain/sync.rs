@@ -146,7 +146,7 @@ pub async fn sync_blocks() {
 
     info!("syncing execution blocks");
 
-    let db_pool = db::get_db_pool("sync-execution-blocks", 3).await;
+    let db_pool = db::get_db_pool("sync-execution-blocks", 6).await;
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 

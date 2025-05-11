@@ -1,4 +1,5 @@
 use sqlx::{postgres::PgPoolOptions, Connection, Executor, PgConnection, PgPool};
+use std::time::Duration;
 
 use crate::env::ENV_CONFIG;
 
@@ -13,6 +14,7 @@ pub async fn get_db_pool(name: &str, max_connections: u32) -> PgPool {
             })
         })
         .max_connections(max_connections)
+        .acquire_timeout(Duration::from_secs(30))
         .connect(&ENV_CONFIG.db_url)
         .await
         .expect("expect DB to be available to connect")
