@@ -80,9 +80,9 @@ pub struct ExecutionDeposit {
 
 #[derive(Debug, Deserialize)]
 pub struct ExecutionWithdrawal {
-    pub index: i32,
-    pub address: String,
     pub amount: GweiNewtype,
+    pub source_address: String,
+    pub validator_pubkey: String,
 }
 
 #[derive(Debug, Deserialize)]
