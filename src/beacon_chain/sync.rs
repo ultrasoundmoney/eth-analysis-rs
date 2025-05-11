@@ -196,7 +196,10 @@ pub async fn sync_slot_by_state_root(
             .await;
         }
 
-        eth_supply::sync_eth_supply(&mut transaction, slot).await;
+        let result = eth_supply::sync_eth_supply(&mut transaction, slot).await;
+        if let Err(e) = result {
+            warn!("error syncing eth supply, skipping: {}", e);
+        }
     }
 
     transaction.commit().await?;
@@ -273,39 +276,29 @@ async fn get_block_root_for_slot_from_db(
     Ok(row.map(|r| r.block_root))
 }
 
-/// Rolls back a single slot from all relevant tables.
-pub async fn rollback_slot(transaction: &mut PgConnection, slot: Slot) -> Result<()> {
-    debug!(%slot, "rolling back slot completely from db");
-
-    eth_supply::rollback_supply_slot(&mut *transaction, slot).await?;
-    issuance::delete_issuance_by_slot(&mut *transaction, slot).await?;
-    balances::delete_validator_sum_by_slot(&mut *transaction, slot).await?;
-    blocks::delete_block(&mut *transaction, slot).await;
-    states::delete_state(&mut *transaction, slot).await;
-
+/// Rolls back all slots greater than or equal to the given slot from all relevant tables.
+pub async fn rollback_slots(transaction: &mut PgConnection, slot_gte: Slot) -> Result<()> {
+    debug!(%slot_gte, "rolling back slots >= {} completely from db", slot_gte);
+    // The passed slot_gte is now the first slot to be rolled back (inclusive).
+    // All component rollback/delete functions are assumed to take a slot
+    // and delete data for that slot AND ANY HIGHER SLOTS (or just >= slot provided to them).
+    // If they delete strictly greater than, this logic would be slightly different,
+    // but `rollback_supply_from_slot` suggests >= behavior.
+    eth_supply::rollback_supply_from_slot(&mut *transaction, slot_gte).await?;
+    issuance::delete_issuances(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
+    balances::delete_validator_sums(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
+    blocks::delete_blocks(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
+    states::delete_states(&mut *transaction, slot_gte).await; // Assuming this deletes >= slot_gte
     Ok(())
 }
 
-/// Rolls back all slots greater than the given slot from all relevant tables.
-pub async fn rollback_slots(transaction: &mut PgConnection, slot: Slot) -> Result<()> {
-    debug!(%slot, "rolling back slots > {} completely from db", slot);
-    let gte_slot = slot + 1;
-    eth_supply::rollback_supply_from_slot(&mut *transaction, gte_slot).await?;
-    issuance::delete_issuances(&mut *transaction, gte_slot).await;
-    balances::delete_validator_sums(&mut *transaction, gte_slot).await;
-    blocks::delete_blocks(&mut *transaction, gte_slot).await;
-    states::delete_states(&mut *transaction, gte_slot).await;
-    Ok(())
-}
-
-/// Finds the last slot in the DB that is consistent with the canonical chain.
-/// Rolls back any inconsistent slots from the DB.
-/// Returns the next slot that should be processed (i.e., consistent_slot + 1).
-async fn find_last_valid_slot_after_rollback(
+/// Rolls back to the last common ancestor of the DB and the beacon chain.
+/// Returns the next slot to process.
+async fn rollback_to_last_common_ancestor(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
 ) -> Result<Slot> {
-    let last_state_opt = crate::beacon_chain::states::last_stored_state(db_pool).await?;
+    let last_state_opt = states::last_stored_state(db_pool).await?;
 
     let mut current_check_slot: Slot = match last_state_opt {
         Some(last_state) => last_state.slot,
@@ -321,11 +314,7 @@ async fn find_last_valid_slot_after_rollback(
 
     loop {
         if current_check_slot < Slot(0) {
-            warn!(
-                "rollback check went below slot 0. ensuring db is empty and syncing from genesis."
-            );
-            let mut conn = db_pool.acquire().await?;
-            rollback_slots(&mut conn, Slot(-1)).await?;
+            warn!("rolled back slot 0. ensuring db is empty and ready to sync from genesis.");
             return Ok(Slot(0));
         }
 
@@ -338,16 +327,16 @@ async fn find_last_valid_slot_after_rollback(
                     info!(slot = %current_check_slot, "found consistent block in db.");
                     return Ok(current_check_slot + 1);
                 } else {
-                    warn!(slot = %current_check_slot, db_root = ?db_block_root_for_check_slot, chain_root = %on_chain_header.root, "mismatch or db missing chain block. rolling back this slot.");
+                    warn!(slot = %current_check_slot, db_root = ?db_block_root_for_check_slot, chain_root = %on_chain_header.root, "mismatch or db missing chain block. rolling back this slot and any above it.");
                     let mut conn = db_pool.acquire().await?;
-                    rollback_slot(&mut conn, current_check_slot).await?;
+                    rollback_slots(&mut conn, current_check_slot).await?;
                 }
             }
             Ok(None) => {
                 if db_block_root_for_check_slot.is_some() {
-                    warn!(slot = %current_check_slot, "db has block, chain says slot missed. rolling back this slot.");
+                    warn!(slot = %current_check_slot, "db has block, chain says slot missed. rolling back this slot and any above it.");
                     let mut conn = db_pool.acquire().await?;
-                    rollback_slot(&mut conn, current_check_slot).await?;
+                    rollback_slots(&mut conn, current_check_slot).await?;
                 } else {
                     debug!(slot = %current_check_slot, "slot consistently empty on db and chain. continuing search.");
                 }
@@ -355,7 +344,7 @@ async fn find_last_valid_slot_after_rollback(
             Err(e) => {
                 warn!(slot = %current_check_slot, "error fetching header during rollback: {}. retrying after delay.", e);
                 tokio::time::sleep(SYNC_V2_ERROR_RETRY_DELAY).await;
-                continue;
+                continue; // Retry the same slot, skip decrementing current_check_slot
             }
         }
         current_check_slot = current_check_slot - 1;
@@ -371,8 +360,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
     let beacon_node = BeaconNodeHttp::new();
 
     info!("performing startup validation and potential rollback to determine sync start slot.");
-    let mut next_slot_to_process =
-        find_last_valid_slot_after_rollback(&db_pool, &beacon_node).await?;
+    let mut next_slot_to_process = rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;
     info!(
         "startup validation complete. initial next_slot_to_process: {}",
         next_slot_to_process
@@ -424,7 +412,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                         if *highest_db_slot >= current_processing_slot {
                             warn!(%current_processing_slot, %highest_db_slot, "consistency issue: current slot not ahead of db tip. triggering rollback.");
                             next_slot_to_process =
-                                find_last_valid_slot_after_rollback(&db_pool, &beacon_node).await?;
+                                rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;
                             break;
                         }
                         highest_db_root.clone()
@@ -469,7 +457,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                     } else {
                         warn!(slot = %current_processing_slot, expected_parent = %db_parent_block_root_expected, actual_parent = %on_chain_parent_root, "reorg detected. parent mismatch.");
                         next_slot_to_process =
-                            find_last_valid_slot_after_rollback(&db_pool, &beacon_node).await?;
+                            rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;
                         break;
                     }
                 }
