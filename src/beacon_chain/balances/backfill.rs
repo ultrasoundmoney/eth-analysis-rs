@@ -9,7 +9,7 @@ use crate::beacon_chain::{
     BeaconNode, Slot,
 };
 
-const GET_BALANCES_CONCURRENCY_LIMIT: usize = 16;
+const GET_BALANCES_CONCURRENCY_LIMIT: usize = 4;
 const SLOTS_PER_EPOCH: i64 = 32;
 
 pub enum Granularity {
