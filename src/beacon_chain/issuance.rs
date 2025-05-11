@@ -81,16 +81,6 @@ pub async fn delete_issuances(executor: impl PgExecutor<'_>, greater_than_or_equ
     .unwrap();
 }
 
-pub async fn delete_issuance_by_slot(executor: impl PgExecutor<'_>, slot: Slot) -> Result<()> {
-    sqlx::query!(
-        "DELETE FROM beacon_issuance WHERE state_root IN (SELECT state_root FROM beacon_states WHERE slot = $1)",
-        slot.0
-    )
-    .execute(executor)
-    .await?;
-    Ok(())
-}
-
 pub async fn get_n_days_ago_issuance(executor: impl PgExecutor<'_>, n: i32) -> GweiNewtype {
     sqlx::query!(
         "

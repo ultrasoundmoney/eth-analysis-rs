@@ -139,25 +139,6 @@ pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal:
     .unwrap();
 }
 
-pub async fn delete_block(executor: impl PgExecutor<'_>, slot: Slot) {
-    sqlx::query(
-        "
-        DELETE FROM beacon_blocks
-        WHERE state_root IN (
-            SELECT
-                state_root
-            FROM
-                beacon_states
-            WHERE slot = $1
-        )
-        ",
-    )
-    .bind(slot.0)
-    .execute(executor)
-    .await
-    .unwrap();
-}
-
 pub async fn get_block_before_slot(
     executor: impl PgExecutor<'_>,
     less_than: Slot,
