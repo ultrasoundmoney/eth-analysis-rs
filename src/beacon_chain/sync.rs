@@ -1,3 +1,4 @@
+use anyhow::Context;
 use anyhow::{anyhow, Result};
 use chrono::Duration;
 use lazy_static::lazy_static;
@@ -34,17 +35,28 @@ async fn gather_sync_data(
     // The beacon node won't clearly tell us if a header is unavailable because the slot was missed
     // or because the state_root we have got dropped. To determine which, we ask to identify the
     // state_root after we got the header. If the state_root still matches, the slot was missed.
-    let header = beacon_node.get_header_by_slot(slot).await?;
+    let header = beacon_node
+        .get_header_by_slot(slot)
+        .await
+        .with_context(|| format!("failed to get header by slot {} from beacon node", slot))?;
 
     let state_root_check = beacon_node
         .get_state_root_by_slot(slot)
-        .await?
-        .expect("expect state_root to be available for currently syncing slot");
+        .await
+        .with_context(|| format!("failed to get state_root by slot {} from beacon node", slot))?
+        .ok_or_else(|| {
+            anyhow!(
+                "beacon node reported no state_root for slot {} when one was expected",
+                slot
+            )
+        })?;
 
     if *state_root != state_root_check {
         return Err(anyhow!(
-            "slot reorged during gather_sync_data phase, can't continue sync of current state_root {}",
-            state_root
+            "slot reorged during gather_sync_data for slot {}: initial state_root ({}) != chain state_root ({})",
+            slot,
+            state_root,
+            state_root_check
         ));
     }
 
@@ -53,13 +65,20 @@ async fn gather_sync_data(
         Some(header) => {
             let block = beacon_node
                 .get_block_by_block_root(&header.root)
-                .await?
-                .unwrap_or_else(|| {
-                    panic!(
-                        "expect a block to be ava)ilable for currently syncing block_root {}",
-                        header.root
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to get block by block_root {} (for slot {}) from beacon node",
+                        header.root, slot
                     )
-                });
+                })?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "beacon node reported no block for block_root {} (slot {}) when one was expected",
+                        header.root,
+                        slot
+                    )
+                })?;
             Some((header, block))
         }
     };
@@ -70,6 +89,8 @@ async fn gather_sync_data(
     let validator_balances = {
         if sync_lag > &BLOCK_LAG_LIMIT {
             warn!(
+                %slot,
+                %state_root,
                 %sync_lag,
                 "block lag over limit, skipping get_validator_balances"
             );
@@ -77,8 +98,20 @@ async fn gather_sync_data(
         } else {
             let validator_balances = beacon_node
                 .get_validator_balances(state_root)
-                .await?
-                .expect("expect validator balances to exist for given state_root");
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to get validator balances for state_root {} (slot {}) from beacon node",
+                        state_root, slot
+                    )
+                })?
+                .ok_or_else(|| {
+                    anyhow!(
+                        "beacon node reported no validator balances for state_root {} (slot {}) when they were expected",
+                        state_root,
+                        slot
+                    )
+                })?;
             Some(validator_balances)
         }
     };
@@ -92,7 +125,12 @@ async fn gather_sync_data(
 }
 
 async fn get_sync_lag(beacon_node: &BeaconNodeHttp, syncing_slot: Slot) -> Result<Duration> {
-    let last_header = beacon_node.get_last_header().await?;
+    let last_header = beacon_node.get_last_header().await.with_context(|| {
+        format!(
+            "failed to get last header from beacon node (for sync_lag calculation for slot {})",
+            syncing_slot
+        )
+    })?;
     let last_on_chain_slot = last_header.header.message.slot;
     let last_on_chain_slot_date_time = last_on_chain_slot.date_time();
     let slot_date_time = syncing_slot.date_time();
@@ -107,13 +145,22 @@ pub async fn sync_slot_by_state_root(
     slot: Slot,
 ) -> Result<()> {
     // If we are falling too far behind the head of the chain, skip storing validator balances.
-    let sync_lag = get_sync_lag(beacon_node, slot).await?;
+    let sync_lag = get_sync_lag(beacon_node, slot)
+        .await
+        .with_context(|| format!("failed to get sync lag for slot {}", slot))?;
     debug!(%sync_lag, "beacon sync lag");
 
     let SyncData {
         header_block_tuple,
         validator_balances,
-    } = gather_sync_data(beacon_node, state_root, slot, &sync_lag).await?;
+    } = gather_sync_data(beacon_node, state_root, slot, &sync_lag)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to gather sync data for slot {}, state_root {}",
+                slot, state_root
+            )
+        })?;
 
     // Now that we have all the data, we start storing it.
     let mut transaction = db_pool.begin().await?;
@@ -206,7 +253,8 @@ pub async fn sync_slot_by_state_root(
 
     let last_on_chain_state_root = beacon_node
         .get_last_header()
-        .await?
+        .await
+        .with_context(|| "failed to get last on-chain header for sync catch-up check".to_string())?
         .header
         .message
         .state_root;
