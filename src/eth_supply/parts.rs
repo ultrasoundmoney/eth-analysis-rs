@@ -88,14 +88,16 @@ async fn get_supply_parts(
         "found block for supply parts calculation"
     );
 
-    // 3. Get beacon balances. If missing, bail.
-    let beacon_balances_sum =
-        beacon_chain::get_balances_by_state_root(&mut *executor, &state_root_for_balances)
-            .await?
-            .ok_or(anyhow::anyhow!(
-                "no beacon balances found for state root {}",
-                state_root_for_balances
-            ))?;
+    // 3. Get beacon balances. We don't expect to have these for every slot.
+    // If we don't find any, return None.
+    let Some(beacon_balances_sum) =
+        beacon_chain::get_balances_by_state_root(&mut *executor, &state_root_for_balances).await?
+    else {
+        debug!(%target_slot, "no beacon balances found for state root, returning None");
+        return Ok(None);
+    };
+
+    debug!(%target_slot, %beacon_balances_sum, "found beacon balances");
 
     // 4. Get execution balances. If missing, bail.
     let execution_balances_data =
