@@ -95,6 +95,27 @@ impl LiveSupplyReader {
         }
     }
 
+    /// Adds a supply delta to the cache only if a delta with the same block_number
+    /// and block_hash does not already exist.
+    /// Returns true if a new delta was added, false otherwise.
+    fn add_delta_to_cache_if_unique(
+        deltas_cache: &mut BTreeMap<BlockNumber, Vec<SupplyDelta>>,
+        delta_to_add: SupplyDelta,
+    ) -> bool {
+        let block_deltas = deltas_cache.entry(delta_to_add.block_number).or_default();
+
+        let hash_exists = block_deltas
+            .iter()
+            .any(|existing_delta| existing_delta.block_hash == delta_to_add.block_hash);
+
+        if !hash_exists {
+            block_deltas.push(delta_to_add);
+            true
+        } else {
+            false
+        }
+    }
+
     // New private helper function to find and sort historic files
     fn find_historic_files_in_dir(&self) -> Result<Vec<PathBuf>> {
         let mut historic_files: Vec<PathBuf> = Vec::new();
@@ -181,12 +202,20 @@ impl LiveSupplyReader {
         Ok(files_to_process)
     }
 
-    pub fn start_background_tailing(self: Arc<Self>) {
+    pub fn start_background_tasks(self: Arc<Self>) {
+        let reader_clone_tail = self.clone();
         tokio::spawn(async move {
             info!("background supply reading task started.");
-            if let Err(e) = self.initial_load_and_tail().await {
+            if let Err(e) = reader_clone_tail.initial_load_and_tail().await {
                 error!("error in live supply reading process: {}", e);
             }
+        });
+
+        let reader_clone_rescan = self;
+        tokio::spawn(async move {
+            info!("background periodic full rescan task started.");
+            reader_clone_rescan.periodic_full_rescan().await;
+            warn!("periodic full rescan task unexpectedly finished.");
         });
     }
 
@@ -234,14 +263,12 @@ impl LiveSupplyReader {
         let mut lines = reader.lines();
 
         let mut deltas_guard = self.deltas.write().await;
+
         while let Some(line_result) = lines.next_line().await? {
             match serde_json::from_str::<GethSupplyDelta>(&line_result) {
                 Ok(geth_delta) => match convert_to_supply_delta(&geth_delta) {
                     Ok(supply_delta) => {
-                        deltas_guard
-                            .entry(supply_delta.block_number)
-                            .or_insert_with(Vec::new)
-                            .push(supply_delta);
+                        Self::add_delta_to_cache_if_unique(&mut deltas_guard, supply_delta);
                     }
                     Err(e) => {
                         error!(
@@ -302,17 +329,18 @@ impl LiveSupplyReader {
                 let mut lines = reader.lines();
 
                 let mut deltas_guard = self.deltas.write().await;
-                let mut new_lines_processed = 0;
+                let mut new_deltas_processed = 0;
 
                 while let Some(line_result) = lines.next_line().await? {
-                    new_lines_processed += 1;
                     match serde_json::from_str::<GethSupplyDelta>(&line_result) {
                         Ok(geth_delta) => match convert_to_supply_delta(&geth_delta) {
                             Ok(supply_delta) => {
-                                deltas_guard
-                                    .entry(supply_delta.block_number)
-                                    .or_insert_with(Vec::new)
-                                    .push(supply_delta);
+                                if Self::add_delta_to_cache_if_unique(
+                                    &mut deltas_guard,
+                                    supply_delta,
+                                ) {
+                                    new_deltas_processed += 1;
+                                }
                             }
                             Err(e) => {
                                 error!("tail: failed to convert gethsupplydelta (block: {}): {} from file: {:?}", geth_delta.block_number, e, file_path);
@@ -326,17 +354,90 @@ impl LiveSupplyReader {
 
                 current_position = file.seek(SeekFrom::Current(0)).await?;
 
-                if new_lines_processed > 0 {
+                if new_deltas_processed > 0 {
                     Self::ensure_cache_limit(&mut deltas_guard);
                     debug!(
-                        "tail: processed {} new lines from {:?}. new position: {}. cache size: {}",
-                        new_lines_processed,
+                        "tail: processed {} new unique deltas from {:?}. new position: {}. cache size: {}",
+                        new_deltas_processed,
                         file_path,
                         current_position,
                         deltas_guard.len()
                     );
                 }
             }
+        }
+    }
+
+    async fn periodic_full_rescan(&self) {
+        let rescan_interval = Duration::from_secs(60);
+        let file_path = self.data_dir.join("supply.jsonl");
+
+        loop {
+            tokio::time::sleep(rescan_interval).await;
+
+            if !file_path.exists() {
+                warn!("periodic_full_rescan: supply.jsonl not found, skipping scan.");
+                continue;
+            }
+
+            debug!("starting periodic full rescan of {:?}", file_path);
+            let file = match File::open(&file_path).await {
+                Ok(f) => f,
+                Err(e) => {
+                    error!(
+                        "periodic_full_rescan: failed to open {:?}: {}. skipping scan.",
+                        file_path, e
+                    );
+                    continue;
+                }
+            };
+
+            let reader = BufReader::new(file);
+            let mut lines = reader.lines();
+            let mut deltas_added = 0;
+            let mut lines_processed = 0;
+
+            {
+                let mut deltas_guard = self.deltas.write().await;
+                while let Ok(Some(line_result)) = lines.next_line().await {
+                    lines_processed += 1;
+                    match serde_json::from_str::<GethSupplyDelta>(&line_result) {
+                        Ok(geth_delta) => match convert_to_supply_delta(&geth_delta) {
+                            Ok(supply_delta) => {
+                                if Self::add_delta_to_cache_if_unique(
+                                    &mut deltas_guard,
+                                    supply_delta,
+                                ) {
+                                    deltas_added += 1;
+                                }
+                            }
+                            Err(e) => {
+                                error!(
+                                    "periodic_full_rescan: failed to convert gethsupplydelta (block: {}): {} from file: {:?}",
+                                    geth_delta.block_number, e, file_path
+                                );
+                            }
+                        },
+                        Err(e) => {
+                            error!(
+                                "periodic_full_rescan: failed to parse gethsupplydelta line from file {:?}: {} -- line: {}",
+                                file_path, e, line_result
+                            );
+                        }
+                    }
+                }
+                if deltas_added > 0 {
+                    Self::ensure_cache_limit(&mut deltas_guard);
+                }
+            }
+
+            debug!(
+                "periodic_full_rescan: finished scan of {:?}. Processed {} lines, added {} new unique deltas. Cache size: {}",
+                file_path,
+                lines_processed,
+                deltas_added,
+                self.deltas.read().await.len()
+            );
         }
     }
 
@@ -353,7 +454,7 @@ struct SupplyDeltaQuery {
 pub async fn start_live_api(data_dir: PathBuf, port: u16) -> Result<()> {
     let reader = Arc::new(LiveSupplyReader::new(data_dir));
 
-    reader.clone().start_background_tailing();
+    reader.clone().start_background_tasks();
 
     let app = Router::new()
         .route("/supply/delta", get(get_supply_delta_handler))
