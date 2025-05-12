@@ -175,6 +175,13 @@ mod tests {
             ];
             Ok(mock_validators)
         }
+
+        async fn get_validator_balances_by_slot(
+            &self,
+            _slot: Slot,
+        ) -> Result<Option<Vec<ValidatorBalance>>> {
+            Ok(None)
+        }
     }
 
     #[tokio::test]
