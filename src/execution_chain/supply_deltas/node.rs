@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use reqwest::Client;
 use sqlx::PgConnection;
 use tokio::time::sleep;
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 
 use crate::{
     env::ENV_CONFIG,
