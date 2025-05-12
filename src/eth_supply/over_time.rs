@@ -5,6 +5,7 @@ use serde::Serialize;
 use sqlx::postgres::types::PgInterval;
 use sqlx::{PgExecutor, PgPool};
 use tracing::debug;
+use tracing::warn;
 
 use crate::{
     beacon_chain::Slot,
@@ -308,6 +309,28 @@ pub async fn get_supply_over_time(
         get_supply_since_burn(executor),
         get_last_supply_point(executor)
     );
+
+    if d1.is_empty() {
+        warn!("d1 supply over time vector is empty");
+    }
+    if d30.is_empty() {
+        warn!("d30 supply over time vector is empty");
+    }
+    if d7.is_empty() {
+        warn!("d7 supply over time vector is empty");
+    }
+    if h1.is_empty() {
+        warn!("h1 supply over time vector is empty");
+    }
+    if m5.is_empty() {
+        warn!("m5 supply over time vector is empty");
+    }
+    if since_merge.is_empty() {
+        warn!("since_merge supply over time vector is empty");
+    }
+    if since_burn.is_empty() {
+        warn!("since_burn supply over time vector is empty");
+    }
 
     // We like showing the latest data point we have, regardless of the time frame. We add said
     // point to the time frames that use a higher than every-minute granularity.

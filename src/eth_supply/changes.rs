@@ -33,10 +33,10 @@ impl From<&Vec<SupplyAtTime>> for SupplyChange {
     fn from(supply_at_time: &Vec<SupplyAtTime>) -> Self {
         let first = supply_at_time
             .first()
-            .expect("expect at least one supply in d1");
+            .expect("expect at least one supply in list");
         let last = supply_at_time
             .last()
-            .expect("expect at least one supply in d1");
+            .expect("expect at least one supply in list");
         let change = last.supply - first.supply;
 
         SupplyChange {
