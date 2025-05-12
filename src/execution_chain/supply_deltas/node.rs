@@ -133,7 +133,7 @@ pub fn stream_supply_deltas_from(
                     last_successful_fetch_time = tokio::time::Instant::now();
                 }
                 Err(e) => {
-                    warn!(
+                    debug!(
                         %current_block_number,
                         error = %e,
                         "failed to fetch supply delta for block {}. retrying after delay.", current_block_number
