@@ -168,11 +168,6 @@ pub async fn sync_slot_by_state_root(
         )
         .await;
 
-        let deposit_sum_aggregated =
-            deposits::get_deposit_sum_aggregated(&mut *transaction, &block).await;
-        let withdrawal_sum_aggregated =
-            withdrawals::get_withdrawal_sum_aggregated(&mut *transaction, &block).await;
-
         issuance::store_issuance(
             &mut *transaction,
             state_root,
