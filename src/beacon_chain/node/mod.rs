@@ -382,6 +382,10 @@ pub trait BeaconNode {
         state_root: &str,
     ) -> Result<Option<Vec<ValidatorBalance>>>;
     async fn get_validators_by_state(&self, state_root: &str) -> Result<Vec<ValidatorEnvelope>>;
+    async fn get_validator_balances_by_slot(
+        &self,
+        slot: Slot,
+    ) -> Result<Option<Vec<ValidatorBalance>>>;
 }
 
 impl BeaconNodeHttp {
@@ -408,6 +412,39 @@ impl BeaconNodeHttp {
             status => Err(anyhow!(
                 "failed to fetch block by block_id. block_id = {} status = {} url = {}",
                 block_id,
+                status,
+                res.url()
+            )),
+        }
+    }
+
+    pub async fn get_validator_balances_by_slot(
+        &self,
+        slot: Slot,
+    ) -> Result<Option<Vec<ValidatorBalance>>> {
+        let beacon_url = ENV_CONFIG
+            .beacon_url
+            .as_ref()
+            .expect("BEACON_URL is required in env to fetch validator balances");
+        let url = format!(
+            "{}/eth/v1/beacon/states/{}/validator_balances",
+            beacon_url, slot.0
+        );
+        let res = self
+            .client
+            .get(&url)
+            .send()
+            .timed("get_validator_balances_by_slot")
+            .await?;
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => {
+                let envelope = res.json::<ValidatorBalancesEnvelope>().await?;
+                Ok(Some(envelope.data))
+            }
+            status => Err(anyhow!(
+                "failed to fetch validator balances by slot. slot = {} status = {} url = {}",
+                slot.0,
                 status,
                 res.url()
             )),
@@ -587,6 +624,13 @@ impl BeaconNode for BeaconNodeHttp {
             .await
             .map(|envelope| envelope.data)
             .map_err(Into::into)
+    }
+
+    async fn get_validator_balances_by_slot(
+        &self,
+        slot: Slot,
+    ) -> Result<Option<Vec<ValidatorBalance>>> {
+        self.get_validator_balances_by_slot(slot).await
     }
 }
 

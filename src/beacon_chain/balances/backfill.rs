@@ -137,17 +137,17 @@ pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from
                 Ok(Some(header_envelope)) => {
                     debug!(slot = %slot_obj, "backfill: header found.");
                     let state_root_from_header = header_envelope.state_root();
-                    match beacon_node_clone.get_validator_balances(&state_root_from_header).await {
+                    match beacon_node_clone.get_validator_balances_by_slot(slot_obj).await {
                         Ok(Some(validator_balances)) => {
                             debug!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: validator balances successfully fetched.");
                             BackfillItemOutcome::StoreBalances(state_root_from_header.clone(), current_slot_val_i32, validator_balances)
                         }
                         Ok(None) => {
-                            warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: beacon node reported no validator balances for state_root (from header).");
+                            warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: beacon node reported no validator balances for slot (using slot-based fetch).");
                             BackfillItemOutcome::HeaderExistsNoBalances(state_root_from_header.clone(), current_slot_val_i32)
                         }
                         Err(e) => {
-                            warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: failed to get validator balances: {}", e.to_string());
+                            warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: failed to get validator balances by slot: {}", e.to_string());
                             BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting balances for slot {}: {}", slot_obj, e))
                         }
                     }
