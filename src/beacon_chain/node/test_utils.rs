@@ -111,6 +111,11 @@ impl BeaconHeaderSignedEnvelopeBuilder {
         self
     }
 
+    pub fn state_root(mut self, state_root: &str) -> Self {
+        self.state_root = state_root.to_string();
+        self
+    }
+
     pub fn build(self) -> BeaconHeaderSignedEnvelope {
         BeaconHeaderSignedEnvelope {
             root: self.block_root,

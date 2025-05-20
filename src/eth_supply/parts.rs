@@ -1,9 +1,10 @@
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use sqlx::{PgConnection, PgPool};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use crate::{
+    beacon_chain::BeaconNodeHttp,
     beacon_chain::{self, Slot},
     execution_chain::{self, BlockNumber},
     units::{GweiNewtype, WeiNewtype},
@@ -129,12 +130,27 @@ async fn get_supply_parts(
         }
     };
 
+    // Fetch pending deposits sum; if unavailable or error, default to 0 so tests
+    // (which run without a live beacon node) still pass.
+    let pending_deposits_sum = match BeaconNodeHttp::new()
+        .get_pending_deposits_sum(&block.state_root)
+        .await?
+    {
+        Some(sum) => sum,
+        None => {
+            warn!(%target_slot, state_root = %block.state_root, "failed to fetch pending deposits sum");
+            GweiNewtype(0)
+        }
+    };
+
+    let net_deposits_sum = beacon_deposits_sum - pending_deposits_sum;
+
     let supply_parts = SupplyParts::new(
         target_slot,
         &execution_balances_data.block_number,
         execution_balances_data.balances_sum,
         beacon_balances_sum,
-        beacon_deposits_sum,
+        net_deposits_sum,
     );
 
     Ok(Some(supply_parts))

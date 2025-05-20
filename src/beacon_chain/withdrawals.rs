@@ -14,12 +14,7 @@ pub fn get_withdrawal_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
         None => GweiNewtype(0),
     };
 
-    let execution_withdrawals_sum = block
-        .execution_request_withdrawals()
-        .iter()
-        .fold(GweiNewtype(0), |sum, withdrawal| sum + withdrawal.amount);
-
-    consensus_withdrawals_sum + execution_withdrawals_sum
+    consensus_withdrawals_sum
 }
 
 pub async fn get_withdrawal_sum_aggregated(

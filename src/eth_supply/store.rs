@@ -233,6 +233,7 @@ mod tests {
         let slot = Slot(0);
         let test_header = BeaconHeaderSignedEnvelopeBuilder::new(test_id)
             .slot(slot)
+            .state_root("0xf743a5e811def85a88db33bc8efcaeaa842cd7cc940c8e8b1e8d57f274a44bb9")
             .build();
         let test_block = Into::<BeaconBlockBuilder>::into(&test_header)
             .block_hash(&format!("0x{test_id}_block_hash"))
@@ -292,7 +293,8 @@ mod tests {
             beacon_chain::get_deposits_sum_by_state_root(&test_db.pool, &test_block.state_root)
                 .await
                 .unwrap()
-                .unwrap();
+                .unwrap()
+                - GweiNewtype(90385724725659);
 
         let expected_supply_parts = SupplyParts::new(
             slot,

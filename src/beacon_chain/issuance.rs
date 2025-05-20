@@ -46,11 +46,14 @@ pub async fn store_issuance(
 }
 
 pub fn calc_issuance(
-    validator_balances_sum_gwei: &GweiNewtype,
-    withdrawal_sum_aggregated: &GweiNewtype,
-    deposit_sum_aggregated: &GweiNewtype,
+    beacon_balances_sum_gwei: &GweiNewtype,
+    deposit_requests_running_total: &GweiNewtype,
+    pending_deposits_sum: &GweiNewtype,
+    withdrawals_running_total: &GweiNewtype,
 ) -> GweiNewtype {
-    (*validator_balances_sum_gwei + *withdrawal_sum_aggregated) - *deposit_sum_aggregated
+    *beacon_balances_sum_gwei - *deposit_requests_running_total
+        + *pending_deposits_sum
+        + *withdrawals_running_total
 }
 
 pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
@@ -293,17 +296,21 @@ mod tests {
 
     #[test]
     fn calc_issuance_test() {
-        let validator_balances_sum_gwei = GweiNewtype(100);
-        let withdrawal_sum_aggregated = GweiNewtype(10);
-        let deposit_sum_aggregated = GweiNewtype(50);
+        let beacon_balances_sum = GweiNewtype(100);
+        let deposit_running_total = GweiNewtype(50);
+        let pending_deposits_sum = GweiNewtype(20);
+        let withdrawals_running_total = GweiNewtype(10);
+
+        let expected = GweiNewtype(100 - 50 + 20 + 10);
 
         assert_eq!(
             calc_issuance(
-                &validator_balances_sum_gwei,
-                &withdrawal_sum_aggregated,
-                &deposit_sum_aggregated
+                &beacon_balances_sum,
+                &deposit_running_total,
+                &pending_deposits_sum,
+                &withdrawals_running_total
             ),
-            GweiNewtype(60)
+            expected
         )
     }
 

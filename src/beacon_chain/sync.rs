@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use tracing::{debug, info, warn};
 
 use crate::beacon_chain::withdrawals;
+use crate::units::GweiNewtype;
 use crate::{
     beacon_chain::{balances, deposits, issuance},
     db, log,
@@ -168,14 +169,24 @@ pub async fn sync_slot_by_state_root(
         )
         .await;
 
+        let pending_deposits_sum = match beacon_node.get_pending_deposits_sum(state_root).await {
+            Ok(Some(sum)) => sum,
+            Ok(None) => GweiNewtype(0),
+            Err(e) => {
+                warn!(state_root = %state_root, "failed to fetch pending deposits sum: {}", e);
+                GweiNewtype(0)
+            }
+        };
+
         issuance::store_issuance(
             &mut *transaction,
             state_root,
             slot,
             &issuance::calc_issuance(
                 &validator_balances_sum,
-                &withdrawal_sum_aggregated,
                 &deposit_sum_aggregated,
+                &pending_deposits_sum,
+                &withdrawal_sum_aggregated,
             ),
         )
         .await;

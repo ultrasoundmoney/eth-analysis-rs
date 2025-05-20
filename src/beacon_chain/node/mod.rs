@@ -345,6 +345,16 @@ struct CheckpointEnvelope {
     data: FinalityCheckpoints,
 }
 
+#[derive(Deserialize)]
+pub struct PendingDeposit {
+    pub amount: GweiNewtype,
+}
+
+#[derive(Deserialize)]
+struct PendingDepositsEnvelope {
+    data: Vec<PendingDeposit>,
+}
+
 #[derive(Clone, Debug)]
 pub struct BeaconNodeHttp {
     client: reqwest::Client,
@@ -445,6 +455,47 @@ impl BeaconNodeHttp {
             status => Err(anyhow!(
                 "failed to fetch validator balances by slot. slot = {} status = {} url = {}",
                 slot.0,
+                status,
+                res.url()
+            )),
+        }
+    }
+
+    /// Fetches the sum of pending deposits (in Gwei) for a given beacon state.
+    /// Returns `Ok(Some(sum))` if the state exists and the endpoint responds with data,
+    /// `Ok(None)` if the endpoint returns 404 (state not available), or an `Err` for other
+    /// HTTP / network failures.
+    pub async fn get_pending_deposits_sum(
+        &self,
+        state_root: &str,
+    ) -> anyhow::Result<Option<GweiNewtype>> {
+        let Some(beacon_url) = ENV_CONFIG.beacon_url.as_ref() else {
+            // If BEACON_URL is not configured, we cannot fetch pending deposits. Return None.
+            return Err(anyhow::anyhow!(
+                "BEACON_URL is not configured, cannot fetch pending deposits"
+            ));
+        };
+
+        let url = format!(
+            "{}/eth/v1/beacon/states/{}/pending_deposits",
+            beacon_url, state_root
+        );
+
+        let res = self.client.get(&url).send().await?;
+
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => {
+                let envelope = res.json::<PendingDepositsEnvelope>().await?;
+                let sum = envelope
+                    .data
+                    .iter()
+                    .fold(GweiNewtype(0), |acc, d| acc + d.amount);
+                Ok(Some(sum))
+            }
+            status => Err(anyhow::anyhow!(
+                "failed to fetch pending deposits. state_root = {} status = {} url = {}",
+                state_root,
                 status,
                 res.url()
             )),
@@ -860,5 +911,21 @@ pub mod tests {
         );
         // Assuming GweiNewtype can be constructed as GweiNewtype(0) and implements PartialEq
         assert_eq!(withdrawal.amount, GweiNewtype(0));
+    }
+
+    #[test]
+    fn decode_pending_deposits() {
+        let file =
+            File::open("src/beacon_chain/data_samples/pending_deposits_11649024.json").unwrap();
+        let reader = BufReader::new(file);
+
+        let envelope: PendingDepositsEnvelope =
+            serde_json::from_reader(reader).expect("failed to decode pending deposits JSON");
+        assert!(!envelope.data.is_empty());
+        // sanity-check first amount
+        assert_eq!(
+            envelope.data.first().unwrap().amount,
+            GweiNewtype(32_000_000_000)
+        );
     }
 }
