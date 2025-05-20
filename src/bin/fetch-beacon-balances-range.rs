@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
 
     let beacon_node = BeaconNodeHttp::new();
     let mut writer = csv::Writer::from_path(output_file_name.clone())?;
-    writer.write_record(&["slot", "total_balance_gwei"])?;
+    writer.write_record(["slot", "total_balance_gwei"])?;
 
     for current_slot_val in args.start_slot..=args.end_slot {
         let slot = Slot(current_slot_val as i32);

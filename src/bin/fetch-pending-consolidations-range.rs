@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
         .build()?;
 
     let mut writer = csv::Writer::from_path(output_file_name.clone())?;
-    writer.write_record(&["slot", "total_pending_consolidation_gwei"])?;
+    writer.write_record(["slot", "total_pending_consolidation_gwei"])?;
 
     for current_slot_val in args.start_slot..=args.end_slot {
         info!(
