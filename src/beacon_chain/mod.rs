@@ -1,5 +1,5 @@
 pub mod balances;
-mod blocks;
+pub mod blocks;
 mod deposits;
 pub mod effective_balance_sums;
 mod issuance;
