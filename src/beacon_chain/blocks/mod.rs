@@ -1,7 +1,6 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
 mod heal;
 
-use anyhow::Context;
 use sqlx::{PgExecutor, Row};
 
 use crate::units::GweiNewtype;
@@ -89,6 +88,7 @@ pub async fn store_block(
     withdrawal_sum: &GweiNewtype,
     withdrawal_sum_aggregated: &GweiNewtype,
     header: &BeaconHeaderSignedEnvelope,
+    slot: Slot,
 ) {
     sqlx::query!(
         "
@@ -100,10 +100,11 @@ pub async fn store_block(
             withdrawal_sum,
             withdrawal_sum_aggregated,
             parent_root,
-            state_root
+            state_root,
+            slot
         )
         VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8
+            $1, $2, $3, $4, $5, $6, $7, $8, $9
         )
         ",
         block.block_hash(),
@@ -114,6 +115,7 @@ pub async fn store_block(
         i64::from(withdrawal_sum_aggregated.to_owned()),
         header.parent_root(),
         header.state_root(),
+        slot.0,
     )
     .execute(executor)
     .await
@@ -354,6 +356,7 @@ mod tests {
                     },
                 },
             },
+            slot,
         )
         .await;
 

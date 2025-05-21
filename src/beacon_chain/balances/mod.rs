@@ -1,9 +1,8 @@
 pub mod backfill;
 
-use anyhow::Context;
-use chrono::{Duration, DurationRound};
+use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use sqlx::PgExecutor;
+use sqlx::{PgExecutor, Row};
 
 use crate::units::GweiNewtype;
 

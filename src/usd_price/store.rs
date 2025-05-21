@@ -204,7 +204,7 @@ impl EthPriceStore for EthPriceStorePostgres {
         .await
         .unwrap();
 
-        if block.timestamp - row.timestamp <= Duration::minutes(20) {
+        if block.timestamp - row.timestamp <= chrono::Duration::minutes(20) {
             Ok(row.ethusd)
         } else {
             Err(GetEthPriceError::PriceTooOld)

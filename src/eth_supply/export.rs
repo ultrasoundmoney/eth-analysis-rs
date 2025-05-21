@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 
 use crate::{
-    beacon_chain::{self, Slot},
+    beacon_chain::Slot,
     db,
     time_frames::{GrowingTimeFrame, TimeFrame},
     units::EthNewtype,

@@ -155,6 +155,7 @@ pub async fn sync_slot_by_state_root(
         &withdrawals::get_withdrawal_sum_from_block(&block),
         &withdrawal_sum_aggregated,
         &header,
+        header.slot(),
     )
     .await;
 

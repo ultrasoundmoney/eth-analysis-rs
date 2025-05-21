@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
-use sqlx::{postgres::types::PgInterval, PgExecutor, PgPool};
+use sqlx::{PgExecutor, PgPool};
 use thiserror::Error;
 use tracing::{debug, info};
 

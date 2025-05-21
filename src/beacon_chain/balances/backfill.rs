@@ -1,4 +1,4 @@
-use futures::{pin_mut, StreamExt};
+use futures::pin_mut;
 use pit_wall::Progress;
 use sqlx::PgPool;
 use tracing::{debug, info, warn};

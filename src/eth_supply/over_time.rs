@@ -2,7 +2,6 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
-use sqlx::postgres::types::PgInterval;
 use sqlx::{PgExecutor, PgPool};
 use tracing::debug;
 use tracing::warn;
@@ -10,7 +9,7 @@ use tracing::warn;
 use crate::{
     beacon_chain::Slot,
     eth_time,
-    execution_chain::{self, BlockNumber},
+    execution_chain::BlockNumber,
     time_frames::{GrowingTimeFrame, LimitedTimeFrame, TimeFrame},
     units::EthNewtype,
 };

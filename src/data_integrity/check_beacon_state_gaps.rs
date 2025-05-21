@@ -2,7 +2,7 @@ use core::panic;
 use std::collections::HashSet;
 
 use anyhow::Result;
-use futures::{StreamExt, TryStreamExt};
+use futures::TryStreamExt;
 use sqlx::{postgres::PgRow, PgConnection, Row};
 use tracing::info;
 
