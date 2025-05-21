@@ -8,20 +8,25 @@ use crate::units::GweiNewtype;
 use super::node::BeaconBlock;
 use super::{blocks, Slot};
 
+/// Returns the sum of all **deposit *requests*** (EIP-6110 execution layer deposits)
+/// contained in the given block.
+///
+/// From the Pectra (Electra) hard-fork onwards, new validator funding happens via
+/// the `execution_requests.deposits[*]` list that lives inside
+/// `block.body.execution_requests`. These requests are later credited on the
+/// consensus layer after passing through the `pending_deposits` queue, so the
+/// *receipt* list `block.deposits()` must **not** be counted here – doing so
+/// would double-subtract the value in the issuance formula.
+///
+/// For pre-Pectra history (where `execution_requests` is absent) the list is
+/// empty and we deliberately return zero; the legacy consensus deposit receipts
+/// are already reflected in `beacon_balances` and therefore cancel out without
+/// needing an explicit subtraction.
 pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
-    // Pre-pectra
-    let consensus_deposits_sum = block
-        .deposits()
-        .iter()
-        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
-
-    // Post-pectra
-    let execution_deposits_sum = block
+    block
         .execution_request_deposits()
         .iter()
-        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
-
-    consensus_deposits_sum + execution_deposits_sum
+        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount)
 }
 
 pub async fn get_deposit_sum_aggregated(
