@@ -1,0 +1,6 @@
+{
+  "snapshot": "snapshot-20250520-26bf3026-3c13-4f7e-bf21-3e22b4528620",
+  "install": "sudo apt install libssl-dev pkg-config && rustup install stable",
+  "start": "cargo check",
+  "terminals": []
+}
