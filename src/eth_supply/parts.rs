@@ -149,7 +149,7 @@ async fn gather_supply_parts(
     )
     .fetch_optional(&mut *executor)
     .await?
-    .and_then(|row| row.pending_deposits_sum_gwei.map(|v| GweiNewtype(v)));
+    .and_then(|row| row.pending_deposits_sum_gwei.map(GweiNewtype));
 
     let pending_deposits_sum = if let Some(sum) = pending_deposits_sum_db {
         debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "using pending deposits sum from db");
