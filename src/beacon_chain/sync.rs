@@ -36,7 +36,27 @@ async fn gather_balances_deposits(
             debug!(%slot, "pre-pectra slot, skipping pending deposits sum fetch");
             return Ok(None);
         }
-        beacon_node.get_pending_deposits_sum(&state_root_str).await
+
+        // we have a strange issue where it appears pending deposits come back null sometimes even if they become available later.
+        // so we retry once and log something if that works.
+        let result = beacon_node
+            .get_pending_deposits_sum(&state_root_str)
+            .await?;
+        if result.is_none() {
+            debug!(%slot, "pending deposits sum is None, retrying");
+            tokio::time::sleep(std::time::Duration::from_secs(12)).await;
+            let result = beacon_node
+                .get_pending_deposits_sum(&state_root_str)
+                .await?;
+            if result.is_none() {
+                warn!(%slot, "pending deposits sum is still None, returning None");
+                return Ok(None);
+            } else {
+                debug!(%slot, "pending deposits became available after waiting 12 seconds");
+            }
+        }
+
+        Ok(result)
     };
 
     let (validator_balances_result, pending_deposits_sum_result) =
