@@ -5,6 +5,11 @@ set -e
 
 CLUSTER=$1
 SERVICE_NAME=$2
+# Added optional force deploy flag (third argument)
+FORCE_DEPLOY=false
+if [[ "$3" == "--force" || "$3" == "-f" ]]; then
+    FORCE_DEPLOY=true
+fi
 TARGET_ENV_NAME="" # Will be dev, stag, or prod
 
 # --- Configuration ---
@@ -26,7 +31,7 @@ elif [[ "$CLUSTER" == "prod" ]]; then
     TARGET_ENV_NAME="production"
 else
     echo "error: unknown cluster: $CLUSTER"
-    echo "usage: ./deploy-backend.sh [dev|stag|prod] [service-name]"
+    echo "usage: ./deploy-backend.sh [dev|stag|prod] [service-name] [--force]"
     exit 1
 fi
 
@@ -34,7 +39,7 @@ fi
 if [[ ! " ${VALID_SERVICES[@]} " =~ " ${SERVICE_NAME} " ]]; then
     echo "error: unknown service name: $SERVICE_NAME"
     echo "valid services are: ${VALID_SERVICES[*]}"
-    echo "usage: ./deploy-backend.sh [dev|stag|prod] [service-name]"
+    echo "usage: ./deploy-backend.sh [dev|stag|prod] [service-name] [--force]"
     exit 1
 fi
 
@@ -96,21 +101,26 @@ CI_CHECK_OUTPUT=$( (
 
 CI_STATUS="$CI_CHECK_OUTPUT"
 
-if [[ "$CI_STATUS" == "failure" || "$CI_STATUS" == "error" ]]; then
-    echo "-> ci failure or error detected for commit $CURRENT_COMMIT_SHORT ($CI_STATUS)"
-    exit 1
-elif [[ "$CI_STATUS" == "no status" || "$CI_STATUS" == "" ]]; then # Check for empty string too
-    read -p "-> no ci status available (or timed out) for commit $CURRENT_COMMIT_SHORT. status: '$CI_STATUS'. continue deployment? (y/n): " CONTINUE
-    if [[ "$CONTINUE" != "y" ]]; then
-        echo "-> aborting deployment."
+# If force deploy flag is set, skip CI status enforcement
+if [[ "$FORCE_DEPLOY" == true ]]; then
+    echo "-> force deploy enabled. skipping ci status enforcement (ci status: $CI_STATUS)."
+else
+    if [[ "$CI_STATUS" == "failure" || "$CI_STATUS" == "error" ]]; then
+        echo "-> ci failure or error detected for commit $CURRENT_COMMIT_SHORT ($CI_STATUS)"
+        exit 1
+    elif [[ "$CI_STATUS" == "no status" || "$CI_STATUS" == "" ]]; then # Check for empty string too
+        read -p "-> no ci status available (or timed out) for commit $CURRENT_COMMIT_SHORT. status: '$CI_STATUS'. continue deployment? (y/n): " CONTINUE
+        if [[ "$CONTINUE" != "y" ]]; then
+            echo "-> aborting deployment."
+            exit 1
+        fi
+        echo "-> continuing deployment despite missing ci status."
+    elif [[ "$CI_STATUS" == "success" ]]; then
+        echo "-> ci success for commit $CURRENT_COMMIT_SHORT."
+    else # Should not happen if logic above is correct
+        echo "-> unknown ci status: '$CI_STATUS'. aborting."
         exit 1
     fi
-    echo "-> continuing deployment despite missing ci status."
-elif [[ "$CI_STATUS" == "success" ]]; then
-    echo "-> ci success for commit $CURRENT_COMMIT_SHORT."
-else # Should not happen if logic above is correct
-    echo "-> unknown ci status: '$CI_STATUS'. aborting."
-    exit 1
 fi
 
 echo "-> continuing with deploy of $SERVICE_NAME."
