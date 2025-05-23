@@ -65,6 +65,7 @@ pub const FIRST_POST_LONDON_SLOT: Slot = Slot(1778566);
 lazy_static! {
     pub static ref GENESIS_TIMESTAMP: DateTime<Utc> = "2020-12-01T12:00:23Z".parse().unwrap();
     pub static ref SHAPELLA_SLOT: Slot = Slot(6209536);
+    pub static ref PECTRA_SLOT: Slot = Slot(11649024);
 }
 
 #[derive(Serialize)]
@@ -116,6 +117,7 @@ pub mod tests {
             &GweiNewtype(0),
             &GweiNewtype(0),
             &GweiNewtype(0),
+            None,
             header,
         )
         .await;

@@ -396,6 +396,7 @@ pub trait BeaconNode {
         &self,
         slot: Slot,
     ) -> Result<Option<Vec<ValidatorBalance>>>;
+    async fn get_pending_deposits_sum(&self, state_root: &str) -> Result<Option<GweiNewtype>>;
 }
 
 impl BeaconNodeHttp {
@@ -465,6 +466,7 @@ impl BeaconNodeHttp {
     /// Returns `Ok(Some(sum))` if the state exists and the endpoint responds with data,
     /// `Ok(None)` if the endpoint returns 404 (state not available), or an `Err` for other
     /// HTTP / network failures.
+    #[instrument(skip(self))]
     pub async fn get_pending_deposits_sum(
         &self,
         state_root: &str,
@@ -682,6 +684,10 @@ impl BeaconNode for BeaconNodeHttp {
         slot: Slot,
     ) -> Result<Option<Vec<ValidatorBalance>>> {
         self.get_validator_balances_by_slot(slot).await
+    }
+
+    async fn get_pending_deposits_sum(&self, state_root: &str) -> Result<Option<GweiNewtype>> {
+        self.get_pending_deposits_sum(state_root).await
     }
 }
 

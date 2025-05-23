@@ -136,14 +136,18 @@ async fn get_supply_parts(
         .get_pending_deposits_sum(&block.state_root)
         .await?
     {
-        Some(sum) => sum,
+        Some(sum) => {
+            debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "successfully fetched pending deposits sum");
+            sum
+        }
         None => {
-            warn!(%target_slot, state_root = %block.state_root, "failed to fetch pending deposits sum");
+            warn!(%target_slot, state_root = %block.state_root, "failed to fetch pending deposits sum, defaulting to 0");
             GweiNewtype(0)
         }
     };
 
     let net_deposits_sum = beacon_deposits_sum - pending_deposits_sum;
+    debug!(%target_slot, %beacon_deposits_sum, %pending_deposits_sum, %net_deposits_sum, "calculated net_deposits_sum");
 
     let supply_parts = SupplyParts::new(
         target_slot,

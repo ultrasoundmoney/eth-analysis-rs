@@ -88,6 +88,7 @@ pub async fn store_block(
     deposit_sum_aggregated: &GweiNewtype,
     withdrawal_sum: &GweiNewtype,
     withdrawal_sum_aggregated: &GweiNewtype,
+    pending_deposits_sum: Option<GweiNewtype>,
     header: &BeaconHeaderSignedEnvelope,
 ) {
     sqlx::query!(
@@ -99,11 +100,12 @@ pub async fn store_block(
             deposit_sum_aggregated,
             withdrawal_sum,
             withdrawal_sum_aggregated,
+            pending_deposits_sum_gwei,
             parent_root,
             state_root
         )
         VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8
+            $1, $2, $3, $4, $5, $6, $7, $8, $9
         )
         ",
         block.block_hash(),
@@ -112,6 +114,7 @@ pub async fn store_block(
         i64::from(deposit_sum_aggregated.to_owned()),
         i64::from(withdrawal_sum.to_owned()),
         i64::from(withdrawal_sum_aggregated.to_owned()),
+        pending_deposits_sum.map(i64::from),
         header.parent_root(),
         header.state_root(),
     )
@@ -344,6 +347,7 @@ mod tests {
             &GweiNewtype(0),
             &GweiNewtype(0),
             &GweiNewtype(0),
+            None,
             &BeaconHeaderSignedEnvelope {
                 root: "0xblock_root".to_string(),
                 header: BeaconHeaderEnvelope {

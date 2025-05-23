@@ -182,6 +182,10 @@ mod tests {
         ) -> Result<Option<Vec<ValidatorBalance>>> {
             Ok(None)
         }
+
+        async fn get_pending_deposits_sum(&self, _state_root: &str) -> Result<Option<GweiNewtype>> {
+            Ok(None)
+        }
     }
 
     #[tokio::test]

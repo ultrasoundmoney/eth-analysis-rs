@@ -3,25 +3,26 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
 use sqlx::{PgExecutor, Row};
 
+use crate::beacon_chain::PECTRA_SLOT;
 use crate::units::GweiNewtype;
 
 use super::node::BeaconBlock;
 use super::{blocks, Slot};
 
 pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
-    // Pre-pectra
-    let consensus_deposits_sum = block
-        .deposits()
-        .iter()
-        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
-
-    // Post-pectra
-    let execution_deposits_sum = block
-        .execution_request_deposits()
-        .iter()
-        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
-
-    consensus_deposits_sum + execution_deposits_sum
+    if block.slot < *PECTRA_SLOT {
+        // Pre-Pectra: use consensus layer deposits
+        block
+            .deposits()
+            .iter()
+            .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount)
+    } else {
+        // Post-Pectra: use execution request deposits (EIP-6110)
+        block
+            .execution_request_deposits()
+            .iter()
+            .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount)
+    }
 }
 
 pub async fn get_deposit_sum_aggregated(
@@ -102,6 +103,7 @@ mod tests {
             &GweiNewtype(1),
             &GweiNewtype(0),
             &GweiNewtype(1),
+            None,
             &test_header,
         )
         .await;

@@ -3,91 +3,55 @@ use chrono::Duration;
 use lazy_static::lazy_static;
 use sqlx::PgExecutor;
 use sqlx::PgPool;
+use tracing::instrument;
 use tracing::{debug, info, warn};
 
 use crate::beacon_chain::withdrawals;
 use crate::units::GweiNewtype;
+use crate::{beacon_chain::PECTRA_SLOT, eth_supply, supply_dashboard_analysis};
 use crate::{
     beacon_chain::{balances, deposits, issuance},
     db, log,
 };
-use crate::{eth_supply, supply_dashboard_analysis};
 
-use super::node::{BeaconBlock, BeaconNode, BeaconNodeHttp, ValidatorBalance};
+use super::node::{BeaconNode, BeaconNodeHttp, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot};
 
 lazy_static! {
     static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(5);
 }
 
-struct SyncData {
-    block: BeaconBlock,
-    validator_balances: Option<Vec<ValidatorBalance>>,
-}
-
-async fn gather_sync_data(
+#[instrument(skip(beacon_node, header), fields(slot = %header.slot(), block_root = %header.root))]
+async fn gather_balances_deposits(
     beacon_node: &BeaconNodeHttp,
     header: &BeaconHeaderSignedEnvelope,
-    sync_lag: &Duration,
-) -> Result<SyncData> {
-    let block_root = header.root.clone();
+) -> Result<(Vec<ValidatorBalance>, Option<GweiNewtype>)> {
     let slot = header.slot();
+    let state_root_str = header.state_root();
 
-    let block = beacon_node
-        .get_block_by_block_root(&block_root)
-        .await
-        .with_context(|| {
-            format!(
-                "failed to get block by block_root {} (for slot {}) from beacon node",
-                block_root, slot
-            )
-        })?
+    let balances_future = beacon_node.get_validator_balances(&state_root_str);
+
+    let pending_deposits_future = async {
+        if slot < *PECTRA_SLOT {
+            debug!(%slot, "pre-pectra slot, skipping pending deposits sum fetch");
+            return Ok(None);
+        }
+        beacon_node.get_pending_deposits_sum(&state_root_str).await
+    };
+
+    let (validator_balances_result, pending_deposits_sum_result) =
+        tokio::try_join!(balances_future, pending_deposits_future)?;
+
+    let validator_balances = validator_balances_result
         .ok_or_else(|| {
             anyhow!(
-                "beacon node reported no block for block_root {} (slot {}) when one was expected",
-                block_root,
+                "beacon node reported no validator balances for state_root {} (slot {}), which are mandatory when GATHERING (received None)",
+                state_root_str,
                 slot
             )
         })?;
 
-    // Whenever we fall behind, getting validator balances for older slots from lighthouse takes a
-    // long time. This means if we fall behind too far we never catch up, as syncing one slot now
-    // takes longer than it takes for a new slot to appear (12 seconds).
-    let validator_balances = if sync_lag > &BLOCK_LAG_LIMIT {
-        warn!(
-            %slot,
-            %block_root,
-            %sync_lag,
-            "block lag over limit, skipping get_validator_balances"
-        );
-        None
-    } else {
-        let validator_balances = beacon_node
-                .get_validator_balances(&header.state_root())
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to get validator balances for state_root {} (slot {}) from beacon node",
-                        header.state_root(),
-                        slot
-                    )
-                })?
-                .ok_or_else(|| {
-                    anyhow!(
-                        "beacon node reported no validator balances for state_root {} (slot {}) when they were expected",
-                        header.state_root(),
-                        slot
-                    )
-                })?;
-        Some(validator_balances)
-    };
-
-    let sync_data = SyncData {
-        block,
-        validator_balances,
-    };
-
-    Ok(sync_data)
+    Ok((validator_balances, pending_deposits_sum_result))
 }
 
 async fn get_sync_lag(beacon_node: &BeaconNodeHttp, syncing_slot: Slot) -> Result<Duration> {
@@ -109,16 +73,49 @@ pub async fn sync_slot_by_state_root(
     beacon_node: &BeaconNodeHttp,
     header: BeaconHeaderSignedEnvelope,
 ) -> Result<()> {
-    // If we are falling too far behind the head of the chain, skip storing validator balances.
     let sync_lag = get_sync_lag(beacon_node, header.slot()).await?;
-    debug!(%sync_lag, "beacon sync lag");
+    debug!(%sync_lag, "beacon sync lag for slot {}", header.slot());
 
-    let SyncData {
-        block,
-        validator_balances,
-    } = gather_sync_data(beacon_node, &header, &sync_lag).await?;
+    let block_root_for_get_block = header.root.clone();
+    let slot_for_get_block = header.slot();
+    let block = beacon_node
+        .get_block_by_block_root(&block_root_for_get_block)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to get block by block_root {} (for slot {}) from beacon node",
+                block_root_for_get_block, slot_for_get_block
+            )
+        })?
+        .ok_or_else(|| {
+            anyhow!(
+                "beacon node reported no block for block_root {} (slot {}) when one was expected",
+                block_root_for_get_block,
+                slot_for_get_block
+            )
+        })?;
 
-    // Now that we have all the data, we start storing it.
+    let mut opt_validator_balances: Option<Vec<ValidatorBalance>> = None;
+    let mut opt_pending_deposits_sum: Option<GweiNewtype> = None;
+
+    // whenever we fall behind, getting validator balances for older slots from lighthouse takes a
+    // long time. this means if we fall behind too far we never catch up, as syncing one slot now
+    // takes longer than it takes for a new slot to appear (12 seconds).
+    if sync_lag <= *BLOCK_LAG_LIMIT {
+        debug!(slot = %header.slot(), "sync lag within limit, gathering balances and deposits");
+        match gather_balances_deposits(beacon_node, &header).await {
+            Ok((balances, deposits)) => {
+                opt_validator_balances = Some(balances);
+                opt_pending_deposits_sum = deposits;
+            }
+            Err(e) => {
+                warn!(slot = %header.slot(), error = ?e, "failed to gather balances/deposits despite sync lag within limit; proceeding without them");
+            }
+        }
+    } else {
+        warn!(slot = %header.slot(), %sync_lag, "sync lag over limit ({}), skipping balances and pending deposits fetch", *BLOCK_LAG_LIMIT);
+    }
+
     let mut transaction = db_pool.begin().await?;
 
     let deposit_sum_aggregated =
@@ -154,13 +151,14 @@ pub async fn sync_slot_by_state_root(
         &deposit_sum_aggregated,
         &withdrawals::get_withdrawal_sum_from_block(&block),
         &withdrawal_sum_aggregated,
+        opt_pending_deposits_sum,
         &header,
     )
     .await;
 
-    if let Some(ref validator_balances) = validator_balances {
-        debug!("validator balances present");
-        let validator_balances_sum = balances::sum_validator_balances(validator_balances);
+    if let Some(ref validator_balances_vec) = opt_validator_balances {
+        debug!(slot = %header.slot(), "validator balances available, proceeding with related storage");
+        let validator_balances_sum = balances::sum_validator_balances(validator_balances_vec);
         balances::store_validators_balance(
             &mut *transaction,
             state_root,
@@ -169,15 +167,16 @@ pub async fn sync_slot_by_state_root(
         )
         .await;
 
-        let pending_deposits_sum = match beacon_node.get_pending_deposits_sum(state_root).await {
-            Ok(Some(sum)) => sum,
-            Ok(None) => GweiNewtype(0),
-            Err(e) => {
-                warn!(state_root = %state_root, "failed to fetch pending deposits sum: {}", e);
-                GweiNewtype(0)
-            }
-        };
+        // Determine pending deposits for issuance, defaulting to 0 if None.
+        let pending_deposits_for_issuance = opt_pending_deposits_sum.unwrap_or_else(|| {
+            debug!(slot = %header.slot(), "pending deposits sum is None (due to pre-pectra, sync lag, or fetch error), using GweiNewtype(0) for issuance calculation");
+            GweiNewtype(0)
+        });
+        if opt_pending_deposits_sum.is_some() {
+            debug!(slot = %header.slot(), pending_deposits_sum = ?opt_pending_deposits_sum, "using actual pending deposits sum for issuance calculation");
+        }
 
+        debug!(slot = %header.slot(), "storing issuance using effective pending deposits sum");
         issuance::store_issuance(
             &mut *transaction,
             state_root,
@@ -185,7 +184,7 @@ pub async fn sync_slot_by_state_root(
             &issuance::calc_issuance(
                 &validator_balances_sum,
                 &deposit_sum_aggregated,
-                &pending_deposits_sum,
+                &pending_deposits_for_issuance, // Use the effective value
                 &withdrawal_sum_aggregated,
             ),
         )
@@ -193,8 +192,13 @@ pub async fn sync_slot_by_state_root(
 
         let result = eth_supply::sync_eth_supply(&mut transaction, slot).await;
         if let Err(e) = result {
-            warn!("error syncing eth supply, skipping: {}", e);
+            warn!(
+                "error syncing eth supply for slot {}, skipping: {}",
+                slot, e
+            );
         }
+    } else {
+        debug!(slot = %header.slot(), "validator balances not available (likely due to sync lag or fetch error), skipping dependent storage operations");
     }
 
     transaction.commit().await?;

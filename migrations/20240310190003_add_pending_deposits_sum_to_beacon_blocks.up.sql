@@ -1,0 +1,2 @@
+ALTER TABLE beacon_blocks
+ADD COLUMN pending_deposits_sum_gwei BIGINT;

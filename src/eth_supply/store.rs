@@ -248,10 +248,11 @@ mod tests {
         beacon_chain::store_block(
             &test_db.pool,
             &test_block,
-            &GweiNewtype(0),
-            &GweiNewtype(5),
-            &GweiNewtype(0),
-            &GweiNewtype(5),
+            &GweiNewtype(0), // deposit_sum
+            &GweiNewtype(5), // deposit_sum_aggregated
+            &GweiNewtype(0), // withdrawal_sum
+            &GweiNewtype(5), // withdrawal_sum_aggregated
+            None,            // pending_deposits_sum
             &test_header,
         )
         .await;
