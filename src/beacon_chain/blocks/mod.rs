@@ -96,11 +96,13 @@ pub async fn store_block(
     sums: StoreBlockParams,
     header: &BeaconHeaderSignedEnvelope,
 ) {
-    sqlx::query!(
+    let slot_value: i32 = block.slot.into();
+    sqlx::query(
         "
         INSERT INTO beacon_blocks (
             block_hash,
             block_root,
+            slot,
             deposit_sum,
             deposit_sum_aggregated,
             withdrawal_sum,
@@ -110,19 +112,20 @@ pub async fn store_block(
             state_root
         )
         VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
         )
         ",
-        block.block_hash(),
-        header.root,
-        i64::from(sums.deposit_sum),
-        i64::from(sums.deposit_sum_aggregated),
-        i64::from(sums.withdrawal_sum),
-        i64::from(sums.withdrawal_sum_aggregated),
-        sums.pending_deposits_sum.map(i64::from),
-        header.parent_root(),
-        header.state_root(),
     )
+    .bind(block.block_hash())
+    .bind(&header.root)
+    .bind(slot_value)
+    .bind(i64::from(sums.deposit_sum))
+    .bind(i64::from(sums.deposit_sum_aggregated))
+    .bind(i64::from(sums.withdrawal_sum))
+    .bind(i64::from(sums.withdrawal_sum_aggregated))
+    .bind(sums.pending_deposits_sum.map(i64::from))
+    .bind(header.parent_root())
+    .bind(header.state_root())
     .execute(executor)
     .await
     .unwrap();
