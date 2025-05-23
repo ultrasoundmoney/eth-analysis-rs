@@ -59,47 +59,52 @@ echo "-> deploying $SERVICE_NAME (backend) - $CURRENT_COMMIT_SHORT to $CLUSTER (
 echo "-> pushing latest code to github"
 git push
 
-echo "-> checking for ci success for commit $CURRENT_COMMIT_FULL"
-# Check if hub is installed
-if ! command -v hub &> /dev/null; then
-    echo "error: hub cli is not installed. please install it to continue."
-    echo "       (see: https://hub.github.com/)"
-    exit 1
-fi
-sleep 6 # Give CI some time to start
-
-# hub ci-status might exit the script if it fails, wrap in subshell to control exit
-CI_CHECK_OUTPUT=$( (
-    set +e # Allow hub to fail without exiting the main script immediately
-    ci_status_val=""
-    retries=0
-    max_retries=10 # Approx 160 seconds + initial 6s wait
-
-    while [[ $retries -lt $max_retries ]]; do
-        ci_status_val=$(hub ci-status "$CURRENT_COMMIT_FULL" 2>&1) # Capture stderr too
-        if [[ $ci_status_val == "pending" ]]; then
-            echo "-> ci status: pending, trying again in 16 seconds (attempt $((retries + 1))/$max_retries)"
-            sleep 16
-            retries=$((retries + 1))
-        elif [[ $ci_status_val == "success" || $ci_status_val == "failure" || $ci_status_val == "error" || $ci_status_val == "no status" ]]; then
-            break
-        else
-            # Handle unexpected output from hub ci-status, could be an error message
-            echo "-> unexpected ci status output: $ci_status_val. assuming 'no status' and will ask to continue."
-            ci_status_val="no status" # Treat as no status
-            break
-        fi
-    done
-
-    if [[ $retries -eq $max_retries && $ci_status_val == "pending" ]]; then
-        echo "-> ci status still pending after multiple retries."
-        ci_status_val="no status" # Treat as no status if timeout
+if [[ "$FORCE_DEPLOY" == true ]]; then
+    echo "-> force deploy enabled; skipping ci checks entirely."
+    CI_STATUS="skipped"
+else
+    echo "-> checking for ci success for commit $CURRENT_COMMIT_FULL"
+    # Check if hub is installed
+    if ! command -v hub &> /dev/null; then
+        echo "error: hub cli is not installed. please install it to continue."
+        echo "       (see: https://hub.github.com/)"
+        exit 1
     fi
-    
-    echo "$ci_status_val" # Pass the final status out of the subshell
-) )
+    sleep 6 # Give CI some time to start
 
-CI_STATUS="$CI_CHECK_OUTPUT"
+    # hub ci-status might exit the script if it fails, wrap in subshell to control exit
+    CI_CHECK_OUTPUT=$( (
+        set +e # Allow hub to fail without exiting the main script immediately
+        ci_status_val=""
+        retries=0
+        max_retries=10 # Approx 160 seconds + initial 6s wait
+
+        while [[ $retries -lt $max_retries ]]; do
+            ci_status_val=$(hub ci-status "$CURRENT_COMMIT_FULL" 2>&1) # Capture stderr too
+            if [[ $ci_status_val == "pending" ]]; then
+                echo "-> ci status: pending, trying again in 16 seconds (attempt $((retries + 1))/$max_retries)"
+                sleep 16
+                retries=$((retries + 1))
+            elif [[ $ci_status_val == "success" || $ci_status_val == "failure" || $ci_status_val == "error" || $ci_status_val == "no status" ]]; then
+                break
+            else
+                # Handle unexpected output from hub ci-status, could be an error message
+                echo "-> unexpected ci status output: $ci_status_val. assuming 'no status' and will ask to continue."
+                ci_status_val="no status" # Treat as no status
+                break
+            fi
+        done
+
+        if [[ $retries -eq $max_retries && $ci_status_val == "pending" ]]; then
+            echo "-> ci status still pending after multiple retries."
+            ci_status_val="no status" # Treat as no status if timeout
+        fi
+        
+        echo "$ci_status_val" # Pass the final status out of the subshell
+    ) )
+
+    CI_STATUS="$CI_CHECK_OUTPUT"
+fi
 
 # If force deploy flag is set, skip CI status enforcement
 if [[ "$FORCE_DEPLOY" == true ]]; then
