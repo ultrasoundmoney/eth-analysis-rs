@@ -144,17 +144,15 @@ pub async fn sync_slot_by_state_root(
 
     states::store_state(&mut *transaction, &header.state_root(), header.slot()).await;
 
-    blocks::store_block(
-        &mut *transaction,
-        &block,
-        &deposits::get_deposit_sum_from_block(&block),
-        &deposit_sum_aggregated,
-        &withdrawals::get_withdrawal_sum_from_block(&block),
-        &withdrawal_sum_aggregated,
-        opt_pending_deposits_sum,
-        &header,
-    )
-    .await;
+    let store_block_params = blocks::StoreBlockParams {
+        deposit_sum: deposits::get_deposit_sum_from_block(&block),
+        deposit_sum_aggregated,
+        withdrawal_sum: withdrawals::get_withdrawal_sum_from_block(&block),
+        withdrawal_sum_aggregated,
+        pending_deposits_sum: opt_pending_deposits_sum,
+    };
+
+    blocks::store_block(&mut *transaction, &block, store_block_params, &header).await;
 
     if let Some(ref validator_balances_vec) = opt_validator_balances {
         debug!(slot = %header.slot(), "validator balances available, proceeding with related storage");

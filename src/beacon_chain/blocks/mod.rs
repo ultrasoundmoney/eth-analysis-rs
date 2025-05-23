@@ -11,6 +11,14 @@ use super::{
     Slot,
 };
 
+pub struct StoreBlockParams {
+    pub deposit_sum: GweiNewtype,
+    pub deposit_sum_aggregated: GweiNewtype,
+    pub withdrawal_sum: GweiNewtype,
+    pub withdrawal_sum_aggregated: GweiNewtype,
+    pub pending_deposits_sum: Option<GweiNewtype>,
+}
+
 pub use heal::heal_block_hashes;
 
 pub const GENESIS_PARENT_ROOT: &str =
@@ -84,11 +92,7 @@ pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) 
 pub async fn store_block(
     executor: impl PgExecutor<'_>,
     block: &BeaconBlock,
-    deposit_sum: &GweiNewtype,
-    deposit_sum_aggregated: &GweiNewtype,
-    withdrawal_sum: &GweiNewtype,
-    withdrawal_sum_aggregated: &GweiNewtype,
-    pending_deposits_sum: Option<GweiNewtype>,
+    sums: StoreBlockParams,
     header: &BeaconHeaderSignedEnvelope,
 ) {
     sqlx::query!(
@@ -110,11 +114,11 @@ pub async fn store_block(
         ",
         block.block_hash(),
         header.root,
-        i64::from(deposit_sum.to_owned()),
-        i64::from(deposit_sum_aggregated.to_owned()),
-        i64::from(withdrawal_sum.to_owned()),
-        i64::from(withdrawal_sum_aggregated.to_owned()),
-        pending_deposits_sum.map(i64::from),
+        i64::from(sums.deposit_sum),
+        i64::from(sums.deposit_sum_aggregated),
+        i64::from(sums.withdrawal_sum),
+        i64::from(sums.withdrawal_sum_aggregated),
+        sums.pending_deposits_sum.map(i64::from),
         header.parent_root(),
         header.state_root(),
     )
@@ -331,6 +335,14 @@ mod tests {
 
         store_state(&mut *transaction, &state_root, slot).await;
 
+        let sums = StoreBlockParams {
+            deposit_sum: GweiNewtype(0),
+            deposit_sum_aggregated: GweiNewtype(0),
+            withdrawal_sum: GweiNewtype(0),
+            withdrawal_sum_aggregated: GweiNewtype(0),
+            pending_deposits_sum: None,
+        };
+
         store_block(
             &mut *transaction,
             &BeaconBlock {
@@ -343,11 +355,7 @@ mod tests {
                 slot,
                 state_root: state_root.clone(),
             },
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-            None,
+            sums,
             &BeaconHeaderSignedEnvelope {
                 root: "0xblock_root".to_string(),
                 header: BeaconHeaderEnvelope {
