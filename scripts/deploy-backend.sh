@@ -55,7 +55,12 @@ echo "-> pushing latest code to github"
 git push
 
 echo "-> checking for ci success for commit $CURRENT_COMMIT_FULL"
-echo "   (this script uses 'hub' cli for ci status. ensure it's installed and configured.)"
+# Check if hub is installed
+if ! command -v hub &> /dev/null; then
+    echo "error: hub cli is not installed. please install it to continue."
+    echo "       (see: https://hub.github.com/)"
+    exit 1
+fi
 sleep 6 # Give CI some time to start
 
 # hub ci-status might exit the script if it fails, wrap in subshell to control exit
