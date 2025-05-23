@@ -168,8 +168,8 @@ pub async fn get_block_before_slot(
             beacon_blocks 
         JOIN beacon_states ON
             beacon_blocks.state_root = beacon_states.state_root 
-        WHERE slot < $1
-        ORDER BY slot DESC 
+        WHERE beacon_states.slot < $1
+        ORDER BY beacon_states.slot DESC 
         LIMIT 1
         ",
         less_than.0
@@ -249,7 +249,7 @@ pub async fn get_block_by_slot(
         JOIN beacon_states ON
             beacon_blocks.state_root = beacon_states.state_root
         WHERE
-            slot = $1
+            beacon_states.slot = $1
         "#,
         slot.0
     )

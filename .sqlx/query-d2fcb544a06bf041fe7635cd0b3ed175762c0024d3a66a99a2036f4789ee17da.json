@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            block_root,\n            slot AS \"slot!\"\n        FROM\n            beacon_blocks\n        JOIN beacon_states ON\n            beacon_blocks.state_root = beacon_states.state_root\n        WHERE\n            slot >= $1\n        ",
+  "query": "\n        SELECT\n            block_root,\n            beacon_states.slot AS \"slot!\"\n        FROM\n            beacon_blocks\n        JOIN beacon_states ON\n            beacon_blocks.state_root = beacon_states.state_root\n        WHERE\n            beacon_states.slot >= $1\n        ",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "9fc66ee1900454416f9b3a837df82c6f509a58cc642f133fae587266b5226888"
+  "hash": "d2fcb544a06bf041fe7635cd0b3ed175762c0024d3a66a99a2036f4789ee17da"
 }

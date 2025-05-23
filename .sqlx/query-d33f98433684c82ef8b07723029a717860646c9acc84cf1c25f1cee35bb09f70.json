@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            block_root,\n            beacon_blocks.state_root,\n            parent_root,\n            deposit_sum,\n            deposit_sum_aggregated,\n            block_hash\n        FROM\n            beacon_blocks\n        JOIN beacon_states ON\n            beacon_blocks.state_root = beacon_states.state_root\n        WHERE\n            slot = $1\n        ",
+  "query": "\n        SELECT\n            block_root,\n            beacon_blocks.state_root,\n            parent_root,\n            deposit_sum,\n            deposit_sum_aggregated,\n            block_hash\n        FROM\n            beacon_blocks \n        JOIN beacon_states ON\n            beacon_blocks.state_root = beacon_states.state_root \n        WHERE beacon_states.slot < $1\n        ORDER BY beacon_states.slot DESC \n        LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -48,5 +48,5 @@
       true
     ]
   },
-  "hash": "4c311cd6fc10898b9a865fe7f2b50dec072356e8d0f9dc0b6185423a035769fb"
+  "hash": "d33f98433684c82ef8b07723029a717860646c9acc84cf1c25f1cee35bb09f70"
 }

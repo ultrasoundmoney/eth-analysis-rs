@@ -30,7 +30,7 @@ pub async fn heal_block_hashes() {
         JOIN beacon_states ON
             beacon_blocks.state_root = beacon_states.state_root
         WHERE
-            slot >= $1
+            beacon_states.slot >= $1
         AND
             block_hash IS NULL
         "#,
@@ -50,13 +50,13 @@ pub async fn heal_block_hashes() {
         r#"
         SELECT
             block_root,
-            slot AS "slot!"
+            beacon_states.slot AS "slot!"
         FROM
             beacon_blocks
         JOIN beacon_states ON
             beacon_blocks.state_root = beacon_states.state_root
         WHERE
-            slot >= $1
+            beacon_states.slot >= $1
         "#,
         first_slot.0
     )
