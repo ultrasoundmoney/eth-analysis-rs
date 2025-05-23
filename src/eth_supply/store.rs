@@ -198,7 +198,9 @@ mod tests {
     use sqlx::Acquire;
 
     use crate::{
-        beacon_chain::{self, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder, Slot},
+        beacon_chain::{
+            self, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder, Slot, StoreBlockParams,
+        },
         db,
         eth_supply::SupplyParts,
         execution_chain::{self, add_delta, ExecutionNodeBlock, SupplyDelta},
@@ -245,14 +247,19 @@ mod tests {
 
         beacon_chain::store_state(&test_db.pool, &test_header.state_root(), slot).await;
 
+        // Provide a pending deposits sum so that supply parts can be calculated.
+        let pending_deposits_sum = GweiNewtype(2);
+
         beacon_chain::store_block(
             &test_db.pool,
             &test_block,
-            &GweiNewtype(0), // deposit_sum
-            &GweiNewtype(5), // deposit_sum_aggregated
-            &GweiNewtype(0), // withdrawal_sum
-            &GweiNewtype(5), // withdrawal_sum_aggregated
-            None,            // pending_deposits_sum
+            StoreBlockParams {
+                deposit_sum: GweiNewtype(0),
+                deposit_sum_aggregated: GweiNewtype(5),
+                withdrawal_sum: GweiNewtype(0),
+                withdrawal_sum_aggregated: GweiNewtype(5),
+                pending_deposits_sum: Some(pending_deposits_sum),
+            },
             &test_header,
         )
         .await;
@@ -265,6 +272,7 @@ mod tests {
         )
         .await;
 
+        // Insert execution supply delta so that execution balances can be retrieved.
         let supply_delta_test = SupplyDelta {
             supply_delta: 1,
             block_number: 0,
@@ -290,18 +298,14 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let beacon_deposits_sum =
-            beacon_chain::get_deposits_sum_by_state_root(&test_db.pool, &test_block.state_root)
-                .await
-                .unwrap()
-                .unwrap()
-                - GweiNewtype(90385724725659);
+        // Compute expected net deposits sum: deposit_sum_aggregated - pending_deposits_sum.
+        let beacon_deposits_sum = GweiNewtype(5) - pending_deposits_sum; // 3 gwei
 
         let expected_supply_parts = SupplyParts::new(
             slot,
             &execution_balances.block_number,
             execution_balances.balances_sum,
-            GweiNewtype(20),
+            GweiNewtype(20), // beacon balances sum
             beacon_deposits_sum,
         );
 

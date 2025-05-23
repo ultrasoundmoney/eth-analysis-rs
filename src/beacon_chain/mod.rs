@@ -21,6 +21,7 @@ pub use blocks::get_block_before_slot;
 pub use blocks::get_block_by_slot;
 pub use blocks::heal_block_hashes;
 pub use blocks::store_block;
+pub use blocks::StoreBlockParams;
 pub use blocks::GENESIS_PARENT_ROOT;
 
 use chrono::DateTime;
@@ -87,9 +88,7 @@ impl From<(DateTime<Utc>, i64)> for GweiInTime {
 pub mod tests {
     use sqlx::{Acquire, PgConnection};
 
-    use crate::units::GweiNewtype;
-
-    use super::{node::BeaconBlock, *};
+    use super::{blocks::StoreBlockParams, node::BeaconBlock, *};
 
     pub async fn store_test_block(executor: &mut PgConnection, test_id: &str) {
         let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
@@ -110,16 +109,6 @@ pub mod tests {
         )
         .await;
 
-        store_block(
-            executor,
-            block,
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-            &GweiNewtype(0),
-            None,
-            header,
-        )
-        .await;
+        store_block(executor, block, StoreBlockParams::default(), header).await;
     }
 }

@@ -46,7 +46,7 @@ impl SupplyParts {
 // Our parent callers take care to try not to call us when beacon and execution have not both been synced.
 // This is bad. Let's try to slowly work towards taking what we need as arguments.
 // This way the caller is explicitly responsible for gathering what we need.
-async fn get_supply_parts(
+async fn gather_supply_parts(
     executor: &mut PgConnection,
     target_slot: Slot,
 ) -> Result<Option<SupplyParts>> {
@@ -130,19 +130,43 @@ async fn get_supply_parts(
         }
     };
 
-    // Fetch pending deposits sum; if unavailable or error, default to 0 so tests
-    // (which run without a live beacon node) still pass.
-    let pending_deposits_sum = match BeaconNodeHttp::new()
-        .get_pending_deposits_sum(&block.state_root)
-        .await?
-    {
-        Some(sum) => {
-            debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "successfully fetched pending deposits sum");
-            sum
-        }
-        None => {
-            warn!(%target_slot, state_root = %block.state_root, "failed to fetch pending deposits sum, defaulting to 0");
-            GweiNewtype(0)
+    // 6. Obtain pending deposits sum — prefer the value we stored at ingest
+    // time (beacon_blocks.pending_deposits_sum_gwei). Only fall back to the
+    // beacon-node API if the DB entry is NULL. If we still cannot obtain a
+    // value we *skip* supply calculation for this slot to avoid publishing an
+    // incorrect number.
+
+    let pending_deposits_sum_db = sqlx::query!(
+        r#"
+            SELECT
+                pending_deposits_sum_gwei
+            FROM
+                beacon_blocks
+            WHERE
+                state_root = $1
+        "#,
+        &block.state_root
+    )
+    .fetch_optional(&mut *executor)
+    .await?
+    .and_then(|row| row.pending_deposits_sum_gwei.map(|v| GweiNewtype(v)));
+
+    let pending_deposits_sum = if let Some(sum) = pending_deposits_sum_db {
+        debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "using pending deposits sum from db");
+        sum
+    } else {
+        match BeaconNodeHttp::new()
+            .get_pending_deposits_sum(&block.state_root)
+            .await
+        {
+            Ok(Some(sum)) => {
+                debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "fetched pending deposits sum from beacon node");
+                sum
+            }
+            Ok(None) | Err(_) => {
+                warn!(%target_slot, state_root = %block.state_root, "pending deposits sum unavailable from db and beacon node; skipping supply calculation for this slot");
+                return Ok(None);
+            }
         }
     };
 
@@ -175,13 +199,13 @@ impl<'a> SupplyPartsStore<'a> {
             .acquire()
             .await
             .context("failed to acquire db connection for get supply parts")?;
-        get_supply_parts(&mut conn, slot).await
+        gather_supply_parts(&mut conn, slot).await
     }
 
     pub async fn get_with_transaction(
         transaction: &mut PgConnection,
         slot: Slot,
     ) -> Result<Option<SupplyParts>> {
-        get_supply_parts(transaction, slot).await
+        gather_supply_parts(transaction, slot).await
     }
 }

@@ -74,6 +74,7 @@ mod tests {
     use crate::{
         beacon_chain::{
             store_block, store_state, BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder,
+            StoreBlockParams,
         },
         db,
     };
@@ -99,11 +100,13 @@ mod tests {
         store_block(
             &mut *transaction,
             &test_block,
-            &GweiNewtype(0),
-            &GweiNewtype(1),
-            &GweiNewtype(0),
-            &GweiNewtype(1),
-            None,
+            StoreBlockParams {
+                deposit_sum: GweiNewtype(0),
+                deposit_sum_aggregated: GweiNewtype(1),
+                withdrawal_sum: GweiNewtype(0),
+                withdrawal_sum_aggregated: GweiNewtype(1),
+                pending_deposits_sum: None,
+            },
             &test_header,
         )
         .await;

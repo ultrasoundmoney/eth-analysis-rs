@@ -13,7 +13,7 @@ use super::{eth::EthNewtype, WeiNewtype};
 // That is ~9_000_000_000 ETH, which is more than the entire supply. When serializing, it defaults
 // to string. Converting to GweiImprecise is fine for values which fit in float. For float max safe
 // is 2^53, so anything more than ~9M ETH will lose accuracy.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Default)]
 #[serde(into = "String")]
 pub struct GweiNewtype(pub i64);
 

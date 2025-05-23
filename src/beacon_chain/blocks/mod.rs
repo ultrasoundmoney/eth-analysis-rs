@@ -11,6 +11,7 @@ use super::{
     Slot,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct StoreBlockParams {
     pub deposit_sum: GweiNewtype,
     pub deposit_sum_aggregated: GweiNewtype,
