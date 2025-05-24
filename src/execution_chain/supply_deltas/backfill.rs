@@ -2,11 +2,9 @@ use sqlx::PgPool;
 use tracing::{debug, info};
 
 use crate::{
-    db,
     execution_chain::{BlockNumber, BlockRange, GENESIS_SUPPLY},
     job_progress::JobProgress,
     key_value_store::KeyValueStorePostgres,
-    log,
     units::Wei,
 };
 
