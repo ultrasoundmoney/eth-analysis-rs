@@ -26,6 +26,7 @@ enum GranularityArgs {
     Slot,
     Hour,
     Day,
+    Epoch,
 }
 
 impl From<GranularityArgs> for Granularity {
@@ -34,6 +35,7 @@ impl From<GranularityArgs> for Granularity {
             GranularityArgs::Slot => Granularity::Slot,
             GranularityArgs::Hour => Granularity::Hour,
             GranularityArgs::Day => Granularity::Day,
+            GranularityArgs::Epoch => Granularity::Epoch,
         }
     }
 }
