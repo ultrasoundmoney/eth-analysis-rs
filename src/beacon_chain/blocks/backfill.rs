@@ -111,7 +111,7 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
             SELECT state_root
             FROM beacon_blocks
             WHERE slot IS NULL
-            ORDER BY pending_deposits_sum_gwei DESC
+            ORDER BY deposit_sum_aggregated DESC
             LIMIT $1
             "#,
             DB_CHUNK_SIZE as i64
