@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) as \"count!\"\n        FROM beacon_blocks\n        WHERE slot IS NOT NULL AND slot >= $1 AND pending_deposits_sum_gwei IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "745e72419a3c6d27daccf519fdfa7cba65ebcafcbe56e3b2b9df421d9f94f7bc"
+}
