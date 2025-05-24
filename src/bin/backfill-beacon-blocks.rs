@@ -1,5 +1,5 @@
 use eth_analysis::{
-    beacon_chain::{self, Slot},
+    beacon_chain::{self},
     db, log,
 };
 use tracing::info;
