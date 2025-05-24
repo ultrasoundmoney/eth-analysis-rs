@@ -49,7 +49,7 @@ struct StateRootAndSlotFromStates {
 }
 
 pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
-    info!("starting beacon_block slot backfill process using range-based scan of beacon_states.");
+    info!("starting beacon_block slot backfill process.");
 
     let max_slot_in_states_opt: Option<i32> =
         sqlx::query_scalar!("SELECT MAX(slot) FROM beacon_states")
@@ -63,7 +63,7 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
     let max_slot_in_states = match max_slot_in_states_opt {
         Some(max_slot) => max_slot,
         None => {
-            info!("no slots found in beacon_states. nothing to do.");
+            info!("no slots found in beacon_states. nothing to iterate over for backfill.");
             return;
         }
     };
@@ -74,30 +74,66 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
         return;
     }
 
-    let mut progress = Progress::new(
-        "backfill-beacon-block-slots-by-range",
-        max_slot_in_states as u64,
-    );
-    let mut current_min_slot_in_range: i32 = 0; // Assuming we start checking from slot 0
+    // Get initial count of blocks needing backfill for progress reporting
+    let initial_blocks_to_backfill_count_res: Result<Option<i64>, sqlx::Error> =
+        sqlx::query_scalar("SELECT COUNT(*) FROM beacon_blocks WHERE slot IS NULL")
+            .fetch_optional(db_pool) // COUNT(*) always returns a row, but fetch_optional is safer with Option<T>
+            .await;
 
-    while current_min_slot_in_range <= max_slot_in_states {
-        let current_max_slot_in_range = current_min_slot_in_range + SLOT_RANGE_SIZE - 1;
+    let initial_blocks_to_backfill_count = match initial_blocks_to_backfill_count_res {
+        Ok(Some(count)) if count > 0 => count as u64,
+        Ok(Some(count)) => {
+            // count is 0 or negative
+            info!(
+                "no beacon_blocks found with NULL slots (count is {}). backfill not needed.",
+                count
+            );
+            return;
+        }
+        Ok(None) => {
+            // Should not happen with COUNT(*), but defensive
+            info!("COUNT(*) query returned no row, which is unexpected. aborting backfill.");
+            return;
+        }
+        Err(e) => {
+            warn!(error = %e, "failed to query count of blocks with null slots. aborting backfill.");
+            return;
+        }
+    };
+
+    info!(
+        initial_blocks_to_backfill_count,
+        "determined number of blocks requiring slot backfill."
+    );
+
+    let mut progress = Progress::new(
+        "backfill-beacon-block-slots",
+        initial_blocks_to_backfill_count,
+    );
+    let mut total_blocks_backfilled_count: u64 = 0;
+    let mut current_head_slot: i32 = max_slot_in_states;
+
+    while current_head_slot >= 0 {
+        let current_range_max_slot = current_head_slot;
+        let current_range_min_slot = std::cmp::max(0, current_head_slot - SLOT_RANGE_SIZE + 1);
+
         debug!(
             "processing slot range: [{}, {}]",
-            current_min_slot_in_range, current_max_slot_in_range
+            current_range_min_slot, current_range_max_slot
         );
 
         let mut is_triggered = false;
+        let trigger_check_slot = current_range_max_slot;
 
-        // Check Trigger Condition for the start of the range
+        // Check Trigger Condition for the end of the range (highest slot in current batch)
         let trigger_state_root_opt: Option<String> = sqlx::query_scalar!(
             "SELECT state_root FROM beacon_states WHERE slot = $1",
-            current_min_slot_in_range
+            trigger_check_slot
         )
         .fetch_optional(db_pool)
         .await
         .unwrap_or_else(|e| {
-            warn!(slot = current_min_slot_in_range, error = %e, "db error fetching state_root for trigger check");
+            warn!(slot = trigger_check_slot, error = %e, "db error fetching state_root for trigger check");
             None
         });
 
@@ -118,11 +154,9 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
                 if record.slot.is_none() {
                     is_triggered = true;
                     info!(
-                        slot_range = format!(
-                            "[{}, {}]",
-                            current_min_slot_in_range, current_max_slot_in_range
-                        ),
-                        trigger_slot = current_min_slot_in_range,
+                        slot_range =
+                            format!("[{}, {}]", current_range_min_slot, current_range_max_slot),
+                        trigger_slot = trigger_check_slot,
                         trigger_state_root,
                         "backfill triggered for slot range."
                     );
@@ -130,14 +164,14 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
             } else {
                 // State root from beacon_states not found in beacon_blocks, so cannot be a trigger.
                 debug!(
-                    slot = current_min_slot_in_range,
+                    slot = trigger_check_slot,
                     %trigger_state_root,
                     "trigger state_root not found in beacon_blocks or already has slot, not triggering."
                 );
             }
         } else {
             debug!(
-                slot = current_min_slot_in_range,
+                slot = trigger_check_slot,
                 "no state_root found in beacon_states for trigger slot, not triggering."
             );
         }
@@ -151,14 +185,14 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
                 INNER JOIN beacon_blocks bb ON bs.state_root = bb.state_root
                 WHERE bs.slot >= $1 AND bs.slot <= $2 AND bb.slot IS NULL
                 "#,
-                current_min_slot_in_range,
-                current_max_slot_in_range
+                current_range_min_slot,
+                current_range_max_slot
             )
             .fetch_all(db_pool)
             .await
             .unwrap_or_else(|e| {
                 warn!(
-                    slot_range = format!("[{}, {}]", current_min_slot_in_range, current_max_slot_in_range),
+                    slot_range = format!("[{}, {}]", current_range_min_slot, current_range_max_slot),
                     error = %e,
                     "failed to fetch records for backfill in triggered range"
                 );
@@ -177,19 +211,19 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
                 let num_to_update = block_slot_data_vec.len();
                 match bulk_update_slots(db_pool, block_slot_data_vec).await {
                     Ok(rows_affected) => {
+                        total_blocks_backfilled_count += rows_affected;
                         info!(
-                            slot_range = format!(
-                                "[{}, {}]",
-                                current_min_slot_in_range, current_max_slot_in_range
-                            ),
+                            slot_range =
+                                format!("[{}, {}]", current_range_min_slot, current_range_max_slot),
                             attempted_updates = num_to_update,
                             actual_rows_affected = rows_affected,
-                            "bulk updated beacon_blocks slots."
+                            "bulk updated beacon_blocks slots. total backfilled so far: {}",
+                            total_blocks_backfilled_count
                         );
                     }
                     Err(e) => {
                         warn!(
-                            slot_range = format!("[{}, {}]", current_min_slot_in_range, current_max_slot_in_range),
+                            slot_range = format!("[{}, {}]", current_range_min_slot, current_range_max_slot),
                             error = %e,
                             "error during bulk update of slots for range."
                         );
@@ -197,35 +231,31 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
                 }
             } else {
                 info!(
-                    slot_range = format!("[{}, {}]", current_min_slot_in_range, current_max_slot_in_range),
+                    slot_range = format!("[{}, {}]", current_range_min_slot, current_range_max_slot),
                     "triggered backfill, but no updatable (NULL slot in beacon_blocks) records found in range."
                 );
             }
         } else {
             debug!(
-                slot_range = format!(
-                    "[{}, {}]",
-                    current_min_slot_in_range, current_max_slot_in_range
-                ),
+                slot_range = format!("[{}, {}]", current_range_min_slot, current_range_max_slot),
                 "backfill not triggered for slot range."
             );
         }
 
-        progress.set_work_done(std::cmp::min(
-            current_max_slot_in_range as u64,
-            max_slot_in_states as u64,
-        ));
+        progress.set_work_done(total_blocks_backfilled_count);
         info!(
-            "slot backfill progress by range: {}",
-            progress.get_progress_string()
+            "slot backfill progress: {} (processed slots down to {})",
+            progress.get_progress_string(),
+            current_range_min_slot
         );
 
-        current_min_slot_in_range += SLOT_RANGE_SIZE;
+        current_head_slot = current_range_min_slot - 1;
     }
 
-    progress.set_work_done(max_slot_in_states as u64); // Ensure progress shows 100%
+    progress.set_work_done(total_blocks_backfilled_count); // Ensure final progress reflects actual updates
     info!(
-        "beacon_block_slots backfill by range process finished. final progress: {}",
-        progress.get_progress_string()
+        "beacon_block_slots backfill process finished. final progress: {}. total blocks updated: {}",
+        progress.get_progress_string(),
+        total_blocks_backfilled_count
     );
 }
