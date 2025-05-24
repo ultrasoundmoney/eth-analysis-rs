@@ -105,19 +105,13 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
     let mut overall_processed_count: u64 = 0;
 
     loop {
-        let records_to_process: Vec<StateRootAndOptionalDbSlot> = sqlx::query_as!(
-            StateRootAndOptionalDbSlot,
+        // Fetch a chunk of beacon_blocks with NULL slots
+        let state_roots_to_process: Vec<String> = sqlx::query_scalar!(
             r#"
-            SELECT
-                bb.state_root,
-                bs.slot AS "slot_from_db?"
-            FROM
-                beacon_states bs
-            LEFT JOIN beacon_blocks bb USING (state_root)
-            WHERE
-                bb.slot IS NULL
-            ORDER BY
-                bs.slot DESC
+            SELECT state_root
+            FROM beacon_blocks
+            WHERE slot IS NULL
+            ORDER BY pending_deposits_sum_gwei DESC
             LIMIT $1
             "#,
             DB_CHUNK_SIZE as i64
@@ -125,29 +119,59 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
         .fetch_all(db_pool)
         .await
         .unwrap_or_else(|e| {
-            warn!(error = %e, "failed to fetch chunk of state_roots with optional slots, ending backfill early");
+            warn!(error = %e, "failed to fetch chunk of state_roots with null slots, ending backfill early");
             Vec::new()
         });
 
-        if records_to_process.is_empty() {
-            info!("no more state_roots with missing slots found to process.");
+        if state_roots_to_process.is_empty() {
+            info!("no more beacon_blocks with missing slots found to process.");
             break;
         }
 
-        let chunk_size = records_to_process.len() as u64;
-        debug!("processing a new chunk of {} records", chunk_size);
+        let chunk_size = state_roots_to_process.len() as u64;
+        debug!("processing a new chunk of {} state_roots", chunk_size);
+
+        // Fetch slots from beacon_states for the current chunk of state_roots
+        // We need a way to associate the fetched slots back to their state_roots
+        let slots_from_db_result: Vec<(String, Option<i32>)> = if !state_roots_to_process.is_empty()
+        {
+            sqlx::query_as!(
+                StateRootAndOptionalDbSlot,
+                r#"
+                SELECT bs.state_root AS "state_root!", bs.slot AS "slot_from_db?"
+                FROM beacon_states bs
+                WHERE bs.state_root = ANY($1)
+                "#,
+                &state_roots_to_process
+            )
+            .fetch_all(db_pool)
+            .await
+            .map(|records| records.into_iter().map(|r| (r.state_root, r.slot_from_db)).collect())
+            .unwrap_or_else(|e| {
+                warn!(error = %e, "failed to fetch slots from beacon_states for chunk, will attempt node lookup for all");
+                Vec::new()
+            })
+        } else {
+            Vec::new()
+        };
+
+        // Create a map for quick lookup of slots from beacon_states
+        let slots_map: std::collections::HashMap<String, i32> = slots_from_db_result
+            .into_iter()
+            .filter_map(|(sr, opt_slot)| opt_slot.map(|slot_val| (sr, slot_val)))
+            .collect();
 
         let mut successfully_found_slots: Vec<BlockSlotData> = Vec::new();
         let mut state_roots_needing_node_lookup: Vec<String> = Vec::new();
 
-        for record in records_to_process {
-            if let Some(slot_val) = record.slot_from_db {
+        for state_root_to_process in state_roots_to_process {
+            if let Some(&slot_val) = slots_map.get(&state_root_to_process) {
                 successfully_found_slots.push(BlockSlotData {
-                    state_root: record.state_root,
+                    state_root: state_root_to_process,
                     slot: Slot(slot_val),
                 });
             } else {
-                state_roots_needing_node_lookup.push(record.state_root);
+                state_roots_needing_node_lookup.push(state_root_to_process);
             }
         }
 
