@@ -159,8 +159,7 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
             .collect()
             .await;
 
-        let successful_updates: Vec<BlockSlotData> =
-            results.into_iter().filter_map(|res| res).collect();
+        let successful_updates: Vec<BlockSlotData> = results.into_iter().flatten().collect();
 
         if !successful_updates.is_empty() {
             match bulk_update_slots(db_pool, successful_updates).await {

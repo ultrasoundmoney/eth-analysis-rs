@@ -12,7 +12,7 @@ pub async fn main() {
 
     let db_pool = db::get_db_pool("backfill-beacon-blocks", 3).await;
 
-    beacon_chain::blocks::backfill::backfill_blocks(&db_pool).await;
+    beacon_chain::blocks::backfill::backfill_beacon_block_slots(&db_pool).await;
 
     info!("beacon block backfill process finished");
 }
