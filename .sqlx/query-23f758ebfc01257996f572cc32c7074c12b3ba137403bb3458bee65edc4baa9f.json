@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE beacon_blocks AS bb\n        SET slot = upd.slot\n        FROM UNNEST($1::text[], $2::int4[]) AS upd(state_root, slot)\n        WHERE bb.state_root = upd.state_root\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "23f758ebfc01257996f572cc32c7074c12b3ba137403bb3458bee65edc4baa9f"
+}
