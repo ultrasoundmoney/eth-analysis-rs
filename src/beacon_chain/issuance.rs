@@ -7,7 +7,6 @@
 //! to change this to looking up by slots and blocks, or alternatively time relative to the current
 //! block.
 use anyhow::Result;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
 use serde::Serialize;
@@ -54,24 +53,6 @@ pub fn calc_issuance(
     *beacon_balances_sum_gwei - *deposit_requests_running_total
         + *pending_deposits_sum
         + *withdrawals_running_total
-}
-
-pub async fn get_current_issuance(executor: impl PgExecutor<'_>) -> GweiNewtype {
-    sqlx::query!(
-        "
-        SELECT
-            gwei
-        FROM
-            beacon_issuance
-        ORDER BY
-            timestamp DESC
-        LIMIT 1
-        ",
-    )
-    .fetch_one(executor)
-    .await
-    .map(|row| GweiNewtype(row.gwei))
-    .unwrap()
 }
 
 pub async fn delete_issuances(executor: impl PgExecutor<'_>, greater_than_or_equal: Slot) {
@@ -128,7 +109,7 @@ pub enum IssuanceUnavailableError {
     Timestamp(DateTime<Utc>),
 }
 
-#[async_trait]
+#[allow(async_fn_in_trait)]
 pub trait IssuanceStore {
     async fn current_issuance(&self) -> GweiNewtype;
     async fn n_days_ago_issuance(&self, n: i32) -> GweiNewtype;
@@ -154,10 +135,23 @@ impl IssuanceStorePostgres {
     }
 }
 
-#[async_trait]
 impl IssuanceStore for IssuanceStorePostgres {
     async fn current_issuance(&self) -> GweiNewtype {
-        get_current_issuance(&self.db_pool).await
+        sqlx::query!(
+            "
+            SELECT
+                gwei
+            FROM
+                beacon_issuance
+            ORDER BY
+                timestamp DESC
+            LIMIT 1
+            ",
+        )
+        .fetch_one(&self.db_pool)
+        .await
+        .map(|row| GweiNewtype(row.gwei))
+        .unwrap()
     }
 
     async fn n_days_ago_issuance(&self, n: i32) -> GweiNewtype {
@@ -260,11 +254,12 @@ pub async fn update_issuance_estimate() {
 mod tests {
     use chrono::{Duration, DurationRound, TimeZone, Utc};
     use sqlx::Acquire;
+    use test_context::test_context;
 
     use super::*;
     use crate::{
         beacon_chain::{states::store_state, GweiInTime},
-        db,
+        db::{self, tests::TestDb},
     };
 
     pub async fn get_issuance_by_start_of_day(pool: impl PgExecutor<'_>) -> Vec<GweiInTime> {
@@ -338,32 +333,26 @@ mod tests {
         assert_eq!(datetime, start_of_day_datetime);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn get_current_issuance_test() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn get_current_issuance_test(db: &TestDb) {
+        let issuance_store = IssuanceStorePostgres::new(db.pool.clone());
 
-        store_state(&mut *transaction, "0xtest_issuance_1", Slot(3599)).await;
+        store_state(&db.pool, "0xtest_issuance_1", Slot(3599)).await;
 
-        store_state(&mut *transaction, "0xtest_issuance_2", Slot(10799)).await;
+        store_state(&db.pool, "0xtest_issuance_2", Slot(10799)).await;
 
-        store_issuance(
-            &mut *transaction,
-            "0xtest_issuance_1",
-            Slot(3599),
-            &GweiNewtype(100),
-        )
-        .await;
+        store_issuance(&db.pool, "0xtest_issuance_1", Slot(3599), &GweiNewtype(100)).await;
 
         store_issuance(
-            &mut *transaction,
+            &db.pool,
             "0xtest_issuance_2",
             Slot(10799),
             &GweiNewtype(110),
         )
         .await;
 
-        let current_issuance = get_current_issuance(&mut *transaction).await;
+        let current_issuance = issuance_store.current_issuance().await;
 
         assert_eq!(current_issuance, GweiNewtype(110));
     }
@@ -435,7 +424,6 @@ mod tests {
 
     struct IssuanceStoreTest {}
 
-    #[async_trait]
     impl IssuanceStore for IssuanceStoreTest {
         async fn current_issuance(&self) -> GweiNewtype {
             GweiNewtype(100)
