@@ -1,9 +1,11 @@
+mod backfill;
 mod export;
 mod logs;
 mod node;
 pub mod snapshot;
 mod sync;
 
+pub use backfill::backfill_execution_supply;
 pub use export::export_deltas;
 pub use export::summary_from_deltas_csv;
 pub use logs::write_deltas_log;

@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use tracing::{debug, info};
 
-use eth_analysis::{
+use crate::{
     db,
     execution_chain::{BlockNumber, BlockRange, GENESIS_SUPPLY},
     job_progress::JobProgress,
@@ -48,13 +48,10 @@ async fn bulk_insert_execution_supplies(
     .unwrap();
 }
 
-#[tokio::main]
-pub async fn main() {
-    log::init();
+pub async fn backfill_execution_supply(pool: &PgPool) {
+    info!("initiating execution supply backfill");
 
-    let db_pool = db::get_db_pool("backfill-execution-supply", 3).await;
-
-    let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
+    let key_value_store = KeyValueStorePostgres::new(pool.clone());
     let job_progress = JobProgress::new(BACKFILL_EXECUTION_SUPPLY_KEY, &key_value_store);
 
     let last_synced_block: Option<BlockNumber> = job_progress.get().await;
@@ -73,7 +70,7 @@ pub async fn main() {
                 ",
                 GENESIS_SUPPLY.0.to_string() as String,
             )
-            .execute(&db_pool)
+            .execute(pool)
             .await
             .unwrap();
 
@@ -100,7 +97,7 @@ pub async fn main() {
                 ",
                 last_synced_block
             )
-            .fetch_one(&db_pool)
+            .fetch_one(pool)
             .await
             .unwrap();
             let balances_sum = row.balances_sum.unwrap().parse::<Wei>().unwrap();
@@ -139,7 +136,7 @@ pub async fn main() {
             next_range.start,
             next_range.end,
         )
-        .fetch_all(&db_pool)
+        .fetch_all(pool)
         .await
         .unwrap()
         .into_iter()
@@ -153,6 +150,11 @@ pub async fn main() {
             )
         })
         .collect::<Vec<_>>();
+
+        if supply_deltas.is_empty() {
+            info!("no more supply deltas found, stopping execution supply backfill");
+            break;
+        }
 
         let new_execution_supplies: Vec<(String, i32, Wei)> = supply_deltas
             .iter()
@@ -170,7 +172,7 @@ pub async fn main() {
             })
             .collect();
 
-        bulk_insert_execution_supplies(&db_pool, &new_execution_supplies).await;
+        bulk_insert_execution_supplies(pool, &new_execution_supplies).await;
 
         job_progress.set(&last_supply.1).await;
 
@@ -178,4 +180,5 @@ pub async fn main() {
         debug!(?last_supply, "stored execution supplies");
         debug!("{}", progress.get_progress_string());
     }
+    info!("done backfilling execution supply");
 }
