@@ -146,15 +146,9 @@ pub async fn sync_slot_by_state_root(
     // takes longer than it takes for a new slot to appear (12 seconds).
     if sync_lag <= *BLOCK_LAG_LIMIT {
         debug!(slot = %header.slot(), "sync lag within limit, gathering balances and deposits");
-        match gather_balances_deposits(beacon_node, &header).await {
-            Ok((balances, deposits)) => {
-                opt_validator_balances = Some(balances);
-                opt_pending_deposits_sum = deposits;
-            }
-            Err(e) => {
-                warn!(slot = %header.slot(), error = ?e, "failed to gather balances/deposits despite sync lag within limit; proceeding without them");
-            }
-        }
+        let (balances, deposits) = gather_balances_deposits(beacon_node, &header).await?;
+        opt_validator_balances = Some(balances);
+        opt_pending_deposits_sum = deposits;
     } else {
         warn!(slot = %header.slot(), %sync_lag, "sync lag over limit ({}), skipping balances and pending deposits fetch", *BLOCK_LAG_LIMIT);
     }
