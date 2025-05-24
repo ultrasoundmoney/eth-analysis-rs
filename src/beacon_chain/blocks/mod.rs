@@ -1,4 +1,5 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
+pub mod backfill;
 mod heal;
 
 use anyhow::Context;

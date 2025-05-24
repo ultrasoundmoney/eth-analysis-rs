@@ -1,5 +1,5 @@
 pub mod balances;
-mod blocks;
+pub mod blocks;
 mod deposits;
 pub mod effective_balance_sums;
 mod issuance;
@@ -17,6 +17,7 @@ pub use balances::store_validators_balance;
 pub use balances::sum_validator_balances;
 pub use balances::BeaconBalancesSum;
 
+pub use blocks::backfill::backfill_blocks;
 pub use blocks::get_block_before_slot;
 pub use blocks::get_block_by_slot;
 pub use blocks::heal_block_hashes;
