@@ -32,10 +32,9 @@ async fn fetch_issuance_data_for_slot(
     beacon_node: &BeaconNodeHttp,
     slot: Slot,
 ) -> anyhow::Result<Option<IssuanceBackfillData>> {
-    if slot < *PECTRA_SLOT {
-        debug!(%slot, "slot is pre-pectra, skipping issuance data fetch for backfill");
-        return Ok(None);
-    }
+    // Removed Pectra slot check here to allow backfilling earlier slots.
+    // The pending_deposits_sum logic below correctly handles pre-Pectra cases.
+
     // 1. Get state_root and aggregated deposit/withdrawal sums from beacon_blocks table
     let block_info = sqlx::query!(
         r#"
@@ -70,9 +69,9 @@ async fn fetch_issuance_data_for_slot(
         .iter()
         .fold(GweiNewtype(0), |acc, b| acc + b.balance);
 
-    // 3. Fetch pending deposits sum (already correctly checks PECTRA_SLOT internally in original code)
+    // 3. Fetch pending deposits sum
     let pending_deposits_sum = if slot < *PECTRA_SLOT {
-        // Redundant check here given the top guard, but safe.
+        // Correctly sets to 0 for pre-Pectra slots.
         GweiNewtype(0)
     } else {
         match beacon_node.get_pending_deposits_sum(&state_root).await {
@@ -323,12 +322,27 @@ pub async fn backfill_slot_range_issuance(
     start_slot_config: Slot,
     end_slot_config: Slot,
 ) {
-    let effective_start_slot = std::cmp::max(start_slot_config, *PECTRA_SLOT);
+    let effective_start_slot = start_slot_config; // Use user-defined start_slot directly
 
-    info!(%start_slot_config, %end_slot_config, %effective_start_slot, "starting backfill for beacon issuance in specified slot range (one per hour, Pectra cap applied, using upsert)");
+    let run_description = if effective_start_slot < *PECTRA_SLOT {
+        format!(
+            "includes pre-pectra slots (note: pending_deposits_sum is zero for slots before {})",
+            *PECTRA_SLOT
+        )
+    } else {
+        format!("for slots from {} onwards", *PECTRA_SLOT)
+    };
+    info!(
+        %start_slot_config, %end_slot_config, %effective_start_slot,
+        "starting backfill for beacon issuance in specified slot range [{}, {}] (one per hour, {}, using upsert)",
+        effective_start_slot, end_slot_config, run_description
+    );
 
     if effective_start_slot > end_slot_config {
-        info!("effective start slot ({}) is after end slot ({}) due to Pectra hard cap, nothing to do.", effective_start_slot, end_slot_config);
+        info!(
+            "effective start slot ({}) is after end slot ({}), nothing to do.",
+            effective_start_slot, end_slot_config
+        );
         return;
     }
 
@@ -337,7 +351,7 @@ pub async fn backfill_slot_range_issuance(
     let total_representative_slots_to_process =
         estimate_total_hours_in_range(db_pool, effective_start_slot, end_slot_config).await;
     if total_representative_slots_to_process == 0 {
-        info!(effective_start_slot = %effective_start_slot, end_slot = %end_slot_config, "no representative slots (slot % 300 == 0 and >= Pectra) found in the specified slot range to backfill issuance for. nothing to do.");
+        info!(%effective_start_slot, %end_slot_config, "no representative slots (slot % {} == 0) found in the specified slot range [{}, {}] to backfill issuance for. nothing to do.", SLOTS_PER_HOUR, effective_start_slot, end_slot_config);
         return;
     }
     debug!(
@@ -370,7 +384,7 @@ pub async fn backfill_slot_range_issuance(
 
         if slots_to_process.is_empty() {
             info!(
-                "no more slots in range [{}-{}] (post-Pectra) found to process for hourly issuance.",
+                "no more slots in range [{}-{}] found to process for hourly issuance.",
                 effective_start_slot, end_slot_config
             );
             break;
@@ -378,7 +392,7 @@ pub async fn backfill_slot_range_issuance(
 
         let current_chunk_size = slots_to_process.len() as u64;
         debug!(
-            "processing a new chunk of {} slots for range [{}-{}] (post-Pectra) hourly issuance",
+            "processing a new chunk of {} slots for range [{}-{}] for hourly issuance",
             current_chunk_size, effective_start_slot, end_slot_config
         );
 
@@ -418,13 +432,16 @@ pub async fn backfill_slot_range_issuance(
         }
 
         if issuance_calculated_count_in_chunk > 0 {
-            info!("successfully calculated and stored issuance for {} slots in this chunk for range [{}-{} (post-Pectra)].", issuance_calculated_count_in_chunk, effective_start_slot, end_slot_config);
+            info!(
+                "successfully calculated and stored issuance for {} slots in this chunk for range [{}-{}].",
+                issuance_calculated_count_in_chunk, effective_start_slot, end_slot_config
+            );
         }
 
         overall_processed_slots_in_db_chunks += current_chunk_size;
         progress.set_work_done(successful_updates_count);
         info!(
-            "range [{}-{}] (post-Pectra) issuance backfill progress: {}",
+            "range [{}-{}] issuance backfill progress: {}",
             effective_start_slot,
             end_slot_config,
             progress.get_progress_string()
@@ -432,7 +449,7 @@ pub async fn backfill_slot_range_issuance(
 
         if current_chunk_size < DB_CHUNK_SIZE as u64 {
             info!(
-                "processed the last chunk of slots for range [{}-{} (post-Pectra)].",
+                "processed the last chunk of slots for range [{}-{}].",
                 effective_start_slot, end_slot_config
             );
             break;
@@ -441,7 +458,7 @@ pub async fn backfill_slot_range_issuance(
 
     progress.set_work_done(total_representative_slots_to_process);
     info!(
-        "slot range [{}-{}] (post-Pectra) hourly issuance backfill process finished. successfully updated {} representative_slots. final progress: {}",
+        "slot range [{}-{}] hourly issuance backfill process finished. successfully updated {} representative_slots. final progress: {}",
         effective_start_slot, end_slot_config, successful_updates_count,
         progress.get_progress_string()
     );
