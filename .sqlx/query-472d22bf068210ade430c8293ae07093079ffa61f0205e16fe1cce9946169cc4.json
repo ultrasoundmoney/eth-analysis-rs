@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO beacon_issuance (timestamp, state_root, gwei)\n        VALUES ($1, $2, $3)\n        ON CONFLICT (state_root) DO UPDATE SET\n            timestamp = EXCLUDED.timestamp,\n            gwei = EXCLUDED.gwei\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "472d22bf068210ade430c8293ae07093079ffa61f0205e16fe1cce9946169cc4"
+}

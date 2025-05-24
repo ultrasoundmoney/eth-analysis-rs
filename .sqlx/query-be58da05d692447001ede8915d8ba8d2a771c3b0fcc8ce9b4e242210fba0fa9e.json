@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            state_root,\n            deposit_sum_aggregated,\n            withdrawal_sum_aggregated\n        FROM beacon_blocks\n        WHERE slot = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state_root",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "deposit_sum_aggregated",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "withdrawal_sum_aggregated",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "be58da05d692447001ede8915d8ba8d2a771c3b0fcc8ce9b4e242210fba0fa9e"
+}

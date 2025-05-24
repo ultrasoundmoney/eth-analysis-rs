@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            bb.slot AS \"representative_slot!\"\n        FROM beacon_blocks AS bb\n        WHERE bb.slot >= $1 AND bb.slot <= $2\n          AND bb.slot % $3 = 0\n        ORDER BY bb.slot ASC\n        LIMIT $4 OFFSET $5\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "representative_slot!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "aa56cd595efc72cb5a17d12836aef8fd97ddc53e4fac14611ddb440f737b58d7"
+}
