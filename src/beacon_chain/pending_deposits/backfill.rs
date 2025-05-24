@@ -110,6 +110,7 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool) {
             r#"
             SELECT state_root FROM beacon_blocks
             WHERE slot IS NOT NULL AND slot >= $1 AND pending_deposits_sum_gwei IS NULL
+            ORDER BY slot DESC
             LIMIT $2
             "#,
             PECTRA_SLOT.0,
