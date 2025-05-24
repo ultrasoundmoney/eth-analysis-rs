@@ -4,7 +4,7 @@ use tracing::{debug, info, warn};
 
 use crate::beacon_chain::Slot;
 
-const SLOT_RANGE_SIZE: i32 = 1000;
+const SLOT_RANGE_SIZE: i32 = 100;
 
 #[derive(Debug, Clone)]
 struct BlockSlotData {
@@ -123,9 +123,14 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
         );
 
         let mut is_triggered = false;
-        let trigger_check_slot = current_range_max_slot;
+        let trigger_check_slot = current_range_min_slot;
 
-        // Check Trigger Condition for the end of the range (highest slot in current batch)
+        // Performance optimization: Check only the state_root for the lowest slot in the current
+        // range (current_range_min_slot). If this specific state_root is present in beacon_states
+        // and its corresponding beacon_block entry has a NULL slot, we trigger a backfill
+        // for the entire range. This avoids a potentially costly query to check all slots
+        // in the range upfront. The assumption is that if the bottom of the range needs
+        // backfilling, it's a good heuristic to process the whole recent chunk.
         let trigger_state_root_opt: Option<String> = sqlx::query_scalar!(
             "SELECT state_root FROM beacon_states WHERE slot = $1",
             trigger_check_slot
@@ -157,8 +162,15 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
                         slot_range =
                             format!("[{}, {}]", current_range_min_slot, current_range_max_slot),
                         trigger_slot = trigger_check_slot,
-                        trigger_state_root,
+                        %trigger_state_root,
                         "backfill triggered for slot range."
+                    );
+                } else {
+                    // Slot is present, no trigger based on this specific state_root
+                    debug!(
+                        slot = trigger_check_slot,
+                        %trigger_state_root,
+                        "trigger state_root found in beacon_blocks but already has a slot, not triggering."
                     );
                 }
             } else {
@@ -166,7 +178,7 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
                 debug!(
                     slot = trigger_check_slot,
                     %trigger_state_root,
-                    "trigger state_root not found in beacon_blocks or already has slot, not triggering."
+                    "trigger state_root not found in beacon_blocks, not triggering."
                 );
             }
         } else {
@@ -244,8 +256,11 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
 
         progress.set_work_done(total_blocks_backfilled_count);
         info!(
-            "slot backfill progress: {} (processed slots down to {})",
+            "slot backfill iteration complete for range [{}, {}]. progress: {}. total blocks updated so far: {}. next range starts below {}.",
+            current_range_min_slot,
+            current_range_max_slot,
             progress.get_progress_string(),
+            total_blocks_backfilled_count,
             current_range_min_slot
         );
 
