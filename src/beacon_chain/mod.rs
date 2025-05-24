@@ -4,6 +4,7 @@ mod deposits;
 pub mod effective_balance_sums;
 mod issuance;
 mod node;
+pub mod pending_deposits;
 pub mod states;
 mod store;
 mod sync;
@@ -84,6 +85,8 @@ impl From<(DateTime<Utc>, i64)> for GweiInTime {
         }
     }
 }
+
+pub use pending_deposits::backfill::backfill_pending_deposits_sum;
 
 #[cfg(test)]
 pub mod tests {

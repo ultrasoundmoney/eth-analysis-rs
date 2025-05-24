@@ -18,41 +18,16 @@ async fn estimate_total_missing_slots(db_pool: &PgPool) -> u64 {
         .unwrap_or(0)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct BlockSlotData {
     state_root: String,
     slot: Slot,
 }
 
-async fn find_slot_for_state_root(
-    db_pool: &PgPool,
+async fn fetch_slot_from_node_for_state_root(
     beacon_node: &BeaconNodeHttp,
     state_root: String,
 ) -> Option<BlockSlotData> {
-    // 1. Try beacon_states table first
-    match sqlx::query_scalar!(
-        "SELECT slot FROM beacon_states WHERE state_root = $1",
-        &state_root
-    )
-    .fetch_optional(db_pool)
-    .await
-    {
-        Ok(Some(slot_val)) => {
-            debug!(%state_root, slot = slot_val, "slot found in beacon_states");
-            return Some(BlockSlotData {
-                state_root,
-                slot: Slot(slot_val),
-            });
-        }
-        Ok(None) => {
-            debug!(%state_root, "slot not found in beacon_states, trying beacon node");
-        }
-        Err(e) => {
-            warn!(%state_root, error = %e, "db error querying beacon_states for slot, trying beacon node");
-        }
-    }
-
-    // 2. If not in beacon_states, try beacon node
     warn!(%state_root, "falling back to beacon node to find slot for state_root");
     match beacon_node
         .get_header(&BlockId::BlockRoot(state_root.clone()))
@@ -61,20 +36,20 @@ async fn find_slot_for_state_root(
         Ok(Some(header_envelope)) => {
             let node_slot = header_envelope.slot();
             debug!(%state_root, slot = %node_slot, "slot found via beacon node header");
-            return Some(BlockSlotData {
+            Some(BlockSlotData {
                 state_root,
                 slot: node_slot,
-            });
+            })
         }
         Ok(None) => {
             warn!(%state_root, "header (and slot) not found via beacon node for state_root");
+            None
         }
         Err(e) => {
             warn!(%state_root, error = %e, "error fetching header from beacon node for state_root");
+            None
         }
     }
-
-    None
 }
 
 async fn bulk_update_slots(db_pool: &PgPool, updates: Vec<BlockSlotData>) -> sqlx::Result<u64> {
@@ -90,8 +65,6 @@ async fn bulk_update_slots(db_pool: &PgPool, updates: Vec<BlockSlotData>) -> sql
         slots.push(update.slot.0);
     }
 
-    // Using UNNEST for bulk update as per SQLx FAQ
-    // Assumes `slot` column in `beacon_blocks` is of a type compatible with i32 (e.g., INTEGER)
     let rows_affected = sqlx::query!(
         r#"
         UPDATE beacon_blocks AS bb
@@ -107,6 +80,12 @@ async fn bulk_update_slots(db_pool: &PgPool, updates: Vec<BlockSlotData>) -> sql
     .rows_affected();
 
     Ok(rows_affected)
+}
+
+#[derive(sqlx::FromRow, Debug)]
+struct StateRootAndOptionalDbSlot {
+    state_root: String,
+    slot_from_db: Option<i32>,
 }
 
 pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
@@ -126,63 +105,100 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
     let mut overall_processed_count: u64 = 0;
 
     loop {
-        let state_roots_to_process: Vec<String> = sqlx::query_scalar!(
-            "SELECT state_root FROM beacon_blocks WHERE slot IS NULL LIMIT $1",
+        let records_to_process: Vec<StateRootAndOptionalDbSlot> = sqlx::query_as!(
+            StateRootAndOptionalDbSlot,
+            r#"
+            SELECT
+                bb.state_root,
+                bs.slot AS "slot_from_db?" -- سیسqlx maps this to Option<i32>
+            FROM beacon_blocks bb
+            LEFT JOIN beacon_states bs ON bb.state_root = bs.state_root
+            WHERE bb.slot IS NULL 
+            ORDER BY bs.slot DESC NULLS LAST, bb.state_root ASC
+            LIMIT $1
+            "#,
             DB_CHUNK_SIZE as i64
         )
         .fetch_all(db_pool)
         .await
         .unwrap_or_else(|e| {
-            warn!(error = %e, "failed to fetch chunk of state_roots, ending backfill early");
+            warn!(error = %e, "failed to fetch chunk of state_roots with optional slots, ending backfill early");
             Vec::new()
         });
 
-        if state_roots_to_process.is_empty() {
+        if records_to_process.is_empty() {
             info!("no more state_roots with missing slots found to process.");
             break;
         }
 
-        let chunk_size = state_roots_to_process.len() as u64;
-        debug!("processing a new chunk of {} state_roots", chunk_size);
+        let chunk_size = records_to_process.len() as u64;
+        debug!("processing a new chunk of {} records", chunk_size);
 
-        let tasks =
-            stream::iter(state_roots_to_process).map(|state_root| {
-                let db_pool_clone = db_pool.clone();
-                let beacon_node_clone = beacon_node.clone();
-                async move {
-                    find_slot_for_state_root(&db_pool_clone, &beacon_node_clone, state_root).await
-                }
-            });
+        let mut successfully_found_slots: Vec<BlockSlotData> = Vec::new();
+        let mut state_roots_needing_node_lookup: Vec<String> = Vec::new();
 
-        let results: Vec<Option<BlockSlotData>> = tasks
-            .buffer_unordered(NODE_LOOKUP_CONCURRENCY_LIMIT)
-            .collect()
-            .await;
+        for record in records_to_process {
+            if let Some(slot_val) = record.slot_from_db {
+                successfully_found_slots.push(BlockSlotData {
+                    state_root: record.state_root,
+                    slot: Slot(slot_val),
+                });
+            } else {
+                state_roots_needing_node_lookup.push(record.state_root);
+            }
+        }
 
-        let successful_updates: Vec<BlockSlotData> = results.into_iter().flatten().collect();
+        debug!(
+            "from db: {} slots found directly, {} need node lookup",
+            successfully_found_slots.len(),
+            state_roots_needing_node_lookup.len()
+        );
 
-        if !successful_updates.is_empty() {
-            match bulk_update_slots(db_pool, successful_updates).await {
+        if !state_roots_needing_node_lookup.is_empty() {
+            let node_lookups = stream::iter(state_roots_needing_node_lookup)
+                .map(|sr_to_check| {
+                    let beacon_node_clone = beacon_node.clone();
+                    async move {
+                        fetch_slot_from_node_for_state_root(&beacon_node_clone, sr_to_check).await
+                    }
+                })
+                .buffer_unordered(NODE_LOOKUP_CONCURRENCY_LIMIT)
+                .filter_map(|opt_data| async { opt_data })
+                .collect::<Vec<BlockSlotData>>()
+                .await;
+
+            debug!("from node: {} slots found", node_lookups.len());
+            successfully_found_slots.extend(node_lookups);
+        }
+
+        if !successfully_found_slots.is_empty() {
+            let num_successful = successfully_found_slots.len();
+            match bulk_update_slots(db_pool, successfully_found_slots).await {
                 Ok(rows_affected) => {
-                    info!("bulk updated {} rows with new slots.", rows_affected);
+                    info!(
+                        "bulk updated {} rows with new slots ({} successful lookups this chunk).",
+                        rows_affected, num_successful
+                    );
                 }
                 Err(e) => {
                     warn!(error = %e, "error during bulk update of slots");
                 }
             }
+        } else {
+            debug!("no slots found for the current chunk of state_roots (neither DB nor node).");
         }
 
-        overall_processed_count += chunk_size; // Count all attempted in chunk, not just successfully updated
+        overall_processed_count += chunk_size;
         progress.set_work_done(overall_processed_count);
         info!("slot backfill progress: {}", progress.get_progress_string());
 
         if chunk_size < DB_CHUNK_SIZE as u64 {
             info!("processed the last chunk of state_roots.");
-            break; // Likely the last chunk
+            break;
         }
     }
 
-    progress.set_work_done(total_work); // Ensure progress shows 100% if loop finished
+    progress.set_work_done(total_work);
     info!(
         "beacon_block_slots backfill process finished. final progress: {}",
         progress.get_progress_string()
