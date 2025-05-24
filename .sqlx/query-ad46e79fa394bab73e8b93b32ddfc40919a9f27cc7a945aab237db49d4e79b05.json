@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT slot AS \"slot!: _\", block_root AS root, parent_root\n            FROM beacon_blocks\n            WHERE slot IS NOT NULL AND slot >= $1\n            ORDER BY slot ASC\n            LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slot!: _",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "root",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "parent_root",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "ad46e79fa394bab73e8b93b32ddfc40919a9f27cc7a945aab237db49d4e79b05"
+}

@@ -7,7 +7,9 @@ use eth_analysis::{
         backfill::{backfill_balances, Granularity},
         backfill_pending_deposits_sum,
         blocks,
+        integrity::check_beacon_block_chain_integrity,
         issuance::backfill::{backfill_missing_issuance, backfill_slot_range_issuance},
+        BeaconNodeHttp,
         Slot, // Assuming Slot can be created from i32
         FIRST_POST_LONDON_SLOT,
         PECTRA_SLOT,
@@ -77,6 +79,12 @@ enum Commands {
     BackfillExecutionSupply,
     /// Backfills all hourly balances.
     BackfillHourlyBalances,
+    /// Checks the integrity of the beacon block chain.
+    CheckBeaconBlockChainIntegrity {
+        /// Optional: Specify a slot to start the integrity check from.
+        #[clap(long)]
+        start_slot: Option<i32>,
+    },
 }
 
 async fn run_cli(pool: PgPool, commands: Commands) {
@@ -140,6 +148,20 @@ async fn run_cli(pool: PgPool, commands: Commands) {
             info!("backfilling hourly beacon balances");
             backfill_balances(&pool, &Granularity::Hour, Slot(0)).await;
             info!("done backfilling hourly beacon balances");
+        }
+        Commands::CheckBeaconBlockChainIntegrity { start_slot } => {
+            let start_slot_opt = start_slot.map(Slot);
+            info!(
+                ?start_slot_opt,
+                "initiating beacon block chain integrity check"
+            );
+
+            let beacon_node = BeaconNodeHttp::new();
+
+            match check_beacon_block_chain_integrity(&pool, &beacon_node, start_slot_opt).await {
+                Ok(()) => info!("beacon block chain integrity check successful"),
+                Err(e) => eprintln!("error during beacon block chain integrity check: {}", e),
+            }
         }
     }
 }
