@@ -1,6 +1,5 @@
 use clap::Parser;
 use sqlx::PgPool;
-// use std::string::String; // Ensure String is in scope if not already
 use tracing::info;
 
 use eth_analysis::{
@@ -39,6 +38,7 @@ impl From<GranularityArgs> for Granularity {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Parser, Debug)]
 enum Commands {
     /// Backfills beacon chain issuance data.
