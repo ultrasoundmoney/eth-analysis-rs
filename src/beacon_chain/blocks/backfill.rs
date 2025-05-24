@@ -6,7 +6,7 @@ use tracing::{debug, info, warn};
 use crate::beacon_chain::node::{BeaconNode, BeaconNodeHttp};
 use crate::beacon_chain::{BlockId, Slot};
 
-const DB_CHUNK_SIZE: usize = 1000;
+const DB_CHUNK_SIZE: usize = 100;
 const NODE_LOOKUP_CONCURRENCY_LIMIT: usize = 4;
 
 async fn estimate_total_missing_slots(db_pool: &PgPool) -> u64 {
@@ -110,11 +110,14 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
             r#"
             SELECT
                 bb.state_root,
-                bs.slot AS "slot_from_db?" -- سیسqlx maps this to Option<i32>
-            FROM beacon_blocks bb
-            LEFT JOIN beacon_states bs ON bb.state_root = bs.state_root
-            WHERE bb.slot IS NULL 
-            ORDER BY bs.slot DESC NULLS LAST, bb.state_root ASC
+                bs.slot AS "slot_from_db?"
+            FROM
+                beacon_states bs
+            LEFT JOIN beacon_blocks bb USING (state_root)
+            WHERE
+                bb.slot IS NULL
+            ORDER BY
+                bs.slot DESC
             LIMIT $1
             "#,
             DB_CHUNK_SIZE as i64
