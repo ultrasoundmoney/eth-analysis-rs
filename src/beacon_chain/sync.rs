@@ -21,6 +21,55 @@ lazy_static! {
     static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(5);
 }
 
+async fn fetch_pending_deposits_with_retry(
+    beacon_node: &BeaconNodeHttp,
+    state_root_str: &str,
+    slot: Slot,
+) -> Result<Option<GweiNewtype>> {
+    if slot < *PECTRA_SLOT {
+        debug!(%slot, "pre-pectra slot, skipping pending deposits sum fetch");
+        return Ok(None);
+    }
+
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        match beacon_node.get_pending_deposits_sum(state_root_str).await {
+            Ok(Some(sum)) => {
+                if attempts > 1 {
+                    debug!(%slot, attempt = attempts, "pending deposits sum became available after retry");
+                }
+                return Ok(Some(sum));
+            }
+            Ok(None) => {
+                if attempts < 3 {
+                    warn!(
+                        %slot,
+                        attempt = attempts,
+                        "pending deposits sum is none, retrying in 12s"
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(12)).await;
+                } else {
+                    warn!(
+                        %slot,
+                        "pending deposits sum is still none after 3 attempts, returning none"
+                    );
+                    return Ok(None);
+                }
+            }
+            Err(e) => {
+                // Immediately return an error, do not retry.
+                warn!(
+                    %slot,
+                    error = ?e,
+                    "error fetching pending deposits sum, returning error immediately"
+                );
+                return Err(e.context("failed to fetch pending deposits sum"));
+            }
+        }
+    }
+}
+
 #[instrument(skip(beacon_node, header), fields(slot = %header.slot(), block_root = %header.root))]
 async fn gather_balances_deposits(
     beacon_node: &BeaconNodeHttp,
@@ -30,34 +79,8 @@ async fn gather_balances_deposits(
     let state_root_str = header.state_root();
 
     let balances_future = beacon_node.get_validator_balances(&state_root_str);
-
-    let pending_deposits_future = async {
-        if slot < *PECTRA_SLOT {
-            debug!(%slot, "pre-pectra slot, skipping pending deposits sum fetch");
-            return Ok(None);
-        }
-
-        // we have a strange issue where it appears pending deposits come back null sometimes even if they become available later.
-        // so we retry once and log something if that works.
-        let result = beacon_node
-            .get_pending_deposits_sum(&state_root_str)
-            .await?;
-        if result.is_none() {
-            debug!(%slot, "pending deposits sum is None, retrying");
-            tokio::time::sleep(std::time::Duration::from_secs(12)).await;
-            let result = beacon_node
-                .get_pending_deposits_sum(&state_root_str)
-                .await?;
-            if result.is_none() {
-                warn!(%slot, "pending deposits sum is still None, returning None");
-                return Ok(None);
-            } else {
-                debug!(%slot, "pending deposits became available after waiting 12 seconds");
-            }
-        }
-
-        Ok(result)
-    };
+    let pending_deposits_future =
+        fetch_pending_deposits_with_retry(beacon_node, &state_root_str, slot);
 
     let (validator_balances_result, pending_deposits_sum_result) =
         tokio::try_join!(balances_future, pending_deposits_future)?;
