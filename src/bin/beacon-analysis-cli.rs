@@ -10,6 +10,7 @@ use eth_analysis::{
         issuance::backfill::{backfill_missing_issuance, backfill_slot_range_issuance},
         Slot, // Assuming Slot can be created from i32
         FIRST_POST_LONDON_SLOT,
+        PECTRA_SLOT,
     },
     db,
     execution_chain::supply_deltas::backfill_execution_supply,
@@ -63,6 +64,11 @@ enum Commands {
         #[clap(subcommand)]
         granularity: GranularityArgs,
     },
+    /// Backfills beacon chain balances to Pectra fork.
+    BackfillBalancesToPectra {
+        #[clap(subcommand)]
+        granularity: GranularityArgs,
+    },
     /// Backfills beacon chain block slots.
     BackfillBeaconBlockSlots,
     /// Backfills pending deposits sum.
@@ -107,6 +113,15 @@ async fn run_cli(pool: PgPool, commands: Commands) {
             let gran: Granularity = granularity.into();
             backfill_balances(&pool, &gran, FIRST_POST_LONDON_SLOT).await;
             info!("done backfilling beacon balances to london for specified granularity");
+        }
+        Commands::BackfillBalancesToPectra { granularity } => {
+            info!(
+                granularity = ?granularity,
+                "initiating beacon balances backfill to pectra"
+            );
+            let gran: Granularity = granularity.into();
+            backfill_balances(&pool, &gran, *PECTRA_SLOT + 1).await;
+            info!("done backfilling beacon balances to pectra for specified granularity");
         }
         Commands::BackfillBeaconBlockSlots => {
             info!("initiating beacon block slots backfill");
