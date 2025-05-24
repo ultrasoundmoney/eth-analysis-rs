@@ -1,55 +1,16 @@
-use futures::{stream, StreamExt};
+// use futures::{stream, StreamExt}; // StreamExt might not be needed anymore
 use pit_wall::Progress;
 use sqlx::PgPool;
 use tracing::{debug, info, warn};
 
-use crate::beacon_chain::node::{BeaconNode, BeaconNodeHttp};
-use crate::beacon_chain::{BlockId, Slot};
+use crate::beacon_chain::Slot;
 
-const DB_CHUNK_SIZE: usize = 100;
-const NODE_LOOKUP_CONCURRENCY_LIMIT: usize = 4;
-
-async fn estimate_total_missing_slots(db_pool: &PgPool) -> u64 {
-    sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!" FROM beacon_blocks WHERE slot IS NULL"#)
-        .fetch_one(db_pool)
-        .await
-        .unwrap_or(0)
-        .try_into()
-        .unwrap_or(0)
-}
+const SLOT_RANGE_SIZE: i32 = 1000;
 
 #[derive(Debug, Clone)]
 struct BlockSlotData {
     state_root: String,
     slot: Slot,
-}
-
-async fn fetch_slot_from_node_for_state_root(
-    beacon_node: &BeaconNodeHttp,
-    state_root: String,
-) -> Option<BlockSlotData> {
-    warn!(%state_root, "falling back to beacon node to find slot for state_root");
-    match beacon_node
-        .get_header(&BlockId::BlockRoot(state_root.clone()))
-        .await
-    {
-        Ok(Some(header_envelope)) => {
-            let node_slot = header_envelope.slot();
-            debug!(%state_root, slot = %node_slot, "slot found via beacon node header");
-            Some(BlockSlotData {
-                state_root,
-                slot: node_slot,
-            })
-        }
-        Ok(None) => {
-            warn!(%state_root, "header (and slot) not found via beacon node for state_root");
-            None
-        }
-        Err(e) => {
-            warn!(%state_root, error = %e, "error fetching header from beacon node for state_root");
-            None
-        }
-    }
 }
 
 async fn bulk_update_slots(db_pool: &PgPool, updates: Vec<BlockSlotData>) -> sqlx::Result<u64> {
@@ -83,151 +44,189 @@ async fn bulk_update_slots(db_pool: &PgPool, updates: Vec<BlockSlotData>) -> sql
 }
 
 #[derive(sqlx::FromRow, Debug)]
-struct StateRootAndOptionalDbSlot {
+struct StateRootAndSlotFromStates {
     state_root: String,
-    slot_from_db: Option<i32>,
+    slot_from_states: i32,
 }
 
 pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
-    let beacon_node = BeaconNodeHttp::new();
+    info!("starting beacon_block slot backfill process using range-based scan of beacon_states.");
 
-    debug!("estimating total work for backfilling missing beacon_block slots");
-    let total_work = estimate_total_missing_slots(db_pool).await;
-    if total_work == 0 {
-        info!("no beacon_blocks rows found with missing slots. nothing to do.");
+    let max_slot_in_states_opt: Option<i32> =
+        sqlx::query_scalar!("SELECT MAX(slot) FROM beacon_states")
+            .fetch_one(db_pool)
+            .await
+            .unwrap_or_else(|e| {
+                warn!(error = %e, "failed to query max slot from beacon_states");
+                None
+            });
+
+    let max_slot_in_states = match max_slot_in_states_opt {
+        Some(max_slot) => max_slot,
+        None => {
+            info!("no slots found in beacon_states. nothing to do.");
+            return;
+        }
+    };
+
+    if max_slot_in_states < 0 {
+        // Or some other sensible minimum, e.g. if starting slot is > 0
+        info!(%max_slot_in_states, "max slot in beacon_states is less than zero. nothing to do.");
         return;
     }
-    debug!(
-        "total beacon_blocks with missing slots to process: {}",
-        total_work
-    );
-    let mut progress = Progress::new("backfill-beacon-block-slots", total_work);
-    let mut overall_processed_count: u64 = 0;
 
-    loop {
-        // Fetch a chunk of beacon_blocks with NULL slots
-        let state_roots_to_process: Vec<String> = sqlx::query_scalar!(
-            r#"
-            SELECT state_root
-            FROM beacon_blocks
-            WHERE slot IS NULL
-            ORDER BY deposit_sum_aggregated DESC
-            LIMIT $1
-            "#,
-            DB_CHUNK_SIZE as i64
+    let mut progress = Progress::new(
+        "backfill-beacon-block-slots-by-range",
+        max_slot_in_states as u64,
+    );
+    let mut current_min_slot_in_range: i32 = 0; // Assuming we start checking from slot 0
+
+    while current_min_slot_in_range <= max_slot_in_states {
+        let current_max_slot_in_range = current_min_slot_in_range + SLOT_RANGE_SIZE - 1;
+        debug!(
+            "processing slot range: [{}, {}]",
+            current_min_slot_in_range, current_max_slot_in_range
+        );
+
+        let mut is_triggered = false;
+
+        // Check Trigger Condition for the start of the range
+        let trigger_state_root_opt: Option<String> = sqlx::query_scalar!(
+            "SELECT state_root FROM beacon_states WHERE slot = $1",
+            current_min_slot_in_range
         )
-        .fetch_all(db_pool)
+        .fetch_optional(db_pool)
         .await
         .unwrap_or_else(|e| {
-            warn!(error = %e, "failed to fetch chunk of state_roots with null slots, ending backfill early");
-            Vec::new()
+            warn!(slot = current_min_slot_in_range, error = %e, "db error fetching state_root for trigger check");
+            None
         });
 
-        if state_roots_to_process.is_empty() {
-            info!("no more beacon_blocks with missing slots found to process.");
-            break;
+        if let Some(trigger_state_root) = trigger_state_root_opt {
+            // Check if this state_root is in beacon_blocks and its slot is NULL
+            let block_slot_record_opt = sqlx::query!(
+                "SELECT slot FROM beacon_blocks WHERE state_root = $1",
+                &trigger_state_root
+            )
+            .fetch_optional(db_pool)
+            .await
+            .unwrap_or_else(|e| {
+                warn!(state_root = %trigger_state_root, error = %e, "db error checking beacon_blocks for trigger");
+                None
+            });
+
+            if let Some(record) = block_slot_record_opt {
+                if record.slot.is_none() {
+                    is_triggered = true;
+                    info!(
+                        slot_range = format!(
+                            "[{}, {}]",
+                            current_min_slot_in_range, current_max_slot_in_range
+                        ),
+                        trigger_slot = current_min_slot_in_range,
+                        trigger_state_root,
+                        "backfill triggered for slot range."
+                    );
+                }
+            } else {
+                // State root from beacon_states not found in beacon_blocks, so cannot be a trigger.
+                debug!(
+                    slot = current_min_slot_in_range,
+                    %trigger_state_root,
+                    "trigger state_root not found in beacon_blocks or already has slot, not triggering."
+                );
+            }
+        } else {
+            debug!(
+                slot = current_min_slot_in_range,
+                "no state_root found in beacon_states for trigger slot, not triggering."
+            );
         }
 
-        let chunk_size = state_roots_to_process.len() as u64;
-        debug!("processing a new chunk of {} state_roots", chunk_size);
-
-        // Fetch slots from beacon_states for the current chunk of state_roots
-        // We need a way to associate the fetched slots back to their state_roots
-        let slots_from_db_result: Vec<(String, Option<i32>)> = if !state_roots_to_process.is_empty()
-        {
-            sqlx::query_as!(
-                StateRootAndOptionalDbSlot,
+        if is_triggered {
+            let updates_to_make: Vec<StateRootAndSlotFromStates> = sqlx::query_as!(
+                StateRootAndSlotFromStates,
                 r#"
-                SELECT bs.state_root AS "state_root!", bs.slot AS "slot_from_db?"
+                SELECT bs.state_root, bs.slot as "slot_from_states!"
                 FROM beacon_states bs
-                WHERE bs.state_root = ANY($1)
+                INNER JOIN beacon_blocks bb ON bs.state_root = bb.state_root
+                WHERE bs.slot >= $1 AND bs.slot <= $2 AND bb.slot IS NULL
                 "#,
-                &state_roots_to_process
+                current_min_slot_in_range,
+                current_max_slot_in_range
             )
             .fetch_all(db_pool)
             .await
-            .map(|records| records.into_iter().map(|r| (r.state_root, r.slot_from_db)).collect())
             .unwrap_or_else(|e| {
-                warn!(error = %e, "failed to fetch slots from beacon_states for chunk, will attempt node lookup for all");
+                warn!(
+                    slot_range = format!("[{}, {}]", current_min_slot_in_range, current_max_slot_in_range),
+                    error = %e,
+                    "failed to fetch records for backfill in triggered range"
+                );
                 Vec::new()
-            })
-        } else {
-            Vec::new()
-        };
+            });
 
-        // Create a map for quick lookup of slots from beacon_states
-        let slots_map: std::collections::HashMap<String, i32> = slots_from_db_result
-            .into_iter()
-            .filter_map(|(sr, opt_slot)| opt_slot.map(|slot_val| (sr, slot_val)))
-            .collect();
+            if !updates_to_make.is_empty() {
+                let block_slot_data_vec: Vec<BlockSlotData> = updates_to_make
+                    .into_iter()
+                    .map(|row| BlockSlotData {
+                        state_root: row.state_root,
+                        slot: Slot(row.slot_from_states),
+                    })
+                    .collect();
 
-        let mut successfully_found_slots: Vec<BlockSlotData> = Vec::new();
-        let mut state_roots_needing_node_lookup: Vec<String> = Vec::new();
-
-        for state_root_to_process in state_roots_to_process {
-            if let Some(&slot_val) = slots_map.get(&state_root_to_process) {
-                successfully_found_slots.push(BlockSlotData {
-                    state_root: state_root_to_process,
-                    slot: Slot(slot_val),
-                });
+                let num_to_update = block_slot_data_vec.len();
+                match bulk_update_slots(db_pool, block_slot_data_vec).await {
+                    Ok(rows_affected) => {
+                        info!(
+                            slot_range = format!(
+                                "[{}, {}]",
+                                current_min_slot_in_range, current_max_slot_in_range
+                            ),
+                            attempted_updates = num_to_update,
+                            actual_rows_affected = rows_affected,
+                            "bulk updated beacon_blocks slots."
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            slot_range = format!("[{}, {}]", current_min_slot_in_range, current_max_slot_in_range),
+                            error = %e,
+                            "error during bulk update of slots for range."
+                        );
+                    }
+                }
             } else {
-                state_roots_needing_node_lookup.push(state_root_to_process);
+                info!(
+                    slot_range = format!("[{}, {}]", current_min_slot_in_range, current_max_slot_in_range),
+                    "triggered backfill, but no updatable (NULL slot in beacon_blocks) records found in range."
+                );
             }
+        } else {
+            debug!(
+                slot_range = format!(
+                    "[{}, {}]",
+                    current_min_slot_in_range, current_max_slot_in_range
+                ),
+                "backfill not triggered for slot range."
+            );
         }
 
-        debug!(
-            "from db: {} slots found directly, {} need node lookup",
-            successfully_found_slots.len(),
-            state_roots_needing_node_lookup.len()
+        progress.set_work_done(std::cmp::min(
+            current_max_slot_in_range as u64,
+            max_slot_in_states as u64,
+        ));
+        info!(
+            "slot backfill progress by range: {}",
+            progress.get_progress_string()
         );
 
-        if !state_roots_needing_node_lookup.is_empty() {
-            let node_lookups = stream::iter(state_roots_needing_node_lookup)
-                .map(|sr_to_check| {
-                    let beacon_node_clone = beacon_node.clone();
-                    async move {
-                        fetch_slot_from_node_for_state_root(&beacon_node_clone, sr_to_check).await
-                    }
-                })
-                .buffer_unordered(NODE_LOOKUP_CONCURRENCY_LIMIT)
-                .filter_map(|opt_data| async { opt_data })
-                .collect::<Vec<BlockSlotData>>()
-                .await;
-
-            debug!("from node: {} slots found", node_lookups.len());
-            successfully_found_slots.extend(node_lookups);
-        }
-
-        if !successfully_found_slots.is_empty() {
-            let num_successful = successfully_found_slots.len();
-            match bulk_update_slots(db_pool, successfully_found_slots).await {
-                Ok(rows_affected) => {
-                    info!(
-                        "bulk updated {} rows with new slots ({} successful lookups this chunk).",
-                        rows_affected, num_successful
-                    );
-                }
-                Err(e) => {
-                    warn!(error = %e, "error during bulk update of slots");
-                }
-            }
-        } else {
-            debug!("no slots found for the current chunk of state_roots (neither DB nor node).");
-        }
-
-        overall_processed_count += chunk_size;
-        progress.set_work_done(overall_processed_count);
-        info!("slot backfill progress: {}", progress.get_progress_string());
-
-        if chunk_size < DB_CHUNK_SIZE as u64 {
-            info!("processed the last chunk of state_roots.");
-            break;
-        }
+        current_min_slot_in_range += SLOT_RANGE_SIZE;
     }
 
-    progress.set_work_done(total_work);
+    progress.set_work_done(max_slot_in_states as u64); // Ensure progress shows 100%
     info!(
-        "beacon_block_slots backfill process finished. final progress: {}",
+        "beacon_block_slots backfill by range process finished. final progress: {}",
         progress.get_progress_string()
     );
 }
