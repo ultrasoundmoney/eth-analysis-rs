@@ -14,6 +14,8 @@ use sqlx::{postgres::types::PgInterval, PgExecutor, PgPool};
 use thiserror::Error;
 use tracing::{debug, info};
 
+pub mod backfill;
+
 use crate::{
     caching::{self, CacheKey},
     db,
@@ -31,17 +33,24 @@ pub async fn store_issuance(
     slot: Slot,
     gwei: &GweiNewtype,
 ) {
-    let gwei: i64 = gwei.to_owned().into();
+    let gwei_i64: i64 = gwei.to_owned().into();
+    let timestamp = slot.date_time();
 
     sqlx::query!(
-        "INSERT INTO beacon_issuance (timestamp, state_root, gwei) VALUES ($1, $2, $3)",
-        slot.date_time(),
+        r#"
+        INSERT INTO beacon_issuance (timestamp, state_root, gwei)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (state_root) DO UPDATE SET
+            timestamp = EXCLUDED.timestamp,
+            gwei = EXCLUDED.gwei
+        "#,
+        timestamp,
         state_root,
-        gwei,
+        gwei_i64,
     )
     .execute(executor)
     .await
-    .unwrap();
+    .unwrap_or_else(|e| panic!("failed to store issuance with on conflict: {}", e));
 }
 
 pub fn calc_issuance(
