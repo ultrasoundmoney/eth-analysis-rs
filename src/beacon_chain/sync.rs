@@ -212,18 +212,13 @@ pub async fn sync_slot_by_state_root(
         }
 
         debug!(slot = %header.slot(), "storing issuance using effective pending deposits sum");
-        issuance::store_issuance(
-            &mut *transaction,
-            state_root,
-            slot,
-            &issuance::calc_issuance(
-                &validator_balances_sum,
-                &deposit_sum_aggregated,
-                &pending_deposits_for_issuance, // Use the effective value
-                &withdrawal_sum_aggregated,
-            ),
-        )
-        .await;
+        let issuance = issuance::calc_issuance(
+            &validator_balances_sum,
+            &deposit_sum_aggregated,
+            &pending_deposits_for_issuance,
+            &withdrawal_sum_aggregated,
+        );
+        issuance::store_issuance(&mut *transaction, state_root, slot, &issuance).await;
 
         let result = eth_supply::sync_eth_supply(&mut transaction, slot).await;
         if let Err(e) = result {
