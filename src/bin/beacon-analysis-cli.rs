@@ -11,7 +11,9 @@ use eth_analysis::{
         Slot, // Assuming Slot can be created from i32
         FIRST_POST_LONDON_SLOT,
     },
-    db, log,
+    db,
+    execution_chain::supply_deltas::backfill_execution_supply,
+    log,
 };
 
 #[derive(Parser, Debug)]
@@ -65,6 +67,10 @@ enum Commands {
     BackfillBeaconBlockSlots,
     /// Backfills pending deposits sum.
     BackfillPendingDepositsSum,
+    /// Backfills execution supply.
+    BackfillExecutionSupply,
+    /// Backfills all hourly balances.
+    BackfillHourlyBalances,
 }
 
 async fn run_cli(pool: PgPool, commands: Commands) {
@@ -111,6 +117,14 @@ async fn run_cli(pool: PgPool, commands: Commands) {
             info!("initiating pending deposits sum backfill");
             backfill_pending_deposits_sum(&pool).await;
             info!("done backfilling pending deposits sum");
+        }
+        Commands::BackfillExecutionSupply => {
+            backfill_execution_supply(&pool).await;
+        }
+        Commands::BackfillHourlyBalances => {
+            info!("backfilling hourly beacon balances");
+            backfill_balances(&pool, &Granularity::Hour, Slot(0)).await;
+            info!("done backfilling hourly beacon balances");
         }
     }
 }
