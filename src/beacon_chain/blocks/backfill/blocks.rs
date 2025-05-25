@@ -76,14 +76,14 @@ pub async fn backfill_missing_beacon_blocks(db_pool: &PgPool, from_slot: Slot) {
                         let mut tx = match db_pool.begin().await {
                             Ok(tx) => tx,
                             Err(e) => {
-                                warn!(%slot, error = %e, "failed to open db transaction – skipping");
-                                continue;
+                                warn!(%slot, error = %e, "failed to open db transaction – skipping slot");
+                                break;
                             }
                         };
 
                         if !blocks::get_is_hash_known(&mut *tx, &header_env.parent_root()).await {
-                            warn!(%slot, parent_root = %header_env.parent_root(), "parent not found – skipping");
-                            continue;
+                            warn!(%slot, parent_root = %header_env.parent_root(), "parent block not yet in db – skipping");
+                            break;
                         }
 
                         let deposit_sum_aggregated =
