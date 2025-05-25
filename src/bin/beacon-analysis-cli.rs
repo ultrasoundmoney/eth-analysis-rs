@@ -23,7 +23,7 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone, clap::ValueEnum)]
 enum GranularityArgs {
     Slot,
     Hour,
@@ -42,7 +42,7 @@ impl From<GranularityArgs> for Granularity {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone, clap::ValueEnum)]
 enum HardforkArgs {
     Genesis,
     London,
@@ -75,15 +75,12 @@ enum Commands {
         #[clap(long)]
         end_slot: Option<i32>,
     },
-    /// Backfills beacon chain balances to London fork.
-    BackfillBalancesToLondon {
-        #[clap(subcommand)]
+    /// Backfills beacon chain balances from a hardfork boundary (inclusive).
+    BackfillBalances {
+        /// The granularity for the balances backfill (slot, hour, day, epoch).
         granularity: GranularityArgs,
-    },
-    /// Backfills beacon chain balances to Pectra fork.
-    BackfillBalancesToPectra {
-        #[clap(subcommand)]
-        granularity: GranularityArgs,
+        /// The hardfork boundary to start the backfill from.
+        hardfork: HardforkArgs,
     },
     /// Backfills beacon block slots between a hardfork (inclusive) and the DB tip.
     BackfillMissingBeaconBlockSlots {
@@ -137,23 +134,15 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                 eprintln!("error: for ranged backfill, both --start-slot and --end-slot must be provided.");
             }
         },
-        Commands::BackfillBalancesToLondon { granularity } => {
-            info!(
-                granularity = ?granularity,
-                "initiating beacon balances backfill to london"
-            );
+        Commands::BackfillBalances {
+            granularity,
+            hardfork,
+        } => {
             let gran: Granularity = granularity.into();
-            backfill_balances(&pool, &gran, FIRST_POST_LONDON_SLOT).await;
-            info!("done backfilling beacon balances to london for specified granularity");
-        }
-        Commands::BackfillBalancesToPectra { granularity } => {
-            info!(
-                granularity = ?granularity,
-                "initiating beacon balances backfill to pectra"
-            );
-            let gran: Granularity = granularity.into();
-            backfill_balances(&pool, &gran, *PECTRA_SLOT + 1).await;
-            info!("done backfilling beacon balances to pectra for specified granularity");
+            let start_slot: Slot = hardfork.into();
+            info!(granularity = ?gran, %start_slot, "initiating beacon balances backfill");
+            backfill_balances(&pool, &gran, start_slot).await;
+            info!("done backfilling beacon balances for specified granularity and hardfork");
         }
         Commands::BackfillMissingBeaconBlockSlots { hardfork } => {
             let start_slot: Slot = hardfork.into();

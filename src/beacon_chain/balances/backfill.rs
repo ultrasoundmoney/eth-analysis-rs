@@ -12,6 +12,7 @@ use crate::beacon_chain::{
 const GET_BALANCES_CONCURRENCY_LIMIT: usize = 4;
 const SLOTS_PER_EPOCH: i64 = 32;
 
+#[derive(Debug)]
 pub enum Granularity {
     Day,
     Epoch,
