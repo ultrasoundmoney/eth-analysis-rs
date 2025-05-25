@@ -115,32 +115,62 @@ async fn process_single_state_root_and_update(
     // No explicit true return, function just ends
 }
 
-pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granularity) {
+pub async fn backfill_pending_deposits_sum(
+    db_pool: &PgPool,
+    granularity: &Granularity,
+    start_slot_override: Option<Slot>,
+    end_slot_override: Option<Slot>,
+) {
     let beacon_node = BeaconNodeHttp::new_from_env();
 
-    let highest_slot_in_db = match get_highest_beacon_block_slot(db_pool).await {
-        Ok(Some(slot)) => slot,
-        Ok(None) => {
+    let effective_start_slot = start_slot_override
+        .unwrap_or(*PECTRA_SLOT)
+        .max(*PECTRA_SLOT);
+    let mut effective_end_slot = end_slot_override;
+
+    if effective_end_slot.is_none() {
+        // If no end_slot_override, use highest slot in DB
+        match get_highest_beacon_block_slot(db_pool).await {
+            Ok(Some(slot)) => effective_end_slot = Some(slot),
+            Ok(None) => {
+                info!(
+                    "no beacon blocks found in db, cannot proceed with pending deposits sum backfill."
+                );
+                return;
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to get highest slot from db, cannot proceed with pending deposits sum backfill.");
+                return;
+            }
+        }
+    }
+
+    // Ensure effective_end_slot is not before effective_start_slot
+    if let Some(end_s) = effective_end_slot {
+        if end_s < effective_start_slot {
             info!(
-                "no beacon blocks found in db, cannot proceed with pending deposits sum backfill."
+                start_slot = %effective_start_slot,
+                end_slot = %end_s,
+                "effective end slot is before effective start slot, nothing to backfill."
             );
             return;
         }
-        Err(e) => {
-            warn!(error = %e, "failed to get highest slot from db, cannot proceed with pending deposits sum backfill.");
-            return;
-        }
-    };
+    } else {
+        // This case should ideally not be reached if logic above is correct, but as a safeguard.
+        info!("effective end slot could not be determined, cannot backfill.");
+        return;
+    }
 
-    if highest_slot_in_db < *PECTRA_SLOT {
-        info!(highest_slot = %highest_slot_in_db, pectra_slot = %*PECTRA_SLOT, "highest slot in db is before pectra, nothing to backfill for pending deposits sum.");
+    if effective_start_slot >= effective_end_slot.unwrap_or(Slot(i32::MAX)) {
+        // unwrap_or for comparison if effective_end_slot is still None (should not happen)
+        info!(start_slot = %effective_start_slot, end_slot = ?effective_end_slot, "start slot is not before end slot, nothing to backfill.");
         return;
     }
 
     debug!(
         granularity = ?granularity,
-        pectra_slot = %*PECTRA_SLOT,
-        highest_slot = %highest_slot_in_db,
+        effective_start_slot = %effective_start_slot,
+        effective_end_slot = %effective_end_slot.unwrap(), // Safe to unwrap due to checks above
         "fetching all candidate blocks for pending deposits sum backfill."
     );
 
@@ -151,8 +181,8 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
         WHERE slot >= $1 AND slot <= $2 AND pending_deposits_sum_gwei IS NULL
         ORDER BY slot ASC
         "#,
-        PECTRA_SLOT.0,
-        highest_slot_in_db.0
+        effective_start_slot.0,
+        effective_end_slot.unwrap().0 // Safe to unwrap
     )
     .fetch_all(db_pool)
     .await
@@ -170,7 +200,9 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
     if all_candidate_blocks.is_empty() {
         info!(
             granularity = ?granularity,
-            "no candidate blocks found with missing pending_deposits_sum_gwei between Pectra and DB tip. nothing to do."
+            start_slot = %effective_start_slot,
+            end_slot = %effective_end_slot.unwrap(), // Safe to unwrap
+            "no candidate blocks found with missing pending_deposits_sum_gwei in the specified range. nothing to do."
         );
         return;
     }
@@ -195,6 +227,8 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
     if blocks_to_process_filtered.is_empty() {
         info!(
             granularity = ?granularity,
+            start_slot = %effective_start_slot,
+            end_slot = %effective_end_slot.unwrap(), // Safe to unwrap
             "no blocks matched the specified granularity after fetching. nothing to do."
         );
         return;

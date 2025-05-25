@@ -19,8 +19,18 @@ pub enum Granularity {
     Slot,
 }
 
-async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: Slot) -> u64 {
-    let rows: Vec<i32> = sqlx::query_scalar!(
+#[derive(sqlx::FromRow, Debug)]
+struct SlotRow {
+    slot: i32,
+}
+
+async fn estimate_work_todo(
+    db_pool: &PgPool,
+    granularity: &Granularity,
+    start_slot_opt: Option<Slot>,
+    end_slot_opt: Option<Slot>,
+) -> u64 {
+    let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
         r#"
         SELECT
             beacon_states.slot
@@ -29,18 +39,27 @@ async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: S
         LEFT JOIN beacon_validators_balance ON
             beacon_states.state_root = beacon_validators_balance.state_root
         WHERE
-            slot >= $1
-        AND
             beacon_validators_balance.state_root IS NULL
         "#,
-        from.0,
-    )
-    .fetch_all(db_pool)
-    .await
-    .unwrap_or_else(|e| {
-        warn!("failed to fetch rows for work estimation: {:?}", e);
-        Vec::new()
-    });
+    );
+
+    let from_slot = start_slot_opt.unwrap_or(Slot(0));
+    query_builder.push(" AND slot >= ");
+    query_builder.push_bind(from_slot.0);
+
+    if let Some(end_slot) = end_slot_opt {
+        query_builder.push(" AND slot <= ");
+        query_builder.push_bind(end_slot.0);
+    }
+
+    let rows: Vec<i32> = query_builder
+        .build_query_scalar()
+        .fetch_all(db_pool)
+        .await
+        .unwrap_or_else(|e| {
+            warn!("failed to fetch rows for work estimation: {:?}", e);
+            Vec::new()
+        });
 
     let count = match granularity {
         Granularity::Slot => rows.len(),
@@ -63,35 +82,49 @@ enum BackfillItemOutcome {
     SkippedError(i32, String),                         // slot, error details
 }
 
-pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from: Slot) {
+pub async fn backfill_balances(
+    db_pool: &PgPool,
+    granularity: &Granularity,
+    start_slot_opt: Option<Slot>,
+    end_slot_opt: Option<Slot>,
+) {
     let beacon_node = BeaconNodeHttp::new_from_env();
+    let from_slot = start_slot_opt.unwrap_or(Slot(0));
 
     debug!("estimating work to be done for backfill");
-    let work_todo = estimate_work_todo(db_pool, granularity, from).await;
+    let work_todo = estimate_work_todo(db_pool, granularity, start_slot_opt, end_slot_opt).await;
     debug!(
-        "estimated work to be done for backfill: {} slots",
+        ?start_slot_opt,
+        ?end_slot_opt,
+        "estimated work to be done for backfill: {} items matching granularity",
         work_todo
     );
     let mut progress = Progress::new("backfill-beacon-balances", work_todo);
 
-    let rows = sqlx::query!(
-        "
+    let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+        r#"
         SELECT
-            beacon_states.state_root,
-            beacon_states.slot
+            beacon_blocks.slot
         FROM
-            beacon_states
+            beacon_blocks
         LEFT JOIN beacon_validators_balance ON
-            beacon_states.state_root = beacon_validators_balance.state_root
+            beacon_blocks.state_root = beacon_validators_balance.state_root
         WHERE
-            slot >= $1
-        AND
             beacon_validators_balance.state_root IS NULL
-        ORDER BY slot DESC
-        ",
-        from.0,
-    )
-    .fetch(db_pool);
+        "#,
+    );
+
+    query_builder.push(" AND slot >= ");
+    query_builder.push_bind(from_slot.0);
+
+    if let Some(end_slot) = end_slot_opt {
+        query_builder.push(" AND slot <= ");
+        query_builder.push_bind(end_slot.0);
+    }
+
+    query_builder.push(" ORDER BY slot DESC");
+
+    let rows = query_builder.build_query_as::<SlotRow>().fetch(db_pool);
 
     // filter_map closure must return a Future<Output = Option<Item>>
     let rows_filtered = rows.filter_map(|row_result| async move {

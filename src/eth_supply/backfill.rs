@@ -88,38 +88,45 @@ async fn fetch_verifiable_missing_slots_chunk(
 }
 
 /// Backfills missing eth_supply entries for slots that have all prerequisite data.
-pub async fn backfill_eth_supply(db_pool: &PgPool, start_slot_override: Option<Slot>) {
+pub async fn backfill_eth_supply(
+    db_pool: &PgPool,
+    start_slot_override: Option<Slot>,
+    end_slot_override: Option<Slot>,
+) {
     info!("starting eth supply backfill process");
 
-    let last_known_good_slot = match store::get_last_stored_balances_slot(db_pool).await {
-        Some(slot) => slot,
-        None => {
-            warn!("no execution balances have ever been stored, cannot determine range for eth supply backfill. skipping.");
-            return;
-        }
+    let effective_end_slot = match end_slot_override {
+        Some(end_slot) => end_slot,
+        None => match store::get_last_stored_balances_slot(db_pool).await {
+            Some(slot) => slot,
+            None => {
+                warn!("no execution balances have ever been stored and no end_slot_override provided, cannot determine range for eth supply backfill. skipping.");
+                return;
+            }
+        },
     };
 
     let first_slot_to_check = start_slot_override.unwrap_or(FIRST_POST_MERGE_SLOT);
 
-    if first_slot_to_check > last_known_good_slot {
-        info!(%first_slot_to_check, %last_known_good_slot, "first slot to check is after the last known good slot, nothing to backfill.");
+    if first_slot_to_check > effective_end_slot {
+        info!(%first_slot_to_check, %effective_end_slot, "first slot to check is after the effective end slot, nothing to backfill.");
         return;
     }
 
-    debug!(%first_slot_to_check, %last_known_good_slot, "determined slot range for eth supply backfill");
+    debug!(%first_slot_to_check, %effective_end_slot, "determined slot range for eth supply backfill");
 
     let total_work =
-        estimate_verifiable_missing_slots_count(db_pool, first_slot_to_check, last_known_good_slot)
+        estimate_verifiable_missing_slots_count(db_pool, first_slot_to_check, effective_end_slot)
             .await;
 
     if total_work == 0 {
-        info!(%first_slot_to_check, %last_known_good_slot, "no missing eth_supply entries found in the range where prerequisites are met. nothing to do.");
+        info!(%first_slot_to_check, %effective_end_slot, "no missing eth_supply entries found in the range where prerequisites are met. nothing to do.");
         return;
     }
 
     info!(
         "estimated {} missing eth_supply entries to backfill between {} and {}",
-        total_work, first_slot_to_check, last_known_good_slot
+        total_work, first_slot_to_check, effective_end_slot
     );
 
     let mut progress = Progress::new("backfill-eth-supply", total_work);
@@ -129,15 +136,15 @@ pub async fn backfill_eth_supply(db_pool: &PgPool, start_slot_override: Option<S
     let mut current_start_slot_for_fetch = first_slot_to_check;
 
     loop {
-        if current_start_slot_for_fetch > last_known_good_slot {
-            debug!("current start slot for fetch is beyond last known good slot, completing.");
+        if current_start_slot_for_fetch > effective_end_slot {
+            debug!("current start slot for fetch is beyond effective end slot, completing.");
             break;
         }
 
         let slots_to_process = match fetch_verifiable_missing_slots_chunk(
             db_pool,
             current_start_slot_for_fetch,
-            last_known_good_slot,
+            effective_end_slot,
             DB_CHUNK_SIZE as i64,
         )
         .await

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT SUM(pending_deposits_sum_gwei)::BIGINT\n                FROM beacon_blocks\n                WHERE slot <= $1 AND slot >= $2 AND pending_deposits_sum_gwei IS NOT NULL\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sum",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a4b6e90c759bcb6331f017338d9e615d219b114065c7c7096f33c73e8851f450"
+}
