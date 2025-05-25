@@ -5,7 +5,7 @@ use tracing::{debug, info, warn};
 
 use crate::beacon_chain::balances::backfill::Granularity;
 use crate::{
-    beacon_chain::{node::BeaconNodeHttp, Slot, PECTRA_SLOT},
+    beacon_chain::{node::BeaconNodeHttp, BeaconNode, Slot, PECTRA_SLOT},
     units::GweiNewtype,
 };
 
@@ -143,7 +143,7 @@ async fn process_single_state_root_and_update(
 }
 
 pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granularity) {
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
 
     debug!("estimating total work for backfilling missing pending_deposits_sum_gwei (granularity: {:?})", granularity);
     let total_work = estimate_total_work_for_pending_deposits_sum(db_pool, granularity).await;
@@ -159,6 +159,14 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
     let mut processed_items_count: u64 = 0;
 
     loop {
+        if processed_items_count >= total_work {
+            info!(
+                "all estimated work items ({}) for granularity {:?} have been processed or accounted for. stopping.",
+                total_work, granularity
+            );
+            break;
+        }
+
         let blocks_to_consider: Vec<BlockToProcess> = sqlx::query!(
             r#"
             SELECT state_root, slot FROM beacon_blocks
@@ -177,14 +185,26 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
             slot: row.slot.expect("beacon block slot should not be null for backfill range"),
         }).collect())
         .unwrap_or_else(|e| {
-            warn!(error = %e, "failed to fetch chunk of blocks for pending deposits sum backfill, ending early");
+            warn!(
+                error = %e,
+                "failed to fetch chunk of blocks for pending deposits sum backfill, ending early. processed {} / {} items.",
+                processed_items_count,
+                total_work
+            );
             Vec::new()
         });
 
         if blocks_to_consider.is_empty() {
             info!(
-                "no more candidate blocks with missing pending_deposits_sum_gwei found by query."
+                "no more candidate blocks with missing pending_deposits_sum_gwei found by query for granularity {:?}.",
+                granularity
             );
+            if processed_items_count < total_work {
+                warn!(
+                    "query returned no more blocks, but processed_items_count ({}) is less than total_work ({}). total_work might have been an overestimate or items were processed/removed externally.",
+                    processed_items_count, total_work
+                );
+            }
             break;
         }
 
@@ -210,14 +230,22 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
 
         if state_roots_to_process.is_empty() {
             debug!(
-                "no state_roots matched granularity {:?} in this chunk of {} candidates. fetching next chunk.",
+                "no state_roots matched granularity {:?} in this chunk of {} candidates.",
                 granularity, num_considered_this_chunk
             );
             if num_considered_this_chunk < DB_CHUNK_SIZE as u64 {
-                info!("processed the last chunk of candidate state_roots from db, none matched granularity {:?}.", granularity);
-                break;
+                info!(
+                    "processed the last partial chunk of {} candidate state_roots from db, but none matched granularity {:?}. stopping. (processed {} / {} total)",
+                    num_considered_this_chunk, granularity, processed_items_count, total_work
+                );
+            } else {
+                // Full chunk from DB, but nothing matched granularity.
+                warn!(
+                    "full chunk of {} candidates fetched for granularity {:?}, but none matched the granularity. stopping to prevent potential infinite loop. (processed {} / {} total)",
+                    num_considered_this_chunk, granularity, processed_items_count, total_work
+                );
             }
-            continue;
+            break; // Break in both cases if no items to process from this chunk.
         }
 
         let actual_chunk_to_process_size = state_roots_to_process.len() as u64;
@@ -249,7 +277,6 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
         processed_items_count += actual_chunk_to_process_size;
         progress.set_work_done(processed_items_count);
 
-        // Simplified logging: only logs if candidates were processed in this chunk.
         if actual_chunk_to_process_size > 0 {
             info!(
                 "pending deposits sum: processed batch of {} candidates. overall candidate progress: {}",
@@ -259,14 +286,24 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
         }
 
         if num_considered_this_chunk < DB_CHUNK_SIZE as u64 {
-            info!("processed the last chunk of candidate state_roots from db for pending deposits sum (granularity: {:?}).", granularity);
+            info!(
+                "processed the last chunk of {} candidate state_roots from db for pending deposits sum (granularity: {:?}). all available candidates under this granularity processed. ({} / {} total)",
+                num_considered_this_chunk, granularity, processed_items_count, total_work
+            );
             break;
         }
     }
 
-    progress.set_work_done(total_work);
-    info!(
-        "pending_deposits_sum_gwei backfill process finished (granularity: {:?}). final progress: {}",
-        granularity, progress.get_progress_string()
-    );
+    progress.set_work_done(processed_items_count);
+    if processed_items_count < total_work {
+        warn!(
+            "pending_deposits_sum_gwei backfill for {:?} finished but may have stopped early. processed {} out of estimated {} items. final progress: {}",
+            granularity, processed_items_count, total_work, progress.get_progress_string()
+        );
+    } else {
+        info!(
+            "pending_deposits_sum_gwei backfill for {:?} finished. processed {} items. final progress: {}",
+            granularity, processed_items_count, progress.get_progress_string()
+        );
+    }
 }
