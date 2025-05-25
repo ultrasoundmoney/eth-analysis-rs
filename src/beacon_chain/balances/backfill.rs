@@ -21,10 +21,10 @@ pub enum Granularity {
 }
 
 async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: Slot) -> u64 {
-    let slots_count = sqlx::query!(
-        "
+    let rows: Vec<i32> = sqlx::query_scalar!(
+        r#"
         SELECT
-            COUNT(beacon_states.slot) as \"count!\"
+            beacon_states.slot
         FROM
             beacon_states
         LEFT JOIN beacon_validators_balance ON
@@ -33,22 +33,27 @@ async fn estimate_work_todo(db_pool: &PgPool, granularity: &Granularity, from: S
             slot >= $1
         AND
             beacon_validators_balance.state_root IS NULL
-        ",
+        "#,
         from.0,
     )
-    .fetch_one(db_pool)
+    .fetch_all(db_pool)
     .await
-    .unwrap()
-    .count;
+    .unwrap_or_else(|e| {
+        warn!("failed to fetch rows for work estimation: {:?}", e);
+        Vec::new()
+    });
 
-    match granularity {
-        Granularity::Slot => slots_count,
-        Granularity::Epoch => slots_count * SLOTS_PER_EPOCH,
-        Granularity::Hour => slots_count / 300,
-        Granularity::Day => slots_count / 7200,
-    }
-    .try_into()
-    .unwrap()
+    let count = match granularity {
+        Granularity::Slot => rows.len(),
+        Granularity::Epoch => rows
+            .iter()
+            .filter(|&&s| Slot(s).is_first_of_epoch())
+            .count(),
+        Granularity::Hour => rows.iter().filter(|&&s| Slot(s).is_first_of_hour()).count(),
+        Granularity::Day => rows.iter().filter(|&&s| Slot(s).is_first_of_day()).count(),
+    };
+
+    count as u64
 }
 
 // Define an outcome enum for processing each item

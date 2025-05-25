@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            beacon_states.slot\n        FROM\n            beacon_states\n        LEFT JOIN beacon_validators_balance ON\n            beacon_states.state_root = beacon_validators_balance.state_root\n        WHERE\n            slot >= $1\n        AND\n            beacon_validators_balance.state_root IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slot",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "312853b126fd6d355cdf823aad2d27ff73cb5ec0662e6330f2e15b4abff76372"
+}

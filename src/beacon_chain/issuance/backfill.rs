@@ -147,55 +147,64 @@ async fn fetch_issuance_data_for_slot(
 
 async fn get_slots_to_process_for_missing_issuance(
     db_pool: &PgPool,
-    limit: i64,
+    limit: i64, // This limit might fetch more than needed before filtering
 ) -> sqlx::Result<Vec<Slot>> {
     let rows = sqlx::query!(
         r#"
         SELECT
             bb.slot AS "slot_to_process!"
         FROM beacon_blocks AS bb
-        WHERE bb.slot % $1 = 0
-        AND bb.slot >= $2 -- Pectra Slot check
+        WHERE bb.slot >= $1 -- Pectra Slot check
         AND NOT EXISTS (
             SELECT 1
             FROM beacon_issuance AS bi
             WHERE bi.state_root = bb.state_root
         )
         ORDER BY bb.slot ASC
-        LIMIT $3
+        LIMIT $2 -- Fetch a chunk, will filter for is_first_of_hour in code
         "#,
-        SLOTS_PER_HOUR,
         PECTRA_SLOT.0,
-        limit
+        limit // Use the original limit, filtering happens next
     )
     .fetch_all(db_pool)
     .await?;
     Ok(rows
         .into_iter()
         .map(|row| Slot(row.slot_to_process))
+        .filter(|slot| slot.is_first_of_hour()) // Filter here
         .collect())
 }
 
 async fn estimate_total_missing_hours(db_pool: &PgPool) -> u64 {
-    let count_opt: Option<Option<i64>> = sqlx::query_scalar!(
+    let candidate_slots: Vec<i32> = sqlx::query_scalar!(
         r#"
-        SELECT COUNT(DISTINCT bb.slot)
+        SELECT DISTINCT bb.slot AS "slot!"
         FROM beacon_blocks AS bb
-        WHERE bb.slot % $1 = 0
-        AND bb.slot >= $2 -- Pectra Slot check
+        WHERE bb.slot >= $1 -- Pectra Slot check
+        AND bb.slot IS NOT NULL
         AND NOT EXISTS (
             SELECT 1
             FROM beacon_issuance AS bi
             WHERE bi.state_root = bb.state_root
         )
         "#,
-        SLOTS_PER_HOUR,
         PECTRA_SLOT.0
     )
-    .fetch_one(db_pool)
+    .fetch_all(db_pool)
     .await
-    .ok();
-    count_opt.flatten().unwrap_or(0).try_into().unwrap_or(0)
+    .unwrap_or_else(|e| {
+        warn!(
+            "failed to fetch slots for missing hours estimation: {:?}",
+            e
+        );
+        Vec::new()
+    });
+
+    candidate_slots
+        .into_iter()
+        .map(Slot)
+        .filter(|slot| slot.is_first_of_hour())
+        .count() as u64
 }
 
 pub async fn backfill_missing_issuance(db_pool: &PgPool) {
@@ -308,10 +317,10 @@ pub async fn backfill_missing_issuance(db_pool: &PgPool) {
 
 async fn get_slots_to_process_for_range(
     db_pool: &PgPool,
-    start_slot: Slot, // This will be the Pectra-adjusted start_slot
-    end_slot: Slot,   // This will be the dynamically fetched highest slot
-    batch_offset: i64,
-    batch_limit: i64,
+    start_slot: Slot,  // This will be the Pectra-adjusted start_slot
+    end_slot: Slot,    // This will be the dynamically fetched highest slot
+    batch_offset: i64, // Offset will apply to the pre-filtered list
+    batch_limit: i64,  // Limit will apply to the pre-filtered list
 ) -> sqlx::Result<Vec<Slot>> {
     if start_slot > end_slot {
         return Ok(Vec::new());
@@ -322,21 +331,22 @@ async fn get_slots_to_process_for_range(
             bb.slot AS "representative_slot!"
         FROM beacon_blocks AS bb
         WHERE bb.slot >= $1 AND bb.slot <= $2
-          AND bb.slot % $3 = 0
+        -- Removed: AND bb.slot % $3 = 0 (filtering will be done in Rust code)
         ORDER BY bb.slot ASC
-        LIMIT $4 OFFSET $5
+        LIMIT $3 OFFSET $4 -- Apply limit and offset to the broader set
         "#,
         start_slot.0, // Already Pectra-adjusted by caller
         end_slot.0,
-        SLOTS_PER_HOUR,
-        batch_limit,
-        batch_offset
+        // SLOTS_PER_HOUR, -- No longer needed for SQL query
+        batch_limit,  // Limit for the broader fetch
+        batch_offset  // Offset for the broader fetch
     )
     .fetch_all(db_pool)
     .await?;
     Ok(rows
         .into_iter()
         .map(|row| Slot(row.representative_slot))
+        .filter(|slot| slot.is_first_of_hour()) // Filter here
         .collect())
 }
 
@@ -348,21 +358,32 @@ async fn estimate_total_hours_in_range(
     if start_slot > end_slot {
         return 0;
     }
-    let count_opt: Option<Option<i64>> = sqlx::query_scalar!(
+    let candidate_slots_options: Vec<Option<i32>> = sqlx::query_scalar!(
         r#"
-        SELECT COUNT(DISTINCT bb.slot)
+        SELECT DISTINCT bb.slot
         FROM beacon_blocks AS bb
         WHERE bb.slot >= $1 AND bb.slot <= $2
-          AND bb.slot % $3 = 0
         "#,
-        start_slot.0, // Already Pectra-adjusted by caller
-        end_slot.0,
-        SLOTS_PER_HOUR
+        start_slot.0,
+        end_slot.0
     )
-    .fetch_one(db_pool)
+    .fetch_all(db_pool)
     .await
-    .ok();
-    count_opt.flatten().unwrap_or(0).try_into().unwrap_or(0)
+    .unwrap_or_else(|e| {
+        warn!("failed to fetch slots for range hours estimation: {:?}", e);
+        Vec::new()
+    });
+
+    let candidate_slots: Vec<i32> = candidate_slots_options
+        .into_iter()
+        .flatten() // Converts Vec<Option<i32>> to Vec<i32> by removing Nones
+        .collect();
+
+    candidate_slots
+        .into_iter()
+        .map(Slot)
+        .filter(|slot| slot.is_first_of_hour())
+        .count() as u64
 }
 
 async fn get_highest_beacon_block_slot(db_pool: &PgPool) -> sqlx::Result<Option<Slot>> {

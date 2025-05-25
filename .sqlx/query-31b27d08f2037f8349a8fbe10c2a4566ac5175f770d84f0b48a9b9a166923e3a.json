@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            bb.slot AS \"representative_slot!\"\n        FROM beacon_blocks AS bb\n        WHERE bb.slot >= $1 AND bb.slot <= $2\n        -- Removed: AND bb.slot % $3 = 0 (filtering will be done in Rust code)\n        ORDER BY bb.slot ASC\n        LIMIT $3 OFFSET $4 -- Apply limit and offset to the broader set\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "representative_slot!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "31b27d08f2037f8349a8fbe10c2a4566ac5175f770d84f0b48a9b9a166923e3a"
+}
