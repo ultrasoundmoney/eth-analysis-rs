@@ -3,34 +3,68 @@ use pit_wall::Progress;
 use sqlx::PgPool;
 use tracing::{debug, info, warn};
 
+use crate::beacon_chain::balances::backfill::Granularity;
 use crate::{
-    beacon_chain::{node::BeaconNodeHttp, PECTRA_SLOT},
+    beacon_chain::{node::BeaconNodeHttp, Slot, PECTRA_SLOT},
     units::GweiNewtype,
 };
 
 const DB_CHUNK_SIZE: usize = 1000;
 const NODE_FETCH_CONCURRENCY_LIMIT: usize = 4;
 
-async fn estimate_total_missing_pending_deposits_sum(db_pool: &PgPool) -> u64 {
-    sqlx::query_scalar!(
+async fn estimate_total_work_for_pending_deposits_sum(
+    db_pool: &PgPool,
+    granularity: &Granularity,
+) -> u64 {
+    let candidate_slots: Vec<i32> = sqlx::query_scalar!(
         r#"
-        SELECT COUNT(*) as "count!"
-        FROM beacon_blocks
+        SELECT slot FROM beacon_blocks
         WHERE slot IS NOT NULL AND slot >= $1 AND pending_deposits_sum_gwei IS NULL
         "#,
-        PECTRA_SLOT.0 // PECTRA_SLOT is a Slot, .0 gives the i32 value
+        PECTRA_SLOT.0
     )
-    .fetch_one(db_pool)
+    .fetch_all(db_pool)
     .await
-    .unwrap_or(0)
-    .try_into()
-    .unwrap_or(0)
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| row.expect("beacon block slot should not be null for backfill range"))
+            .collect()
+    })
+    .unwrap_or_else(|e| {
+        warn!(error = %e, "failed to fetch slots for work estimation in pending deposits backfill");
+        Vec::new()
+    });
+
+    if candidate_slots.is_empty() {
+        return 0;
+    }
+
+    let mut count = 0;
+    for slot_val in candidate_slots {
+        let slot_obj = Slot(slot_val);
+        let should_process = match granularity {
+            Granularity::Slot => true,
+            Granularity::Epoch => slot_obj.is_first_of_epoch(),
+            Granularity::Hour => slot_obj.is_first_of_hour(),
+            Granularity::Day => slot_obj.is_first_of_day(),
+        };
+        if should_process {
+            count += 1;
+        }
+    }
+    count
 }
 
 #[derive(Debug)]
 struct PendingDepositUpdateData {
     state_root: String,
     pending_deposits_sum: GweiNewtype,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct BlockToProcess {
+    state_root: String,
+    slot: i32,
 }
 
 async fn fetch_pending_deposits_for_state_root(
@@ -89,26 +123,26 @@ async fn bulk_update_pending_deposits(
     Ok(rows_affected)
 }
 
-pub async fn backfill_pending_deposits_sum(db_pool: &PgPool) {
+pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granularity) {
     let beacon_node = BeaconNodeHttp::new();
 
-    debug!("estimating total work for backfilling missing pending_deposits_sum_gwei");
-    let total_work = estimate_total_missing_pending_deposits_sum(db_pool).await;
+    debug!("estimating total work for backfilling missing pending_deposits_sum_gwei (granularity: {:?})", granularity);
+    let total_work = estimate_total_work_for_pending_deposits_sum(db_pool, granularity).await;
     if total_work == 0 {
-        info!("no beacon_blocks rows found with missing pending_deposits_sum_gwei for post-Pectra slots. nothing to do.");
+        info!("no beacon_blocks rows found with missing pending_deposits_sum_gwei for post-pectra slots, matching granularity {:?}. nothing to do.", granularity);
         return;
     }
     debug!(
-        "total beacon_blocks with missing pending_deposits_sum_gwei to process: {}",
-        total_work
+        "total beacon_blocks with missing pending_deposits_sum_gwei to process (matching granularity {:?}): {}",
+        granularity, total_work
     );
     let mut progress = Progress::new("backfill-pending-deposits-sum", total_work);
-    let mut overall_processed_count: u64 = 0;
+    let mut processed_items_count: u64 = 0;
 
     loop {
-        let state_roots_to_process: Vec<String> = sqlx::query_scalar!(
+        let blocks_to_consider: Vec<BlockToProcess> = sqlx::query!(
             r#"
-            SELECT state_root FROM beacon_blocks
+            SELECT state_root, slot FROM beacon_blocks
             WHERE slot IS NOT NULL AND slot >= $1 AND pending_deposits_sum_gwei IS NULL
             ORDER BY slot DESC
             LIMIT $2
@@ -118,25 +152,64 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool) {
         )
         .fetch_all(db_pool)
         .await
+        .map(|rows| rows.into_iter().map(|row| BlockToProcess {
+            state_root: row.state_root,
+            // this expect is temporary until we have all block slots backfilled and a not null constraint.
+            slot: row.slot.expect("beacon block slot should not be null for backfill range"),
+        }).collect())
         .unwrap_or_else(|e| {
-            warn!(error = %e, "failed to fetch chunk of state_roots for pending deposits sum backfill, ending early");
+            warn!(error = %e, "failed to fetch chunk of blocks for pending deposits sum backfill, ending early");
             Vec::new()
         });
 
-        if state_roots_to_process.is_empty() {
-            info!("no more state_roots with missing pending_deposits_sum_gwei found to process.");
+        if blocks_to_consider.is_empty() {
+            info!(
+                "no more candidate blocks with missing pending_deposits_sum_gwei found by query."
+            );
             break;
         }
 
-        let chunk_size = state_roots_to_process.len() as u64;
+        let num_considered_this_chunk = blocks_to_consider.len() as u64;
+
+        let state_roots_to_process: Vec<String> = blocks_to_consider
+            .into_iter()
+            .filter_map(|block| {
+                let slot_obj = Slot(block.slot);
+                let should_process = match granularity {
+                    Granularity::Slot => true,
+                    Granularity::Epoch => slot_obj.is_first_of_epoch(),
+                    Granularity::Hour => slot_obj.is_first_of_hour(),
+                    Granularity::Day => slot_obj.is_first_of_day(),
+                };
+                if should_process {
+                    Some(block.state_root)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if state_roots_to_process.is_empty() {
+            debug!(
+                "no state_roots matched granularity {:?} in this chunk of {} candidates. fetching next chunk.",
+                granularity, num_considered_this_chunk
+            );
+            if num_considered_this_chunk < DB_CHUNK_SIZE as u64 {
+                info!("processed the last chunk of candidate state_roots from db, none matched granularity {:?}.", granularity);
+                break;
+            }
+            continue;
+        }
+
+        let actual_chunk_to_process_size = state_roots_to_process.len() as u64;
         debug!(
-            "processing a new chunk of {} state_roots for pending deposits sum",
-            chunk_size
+            "processing a new chunk of {} state_roots (filtered by {:?} from {} candidates) for pending deposits sum",
+            actual_chunk_to_process_size, granularity, num_considered_this_chunk
         );
 
         let tasks =
             stream::iter(state_roots_to_process).map(|state_root| {
-                let beacon_node_clone = beacon_node.clone(); // Clone for each async task
+                let beacon_node_clone = beacon_node.clone();
                 async move {
                     fetch_pending_deposits_for_state_root(&beacon_node_clone, state_root).await
                 }
@@ -165,22 +238,22 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool) {
             }
         }
 
-        overall_processed_count += chunk_size;
-        progress.set_work_done(overall_processed_count);
+        processed_items_count += actual_chunk_to_process_size;
+        progress.set_work_done(processed_items_count);
         info!(
             "pending deposits sum backfill progress: {}",
             progress.get_progress_string()
         );
 
-        if chunk_size < DB_CHUNK_SIZE as u64 {
-            info!("processed the last chunk of state_roots for pending deposits sum.");
+        if num_considered_this_chunk < DB_CHUNK_SIZE as u64 {
+            info!("processed the last chunk of candidate state_roots from db for pending deposits sum (granularity: {:?}).", granularity);
             break;
         }
     }
 
     progress.set_work_done(total_work);
     info!(
-        "pending_deposits_sum_gwei backfill process finished. final progress: {}",
-        progress.get_progress_string()
+        "pending_deposits_sum_gwei backfill process finished (granularity: {:?}). final progress: {}",
+        granularity, progress.get_progress_string()
     );
 }

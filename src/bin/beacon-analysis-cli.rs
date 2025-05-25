@@ -94,7 +94,10 @@ enum Commands {
         hardfork: HardforkArgs,
     },
     /// Backfills pending deposits sum to pectra.
-    BackfillPendingDepositsSum,
+    BackfillPendingDepositsSum {
+        /// The granularity for the pending deposits sum backfill (slot, hour, day, epoch).
+        granularity: GranularityArgs,
+    },
     /// Backfills execution supply.
     BackfillExecutionSupply,
     /// Backfills eth supply table for slots with missing data but available prerequisites.
@@ -162,9 +165,10 @@ async fn run_cli(pool: PgPool, commands: Commands) {
             blocks::backfill::backfill_beacon_block_slots(&pool, start_slot).await;
             info!("done backfilling beacon_block slots");
         }
-        Commands::BackfillPendingDepositsSum => {
-            info!("initiating pending deposits sum backfill");
-            backfill_pending_deposits_sum(&pool).await;
+        Commands::BackfillPendingDepositsSum { granularity } => {
+            let gran: Granularity = granularity.into();
+            info!(granularity = ?gran, "initiating pending deposits sum backfill");
+            backfill_pending_deposits_sum(&pool, &gran).await;
             info!("done backfilling pending deposits sum");
         }
         Commands::BackfillExecutionSupply => {
