@@ -5,7 +5,6 @@ use tracing::{debug, error, warn};
 
 use crate::{
     beacon_chain::{self, Slot},
-    beacon_chain::{BeaconNode, BeaconNodeHttp},
     execution_chain::{self, BlockNumber},
     units::{GweiNewtype, WeiNewtype},
 };
