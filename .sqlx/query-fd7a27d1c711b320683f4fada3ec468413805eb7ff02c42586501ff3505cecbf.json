@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            bb.slot AS \"slot!\"\n        FROM\n            beacon_blocks bb\n        JOIN\n            execution_supply esupply ON bb.block_hash = esupply.block_hash\n        LEFT JOIN\n            eth_supply es ON bb.slot = es.balances_slot\n        WHERE\n            bb.slot >= $1 -- current_start_slot_for_fetch\n            AND bb.slot <= $2 -- overall_upper_bound_slot\n            AND es.balances_slot IS NULL\n        ORDER BY\n            bb.slot ASC\n        LIMIT $3;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slot!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "fd7a27d1c711b320683f4fada3ec468413805eb7ff02c42586501ff3505cecbf"
+}

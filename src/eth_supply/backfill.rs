@@ -66,8 +66,6 @@ async fn fetch_verifiable_missing_slots_chunk(
         FROM
             beacon_blocks bb
         JOIN
-            beacon_states bs ON bb.state_root = bs.state_root
-        JOIN
             execution_supply esupply ON bb.block_hash = esupply.block_hash
         LEFT JOIN
             eth_supply es ON bb.slot = es.balances_slot
