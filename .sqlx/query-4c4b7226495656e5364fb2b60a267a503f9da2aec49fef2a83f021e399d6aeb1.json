@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT bs.slot\n        FROM beacon_states bs\n        LEFT JOIN beacon_blocks bb ON bs.state_root = bb.state_root\n        WHERE bs.slot >= $1 AND bs.slot <= $2 AND bb.state_root IS NULL\n        ORDER BY bs.slot ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slot",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4c4b7226495656e5364fb2b60a267a503f9da2aec49fef2a83f021e399d6aeb1"
+}

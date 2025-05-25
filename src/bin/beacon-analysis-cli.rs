@@ -5,14 +5,11 @@ use tracing::info;
 use eth_analysis::{
     beacon_chain::{
         backfill::{backfill_balances, Granularity},
-        backfill_pending_deposits_sum,
-        blocks,
+        backfill_pending_deposits_sum, blocks,
+        blocks::backfill::backfill_missing_beacon_blocks,
         integrity::check_beacon_block_chain_integrity,
         issuance::backfill::{backfill_missing_issuance, backfill_slot_range_issuance},
-        BeaconNodeHttp,
-        Slot, // Assuming Slot can be created from i32
-        FIRST_POST_LONDON_SLOT,
-        PECTRA_SLOT,
+        BeaconNodeHttp, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT,
     },
     db,
     execution_chain::supply_deltas::backfill_execution_supply,
@@ -41,6 +38,23 @@ impl From<GranularityArgs> for Granularity {
             GranularityArgs::Hour => Granularity::Hour,
             GranularityArgs::Day => Granularity::Day,
             GranularityArgs::Epoch => Granularity::Epoch,
+        }
+    }
+}
+
+#[derive(Parser, Debug)]
+enum HardforkArgs {
+    Genesis,
+    London,
+    Pectra,
+}
+
+impl From<HardforkArgs> for Slot {
+    fn from(arg: HardforkArgs) -> Self {
+        match arg {
+            HardforkArgs::Genesis => Slot(0),
+            HardforkArgs::London => FIRST_POST_LONDON_SLOT,
+            HardforkArgs::Pectra => *PECTRA_SLOT,
         }
     }
 }
@@ -84,6 +98,12 @@ enum Commands {
         /// Optional: Specify a slot to start the integrity check from.
         #[clap(long)]
         start_slot: Option<i32>,
+    },
+    /// Backfills missing beacon_blocks between a hardfork (inclusive) and the DB tip.
+    BackfillMissingBeaconBlocks {
+        /// The hardfork boundary to start the backfill from (defaults to GENESIS).
+        #[clap(subcommand)]
+        hardfork: Option<HardforkArgs>,
     },
 }
 
@@ -162,6 +182,12 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                 Ok(()) => info!("beacon block chain integrity check successful"),
                 Err(e) => eprintln!("error during beacon block chain integrity check: {}", e),
             }
+        }
+        Commands::BackfillMissingBeaconBlocks { hardfork } => {
+            let start_slot = hardfork.map(|hf| hf.into()).unwrap_or(Slot(0));
+            info!(%start_slot, "initiating missing beacon_block backfill");
+            backfill_missing_beacon_blocks(&pool, start_slot).await;
+            info!("done backfilling missing beacon_blocks");
         }
     }
 }

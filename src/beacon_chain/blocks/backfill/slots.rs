@@ -69,21 +69,18 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
     };
 
     if max_slot_in_states < 0 {
-        // Or some other sensible minimum, e.g. if starting slot is > 0
         info!(%max_slot_in_states, "max slot in beacon_states is less than zero. nothing to do.");
         return;
     }
 
-    // Get initial count of blocks needing backfill for progress reporting
     let initial_blocks_to_backfill_count_res: Result<Option<i64>, sqlx::Error> =
         sqlx::query_scalar("SELECT COUNT(*) FROM beacon_blocks WHERE slot IS NULL")
-            .fetch_optional(db_pool) // COUNT(*) always returns a row, but fetch_optional is safer with Option<T>
+            .fetch_optional(db_pool)
             .await;
 
     let initial_blocks_to_backfill_count = match initial_blocks_to_backfill_count_res {
         Ok(Some(count)) if count > 0 => count as u64,
         Ok(Some(count)) => {
-            // count is 0 or negative
             info!(
                 "no beacon_blocks found with NULL slots (count is {}). backfill not needed.",
                 count
@@ -91,7 +88,6 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
             return;
         }
         Ok(None) => {
-            // Should not happen with COUNT(*), but defensive
             info!("COUNT(*) query returned no row, which is unexpected. aborting backfill.");
             return;
         }
@@ -125,12 +121,6 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
         let mut is_triggered = false;
         let trigger_check_slot = current_range_min_slot;
 
-        // Performance optimization: Check only the state_root for the lowest slot in the current
-        // range (current_range_min_slot). If this specific state_root is present in beacon_states
-        // and its corresponding beacon_block entry has a NULL slot, we trigger a backfill
-        // for the entire range. This avoids a potentially costly query to check all slots
-        // in the range upfront. The assumption is that if the bottom of the range needs
-        // backfilling, it's a good heuristic to process the whole recent chunk.
         let trigger_state_root_opt: Option<String> = sqlx::query_scalar!(
             "SELECT state_root FROM beacon_states WHERE slot = $1",
             trigger_check_slot
@@ -143,7 +133,6 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
         });
 
         if let Some(trigger_state_root) = trigger_state_root_opt {
-            // Check if this state_root is in beacon_blocks and its slot is NULL
             let block_slot_record_opt = sqlx::query!(
                 "SELECT slot FROM beacon_blocks WHERE state_root = $1",
                 &trigger_state_root
@@ -166,7 +155,6 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
                         "backfill triggered for slot range."
                     );
                 } else {
-                    // Slot is present, no trigger based on this specific state_root
                     debug!(
                         slot = trigger_check_slot,
                         %trigger_state_root,
@@ -174,7 +162,6 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
                     );
                 }
             } else {
-                // State root from beacon_states not found in beacon_blocks, so cannot be a trigger.
                 debug!(
                     slot = trigger_check_slot,
                     %trigger_state_root,
@@ -267,7 +254,7 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
         current_head_slot = current_range_min_slot - 1;
     }
 
-    progress.set_work_done(total_blocks_backfilled_count); // Ensure final progress reflects actual updates
+    progress.set_work_done(total_blocks_backfilled_count);
     info!(
         "beacon_block_slots backfill process finished. final progress: {}. total blocks updated: {}",
         progress.get_progress_string(),
