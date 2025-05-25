@@ -151,24 +151,14 @@ async fn gather_supply_parts(
     .await?
     .and_then(|row| row.pending_deposits_sum_gwei.map(GweiNewtype));
 
-    let pending_deposits_sum = if let Some(sum) = pending_deposits_sum_db {
-        debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "using pending deposits sum from db");
-        sum
-    } else {
-        // TODO: depend on BeaconNode trait and receive as argument.
-        let beacon_node = BeaconNodeHttp::new_from_env();
-        match beacon_node
-            .get_pending_deposits_sum(&block.state_root)
-            .await
-        {
-            Ok(Some(sum)) => {
-                debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "fetched pending deposits sum from beacon node");
-                sum
-            }
-            Ok(None) | Err(_) => {
-                warn!(%target_slot, state_root = %block.state_root, "pending deposits sum unavailable from db and beacon node; skipping supply calculation for this slot");
-                return Ok(None);
-            }
+    let pending_deposits_sum = match pending_deposits_sum_db {
+        Some(sum) => {
+            debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "fetched pending deposits sum from beacon node");
+            sum
+        }
+        None => {
+            warn!(%target_slot, state_root = %block.state_root, "pending deposits sum unavailable from db and beacon node; skipping supply calculation for this slot");
+            return Ok(None);
         }
     };
 
