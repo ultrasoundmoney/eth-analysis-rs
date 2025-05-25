@@ -287,7 +287,10 @@ impl BeaconNode for BeaconNodeHttp {
 
     #[allow(dead_code)]
     async fn get_last_finality_checkpoint(&self) -> Result<FinalityCheckpoint> {
-        let url = format!("{}/eth/v1/beacon/states/finality_checkpoints", self.url);
+        let url = format!(
+            "{}/eth/v1/beacon/states/head/finality_checkpoints",
+            self.url
+        );
         self.client
             .get(&url)
             .send()
