@@ -69,16 +69,15 @@ impl From<HardforkArgs> for Slot {
 enum Commands {
     /// Backfills beacon chain issuance data.
     BackfillIssuance {
-        /// Optional: Specify a start slot for ranged backfill.
-        /// If provided, --end-slot must also be provided.
-        /// This will overwrite existing issuance data for any hour touched by the slot range.
-        #[clap(long)]
-        start_slot: Option<i32>,
-
-        /// Optional: Specify an end slot for ranged backfill.
-        /// If provided, --start-slot must also be provided.
-        #[clap(long)]
-        end_slot: Option<i32>,
+        /// Optional: Specify a start hardfork for ranged backfill.
+        /// If not provided, backfills missing issuance post-Pectra.
+        /// If provided, this will overwrite existing issuance data for any hour
+        /// from the start_hardfork up to the latest slot in the database.
+        #[clap(
+            long,
+            help = "Optional: Specify a start hardfork for ranged backfill. Overwrites existing hourly issuance from this hardfork to the DB tip."
+        )]
+        start_hardfork: Option<HardforkArgs>,
     },
     /// Backfills beacon chain balances from a hardfork boundary (inclusive).
     BackfillBalances {
@@ -125,28 +124,19 @@ enum Commands {
 
 async fn run_cli(pool: PgPool, commands: Commands) {
     match commands {
-        Commands::BackfillIssuance {
-            start_slot,
-            end_slot,
-        } => match (start_slot, end_slot) {
-            (Some(start), Some(end)) => {
-                if start >= end {
-                    eprintln!("error: start_slot must be less than end_slot for ranged backfill.");
-                    return;
-                }
+        Commands::BackfillIssuance { start_hardfork } => match start_hardfork {
+            Some(start_hf_arg) => {
+                let start_slot: Slot = start_hf_arg.clone().into();
                 info!(
-                    start_slot = start,
-                    end_slot = end,
-                    "initiating ranged beacon issuance backfill (one per hour, overwriting)."
+                    start_hardfork = ?start_hf_arg,
+                    derived_start_slot = %start_slot,
+                    "initiating ranged beacon issuance backfill (one per hour, overwriting from start to DB tip)."
                 );
-                backfill_slot_range_issuance(&pool, Slot(start), Slot(end)).await;
+                backfill_slot_range_issuance(&pool, start_slot).await;
             }
-            (None, None) => {
-                info!("initiating missing beacon issuance backfill (one per hour).");
+            None => {
+                info!("initiating missing beacon issuance backfill (one per hour, typically post-pectra unless db is older).");
                 backfill_missing_issuance(&pool).await;
-            }
-            _ => {
-                eprintln!("error: for ranged backfill, both --start-slot and --end-slot must be provided.");
             }
         },
         Commands::BackfillBalances {
