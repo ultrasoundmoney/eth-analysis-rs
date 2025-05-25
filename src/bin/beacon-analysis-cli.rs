@@ -12,6 +12,7 @@ use eth_analysis::{
         BeaconNodeHttp, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT,
     },
     db,
+    eth_supply::backfill::backfill_eth_supply,
     execution_chain::supply_deltas::backfill_execution_supply,
     log,
 };
@@ -96,6 +97,13 @@ enum Commands {
     BackfillPendingDepositsSum,
     /// Backfills execution supply.
     BackfillExecutionSupply,
+    /// Backfills eth supply table for slots with missing data but available prerequisites.
+    BackfillEthSupply {
+        /// Optional: Specify a hardfork to start the backfill from.
+        /// Defaults to the Merge if not provided.
+        #[clap(long)]
+        hardfork: Option<HardforkArgs>,
+    },
     /// Backfills all hourly balances.
     BackfillHourlyBalances,
     /// Checks the integrity of the beacon block chain.
@@ -161,6 +169,12 @@ async fn run_cli(pool: PgPool, commands: Commands) {
         }
         Commands::BackfillExecutionSupply => {
             backfill_execution_supply(&pool).await;
+        }
+        Commands::BackfillEthSupply { hardfork } => {
+            let start_slot: Option<Slot> = hardfork.map(|hf_arg| hf_arg.into());
+            info!(?start_slot, "initiating eth supply backfill");
+            backfill_eth_supply(&pool, start_slot).await;
+            info!("done backfilling eth supply");
         }
         Commands::BackfillHourlyBalances => {
             info!("backfilling hourly beacon balances");

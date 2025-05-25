@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            COUNT(DISTINCT bb.slot) AS \"count!\"\n        FROM\n            beacon_blocks bb\n        JOIN\n            beacon_states bs ON bb.state_root = bs.state_root\n        JOIN\n            execution_supply esupply ON bb.block_hash = esupply.block_hash\n        LEFT JOIN\n            eth_supply es ON bb.slot = es.balances_slot\n        WHERE\n            bb.slot >= $1\n            AND bb.slot <= $2\n            AND es.balances_slot IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d6d3a938ea2a72e271b54d672a09345d10adce411b8b1d192980c30c2e783bed"
+}
