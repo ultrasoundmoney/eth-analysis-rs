@@ -2,166 +2,22 @@
 //! Currently, many calls taking a state_root as input do not acknowledge that a state_root may
 //! disappear at any time. They should be updated to do so.
 pub mod test_utils;
-
-use std::fmt::Display;
+pub mod types;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use chrono::Utc;
 use mockall::automock;
 use reqwest::StatusCode;
-use serde::Deserialize;
 use tracing::instrument;
 
 use crate::{
-    env::ENV_CONFIG, execution_chain::BlockHash, json_codecs::i32_from_string,
-    performance::TimedExt, units::GweiNewtype,
+    env::ENV_CONFIG, execution_chain::BlockHash, performance::TimedExt, units::GweiNewtype,
 };
 
-use super::{slot_from_string, Slot};
+use super::Slot;
 
-#[derive(Debug)]
-pub enum BlockId {
-    BlockRoot(String),
-    #[allow(dead_code)]
-    Finalized,
-    #[allow(dead_code)]
-    Genesis,
-    Head,
-    Slot(Slot),
-}
-
-impl From<Slot> for BlockId {
-    fn from(slot: Slot) -> Self {
-        BlockId::Slot(slot)
-    }
-}
-
-impl Display for BlockId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::BlockRoot(block_root) => write!(f, "BlockId(BlockRoot({block_root}))"),
-            Self::Finalized => write!(f, "BlockId(Finalized)"),
-            Self::Genesis => write!(f, "BlockId(Genesis)"),
-            Self::Head => write!(f, "BlockId(Head)"),
-            Self::Slot(slot) => write!(f, "BlockId(Slot{slot})"),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DepositData {
-    pub amount: GweiNewtype,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Deposit {
-    pub data: DepositData,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Withdrawal {
-    #[serde(deserialize_with = "i32_from_string")]
-    pub index: i32,
-    #[allow(dead_code)]
-    pub address: String,
-    pub amount: GweiNewtype,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ExecutionDeposit {
-    pub pubkey: String,
-    pub withdrawal_credentials: String,
-    pub amount: GweiNewtype,
-    pub signature: String,
-    #[serde(deserialize_with = "i32_from_string")]
-    pub index: i32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ExecutionWithdrawal {
-    pub amount: GweiNewtype,
-    pub source_address: String,
-    pub validator_pubkey: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ExecutionPayload {
-    pub block_hash: BlockHash,
-    pub withdrawals: Option<Vec<Withdrawal>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ExecutionRequests {
-    pub deposits: Vec<ExecutionDeposit>,
-    pub withdrawals: Vec<ExecutionWithdrawal>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BeaconBlockBody {
-    pub deposits: Vec<Deposit>,
-    pub execution_payload: Option<ExecutionPayload>,
-    pub execution_requests: Option<ExecutionRequests>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BeaconBlock {
-    pub body: BeaconBlockBody,
-    pub parent_root: String,
-    #[serde(deserialize_with = "slot_from_string")]
-    pub slot: Slot,
-    pub state_root: String,
-}
-
-impl BeaconBlock {
-    pub fn block_hash(&self) -> Option<&BlockHash> {
-        self.body
-            .execution_payload
-            .as_ref()
-            .map(|payload| &payload.block_hash)
-    }
-
-    pub fn deposits(&self) -> Vec<&DepositData> {
-        self.body
-            .deposits
-            .iter()
-            .map(|deposit| &deposit.data)
-            .collect()
-    }
-
-    pub fn execution_request_deposits(&self) -> Vec<&ExecutionDeposit> {
-        self.body
-            .execution_requests
-            .as_ref()
-            .map_or(vec![], |req| req.deposits.iter().collect())
-    }
-
-    pub fn execution_request_withdrawals(&self) -> Vec<&ExecutionWithdrawal> {
-        self.body
-            .execution_requests
-            .as_ref()
-            .map_or(vec![], |req| req.withdrawals.iter().collect())
-    }
-
-    pub fn withdrawals(&self) -> Option<&Vec<Withdrawal>> {
-        self.body
-            .execution_payload
-            .as_ref()
-            .and_then(|execution_payload| execution_payload.withdrawals.as_ref())
-    }
-}
-
-/// A signed envelope.
-#[derive(Deserialize)]
-struct BeaconBlockSignedEnvelope {
-    message: BeaconBlock,
-}
-
-/// A versioned envelope.
-#[derive(Deserialize)]
-struct BeaconBlockVersionedEnvelope {
-    data: BeaconBlockSignedEnvelope,
-}
+pub use types::*;
 
 fn make_blocks_url(block_id: &BlockId) -> String {
     let block_id_text = match block_id {
@@ -179,91 +35,6 @@ fn make_blocks_url(block_id: &BlockId) -> String {
     format!("{beacon_url}/eth/v2/beacon/blocks/{}", block_id_text)
 }
 
-pub type StateRoot = String;
-
-// Old structs for direct state root fetching, kept for posterity.
-// #[derive(Debug, Deserialize)]
-// struct StateRootSecondEnvelope {
-//     root: StateRoot,
-// }
-
-// #[derive(Debug, Deserialize)]
-// struct StateRootFirstEnvelope {
-//     data: StateRootSecondEnvelope,
-// }
-
-// Old helper for direct state root fetching, kept for posterity.
-// fn make_state_root_url(slot: Slot) -> String {
-//     let beacon_url = ENV_CONFIG
-//         .beacon_url
-//         .as_ref()
-//         .expect("BEACON_URL is required in env to fetch blocks");
-//     format!("{beacon_url}/eth/v1/beacon/states/{}/root", slot)
-// }
-
-#[derive(Debug, Deserialize)]
-pub struct ValidatorBalance {
-    pub balance: GweiNewtype,
-}
-
-#[derive(Debug, Deserialize)]
-struct ValidatorBalancesEnvelope {
-    data: Vec<ValidatorBalance>,
-}
-
-fn make_validator_balances_by_state_url(state_root: &str) -> String {
-    let beacon_url = ENV_CONFIG
-        .beacon_url
-        .as_ref()
-        .expect("BEACON_URL is required in env to fetch validator balances");
-    format!(
-        "{beacon_url}/eth/v1/beacon/states/{}/validator_balances",
-        state_root
-    )
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct BeaconHeader {
-    #[serde(deserialize_with = "slot_from_string")]
-    pub slot: Slot,
-    pub parent_root: BlockRoot,
-    pub state_root: StateRoot,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct BeaconHeaderEnvelope {
-    pub message: BeaconHeader,
-}
-
-/// Keccak hash of a beacon block.
-pub type BlockRoot = String;
-
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct BeaconHeaderSignedEnvelope {
-    /// Root (hash) of the block this header is about.
-    pub root: BlockRoot,
-    pub header: BeaconHeaderEnvelope,
-}
-
-impl BeaconHeaderSignedEnvelope {
-    pub fn slot(&self) -> Slot {
-        self.header.message.slot
-    }
-
-    pub fn parent_root(&self) -> BlockRoot {
-        self.header.message.parent_root.clone()
-    }
-
-    pub fn state_root(&self) -> StateRoot {
-        self.header.message.state_root.clone()
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct HeaderEnvelope {
-    data: BeaconHeaderSignedEnvelope,
-}
-
 fn make_header_by_block_id_url(block_id: &BlockId) -> String {
     let block_id_text = match block_id {
         BlockId::BlockRoot(str) => str.to_owned(),
@@ -279,90 +50,15 @@ fn make_header_by_block_id_url(block_id: &BlockId) -> String {
     format!("{beacon_url}/eth/v1/beacon/headers/{}", block_id_text)
 }
 
-fn make_validators_by_state_url(state_root: &str) -> String {
-    let beacon_url = ENV_CONFIG
-        .beacon_url
-        .as_ref()
-        .expect("BEACON_URL is required in env to fetch validator balances");
-    format!(
-        "{beacon_url}/eth/v1/beacon/states/{}/validators",
-        state_root
-    )
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Validator {
-    pub effective_balance: GweiNewtype,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ValidatorEnvelope {
-    pub status: String,
-    pub validator: Validator,
-}
-
-impl ValidatorEnvelope {
-    pub fn is_active(&self) -> bool {
-        self.status == "active_ongoing"
-            || self.status == "active_exiting"
-            || self.status == "active_slashed"
-    }
-
-    pub fn effective_balance(&self) -> GweiNewtype {
-        self.validator.effective_balance
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct ValidatorsEnvelope {
-    data: Vec<ValidatorEnvelope>,
-}
-
-fn make_finality_checkpoint_url() -> String {
-    let beacon_url = ENV_CONFIG
-        .beacon_url
-        .as_ref()
-        .expect("BEACON_URL is required in env to fetch validator balances");
-    format!("{beacon_url}/eth/v1/beacon/states/head/finality_checkpoints",)
-}
-
-#[derive(Deserialize)]
-pub struct FinalityCheckpoint {
-    #[allow(dead_code)]
-    #[serde(deserialize_with = "i32_from_string")]
-    epoch: i32,
-    #[allow(dead_code)]
-    root: String,
-}
-
-#[derive(Deserialize)]
-struct FinalityCheckpoints {
-    finalized: FinalityCheckpoint,
-}
-
-#[derive(Deserialize)]
-struct CheckpointEnvelope {
-    data: FinalityCheckpoints,
-}
-
-#[derive(Deserialize)]
-pub struct PendingDeposit {
-    pub amount: GweiNewtype,
-}
-
-#[derive(Deserialize)]
-struct PendingDepositsEnvelope {
-    data: Vec<PendingDeposit>,
-}
-
 #[derive(Clone, Debug)]
 pub struct BeaconNodeHttp {
     client: reqwest::Client,
+    url: String,
 }
 
 impl Default for BeaconNodeHttp {
     fn default() -> Self {
-        BeaconNodeHttp::new()
+        BeaconNodeHttp::new("localhost:5052")
     }
 }
 
@@ -400,10 +96,19 @@ pub trait BeaconNode {
 }
 
 impl BeaconNodeHttp {
-    pub fn new() -> Self {
+    pub fn new(url: &str) -> Self {
         BeaconNodeHttp {
             client: reqwest::Client::new(),
+            url: url.to_string(),
         }
+    }
+
+    pub fn new_from_env() -> Self {
+        let beacon_url = ENV_CONFIG
+            .beacon_url
+            .as_ref()
+            .expect("BEACON_URL is required in env to fetch blocks");
+        BeaconNodeHttp::new(beacon_url)
     }
 
     async fn get_block(&self, block_id: &BlockId) -> Result<Option<BeaconBlock>> {
@@ -423,81 +128,6 @@ impl BeaconNodeHttp {
             status => Err(anyhow!(
                 "failed to fetch block by block_id. block_id = {} status = {} url = {}",
                 block_id,
-                status,
-                res.url()
-            )),
-        }
-    }
-
-    pub async fn get_validator_balances_by_slot(
-        &self,
-        slot: Slot,
-    ) -> Result<Option<Vec<ValidatorBalance>>> {
-        let beacon_url = ENV_CONFIG
-            .beacon_url
-            .as_ref()
-            .expect("BEACON_URL is required in env to fetch validator balances");
-        let url = format!(
-            "{}/eth/v1/beacon/states/{}/validator_balances",
-            beacon_url, slot.0
-        );
-        let res = self
-            .client
-            .get(&url)
-            .send()
-            .timed("get_validator_balances_by_slot")
-            .await?;
-        match res.status() {
-            StatusCode::NOT_FOUND => Ok(None),
-            StatusCode::OK => {
-                let envelope = res.json::<ValidatorBalancesEnvelope>().await?;
-                Ok(Some(envelope.data))
-            }
-            status => Err(anyhow!(
-                "failed to fetch validator balances by slot. slot = {} status = {} url = {}",
-                slot.0,
-                status,
-                res.url()
-            )),
-        }
-    }
-
-    /// Fetches the sum of pending deposits (in Gwei) for a given beacon state.
-    /// Returns `Ok(Some(sum))` if the state exists and the endpoint responds with data,
-    /// `Ok(None)` if the endpoint returns 404 (state not available), or an `Err` for other
-    /// HTTP / network failures.
-    #[instrument(skip(self))]
-    pub async fn get_pending_deposits_sum(
-        &self,
-        state_root: &str,
-    ) -> anyhow::Result<Option<GweiNewtype>> {
-        let Some(beacon_url) = ENV_CONFIG.beacon_url.as_ref() else {
-            // If BEACON_URL is not configured, we cannot fetch pending deposits. Return None.
-            return Err(anyhow::anyhow!(
-                "BEACON_URL is not configured, cannot fetch pending deposits"
-            ));
-        };
-
-        let url = format!(
-            "{}/eth/v1/beacon/states/{}/pending_deposits",
-            beacon_url, state_root
-        );
-
-        let res = self.client.get(&url).send().await?;
-
-        match res.status() {
-            StatusCode::NOT_FOUND => Ok(None),
-            StatusCode::OK => {
-                let envelope = res.json::<PendingDepositsEnvelope>().await?;
-                let sum = envelope
-                    .data
-                    .iter()
-                    .fold(GweiNewtype(0), |acc, d| acc + d.amount);
-                Ok(Some(sum))
-            }
-            status => Err(anyhow::anyhow!(
-                "failed to fetch pending deposits. state_root = {} status = {} url = {}",
-                state_root,
                 status,
                 res.url()
             )),
@@ -540,16 +170,17 @@ impl BeaconNode for BeaconNodeHttp {
     }
 
     async fn get_state_root_by_slot(&self, slot: Slot) -> Result<Option<StateRoot>> {
-        // Old implementation was requesting /eth/v1/beacon/states/{slot}/root directly.
-        // Lighthouse is responding not found for whatever reason.
-        // New temporary implementation: rely on fetching the header from /eth/v1/beacon/headers/{slot}
-        match self.get_header_by_slot(slot).await {
-            Ok(Some(header_envelope)) => Ok(Some(header_envelope.state_root())),
-            Ok(None) => Ok(None),
-            Err(e) => Err(e.context(format!(
-                "failed to retrieve header for slot {} while attempting to get state_root",
-                slot
-            ))),
+        let url = format!("{}/eth/v1/beacon/states/{}/root", self.url, slot.0);
+        let res = self.client.get(&url).send().await?;
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => Ok(Some(res.json::<StateRootEnvelope>().await?.data.root)),
+            status => Err(anyhow!(
+                "failed to fetch state root by slot. slot = {} status = {} url = {}",
+                slot.0,
+                status,
+                res.url()
+            )),
         }
     }
 
@@ -558,8 +189,10 @@ impl BeaconNode for BeaconNodeHttp {
         &self,
         state_root: &str,
     ) -> Result<Option<Vec<ValidatorBalance>>> {
-        let url = make_validator_balances_by_state_url(state_root);
-
+        let url = format!(
+            "{}/eth/v1/beacon/states/{}/validator_balances",
+            self.url, state_root
+        );
         let res = self
             .client
             .get(&url)
@@ -654,7 +287,7 @@ impl BeaconNode for BeaconNodeHttp {
 
     #[allow(dead_code)]
     async fn get_last_finality_checkpoint(&self) -> Result<FinalityCheckpoint> {
-        let url = make_finality_checkpoint_url();
+        let url = format!("{}/eth/v1/beacon/states/finality_checkpoints", self.url);
         self.client
             .get(&url)
             .send()
@@ -667,7 +300,10 @@ impl BeaconNode for BeaconNodeHttp {
     }
 
     async fn get_validators_by_state(&self, state_root: &str) -> Result<Vec<ValidatorEnvelope>> {
-        let url = make_validators_by_state_url(state_root);
+        let url = format!(
+            "{}/eth/v1/beacon/states/{}/validators",
+            self.url, state_root
+        );
         self.client
             .get(&url)
             .send()
@@ -683,11 +319,67 @@ impl BeaconNode for BeaconNodeHttp {
         &self,
         slot: Slot,
     ) -> Result<Option<Vec<ValidatorBalance>>> {
-        self.get_validator_balances_by_slot(slot).await
+        let beacon_url = ENV_CONFIG
+            .beacon_url
+            .as_ref()
+            .expect("BEACON_URL is required in env to fetch validator balances");
+        let url = format!(
+            "{}/eth/v1/beacon/states/{}/validator_balances",
+            beacon_url, slot.0
+        );
+        let res = self
+            .client
+            .get(&url)
+            .send()
+            .timed("get_validator_balances_by_slot")
+            .await?;
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => {
+                let envelope = res.json::<ValidatorBalancesEnvelope>().await?;
+                Ok(Some(envelope.data))
+            }
+            status => Err(anyhow!(
+                "failed to fetch validator balances by slot. slot = {} status = {} url = {}",
+                slot.0,
+                status,
+                res.url()
+            )),
+        }
     }
 
+    #[instrument(skip(self))]
     async fn get_pending_deposits_sum(&self, state_root: &str) -> Result<Option<GweiNewtype>> {
-        self.get_pending_deposits_sum(state_root).await
+        let Some(beacon_url) = ENV_CONFIG.beacon_url.as_ref() else {
+            return Err(anyhow::anyhow!(
+                "BEACON_URL is not configured, cannot fetch pending deposits"
+            ));
+        };
+
+        let url = format!(
+            "{}/eth/v1/beacon/states/{}/pending_deposits",
+            beacon_url, state_root
+        );
+
+        let res = self.client.get(&url).send().await?;
+
+        match res.status() {
+            StatusCode::NOT_FOUND => Ok(None),
+            StatusCode::OK => {
+                let envelope = res.json::<PendingDepositsEnvelope>().await?;
+                let sum = envelope
+                    .data
+                    .iter()
+                    .fold(GweiNewtype(0), |acc, d| acc + d.amount);
+                Ok(Some(sum))
+            }
+            status => Err(anyhow::anyhow!(
+                "failed to fetch pending deposits. state_root = {} status = {} url = {}",
+                state_root,
+                status,
+                res.url()
+            )),
+        }
     }
 }
 
@@ -741,7 +433,7 @@ pub mod tests {
         let block_json_str = fs::read_to_string(block_data_path)
             .unwrap_or_else(|_| panic!("failed to read block data from {}", block_data_path));
 
-        serde_json::from_str::<super::BeaconBlockVersionedEnvelope>(&block_json_str)
+        serde_json::from_str::<BeaconBlockVersionedEnvelope>(&block_json_str)
             .unwrap_or_else(|_| panic!("failed to decode block JSON from {}", block_data_path));
 
         // Test decoding for the header
@@ -749,7 +441,7 @@ pub mod tests {
         let header_json_str = fs::read_to_string(header_data_path)
             .unwrap_or_else(|_| panic!("failed to read header data from {}", header_data_path));
 
-        serde_json::from_str::<super::HeaderEnvelope>(&header_json_str)
+        serde_json::from_str::<HeaderEnvelope>(&header_json_str)
             .unwrap_or_else(|_| panic!("failed to decode header JSON from {}", header_data_path));
     }
 
@@ -761,13 +453,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn last_finalized_block_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node.get_last_finalized_block().await.unwrap();
     }
 
     #[tokio::test]
     async fn block_by_root_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node
             .get_block_by_block_root(BLOCK_ROOT_1229)
             .await
@@ -776,13 +468,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn header_by_slot_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node.get_header_by_slot(SLOT_1229).await.unwrap();
     }
 
     #[tokio::test]
     async fn get_none_header_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         let header = beacon_node
             .get_header_by_block_root(
                 "0x602d010f6e616e56026e514d6099730499ad9f635dc6f4581bd6d3ac744fbd8d",
@@ -794,14 +486,14 @@ pub mod tests {
 
     #[tokio::test]
     async fn state_root_by_slot_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node.get_state_root_by_slot(SLOT_1229).await.unwrap();
     }
 
     #[ignore = "failing in CI, probably temporary, try re-enabling"]
     #[tokio::test]
     async fn validator_balances_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node
             .get_validator_balances(STATE_ROOT_1229)
             .await
@@ -812,7 +504,7 @@ pub mod tests {
     #[ignore = "failing in CI, probably temporary, try re-enabling"]
     #[tokio::test]
     async fn validators_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node
             .get_validators_by_state(STATE_ROOT_1229)
             .await
@@ -821,13 +513,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn get_last_finality_checkpoint_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node.get_last_finality_checkpoint().await.unwrap();
     }
 
     #[tokio::test]
     async fn get_header_by_slot_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node
             .get_header_by_slot(Slot(4_000_000))
             .await
@@ -836,7 +528,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn get_header_by_hash_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node
             .get_header_by_block_root(
                 "0x09df4a49850ec0c878ba2443f60f5fa6b473abcb14d222915fc44b17885ed8a4",
@@ -847,13 +539,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn get_last_head_test() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node.get_last_header().await.unwrap();
     }
 
     #[tokio::test]
     async fn get_header_by_state_root() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         beacon_node
             .get_header_by_state_root(
                 "0x2e3df8cebeb66206d2b26e6a36a63105f78c22c3ab4b7abaa11b4056b4519588",
@@ -866,7 +558,7 @@ pub mod tests {
     #[ignore = "failing because we lack a beacon node with history"]
     #[tokio::test]
     async fn get_deposits() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         let block = beacon_node
             .get_block_by_slot(Slot(1229))
             .await
@@ -879,7 +571,7 @@ pub mod tests {
     #[ignore = "failing because we lack a beacon node with history"]
     #[tokio::test]
     async fn get_withdrawals() {
-        let beacon_node = BeaconNodeHttp::new();
+        let beacon_node = BeaconNodeHttp::new_from_env();
         let block = beacon_node
             .get_block_by_slot(Slot(6212480))
             .await
