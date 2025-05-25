@@ -9,7 +9,7 @@ use eth_analysis::{
         blocks::backfill::backfill_missing_beacon_blocks,
         integrity::check_beacon_block_chain_integrity,
         issuance::backfill::{backfill_missing_issuance, backfill_slot_range_issuance},
-        BeaconNodeHttp, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT,
+        BeaconNode, BeaconNodeHttp, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT,
     },
     db,
     eth_supply::backfill::backfill_eth_supply,
@@ -120,6 +120,12 @@ enum Commands {
         #[clap(subcommand)]
         hardfork: Option<HardforkArgs>,
     },
+    /// Fetches and computes the pending deposit sum for a given slot.
+    GetPendingDepositsSum {
+        /// The slot to fetch the pending deposit sum for.
+        #[clap(long)]
+        slot: i32,
+    },
 }
 
 async fn run_cli(pool: PgPool, commands: Commands) {
@@ -194,6 +200,35 @@ async fn run_cli(pool: PgPool, commands: Commands) {
             info!(%start_slot, "initiating missing beacon_block backfill");
             backfill_missing_beacon_blocks(&pool, start_slot).await;
             info!("done backfilling missing beacon_blocks");
+        }
+        Commands::GetPendingDepositsSum { slot } => {
+            info!(%slot, "fetching pending deposits sum for slot");
+            let beacon_node = BeaconNodeHttp::new_from_env();
+            let slot_obj = Slot(slot);
+
+            match beacon_node.get_header_by_slot(slot_obj).await {
+                Ok(Some(block_header)) => {
+                    let state_root = block_header.state_root();
+                    info!(%slot, %state_root, "found state root for slot");
+                    match beacon_node.get_pending_deposits_sum(&state_root).await {
+                        Ok(Some(sum)) => {
+                            info!(%slot, pending_deposits_sum_gwei = %sum, "successfully fetched pending deposits sum");
+                        }
+                        Ok(None) => {
+                            eprintln!("error: beacon node reported no pending deposits sum for state_root {} (slot {})", state_root, slot);
+                        }
+                        Err(e) => {
+                            eprintln!("error: failed to get pending deposits sum for state_root {} (slot {}): {}", state_root, slot, e);
+                        }
+                    }
+                }
+                Ok(None) => {
+                    eprintln!("error: block header not found for slot {}", slot);
+                }
+                Err(e) => {
+                    eprintln!("error: failed to get block header for slot {}: {}", slot, e);
+                }
+            }
         }
     }
 }
