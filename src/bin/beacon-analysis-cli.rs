@@ -46,6 +46,8 @@ impl From<GranularityArgs> for Granularity {
 enum HardforkArgs {
     Genesis,
     London,
+    Capella,
+    Deneb,
     Pectra,
 }
 
@@ -54,6 +56,8 @@ impl From<HardforkArgs> for Slot {
         match arg {
             HardforkArgs::Genesis => Slot(0),
             HardforkArgs::London => FIRST_POST_LONDON_SLOT,
+            HardforkArgs::Capella => Slot(6_209_536),
+            HardforkArgs::Deneb => Slot(8_626_176),
             HardforkArgs::Pectra => *PECTRA_SLOT,
         }
     }
