@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE beacon_blocks\n        SET pending_deposits_sum_gwei = $1\n        WHERE state_root = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "056938267b38be9a731caec045882abc1b4033cf66c0d80e98f21878cc147d2c"
+}
