@@ -9,8 +9,8 @@ use crate::{
     units::GweiNewtype,
 };
 
-const DB_CHUNK_SIZE: usize = 1000;
-const NODE_FETCH_CONCURRENCY_LIMIT: usize = 4;
+const DB_CHUNK_SIZE: usize = 32;
+const NODE_FETCH_CONCURRENCY_LIMIT: usize = 8;
 
 async fn estimate_total_work_for_pending_deposits_sum(
     db_pool: &PgPool,
@@ -90,37 +90,56 @@ async fn fetch_pending_deposits_for_state_root(
     }
 }
 
-async fn bulk_update_pending_deposits(
+async fn update_single_pending_deposit_sum(
     db_pool: &PgPool,
-    updates: Vec<PendingDepositUpdateData>,
-) -> sqlx::Result<u64> {
-    if updates.is_empty() {
-        return Ok(0);
-    }
-
-    let mut state_roots: Vec<String> = Vec::with_capacity(updates.len());
-    let mut sums_gwei: Vec<i64> = Vec::with_capacity(updates.len());
-
-    for update in updates {
-        state_roots.push(update.state_root);
-        sums_gwei.push(i64::from(update.pending_deposits_sum));
-    }
-
-    let rows_affected = sqlx::query!(
+    state_root: &str,
+    pending_deposits_sum: GweiNewtype,
+) -> sqlx::Result<()> {
+    let sum_gwei = i64::from(pending_deposits_sum);
+    sqlx::query!(
         r#"
-        UPDATE beacon_blocks AS bb
-        SET pending_deposits_sum_gwei = upd.sum_gwei
-        FROM UNNEST($1::text[], $2::int8[]) AS upd(state_root, sum_gwei)
-        WHERE bb.state_root = upd.state_root
+        UPDATE beacon_blocks
+        SET pending_deposits_sum_gwei = $1
+        WHERE state_root = $2
         "#,
-        &state_roots,
-        &sums_gwei
+        sum_gwei,
+        state_root
     )
     .execute(db_pool)
-    .await?
-    .rows_affected();
+    .await
+    .map(|_| ())
+}
 
-    Ok(rows_affected)
+// Helper function to process a single state root: fetch its pending deposits sum and update the DB.
+async fn process_single_state_root_and_update(
+    beacon_node: &BeaconNodeHttp,
+    db_pool: &PgPool,
+    state_root_to_process: String,
+) {
+    let update_data =
+        match fetch_pending_deposits_for_state_root(beacon_node, state_root_to_process).await {
+            Some(data) => data,
+            None => {
+                // fetch_pending_deposits_for_state_root already logs issues
+                return;
+            }
+        };
+
+    if let Err(e) = update_single_pending_deposit_sum(
+        db_pool,
+        &update_data.state_root,
+        update_data.pending_deposits_sum,
+    )
+    .await
+    {
+        warn!(
+            state_root = %update_data.state_root,
+            error = %e,
+            "error updating pending deposits sum for state root"
+        );
+        // No explicit false return, function just ends
+    }
+    // No explicit true return, function just ends
 }
 
 pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granularity) {
@@ -207,43 +226,37 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
             actual_chunk_to_process_size, granularity, num_considered_this_chunk
         );
 
-        let tasks =
-            stream::iter(state_roots_to_process).map(|state_root| {
+        // The stream processing will now effectively run operations for their side effects (DB updates, logging).
+        // Collecting into Vec<()> is a way to await all concurrent operations.
+        stream::iter(state_roots_to_process) // state_roots_to_process is Vec<String>
+            .map(|state_root_for_task| {
+                // state_root_for_task is String by move
                 let beacon_node_clone = beacon_node.clone();
+                let db_pool_clone = db_pool.clone();
                 async move {
-                    fetch_pending_deposits_for_state_root(&beacon_node_clone, state_root).await
+                    process_single_state_root_and_update(
+                        &beacon_node_clone,
+                        &db_pool_clone,
+                        state_root_for_task, // state_root_for_task (String) is moved here
+                    )
+                    .await; // process_single_state_root_and_update now returns (), so we just await.
                 }
-            });
-
-        let results: Vec<Option<PendingDepositUpdateData>> = tasks
+            })
             .buffer_unordered(NODE_FETCH_CONCURRENCY_LIMIT)
-            .collect()
+            .collect::<Vec<()>>() // Collects to Vec<()>, effectively awaiting all futures.
             .await;
-
-        let successful_updates: Vec<PendingDepositUpdateData> =
-            results.into_iter().flatten().collect();
-
-        if !successful_updates.is_empty() {
-            let update_count = successful_updates.len();
-            match bulk_update_pending_deposits(db_pool, successful_updates).await {
-                Ok(rows_affected) => {
-                    info!(
-                        "bulk updated {} rows with new pending_deposits_sum_gwei ({} sums found).",
-                        rows_affected, update_count
-                    );
-                }
-                Err(e) => {
-                    warn!(error = %e, "error during bulk update of pending_deposits_sum_gwei");
-                }
-            }
-        }
 
         processed_items_count += actual_chunk_to_process_size;
         progress.set_work_done(processed_items_count);
-        info!(
-            "pending deposits sum backfill progress: {}",
-            progress.get_progress_string()
-        );
+
+        // Simplified logging: only logs if candidates were processed in this chunk.
+        if actual_chunk_to_process_size > 0 {
+            info!(
+                "pending deposits sum: processed batch of {} candidates. overall candidate progress: {}",
+                actual_chunk_to_process_size,
+                progress.get_progress_string()
+            );
+        }
 
         if num_considered_this_chunk < DB_CHUNK_SIZE as u64 {
             info!("processed the last chunk of candidate state_roots from db for pending deposits sum (granularity: {:?}).", granularity);
