@@ -50,13 +50,14 @@ async fn fetch_issuance_data_for_slot(
     // Removed Pectra slot check here to allow backfilling earlier slots.
     // The pending_deposits_sum logic below correctly handles pre-Pectra cases.
 
-    // 1. Get state_root and aggregated deposit/withdrawal sums from beacon_blocks table
+    // 1. Get state_root and other sums from beacon_blocks table
     let block_info = sqlx::query!(
         r#"
         SELECT
             state_root,
             deposit_sum_aggregated,
-            withdrawal_sum_aggregated
+            withdrawal_sum_aggregated,
+            pending_deposits_sum_gwei
         FROM beacon_blocks
         WHERE slot = $1
         "#,
@@ -95,15 +96,26 @@ async fn fetch_issuance_data_for_slot(
         // Correctly sets to 0 for pre-Pectra slots.
         GweiNewtype(0)
     } else {
-        match beacon_node.get_pending_deposits_sum(&state_root).await {
-            Ok(Some(sum)) => sum,
-            Ok(None) => {
-                warn!(%slot, %state_root, "beacon node reported no pending deposits sum for state_root (post-pectra), using 0");
-                GweiNewtype(0)
-            }
-            Err(e) => {
-                warn!(%slot, %state_root, error = %e, "error fetching pending deposits sum, using 0");
-                GweiNewtype(0)
+        // For post-Pectra, try DB first
+        if let Some(sum_gwei_db) = block_row.pending_deposits_sum_gwei {
+            debug!(%slot, %state_root, "found pending_deposits_sum in db (beacon_blocks table)");
+            GweiNewtype(sum_gwei_db)
+        } else {
+            // Fallback to beacon node if not in DB
+            debug!(%slot, %state_root, "pending_deposits_sum not found in db (beacon_blocks table for post-pectra slot), fetching from beacon node");
+            match beacon_node.get_pending_deposits_sum(&state_root).await {
+                Ok(Some(sum_node)) => {
+                    debug!(%slot, %state_root, pending_deposits_sum = %sum_node, "pending deposits sum found via beacon node (after db miss)");
+                    sum_node
+                }
+                Ok(None) => {
+                    warn!(%slot, %state_root, "beacon node reported no pending deposits sum for state_root (post-pectra, after db miss), using 0");
+                    GweiNewtype(0)
+                }
+                Err(e) => {
+                    warn!(%slot, %state_root, error = %e, "error fetching pending deposits sum from beacon node (post-pectra, after db miss), using 0");
+                    GweiNewtype(0)
+                }
             }
         }
     };

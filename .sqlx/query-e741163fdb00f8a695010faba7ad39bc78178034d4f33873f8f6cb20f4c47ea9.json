@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            state_root,\n            deposit_sum_aggregated,\n            withdrawal_sum_aggregated\n        FROM beacon_blocks\n        WHERE slot = $1\n        ",
+  "query": "\n        SELECT\n            state_root,\n            deposit_sum_aggregated,\n            withdrawal_sum_aggregated,\n            pending_deposits_sum_gwei\n        FROM beacon_blocks\n        WHERE slot = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "withdrawal_sum_aggregated",
         "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "pending_deposits_sum_gwei",
+        "type_info": "Int8"
       }
     ],
     "parameters": {
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "be58da05d692447001ede8915d8ba8d2a771c3b0fcc8ce9b4e242210fba0fa9e"
+  "hash": "e741163fdb00f8a695010faba7ad39bc78178034d4f33873f8f6cb20f4c47ea9"
 }
