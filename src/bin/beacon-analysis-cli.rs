@@ -92,7 +92,7 @@ enum Commands {
         #[clap(subcommand)]
         hardfork: HardforkArgs,
     },
-    /// Backfills pending deposits sum.
+    /// Backfills pending deposits sum to pectra.
     BackfillPendingDepositsSum,
     /// Backfills execution supply.
     BackfillExecutionSupply,
