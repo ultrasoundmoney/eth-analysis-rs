@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT state_root, slot FROM beacon_blocks\n            WHERE slot IS NOT NULL AND slot >= $1 AND pending_deposits_sum_gwei IS NULL\n            ORDER BY slot DESC\n            LIMIT $2\n            ",
+  "query": "\n        SELECT state_root, slot FROM beacon_blocks\n        WHERE slot >= $1 AND slot <= $2 AND pending_deposits_sum_gwei IS NULL\n        ORDER BY slot ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -17,7 +17,7 @@
     "parameters": {
       "Left": [
         "Int4",
-        "Int8"
+        "Int4"
       ]
     },
     "nullable": [
@@ -25,5 +25,5 @@
       true
     ]
   },
-  "hash": "16d2308944066f51fc9494819805955567c6b8f780fc6328ee5033fc744510e4"
+  "hash": "3bba993cdd108e7d4c2404611da1d0ab700ce3fbc097101dc0a8dc52da75781c"
 }
