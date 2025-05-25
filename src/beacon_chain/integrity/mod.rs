@@ -47,13 +47,37 @@ pub async fn check_beacon_block_chain_integrity<BN: BeaconNode + Send + Sync + ?
         }
     }
 
+    // Determine upfront whether the canonical chain actually contains a block at `start_slot`.
+    // If it does and our database is missing it, we fail fast instead of continuing the scan.
+    let node_has_block_at_start_slot = beacon_node.get_block_by_slot(start_slot).await?.is_some();
+
+    if node_has_block_at_start_slot {
+        let db_has_block: Option<bool> = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM beacon_blocks WHERE slot = $1)"#,
+            start_slot.0
+        )
+        .fetch_one(executor)
+        .await
+        .context(format!(
+            "failed to check for presence of start_slot {} in db",
+            start_slot
+        ))?;
+
+        if db_has_block != Some(true) {
+            bail!(
+                "db missing block at start_slot {} while beacon node reports a block present",
+                start_slot
+            );
+        }
+    }
+
     let chunk_size: i64 = 1000;
     let mut offset: i64 = 0;
+    // Counter used purely for logging purposes.
     let mut total_blocks_processed = 0;
-    let mut first_block_from_db_processed = false;
 
     loop {
-        debug!(%start_slot, %offset, "fetching block chunk with unified query");
+        debug!(%start_slot, %offset, "fetching block chunk");
         let chunk = sqlx::query_as!(
             BlockLink,
             r#"
@@ -89,13 +113,6 @@ pub async fn check_beacon_block_chain_integrity<BN: BeaconNode + Send + Sync + ?
         for current_block in chunk {
             total_blocks_processed += 1;
 
-            if !first_block_from_db_processed && current_block.slot != start_slot {
-                bail!(
-                        "first block found in DB (slot {}) does not match the resolved start_slot ({}) for the integrity check. DB might be missing blocks or start slot is incorrect.", 
-                        current_block.slot, start_slot
-                    );
-            }
-
             if current_block.parent_root != expected_block_parent_root {
                 warn!(current_slot = %current_block.slot, current_root = %current_block.root, actual_parent = %current_block.parent_root, expected_parent = %expected_block_parent_root, prev_block_context_slot = ?prev_block_slot_for_log, "on-chain verification needed: parent mismatch");
                 bail!(
@@ -106,10 +123,6 @@ pub async fn check_beacon_block_chain_integrity<BN: BeaconNode + Send + Sync + ?
 
             expected_block_parent_root = current_block.root.clone();
             prev_block_slot_for_log = Some(current_block.slot);
-
-            if !first_block_from_db_processed {
-                first_block_from_db_processed = true;
-            }
         }
         offset += chunk_size;
     }

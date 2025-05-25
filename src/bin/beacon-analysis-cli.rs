@@ -85,8 +85,12 @@ enum Commands {
         #[clap(subcommand)]
         granularity: GranularityArgs,
     },
-    /// Backfills beacon chain block slots.
-    BackfillBeaconBlockSlots,
+    /// Backfills beacon block slots between a hardfork (inclusive) and the DB tip.
+    BackfillMissingBeaconBlockSlots {
+        /// The hardfork boundary to start the backfill from.
+        #[clap(subcommand)]
+        hardfork: HardforkArgs,
+    },
     /// Backfills pending deposits sum.
     BackfillPendingDepositsSum,
     /// Backfills execution supply.
@@ -151,10 +155,11 @@ async fn run_cli(pool: PgPool, commands: Commands) {
             backfill_balances(&pool, &gran, *PECTRA_SLOT + 1).await;
             info!("done backfilling beacon balances to pectra for specified granularity");
         }
-        Commands::BackfillBeaconBlockSlots => {
-            info!("initiating beacon block slots backfill");
-            blocks::backfill::backfill_beacon_block_slots(&pool).await;
-            info!("done backfilling beacon block slots");
+        Commands::BackfillMissingBeaconBlockSlots { hardfork } => {
+            let start_slot: Slot = hardfork.into();
+            info!(%start_slot, "initiating missing beacon_block slot backfill");
+            blocks::backfill::backfill_beacon_block_slots(&pool, start_slot).await;
+            info!("done backfilling beacon_block slots");
         }
         Commands::BackfillPendingDepositsSum => {
             info!("initiating pending deposits sum backfill");

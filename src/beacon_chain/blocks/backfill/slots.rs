@@ -48,7 +48,7 @@ struct StateRootAndSlotFromStates {
     slot_from_states: i32,
 }
 
-pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
+pub async fn backfill_beacon_block_slots(db_pool: &PgPool, min_slot_inclusive: Slot) {
     info!("starting beacon_block slot backfill process.");
 
     let max_slot_in_states_opt: Option<i32> =
@@ -73,10 +73,30 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
         return;
     }
 
+    if min_slot_inclusive.0 > max_slot_in_states {
+        info!(
+            %max_slot_in_states,
+            min_slot = min_slot_inclusive.0,
+            "provided lower bound slot is above max slot present in beacon_states. nothing to backfill."
+        );
+        return;
+    }
+
+    // compute initial count of beacon_blocks that still need slot backfill for progress tracking
+    // join to beacon_states so we can filter by the slot stored there, which is never null
     let initial_blocks_to_backfill_count_res: Result<Option<i64>, sqlx::Error> =
-        sqlx::query_scalar("SELECT COUNT(*) FROM beacon_blocks WHERE slot IS NULL")
-            .fetch_optional(db_pool)
-            .await;
+        sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM beacon_blocks bb
+            INNER JOIN beacon_states bs ON bb.state_root = bs.state_root
+            WHERE bb.slot IS NULL
+            AND bs.slot >= $1
+            "#,
+        )
+        .bind(min_slot_inclusive.0)
+        .fetch_optional(db_pool)
+        .await;
 
     let initial_blocks_to_backfill_count = match initial_blocks_to_backfill_count_res {
         Ok(Some(count)) if count > 0 => count as u64,
@@ -109,9 +129,12 @@ pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
     let mut total_blocks_backfilled_count: u64 = 0;
     let mut current_head_slot: i32 = max_slot_in_states;
 
-    while current_head_slot >= 0 {
+    while current_head_slot >= min_slot_inclusive.0 {
         let current_range_max_slot = current_head_slot;
-        let current_range_min_slot = std::cmp::max(0, current_head_slot - SLOT_RANGE_SIZE + 1);
+        let current_range_min_slot = std::cmp::max(
+            min_slot_inclusive.0,
+            current_head_slot - SLOT_RANGE_SIZE + 1,
+        );
 
         debug!(
             "processing slot range: [{}, {}]",
