@@ -4,8 +4,8 @@ use sqlx::{PgConnection, PgPool};
 use tracing::{debug, error, warn};
 
 use crate::{
-    beacon_chain::BeaconNodeHttp,
     beacon_chain::{self, Slot},
+    beacon_chain::{BeaconNode, BeaconNodeHttp},
     execution_chain::{self, BlockNumber},
     units::{GweiNewtype, WeiNewtype},
 };
@@ -155,7 +155,9 @@ async fn gather_supply_parts(
         debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "using pending deposits sum from db");
         sum
     } else {
-        match BeaconNodeHttp::new()
+        // TODO: depend on BeaconNode trait and receive as argument.
+        let beacon_node = BeaconNodeHttp::new_from_env();
+        match beacon_node
             .get_pending_deposits_sum(&block.state_root)
             .await
         {

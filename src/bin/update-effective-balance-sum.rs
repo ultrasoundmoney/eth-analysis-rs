@@ -18,7 +18,7 @@ pub async fn main() {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
     let last_state = beacon_chain::last_stored_state(&db_pool)
         .await
         .expect("expect db to be available")

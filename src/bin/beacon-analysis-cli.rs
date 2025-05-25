@@ -192,7 +192,7 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                 "initiating beacon block chain integrity check"
             );
 
-            let beacon_node = BeaconNodeHttp::new();
+            let beacon_node = BeaconNodeHttp::new_from_env();
 
             match check_beacon_block_chain_integrity(&pool, &beacon_node, start_slot_opt).await {
                 Ok(()) => info!("beacon block chain integrity check successful"),

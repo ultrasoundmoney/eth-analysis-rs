@@ -424,7 +424,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
 
     let db_pool = db::get_db_pool("sync-beacon-states-v2", 5).await;
     sqlx::migrate!().run(&db_pool).await.unwrap();
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
 
     info!("performing startup validation and potential rollback to determine sync start slot.");
     let mut next_slot_to_process = rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;

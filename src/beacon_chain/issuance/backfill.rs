@@ -152,7 +152,7 @@ async fn estimate_total_missing_hours(db_pool: &PgPool) -> u64 {
 
 pub async fn backfill_missing_issuance(db_pool: &PgPool) {
     info!("starting backfill for missing hourly beacon issuance (post-Pectra only, using upsert)");
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
 
     let total_missing_representative_slots = estimate_total_missing_hours(db_pool).await;
     if total_missing_representative_slots == 0 {
@@ -346,7 +346,7 @@ pub async fn backfill_slot_range_issuance(
         return;
     }
 
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
 
     let total_representative_slots_to_process =
         estimate_total_hours_in_range(db_pool, effective_start_slot, end_slot_config).await;

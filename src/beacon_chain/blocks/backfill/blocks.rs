@@ -59,7 +59,7 @@ pub async fn backfill_missing_beacon_blocks(db_pool: &PgPool, from_slot: Slot) {
 
     let total_missing = missing_slots.len() as u64;
     let mut progress = Progress::new("backfill-missing-beacon-blocks", total_missing);
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
 
     for slot_i32 in missing_slots {
         let slot = Slot(slot_i32);

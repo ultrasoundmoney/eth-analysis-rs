@@ -18,7 +18,7 @@ pub async fn heal_block_hashes() {
     let key_value_store = key_value_store::KeyValueStorePostgres::new(db_pool.clone());
     let job_progress = job_progress::JobProgress::new(HEAL_BLOCK_HASHES_KEY, &key_value_store);
 
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
     let first_slot = job_progress.get().await.unwrap_or(FIRST_POST_MERGE_SLOT);
 
     let work_todo = sqlx::query!(

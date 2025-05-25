@@ -1,6 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
-use eth_analysis::beacon_chain::{balances::sum_validator_balances, BeaconNodeHttp, Slot};
+use eth_analysis::beacon_chain::{
+    balances::sum_validator_balances, BeaconNode, BeaconNodeHttp, Slot,
+};
 use tracing::{error, info};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -43,7 +45,7 @@ async fn main() -> Result<()> {
         args.start_slot, args.end_slot, output_file_name
     );
 
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
     let mut writer = csv::Writer::from_path(output_file_name.clone())?;
     writer.write_record(["slot", "total_balance_gwei"])?;
 

@@ -24,7 +24,7 @@ pub async fn heal_beacon_states() {
     let key_value_store = KeyValueStorePostgres::new(db_pool.clone());
     let job_progress = JobProgress::new(HEAL_BEACON_STATES_KEY, &key_value_store);
 
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
     let last_slot = beacon_chain::last_stored_state(&db_pool)
         .await
         .unwrap()

@@ -60,7 +60,7 @@ enum BackfillItemOutcome {
 }
 
 pub async fn backfill_balances(db_pool: &PgPool, granularity: &Granularity, from: Slot) {
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
 
     debug!("estimating work to be done for backfill");
     let work_todo = estimate_work_todo(db_pool, granularity, from).await;

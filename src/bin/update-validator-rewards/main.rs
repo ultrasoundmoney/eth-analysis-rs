@@ -158,7 +158,7 @@ pub async fn main() {
 
     sqlx::migrate!().run(&db_pool).await.unwrap();
 
-    let beacon_node = BeaconNodeHttp::new();
+    let beacon_node = BeaconNodeHttp::new_from_env();
     let relay_api = RelayApiHttp::new();
     let mev_blocks_store = MevBlocksStorePostgres::new(db_pool.clone());
 
