@@ -154,8 +154,7 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
     }
 
     // Calculate the maximum number of chunks to process.
-    // (total_work + DB_CHUNK_SIZE - 1) / DB_CHUNK_SIZE is a way to get ceiling(total_work / DB_CHUNK_SIZE)
-    let max_chunks_to_process = (total_work + DB_CHUNK_SIZE as u64 - 1) / (DB_CHUNK_SIZE as u64);
+    let max_chunks_to_process = total_work.div_ceil(DB_CHUNK_SIZE as u64);
 
     debug!(
         "total beacon_blocks with missing pending_deposits_sum_gwei to process (matching granularity {:?}): {}. max db chunks to fetch: {}",
