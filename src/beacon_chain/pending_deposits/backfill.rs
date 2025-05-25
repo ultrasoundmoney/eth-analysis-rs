@@ -147,22 +147,39 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
 
     debug!("estimating total work for backfilling missing pending_deposits_sum_gwei (granularity: {:?})", granularity);
     let total_work = estimate_total_work_for_pending_deposits_sum(db_pool, granularity).await;
+
     if total_work == 0 {
         info!("no beacon_blocks rows found with missing pending_deposits_sum_gwei for post-pectra slots, matching granularity {:?}. nothing to do.", granularity);
         return;
     }
+
+    // Calculate the maximum number of chunks to process.
+    // (total_work + DB_CHUNK_SIZE - 1) / DB_CHUNK_SIZE is a way to get ceiling(total_work / DB_CHUNK_SIZE)
+    let max_chunks_to_process = (total_work + DB_CHUNK_SIZE as u64 - 1) / (DB_CHUNK_SIZE as u64);
+
     debug!(
-        "total beacon_blocks with missing pending_deposits_sum_gwei to process (matching granularity {:?}): {}",
-        granularity, total_work
+        "total beacon_blocks with missing pending_deposits_sum_gwei to process (matching granularity {:?}): {}. max db chunks to fetch: {}",
+        granularity, total_work, max_chunks_to_process
     );
+
     let mut progress = Progress::new("backfill-pending-deposits-sum", total_work);
     let mut processed_items_count: u64 = 0;
+    let mut chunks_fetched_count: u64 = 0;
 
     loop {
-        if processed_items_count >= total_work {
+        if processed_items_count >= total_work && total_work > 0 {
+            // total_work > 0 to ensure we don't stop if total_work was 0 but loop somehow started
             info!(
-                "all estimated work items ({}) for granularity {:?} have been processed or accounted for. stopping.",
-                total_work, granularity
+                "all estimated work items ({}) for granularity {:?} have been processed. stopping. (fetched {} / {} chunks)",
+                total_work, granularity, chunks_fetched_count, max_chunks_to_process
+            );
+            break;
+        }
+
+        if chunks_fetched_count >= max_chunks_to_process && max_chunks_to_process > 0 {
+            info!(
+                "reached maximum number of chunks to fetch ({}) for granularity {:?}. stopping. (processed {} / {} items)",
+                max_chunks_to_process, granularity, processed_items_count, total_work
             );
             break;
         }
@@ -181,30 +198,27 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
         .await
         .map(|rows| rows.into_iter().map(|row| BlockToProcess {
             state_root: row.state_root,
-            // this expect is temporary until we have all block slots backfilled and a not null constraint.
             slot: row.slot.expect("beacon block slot should not be null for backfill range"),
         }).collect())
         .unwrap_or_else(|e| {
             warn!(
                 error = %e,
-                "failed to fetch chunk of blocks for pending deposits sum backfill, ending early. processed {} / {} items.",
+                "failed to fetch chunk of blocks (chunk attempt {} / {}) for pending deposits sum backfill, ending early. processed {} / {} items.",
+                chunks_fetched_count + 1, // +1 because chunks_fetched_count is incremented after this
+                max_chunks_to_process,
                 processed_items_count,
                 total_work
             );
-            Vec::new()
+            Vec::new() // Results in blocks_to_consider.is_empty() below
         });
+
+        chunks_fetched_count += 1;
 
         if blocks_to_consider.is_empty() {
             info!(
-                "no more candidate blocks with missing pending_deposits_sum_gwei found by query for granularity {:?}.",
-                granularity
+                "no more candidate blocks found by query for granularity {:?} after fetching {} chunks. (processed {} / {} items, expected max {} chunks for this granularity)",
+                granularity, chunks_fetched_count, processed_items_count, total_work, max_chunks_to_process
             );
-            if processed_items_count < total_work {
-                warn!(
-                    "query returned no more blocks, but processed_items_count ({}) is less than total_work ({}). total_work might have been an overestimate or items were processed/removed externally.",
-                    processed_items_count, total_work
-                );
-            }
             break;
         }
 
@@ -230,48 +244,41 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
 
         if state_roots_to_process.is_empty() {
             debug!(
-                "no state_roots matched granularity {:?} in this chunk of {} candidates.",
-                granularity, num_considered_this_chunk
+                "chunk {}/{} ({} candidates) had no state_roots matching granularity {:?}. continuing to next chunk if available.",
+                chunks_fetched_count, max_chunks_to_process, num_considered_this_chunk, granularity
             );
+            // If num_considered_this_chunk < DB_CHUNK_SIZE, it means the DB might be running out.
+            // The loop will terminate either by max_chunks_to_process, or the next fetch returning empty.
             if num_considered_this_chunk < DB_CHUNK_SIZE as u64 {
-                info!(
-                    "processed the last partial chunk of {} candidate state_roots from db, but none matched granularity {:?}. stopping. (processed {} / {} total)",
-                    num_considered_this_chunk, granularity, processed_items_count, total_work
-                );
-            } else {
-                // Full chunk from DB, but nothing matched granularity.
-                warn!(
-                    "full chunk of {} candidates fetched for granularity {:?}, but none matched the granularity. stopping to prevent potential infinite loop. (processed {} / {} total)",
-                    num_considered_this_chunk, granularity, processed_items_count, total_work
+                debug!(
+                    "note: chunk {}/{} was a partial chunk ({} candidates) from the DB and yielded no items for granularity {:?}.",
+                    chunks_fetched_count, max_chunks_to_process, num_considered_this_chunk, granularity
                 );
             }
-            break; // Break in both cases if no items to process from this chunk.
+            continue; // Continue to the next chunk fetch as requested
         }
 
         let actual_chunk_to_process_size = state_roots_to_process.len() as u64;
         debug!(
-            "processing a new chunk of {} state_roots (filtered by {:?} from {} candidates) for pending deposits sum",
-            actual_chunk_to_process_size, granularity, num_considered_this_chunk
+            "processing chunk {}/{}: {} state_roots (filtered by {:?} from {} candidates) for pending deposits sum",
+            chunks_fetched_count, max_chunks_to_process, actual_chunk_to_process_size, granularity, num_considered_this_chunk
         );
 
-        // The stream processing will now effectively run operations for their side effects (DB updates, logging).
-        // Collecting into Vec<()> is a way to await all concurrent operations.
-        stream::iter(state_roots_to_process) // state_roots_to_process is Vec<String>
+        stream::iter(state_roots_to_process)
             .map(|state_root_for_task| {
-                // state_root_for_task is String by move
                 let beacon_node_clone = beacon_node.clone();
                 let db_pool_clone = db_pool.clone();
                 async move {
                     process_single_state_root_and_update(
                         &beacon_node_clone,
                         &db_pool_clone,
-                        state_root_for_task, // state_root_for_task (String) is moved here
+                        state_root_for_task,
                     )
-                    .await; // process_single_state_root_and_update now returns (), so we just await.
+                    .await;
                 }
             })
             .buffer_unordered(NODE_FETCH_CONCURRENCY_LIMIT)
-            .collect::<Vec<()>>() // Collects to Vec<()>, effectively awaiting all futures.
+            .collect::<Vec<()>>()
             .await;
 
         processed_items_count += actual_chunk_to_process_size;
@@ -279,31 +286,23 @@ pub async fn backfill_pending_deposits_sum(db_pool: &PgPool, granularity: &Granu
 
         if actual_chunk_to_process_size > 0 {
             info!(
-                "pending deposits sum: processed batch of {} candidates. overall candidate progress: {}",
-                actual_chunk_to_process_size,
-                progress.get_progress_string()
+                "pending deposits sum (granularity {:?}): processed batch of {} from chunk {}/{}. overall progress: {} ({} / {} items)",
+                granularity, actual_chunk_to_process_size, chunks_fetched_count, max_chunks_to_process,
+                progress.get_progress_string(), processed_items_count, total_work
             );
-        }
-
-        if num_considered_this_chunk < DB_CHUNK_SIZE as u64 {
-            info!(
-                "processed the last chunk of {} candidate state_roots from db for pending deposits sum (granularity: {:?}). all available candidates under this granularity processed. ({} / {} total)",
-                num_considered_this_chunk, granularity, processed_items_count, total_work
-            );
-            break;
         }
     }
 
     progress.set_work_done(processed_items_count);
-    if processed_items_count < total_work {
+    if processed_items_count < total_work && total_work > 0 {
         warn!(
-            "pending_deposits_sum_gwei backfill for {:?} finished but may have stopped early. processed {} out of estimated {} items. final progress: {}",
-            granularity, processed_items_count, total_work, progress.get_progress_string()
+            "pending_deposits_sum_gwei backfill for {:?} finished but may not have processed all estimated items. processed {} out of estimated {} items after {}/{} chunks. final progress: {}",
+            granularity, processed_items_count, total_work, chunks_fetched_count, max_chunks_to_process, progress.get_progress_string()
         );
     } else {
         info!(
-            "pending_deposits_sum_gwei backfill for {:?} finished. processed {} items. final progress: {}",
-            granularity, processed_items_count, progress.get_progress_string()
+            "pending_deposits_sum_gwei backfill for {:?} finished. processed {} items after {}/{} chunks. final progress: {}",
+            granularity, processed_items_count, chunks_fetched_count, max_chunks_to_process, progress.get_progress_string()
         );
     }
 }
