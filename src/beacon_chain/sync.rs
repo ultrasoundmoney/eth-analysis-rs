@@ -1,3 +1,41 @@
+//! Synchronises Beacon Chain data into Postgres on a slot-by-slot basis.
+//!
+//! This module connects to a Lighthouse (or other) beacon node over HTTP and
+//! incrementally replicates the canonical chain into our relational schema. It
+//! is deliberately conservative – every slot is processed in sequence, inside a
+//! single SQL transaction, so that the database is always internally
+//! consistent even in the presence of re-orgs.
+//!
+//! Core responsibilities
+//! ---------------------
+//! * Determine the correct starting point by walking **backwards** from the tip
+//!   of the local database until the last common ancestor with the beacon node
+//!   is found (`rollback_to_last_common_ancestor`). Any divergent rows are
+//!   removed with `rollback_slots`.
+//! * Drive a forward-only sync loop (`sync_beacon_states_slot_by_slot`) that:
+//!     * polls the beacon node every `SYNC_V2_POLLING_INTERVAL`,
+//!     * processes up to `SYNC_V2_MAX_SLOTS_PER_CYCLE` per iteration, and
+//!     * sleeps/retries on errors for `SYNC_V2_ERROR_RETRY_DELAY`.
+//! * For each slot (`sync_slot_by_state_root`):
+//!     * fetch the header, parent root, and block; abort on re-orgs,
+//!     * optionally gather heavy data (validator balances, pending deposits)
+//!       only when we are within `BLOCK_LAG_LIMIT` of the chain head to avoid
+//!       falling further behind,
+//!     * calculate and persist aggregated deposits, withdrawals, issuance, and
+//!       ETH supply, and
+//!     * commit the transaction atomically so downstream queries never observe
+//!       partial state.
+//! * Keep slow-to-calculate analyses (e.g. the supply dashboard) up-to-date once
+//!   we catch up to the head of the chain.
+//!
+//! High-level safety guarantees
+//! ---------------------------
+//! * At most one slot is written at a time and only after its parent exists.
+//! * Any detected inconsistency (missing parent, parent-root mismatch, or RPC
+//!   error) triggers a rollback to the last verified slot before retrying.
+//! * Heavy RPC endpoints are avoided when lagging, ensuring the syncer always
+//!   makes forward progress.
+
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Duration;
 use lazy_static::lazy_static;
