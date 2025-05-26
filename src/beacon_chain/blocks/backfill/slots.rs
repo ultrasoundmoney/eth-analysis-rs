@@ -40,13 +40,15 @@ async fn bulk_update_slots(db_pool: &PgPool, updates: Vec<BlockSlotData>) -> sql
     Ok(rows_affected)
 }
 
-pub async fn backfill_beacon_block_slots(db_pool: &PgPool) {
+pub async fn backfill_beacon_block_slots(db_pool: &PgPool, start_slot: Slot) {
     info!("starting beacon_block slot backfill process");
 
-    let state_roots_to_backfill_res: Result<Vec<String>, sqlx::Error> =
-        sqlx::query_scalar!("SELECT state_root FROM beacon_blocks WHERE slot IS NULL")
-            .fetch_all(db_pool)
-            .await;
+    let state_roots_to_backfill_res: Result<Vec<String>, sqlx::Error> = sqlx::query_scalar!(
+        "SELECT state_root FROM beacon_blocks WHERE slot IS NULL AND slot >= $1",
+        start_slot.0
+    )
+    .fetch_all(db_pool)
+    .await;
 
     let state_roots_to_backfill = match state_roots_to_backfill_res {
         Ok(roots) => roots,
