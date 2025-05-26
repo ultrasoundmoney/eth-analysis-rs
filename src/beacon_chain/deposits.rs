@@ -8,20 +8,6 @@ use crate::units::GweiNewtype;
 use super::node::BeaconBlock;
 use super::{blocks, Slot};
 
-pub fn get_deposit_sum_from_block(block: &BeaconBlock) -> GweiNewtype {
-    let consensus_deposits_sum = block
-        .deposits()
-        .iter()
-        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
-
-    let execution_request_deposits_sum = block
-        .execution_request_deposits()
-        .iter()
-        .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
-
-    consensus_deposits_sum + execution_request_deposits_sum
-}
-
 pub async fn get_deposit_sum_aggregated(
     executor: impl PgExecutor<'_>,
     block: &BeaconBlock,
@@ -32,7 +18,7 @@ pub async fn get_deposit_sum_aggregated(
         blocks::get_deposit_sum_from_block_root(executor, &block.parent_root).await
     };
 
-    parent_deposit_sum_aggregated + get_deposit_sum_from_block(block)
+    parent_deposit_sum_aggregated + block.total_deposits_amount()
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -79,7 +65,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn get_deposits_sum_by_state_root_test() {
+    async fn read_write_deposit_sum_aggregated_test() {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
@@ -115,54 +101,5 @@ mod tests {
                 .unwrap();
 
         assert_eq!(GweiNewtype(1), deposits_sum);
-    }
-
-    #[test]
-    fn get_deposit_sum_from_block_no_deposits_test() {
-        let block = BeaconBlockBuilder::default().build();
-        assert_eq!(get_deposit_sum_from_block(&block), GweiNewtype(0));
-    }
-
-    #[test]
-    fn get_deposit_sum_from_block_only_consensus_deposits_test() {
-        let block = BeaconBlockBuilder::default()
-            .deposits(vec![GweiNewtype(10), GweiNewtype(20)])
-            .build();
-        assert_eq!(get_deposit_sum_from_block(&block), GweiNewtype(30));
-    }
-
-    #[test]
-    fn get_deposit_sum_from_block_only_execution_request_deposits_test() {
-        let block = BeaconBlockBuilder::default()
-            .execution_request_deposits(vec![GweiNewtype(5), GweiNewtype(15)])
-            .build();
-        assert_eq!(get_deposit_sum_from_block(&block), GweiNewtype(20));
-    }
-
-    #[test]
-    fn get_deposit_sum_from_block_both_deposit_types_test() {
-        let block = BeaconBlockBuilder::default()
-            .deposits(vec![GweiNewtype(10), GweiNewtype(20)]) // 30
-            .execution_request_deposits(vec![GweiNewtype(5), GweiNewtype(15)]) // 20
-            .build();
-        assert_eq!(get_deposit_sum_from_block(&block), GweiNewtype(50));
-    }
-
-    #[test]
-    fn get_deposit_sum_from_block_empty_consensus_deposits_with_execution_test() {
-        let block = BeaconBlockBuilder::default()
-            .deposits(vec![])
-            .execution_request_deposits(vec![GweiNewtype(5), GweiNewtype(15)])
-            .build();
-        assert_eq!(get_deposit_sum_from_block(&block), GweiNewtype(20));
-    }
-
-    #[test]
-    fn get_deposit_sum_from_block_empty_execution_deposits_with_consensus_test() {
-        let block = BeaconBlockBuilder::default()
-            .deposits(vec![GweiNewtype(10), GweiNewtype(20)])
-            .execution_request_deposits(vec![])
-            .build();
-        assert_eq!(get_deposit_sum_from_block(&block), GweiNewtype(30));
     }
 }

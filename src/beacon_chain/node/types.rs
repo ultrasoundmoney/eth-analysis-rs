@@ -146,6 +146,23 @@ impl BeaconBlock {
             .as_ref()
             .and_then(|execution_payload| execution_payload.withdrawals.as_ref())
     }
+
+    /// Calculates the sum of all deposits in the block.
+    /// This includes both consensus layer (ETH1-style) deposits and
+    /// execution request (EIP-6110) deposits.
+    pub fn total_deposits_amount(&self) -> GweiNewtype {
+        let consensus_deposits_sum = self
+            .deposits()
+            .iter()
+            .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
+
+        let execution_request_deposits_sum = self
+            .execution_request_deposits()
+            .iter()
+            .fold(GweiNewtype(0), |sum, deposit| sum + deposit.amount);
+
+        consensus_deposits_sum + execution_request_deposits_sum
+    }
 }
 
 // Deserialization specific envelope structs (kept private to node module)
@@ -279,4 +296,60 @@ pub(super) struct StateRootData {
 #[derive(Deserialize)]
 pub(super) struct StateRootEnvelope {
     pub data: StateRootData,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::beacon_chain::BeaconBlockBuilder;
+
+    use super::*;
+
+    #[test]
+    fn get_deposit_sum_from_block_no_deposits_test() {
+        let block = BeaconBlockBuilder::default().build();
+        assert_eq!(block.total_deposits_amount(), GweiNewtype(0));
+    }
+
+    #[test]
+    fn get_deposit_sum_from_block_only_consensus_deposits_test() {
+        let block = BeaconBlockBuilder::default()
+            .deposits(vec![GweiNewtype(10), GweiNewtype(20)])
+            .build();
+        assert_eq!(block.total_deposits_amount(), GweiNewtype(30));
+    }
+
+    #[test]
+    fn get_deposit_sum_from_block_only_execution_request_deposits_test() {
+        let block = BeaconBlockBuilder::default()
+            .execution_request_deposits(vec![GweiNewtype(5), GweiNewtype(15)])
+            .build();
+        assert_eq!(block.total_deposits_amount(), GweiNewtype(20));
+    }
+
+    #[test]
+    fn get_deposit_sum_from_block_both_deposit_types_test() {
+        let block = BeaconBlockBuilder::default()
+            .deposits(vec![GweiNewtype(10), GweiNewtype(20)]) // 30
+            .execution_request_deposits(vec![GweiNewtype(5), GweiNewtype(15)]) // 20
+            .build();
+        assert_eq!(block.total_deposits_amount(), GweiNewtype(50));
+    }
+
+    #[test]
+    fn get_deposit_sum_from_block_empty_consensus_deposits_with_execution_test() {
+        let block = BeaconBlockBuilder::default()
+            .deposits(vec![])
+            .execution_request_deposits(vec![GweiNewtype(5), GweiNewtype(15)])
+            .build();
+        assert_eq!(block.total_deposits_amount(), GweiNewtype(20));
+    }
+
+    #[test]
+    fn get_deposit_sum_from_block_empty_execution_deposits_with_consensus_test() {
+        let block = BeaconBlockBuilder::default()
+            .deposits(vec![GweiNewtype(10), GweiNewtype(20)])
+            .execution_request_deposits(vec![])
+            .build();
+        assert_eq!(block.total_deposits_amount(), GweiNewtype(30));
+    }
 }
