@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pending_deposits_sum_gwei FROM beacon_blocks WHERE state_root = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pending_deposits_sum_gwei",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "fc687067047dfdb2e20400ded3bfabc20586bffc4f2dcfc66250300ab61498ae"
+}

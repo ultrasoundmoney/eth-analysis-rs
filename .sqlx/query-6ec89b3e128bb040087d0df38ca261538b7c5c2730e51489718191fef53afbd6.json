@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*)\n        FROM beacon_blocks bb\n        JOIN beacon_states bs ON bb.state_root = bs.state_root\n        WHERE bs.slot >= $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6ec89b3e128bb040087d0df38ca261538b7c5c2730e51489718191fef53afbd6"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE beacon_blocks\n        SET\n            deposit_sum = $1,\n            deposit_sum_aggregated = $2\n        WHERE\n            block_root = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b842d4d6b85673e9e103e803ebed8372e2637a94b711910c720f1c8a8f0d0c46"
+}
