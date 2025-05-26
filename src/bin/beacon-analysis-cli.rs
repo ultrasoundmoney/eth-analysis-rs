@@ -126,12 +126,8 @@ enum Commands {
         #[clap(long)]
         slot_range: Option<SlotRange>,
     },
-    /// Backfills beacon block slots between a hardfork (inclusive) and the DB tip.
-    BackfillMissingBeaconBlockSlots {
-        /// The hardfork boundary to start the backfill from.
-        #[clap(subcommand)]
-        hardfork: HardforkArgs,
-    },
+    /// Backfills beacon block slots.
+    BackfillMissingBeaconBlockSlots,
     /// Backfills pending deposits sum.
     BackfillPendingDepositsSum {
         /// The granularity for the pending deposits sum backfill (slot, hour, day, epoch).
@@ -234,10 +230,9 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                 }
             }
         }
-        Commands::BackfillMissingBeaconBlockSlots { hardfork } => {
-            let start_slot: Slot = hardfork.into();
-            info!(%start_slot, "initiating missing beacon_block slot backfill");
-            blocks::backfill::backfill_beacon_block_slots(&pool, start_slot).await;
+        Commands::BackfillMissingBeaconBlockSlots => {
+            info!("initiating missing beacon_block slot backfill");
+            blocks::backfill::backfill_beacon_block_slots(&pool).await;
             info!("done backfilling beacon_block slots");
         }
         Commands::BackfillPendingDepositsSum {

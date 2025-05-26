@@ -205,6 +205,8 @@ struct BlockDbRow {
     parent_root: String,
     pub block_hash: Option<String>,
     pub state_root: String,
+    #[allow(dead_code)]
+    pub slot: Option<i32>,
 }
 
 impl From<BlockDbRow> for BeaconBlockFromDb {
@@ -233,13 +235,12 @@ pub async fn get_block_by_slot(
             parent_root,
             deposit_sum,
             deposit_sum_aggregated,
-            block_hash
+            block_hash,
+            slot
         FROM
             beacon_blocks
-        JOIN beacon_states ON
-            beacon_blocks.state_root = beacon_states.state_root
         WHERE
-            beacon_states.slot = $1
+            slot = $1
         "#,
         slot.0
     )

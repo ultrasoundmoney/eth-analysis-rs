@@ -49,24 +49,7 @@ async fn gather_supply_parts(
     executor: &mut PgConnection,
     target_slot: Slot,
 ) -> Result<Option<SupplyParts>> {
-    // 1. Get state_root for the target_slot.
-    // None found is acceptable for empty slots.
-    let state_root_for_balances =
-        match beacon_chain::get_state_root_by_slot(&mut *executor, target_slot).await? {
-            Some(root) => root,
-            None => {
-                debug!(%target_slot, "no state_root found for slot, cannot compute supply parts");
-                return Ok(None);
-            }
-        };
-
-    debug!(
-        %target_slot,
-        %state_root_for_balances,
-        "found state_root for balances"
-    );
-
-    // 2. Find a block for the `target_slot`.
+    // 1. Find a block for the `target_slot`.
     // None found is acceptable for empty slots.
     let block = match beacon_chain::get_block_by_slot(&mut *executor, target_slot).await? {
         Some(b) => b,
@@ -88,10 +71,10 @@ async fn gather_supply_parts(
         "found block for supply parts calculation"
     );
 
-    // 3. Get beacon balances. We don't expect to have these for every slot.
+    // 2. Get beacon balances. We don't expect to have these for every slot.
     // If we don't find any, return None.
     let Some(beacon_balances_sum) =
-        beacon_chain::get_balances_by_state_root(&mut *executor, &state_root_for_balances).await?
+        beacon_chain::get_balances_by_state_root(&mut *executor, &block.state_root).await?
     else {
         debug!(%target_slot, "no beacon balances found for state root, returning None");
         return Ok(None);
@@ -99,7 +82,7 @@ async fn gather_supply_parts(
 
     debug!(%target_slot, %beacon_balances_sum, "found beacon balances");
 
-    // 4. Get execution balances. If missing, bail.
+    // 3. Get execution balances. If missing, bail.
     let execution_balances_data =
         execution_chain::get_execution_balances_by_hash(&mut *executor, &block_hash)
             .await?
@@ -108,12 +91,11 @@ async fn gather_supply_parts(
                 block_hash
             ))?;
 
-    // 5. Get beacon deposits sum. If missing, bail.
-    // Assumes get_deposits_sum_by_state_root returns Result<Option<GweiNewtype>, sqlx::Error>
+    // 4. Get beacon deposits sum. If missing, bail.
     let beacon_deposits_sum = match beacon_chain::get_deposits_sum_by_state_root(
         &mut *executor,
         &block.state_root,
-    ) // Use block's state_root for deposits
+    )
     .await
     .context(format!(
         "failed to get beacon deposits for state root {}",
@@ -129,9 +111,8 @@ async fn gather_supply_parts(
         }
     };
 
-    // 6. Obtain pending deposits sum — prefer the value we stored at ingest
-    // time (beacon_blocks.pending_deposits_sum_gwei). Only fall back to the
-    // beacon-node API if the DB entry is NULL. If we still cannot obtain a
+    // 5. Obtain pending deposits sum — prefer the value we stored at ingest
+    // time (beacon_blocks.pending_deposits_sum_gwei). If we cannot obtain a
     // value we *skip* supply calculation for this slot to avoid publishing an
     // incorrect number.
 
