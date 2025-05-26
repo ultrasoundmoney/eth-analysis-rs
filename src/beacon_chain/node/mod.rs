@@ -440,7 +440,7 @@ pub mod tests {
             .unwrap_or_else(|_| panic!("failed to decode block JSON from {}", block_data_path));
 
         // Test decoding for the header
-        let header_data_path = "src/beacon_chain/data_samples/header-11678488.json";
+        let header_data_path = "src/beacon_chain/data_samples/header_11678488.json";
         let header_json_str = fs::read_to_string(header_data_path)
             .unwrap_or_else(|_| panic!("failed to read header data from {}", header_data_path));
 
