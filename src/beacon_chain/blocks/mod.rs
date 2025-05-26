@@ -1,6 +1,7 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
 pub mod backfill;
-mod heal;
+mod heal_block_hashes;
+pub mod heal_deposits;
 
 use anyhow::Context;
 use sqlx::{PgExecutor, Row};
@@ -21,7 +22,7 @@ pub struct StoreBlockParams {
     pub pending_deposits_sum: Option<GweiNewtype>,
 }
 
-pub use heal::heal_block_hashes;
+pub use heal_block_hashes::heal_block_hashes;
 
 pub const GENESIS_PARENT_ROOT: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
