@@ -1,3 +1,5 @@
+pub mod heal;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
