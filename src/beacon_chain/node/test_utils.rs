@@ -5,6 +5,7 @@ use super::*;
 pub struct BeaconBlockBuilder {
     block_hash: Option<BlockHash>,
     deposits: Vec<GweiNewtype>,
+    execution_request_deposits: Vec<GweiNewtype>,
     parent_root: BlockRoot,
     slot: Slot,
     state_root: StateRoot,
@@ -15,6 +16,7 @@ impl Default for BeaconBlockBuilder {
     fn default() -> Self {
         Self {
             deposits: vec![],
+            execution_request_deposits: vec![],
             parent_root: GENESIS_PARENT_ROOT.to_string(),
             slot: Slot(0),
             state_root: StateRoot::default(),
@@ -27,6 +29,19 @@ impl Default for BeaconBlockBuilder {
 impl BeaconBlockBuilder {
     pub fn block_hash(mut self, block_hash: &str) -> Self {
         self.block_hash = Some(block_hash.to_string());
+        self
+    }
+
+    pub fn deposits(mut self, deposits: Vec<GweiNewtype>) -> Self {
+        self.deposits = deposits;
+        self
+    }
+
+    pub fn execution_request_deposits(
+        mut self,
+        execution_request_deposits: Vec<GweiNewtype>,
+    ) -> Self {
+        self.execution_request_deposits = execution_request_deposits;
         self
     }
 
@@ -49,6 +64,18 @@ impl BeaconBlockBuilder {
             })
             .collect();
 
+        let execution_request_deposits = self
+            .execution_request_deposits
+            .into_iter()
+            .map(|amount| ExecutionDeposit {
+                amount,
+                pubkey: "0x00".to_string(),
+                withdrawal_credentials: "0x00".to_string(),
+                signature: "0x00".to_string(),
+                index: 0,
+            })
+            .collect();
+
         let execution_payload = self.block_hash.map(|block_hash| ExecutionPayload {
             block_hash,
             withdrawals: self.withdrawals,
@@ -58,7 +85,10 @@ impl BeaconBlockBuilder {
             body: BeaconBlockBody {
                 deposits,
                 execution_payload,
-                execution_requests: None,
+                execution_requests: Some(ExecutionRequests {
+                    deposits: execution_request_deposits,
+                    withdrawals: vec![],
+                }),
             },
             parent_root: self.parent_root,
             slot: self.slot,
@@ -72,6 +102,7 @@ impl From<&BeaconHeaderSignedEnvelope> for BeaconBlockBuilder {
         Self {
             block_hash: None,
             deposits: vec![],
+            execution_request_deposits: vec![],
             parent_root: header.parent_root(),
             slot: header.slot(),
             state_root: header.state_root(),

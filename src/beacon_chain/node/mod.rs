@@ -122,7 +122,7 @@ impl BeaconNodeHttp {
                 let block = res
                     .json::<BeaconBlockVersionedEnvelope>()
                     .await
-                    .map(|envelope| envelope.data.message)?;
+                    .map(|envelope| envelope.into())?;
                 Ok(Some(block))
             }
             status => Err(anyhow!(
@@ -432,7 +432,7 @@ pub mod tests {
     #[test]
     fn test_decode_problematic_json() {
         // Test decoding for the block
-        let block_data_path = "src/beacon_chain/data_samples/block-11678488.json";
+        let block_data_path = "src/beacon_chain/data_samples/block_11678488.json";
         let block_json_str = fs::read_to_string(block_data_path)
             .unwrap_or_else(|_| panic!("failed to read block data from {}", block_data_path));
 

@@ -1,4 +1,5 @@
 {
+  "version": "electra",
   "execution_optimistic": false,
   "finalized": true,
   "data": {

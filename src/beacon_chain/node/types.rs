@@ -148,15 +148,21 @@ impl BeaconBlock {
     }
 }
 
-// Deserialization specific envelope structs (kept private to node module via pub(super))
+// Deserialization specific envelope structs (kept private to node module)
 #[derive(Deserialize)]
-pub(super) struct BeaconBlockSignedEnvelope {
-    pub message: BeaconBlock,
+pub struct BeaconBlockSignedEnvelope {
+    message: BeaconBlock,
 }
 
 #[derive(Deserialize)]
-pub(super) struct BeaconBlockVersionedEnvelope {
-    pub data: BeaconBlockSignedEnvelope,
+pub struct BeaconBlockVersionedEnvelope {
+    data: BeaconBlockSignedEnvelope,
+}
+
+impl From<BeaconBlockVersionedEnvelope> for BeaconBlock {
+    fn from(envelope: BeaconBlockVersionedEnvelope) -> Self {
+        envelope.data.message
+    }
 }
 
 #[derive(Debug, Deserialize)]

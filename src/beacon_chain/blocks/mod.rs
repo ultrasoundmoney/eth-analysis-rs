@@ -268,7 +268,10 @@ mod tests {
     use super::*;
     use crate::{
         beacon_chain::{
-            node::{BeaconBlockBody, BeaconHeader, BeaconHeaderEnvelope, ExecutionPayload},
+            node::{
+                BeaconBlockBody, BeaconBlockVersionedEnvelope, BeaconHeader, BeaconHeaderEnvelope,
+                ExecutionPayload,
+            },
             store_state,
             tests::{store_custom_test_block, store_test_block},
             BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder,
@@ -537,5 +540,37 @@ mod tests {
             .unwrap();
 
         assert_eq!(header.root, block_there.block_root);
+    }
+
+    #[tokio::test]
+    async fn decode_deposits_block_test() {
+        let raw_block = include_str!("../data_samples/block_11650102.json");
+        let block: BeaconBlock = serde_json::from_str::<BeaconBlockVersionedEnvelope>(raw_block)
+            .unwrap()
+            .into();
+
+        let deposits = block.deposits();
+        let total_deposit_amount: GweiNewtype = deposits
+            .iter()
+            .fold(GweiNewtype(0), |acc, d| acc + d.amount);
+
+        assert_eq!(deposits.len(), 16);
+        assert_eq!(total_deposit_amount, GweiNewtype(512000000000));
+    }
+
+    #[tokio::test]
+    async fn decode_execution_request_deposits_block_test() {
+        let raw_block = include_str!("../data_samples/block_11678488.json");
+        let block: BeaconBlock = serde_json::from_str::<BeaconBlockVersionedEnvelope>(raw_block)
+            .unwrap()
+            .into();
+
+        let execution_request_deposits = block.execution_request_deposits();
+        let total_execution_deposit_amount: GweiNewtype = execution_request_deposits
+            .iter()
+            .fold(GweiNewtype(0), |acc, d| acc + d.amount);
+
+        assert_eq!(execution_request_deposits.len(), 60);
+        assert_eq!(total_execution_deposit_amount, GweiNewtype(60000000000));
     }
 }
