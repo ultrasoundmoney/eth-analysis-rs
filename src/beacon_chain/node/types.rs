@@ -226,6 +226,21 @@ impl BeaconHeaderSignedEnvelope {
     }
 }
 
+impl From<&BeaconBlock> for BeaconHeaderSignedEnvelope {
+    fn from(block: &BeaconBlock) -> Self {
+        BeaconHeaderSignedEnvelope {
+            root: "0xdefault".to_string(),
+            header: BeaconHeaderEnvelope {
+                message: BeaconHeader {
+                    slot: block.slot,
+                    parent_root: block.parent_root.clone(),
+                    state_root: block.state_root.clone(),
+                },
+            },
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub(super) struct HeaderEnvelope {
     pub data: BeaconHeaderSignedEnvelope,

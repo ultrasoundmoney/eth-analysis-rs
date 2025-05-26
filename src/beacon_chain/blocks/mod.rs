@@ -254,19 +254,19 @@ pub async fn get_block_by_slot(
 #[cfg(test)]
 mod tests {
     use sqlx::Acquire;
+    use test_context::test_context;
 
     use super::*;
     use crate::{
         beacon_chain::{
             node::{
                 BeaconBlockBody, BeaconBlockVersionedEnvelope, BeaconHeader, BeaconHeaderEnvelope,
-                ExecutionPayload,
             },
             store_state,
             tests::{store_custom_test_block, store_test_block},
             BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder,
         },
-        db,
+        db::{self, tests::TestDb},
     };
 
     pub async fn get_last_block_slot(executor: impl PgExecutor<'_>) -> Option<Slot> {
@@ -422,46 +422,24 @@ mod tests {
         assert_eq!(block_slot, None);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn update_block_hash_test() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn update_block_hash_test(db: &TestDb) {
+        let block = BeaconBlockBuilder::new().build();
+        let header: BeaconHeaderSignedEnvelope = (&block).into();
 
-        let test_id = "get_block_test";
-        let slot = Slot(374);
-        let state_root = format!("0x{test_id}_state_root");
-        let block_root = format!("0x{test_id}_block_root");
-        let block_hash = format!("0x{test_id}_block_hash");
-        let block_hash_after = format!("0x{test_id}_block_hash_after");
-        let header = BeaconHeaderSignedEnvelopeBuilder::new(test_id).build();
+        store_state(&db.pool, &block.state_root, block.slot).await;
+        store_block(&db.pool, &block, StoreBlockParams::default(), &header).await;
 
-        store_custom_test_block(
-            &mut transaction,
-            &header,
-            &BeaconBlock {
-                body: BeaconBlockBody {
-                    deposits: vec![],
-                    execution_payload: Some(ExecutionPayload {
-                        block_hash: block_hash.clone(),
-                        withdrawals: None,
-                    }),
-                    execution_requests: None,
-                },
-                parent_root: GENESIS_PARENT_ROOT.to_string(),
-                slot,
-                state_root: state_root.clone(),
-            },
-        )
-        .await;
+        let target_block_hash = "0xupdate_block_hash_test_block_hash".to_string();
+        update_block_hash(&db.pool, &header.root, &target_block_hash).await;
 
-        update_block_hash(&mut *transaction, &block_root, &block_hash_after).await;
-
-        let block = get_block_by_slot(&mut *transaction, header.slot())
+        let block_hash_after = get_block_by_slot(&db.pool, block.slot)
             .await
             .unwrap()
-            .unwrap();
-
-        assert_eq!(block_hash_after, block.block_hash.unwrap());
+            .unwrap()
+            .block_hash;
+        assert_eq!(block_hash_after, Some(target_block_hash));
     }
 
     #[tokio::test]

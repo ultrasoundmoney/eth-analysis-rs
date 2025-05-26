@@ -27,6 +27,10 @@ impl Default for BeaconBlockBuilder {
 }
 
 impl BeaconBlockBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn block_hash(mut self, block_hash: &str) -> Self {
         self.block_hash = Some(block_hash.to_string());
         self
