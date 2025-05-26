@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use csv::WriterBuilder;
 use sqlx::{PgPool, Row};
-use std::io::{self, Write};
 use tracing::{info, warn};
 
 use eth_analysis::{
@@ -27,9 +26,9 @@ enum Commands {
         /// Inclusive end slot.
         #[clap(long)]
         end_slot: i32,
-        /// Optional output file path. Defaults to stdout.
+        /// Output file path (e.g., ./output.csv).
         #[clap(long)]
-        output: Option<String>,
+        output: String,
     },
     /// Export eth supply components for a slot range to CSV.
     ExportEthSupplyComponents {
@@ -39,9 +38,21 @@ enum Commands {
         /// Inclusive end slot.
         #[clap(long)]
         end_slot: i32,
-        /// Optional output file path. Defaults to stdout.
+        /// Output file path (e.g., ./output.csv).
         #[clap(long)]
-        output: Option<String>,
+        output: String,
+    },
+    /// Export net deposit components (eth1, execution request, pending) for a slot range to CSV.
+    ExportNetDeposits {
+        /// Inclusive start slot.
+        #[clap(long)]
+        start_slot: i32,
+        /// Inclusive end slot.
+        #[clap(long)]
+        end_slot: i32,
+        /// Output file path (e.g., ./output.csv).
+        #[clap(long)]
+        output: String,
     },
 }
 
@@ -66,6 +77,13 @@ async fn main() -> anyhow::Result<()> {
         } => {
             export_supply_components(start_slot, end_slot, output).await?;
         }
+        Commands::ExportNetDeposits {
+            start_slot,
+            end_slot,
+            output,
+        } => {
+            export_net_deposits(start_slot, end_slot, output).await?;
+        }
     }
 
     Ok(())
@@ -74,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
 async fn export_eth1_deposits(
     start_slot: i32,
     end_slot: i32,
-    output: Option<String>,
+    output: String,
 ) -> anyhow::Result<()> {
     if start_slot > end_slot {
         anyhow::bail!("start_slot must be <= end_slot");
@@ -114,7 +132,7 @@ async fn export_eth1_deposits(
 async fn export_supply_components(
     start_slot: i32,
     end_slot: i32,
-    output: Option<String>,
+    output: String,
 ) -> anyhow::Result<()> {
     if start_slot > end_slot {
         anyhow::bail!("start_slot must be <= end_slot");
@@ -180,12 +198,78 @@ async fn export_supply_components(
     Ok(())
 }
 
-fn csv_writer(path_opt: &Option<String>) -> anyhow::Result<csv::Writer<Box<dyn Write>>> {
-    let boxed_writer: Box<dyn Write> = match path_opt {
-        Some(p) => Box::new(std::fs::File::create(p)?),
-        None => Box::new(io::stdout()),
-    };
-    Ok(WriterBuilder::new()
-        .has_headers(true)
-        .from_writer(boxed_writer))
+async fn export_net_deposits(start_slot: i32, end_slot: i32, output: String) -> anyhow::Result<()> {
+    if start_slot > end_slot {
+        anyhow::bail!("start_slot must be <= end_slot");
+    }
+
+    let mut writer = csv_writer(&output)?;
+
+    writer.write_record([
+        "slot",
+        "eth1_deposits_sum_gwei",
+        "execution_request_deposits_sum_gwei",
+        "pending_deposits_sum_gwei",
+    ])?;
+
+    let beacon_node = BeaconNodeHttp::new_from_env();
+    let db_pool: PgPool = db::get_db_pool("export-cli-net-deposits", 5).await;
+
+    for slot_i32 in start_slot..=end_slot {
+        let slot = Slot(slot_i32);
+        let (eth1_sum_str, exec_req_sum_str, pending_sum_str) =
+            match beacon_node.get_block_by_slot(slot).await {
+                Ok(Some(block)) => {
+                    let eth1_sum: GweiNewtype = block
+                        .deposits()
+                        .iter()
+                        .fold(GweiNewtype(0), |acc, d| acc + d.amount);
+
+                    let exec_req_sum: GweiNewtype = block
+                        .execution_request_deposits()
+                        .iter()
+                        .fold(GweiNewtype(0), |acc, d| acc + d.amount);
+
+                    let pending_sum_db_opt: Option<i64> = sqlx::query_scalar!(
+                        "SELECT pending_deposits_sum_gwei FROM beacon_blocks WHERE state_root = $1",
+                        block.state_root
+                    )
+                    .fetch_optional(&db_pool)
+                    .await?
+                    .flatten();
+
+                    (
+                        i64::from(eth1_sum).to_string(),
+                        i64::from(exec_req_sum).to_string(),
+                        pending_sum_db_opt
+                            .map(|v| v.to_string())
+                            .unwrap_or_default(),
+                    )
+                }
+                Ok(None) => {
+                    warn!(slot = %slot, "no block found for slot");
+                    ("0".to_string(), "0".to_string(), "".to_string())
+                }
+                Err(e) => {
+                    warn!(slot = %slot, error = %e, "failed to fetch block – skipping slot");
+                    continue; // Skip this slot on error
+                }
+            };
+
+        writer.write_record([
+            slot_i32.to_string(),
+            eth1_sum_str,
+            exec_req_sum_str,
+            pending_sum_str,
+        ])?;
+    }
+
+    writer.flush()?;
+    info!("export net deposits completed");
+    Ok(())
+}
+
+fn csv_writer(path: &str) -> anyhow::Result<csv::Writer<std::fs::File>> {
+    let file = std::fs::File::create(path)?;
+    Ok(WriterBuilder::new().has_headers(true).from_writer(file))
 }
