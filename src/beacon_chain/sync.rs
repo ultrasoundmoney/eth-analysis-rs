@@ -208,7 +208,9 @@ pub async fn sync_slot_by_state_root(
         block_root,
         "storing slot with block"
     );
-    let is_parent_known = blocks::get_is_hash_known(&mut *transaction, &header.parent_root()).await;
+    let is_parent_known = blocks::get_is_hash_known(&mut *transaction, &header.parent_root())
+        .await
+        .unwrap();
     if !is_parent_known {
         bail!(
             "trying to insert beacon block with missing parent, block_root: {}, parent_root: {:?}",
@@ -220,7 +222,7 @@ pub async fn sync_slot_by_state_root(
     states::store_state(&mut *transaction, &header.state_root(), header.slot()).await;
 
     let store_block_params = blocks::StoreBlockParams {
-        deposit_sum: deposits::get_deposit_sum_from_block(&block),
+        deposit_sum: block.total_deposits_amount(),
         deposit_sum_aggregated,
         withdrawal_sum: withdrawals::get_withdrawal_sum_from_block(&block),
         withdrawal_sum_aggregated,

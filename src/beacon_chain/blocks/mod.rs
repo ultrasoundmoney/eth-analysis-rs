@@ -1,7 +1,6 @@
 //! Handles storage and retrieval of beacon blocks in our DB.
 pub mod backfill;
 mod heal_block_hashes;
-pub mod heal_deposits;
 
 use anyhow::Context;
 use sqlx::{PgExecutor, Row};
@@ -72,9 +71,12 @@ pub async fn get_withdrawal_sum_from_block_root(
     .into()
 }
 
-pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) -> bool {
+pub async fn get_is_hash_known(
+    executor: impl PgExecutor<'_>,
+    block_root: &str,
+) -> anyhow::Result<bool> {
     if block_root == GENESIS_PARENT_ROOT {
-        return true;
+        return Ok(true);
     }
 
     sqlx::query(
@@ -88,8 +90,8 @@ pub async fn get_is_hash_known(executor: impl PgExecutor<'_>, block_root: &str) 
     .bind(block_root)
     .fetch_one(executor)
     .await
-    .unwrap()
-    .get("exists")
+    .map(|row| row.get::<bool, _>("exists"))
+    .with_context(|| format!("failed to check if block root is known: {}", block_root))
 }
 
 pub async fn store_block(
@@ -306,7 +308,9 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let is_hash_known = get_is_hash_known(&mut *transaction, GENESIS_PARENT_ROOT).await;
+        let is_hash_known = get_is_hash_known(&mut *transaction, GENESIS_PARENT_ROOT)
+            .await
+            .unwrap();
 
         assert!(is_hash_known);
     }
@@ -316,7 +320,9 @@ mod tests {
         let mut connection = db::tests::get_test_db_connection().await;
         let mut transaction = connection.begin().await.unwrap();
 
-        let is_hash_known = get_is_hash_known(&mut *transaction, "0xnot_there").await;
+        let is_hash_known = get_is_hash_known(&mut *transaction, "0xnot_there")
+            .await
+            .unwrap();
 
         assert!(!is_hash_known);
     }
@@ -328,8 +334,9 @@ mod tests {
 
         store_test_block(&mut transaction, "is_hash_known_test").await;
 
-        let is_hash_known =
-            get_is_hash_known(&mut *transaction, "0xis_hash_known_test_block_root").await;
+        let is_hash_known = get_is_hash_known(&mut *transaction, "0xis_hash_known_test_block_root")
+            .await
+            .unwrap();
 
         assert!(is_hash_known);
     }
@@ -378,7 +385,9 @@ mod tests {
         )
         .await;
 
-        let is_hash_known = get_is_hash_known(&mut *transaction, "0xblock_root").await;
+        let is_hash_known = get_is_hash_known(&mut *transaction, "0xblock_root")
+            .await
+            .unwrap();
 
         assert!(is_hash_known);
     }

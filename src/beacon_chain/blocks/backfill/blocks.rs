@@ -12,7 +12,10 @@ use crate::units::GweiNewtype;
 
 /// Backfills any missing beacon_blocks records between `from_slot` (inclusive)
 /// and the highest slot present in beacon_states.
-pub async fn backfill_missing_beacon_blocks(db_pool: &PgPool, from_slot: Slot) {
+pub async fn backfill_missing_beacon_blocks(
+    db_pool: &PgPool,
+    from_slot: Slot,
+) -> anyhow::Result<()> {
     info!(%from_slot, "starting backfill of missing beacon_blocks");
 
     let highest_slot_opt: Option<i32> = sqlx::query_scalar!("SELECT MAX(slot) FROM beacon_states")
@@ -24,14 +27,14 @@ pub async fn backfill_missing_beacon_blocks(db_pool: &PgPool, from_slot: Slot) {
         Some(val) => val,
         None => {
             info!("no rows in beacon_states – nothing to backfill");
-            return;
+            return Ok(());
         }
     };
     let highest_slot = Slot(highest_slot_val);
 
     if highest_slot < from_slot {
         info!(%highest_slot, %from_slot, "from_slot is higher than db tip – nothing to do");
-        return;
+        return Ok(());
     }
 
     let missing_slots: Vec<i32> = sqlx::query_scalar!(
@@ -54,7 +57,7 @@ pub async fn backfill_missing_beacon_blocks(db_pool: &PgPool, from_slot: Slot) {
 
     if missing_slots.is_empty() {
         info!("no missing beacon_blocks detected in requested range");
-        return;
+        return Ok(());
     }
 
     let total_missing = missing_slots.len() as u64;
@@ -73,15 +76,12 @@ pub async fn backfill_missing_beacon_blocks(db_pool: &PgPool, from_slot: Slot) {
                     .await
                 {
                     Ok(Some(block)) => {
-                        let mut tx = match db_pool.begin().await {
-                            Ok(tx) => tx,
-                            Err(e) => {
-                                warn!(%slot, error = %e, "failed to open db transaction – skipping slot");
-                                break;
-                            }
-                        };
+                        let mut tx = db_pool.begin().await?;
 
-                        if !blocks::get_is_hash_known(&mut *tx, &header_env.parent_root()).await {
+                        if !blocks::get_is_hash_known(&mut *tx, &header_env.parent_root())
+                            .await
+                            .unwrap()
+                        {
                             warn!(%slot, parent_root = %header_env.parent_root(), "parent block not yet in db – skipping");
                             break;
                         }
@@ -93,19 +93,14 @@ pub async fn backfill_missing_beacon_blocks(db_pool: &PgPool, from_slot: Slot) {
 
                         let mut pending_deposits_sum: Option<GweiNewtype> = None;
                         if slot >= *PECTRA_SLOT {
-                            match beacon_node
+                            let sum = beacon_node
                                 .get_pending_deposits_sum(&header_env.state_root())
-                                .await
-                            {
-                                Ok(sum) => pending_deposits_sum = sum,
-                                Err(e) => {
-                                    warn!(%slot, error = %e, "failed to fetch pending deposits sum")
-                                }
-                            }
+                                .await?;
+                            pending_deposits_sum = sum;
                         }
 
                         let store_params = StoreBlockParams {
-                            deposit_sum: deposits::get_deposit_sum_from_block(&block),
+                            deposit_sum: block.total_deposits_amount(),
                             deposit_sum_aggregated,
                             withdrawal_sum: withdrawals::get_withdrawal_sum_from_block(&block),
                             withdrawal_sum_aggregated,
@@ -135,4 +130,5 @@ pub async fn backfill_missing_beacon_blocks(db_pool: &PgPool, from_slot: Slot) {
     }
 
     info!("backfill complete: {}", progress.get_progress_string());
+    Ok(())
 }
