@@ -172,10 +172,10 @@ pub async fn delete_blocks(executor: impl PgExecutor<'_>, greater_than_or_equal:
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct BeaconBlockFromDb {
-    block_root: String,
+    pub block_root: String,
     deposit_sum: GweiNewtype,
     deposit_sum_aggregated: GweiNewtype,
-    parent_root: String,
+    pub parent_root: String,
     pub block_hash: Option<String>,
     pub state_root: String,
 }
