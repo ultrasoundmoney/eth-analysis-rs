@@ -11,6 +11,14 @@ default-run = "serve"
 name = "serve"
 path = "src/bin/serve.rs"
 
+[[bin]]
+name = "beacon-analysis-cli"
+path = "src/bin/beacon-analysis-cli.rs"
+
+[[bin]]
+name = "export-cli"
+path = "src/bin/export-cli.rs"
+
 [dependencies]
 anyhow = { version = "1.0.75", features = ["backtrace"] }
 axum = "0.6.20"
