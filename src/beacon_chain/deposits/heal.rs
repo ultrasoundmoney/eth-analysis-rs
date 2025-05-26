@@ -74,8 +74,8 @@ async fn update_deposit_sums(
     Ok(())
 }
 
-pub async fn recompute_deposit_sums(db_pool: &PgPool, start_slot: Slot) -> Result<()> {
-    info!(%start_slot, "starting deposit sum recomputation process");
+pub async fn heal_deposit_sums(db_pool: &PgPool, start_slot: Slot) -> Result<()> {
+    info!(%start_slot, "starting deposit sum healing process");
 
     // Removed transaction, operations will be on db_pool directly or helpers taking impl PgExecutor
     let beacon_node = BeaconNodeHttp::new_from_env();
@@ -85,7 +85,7 @@ pub async fn recompute_deposit_sums(db_pool: &PgPool, start_slot: Slot) -> Resul
     if start_slot > latest_slot_in_db {
         info!(
             %start_slot, %latest_slot_in_db,
-            "start_slot is after the latest slot in the database. nothing to recompute."
+            "start_slot is after the latest slot in the database. nothing to heal."
         );
         return Ok(());
     }
@@ -96,7 +96,7 @@ pub async fn recompute_deposit_sums(db_pool: &PgPool, start_slot: Slot) -> Resul
     info!(%start_slot, initial_running_agg_sum = %running_total_aggregated_sum, "established jumping-off point for aggregated deposits");
 
     let total_slots_to_process = (latest_slot_in_db.0 - start_slot.0 + 1) as u64;
-    let mut progress = Progress::new("recompute-deposit-sums", total_slots_to_process);
+    let mut progress = Progress::new("heal-deposit-sums", total_slots_to_process);
 
     for current_slot_val in start_slot.0..=latest_slot_in_db.0 {
         let current_slot = Slot(current_slot_val);
@@ -126,7 +126,7 @@ pub async fn recompute_deposit_sums(db_pool: &PgPool, start_slot: Slot) -> Resul
                     deposit_sum = %deposit_sum_for_current_block,
                     deposit_sum_aggregated = %aggregated_sum_for_current_block,
                     parent_agg_sum_used = %running_total_aggregated_sum,
-                    "recomputed deposit sums for block"
+                    "healed deposit sums for block"
                 );
 
                 update_deposit_sums(
@@ -153,6 +153,6 @@ pub async fn recompute_deposit_sums(db_pool: &PgPool, start_slot: Slot) -> Resul
 
     // Removed transaction.commit()
 
-    info!("deposit sum recomputation finished.");
+    info!("deposit sum healing finished.");
     Ok(())
 }

@@ -8,7 +8,7 @@ use eth_analysis::{
         backfill::{backfill_balances, Granularity},
         backfill_pending_deposits_sum, blocks,
         blocks::backfill::backfill_missing_beacon_blocks,
-        deposits::heal::recompute_deposit_sums,
+        deposits::heal::heal_deposit_sums,
         integrity::check_beacon_block_chain_integrity,
         issuance::backfill::{backfill_missing_issuance, backfill_slot_range_issuance},
         BeaconNode, BeaconNodeHttp, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT,
@@ -181,9 +181,9 @@ enum Commands {
         #[clap(long)]
         slot: i32,
     },
-    /// Recomputes deposit sums in the beacon_blocks table.
-    RecomputeDepositSums {
-        /// The hardfork to start recomputing deposit sums from.
+    /// Heals deposit sums in the beacon_blocks table.
+    HealDepositSums {
+        /// The hardfork to start healing deposit sums from.
         #[clap(long)]
         hardfork: HardforkArgs,
     },
@@ -423,12 +423,12 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                 }
             }
         }
-        Commands::RecomputeDepositSums { hardfork } => {
+        Commands::HealDepositSums { hardfork } => {
             let start_slot: Slot = hardfork.into();
-            info!(%start_slot, "initiating deposit sum recomputation");
-            match recompute_deposit_sums(&pool, start_slot).await {
-                Ok(()) => info!("done recomputing deposit sums"),
-                Err(e) => error!("error during deposit sum recomputation: {:?}", e),
+            info!(%start_slot, "initiating deposit sum healing");
+            match heal_deposit_sums(&pool, start_slot).await {
+                Ok(()) => info!("done healing deposit sums"),
+                Err(e) => error!("error during deposit sum healing: {:?}", e),
             }
         }
     }
