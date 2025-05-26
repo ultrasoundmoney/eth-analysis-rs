@@ -1,13 +1,14 @@
 use clap::Parser;
 use sqlx::PgPool;
 use std::str::FromStr;
-use tracing::info;
+use tracing::{error, info};
 
 use eth_analysis::{
     beacon_chain::{
         backfill::{backfill_balances, Granularity},
         backfill_pending_deposits_sum, blocks,
         blocks::backfill::backfill_missing_beacon_blocks,
+        deposits::heal::recompute_deposit_sums,
         integrity::check_beacon_block_chain_integrity,
         issuance::backfill::{backfill_missing_issuance, backfill_slot_range_issuance},
         BeaconNode, BeaconNodeHttp, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT,
@@ -180,6 +181,12 @@ enum Commands {
         #[clap(long)]
         slot: i32,
     },
+    /// Recomputes deposit sums in the beacon_blocks table.
+    RecomputeDepositSums {
+        /// The hardfork to start recomputing deposit sums from.
+        #[clap(long)]
+        hardfork: HardforkArgs,
+    },
 }
 
 async fn run_cli(pool: PgPool, commands: Commands) {
@@ -192,11 +199,19 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                     derived_start_slot = %start_slot,
                     "initiating ranged beacon issuance backfill (one per hour, overwriting from start to DB tip)."
                 );
-                backfill_slot_range_issuance(&pool, start_slot).await;
+                let result = backfill_slot_range_issuance(&pool, start_slot).await;
+                match result {
+                    Ok(()) => info!("done backfilling beacon issuance for specified slot range"),
+                    Err(e) => error!("error during beacon issuance backfill: {:?}", e),
+                }
             }
             None => {
                 info!("initiating missing beacon issuance backfill (one per hour, typically post-pectra unless db is older).");
-                backfill_missing_issuance(&pool).await;
+                let result = backfill_missing_issuance(&pool).await;
+                match result {
+                    Ok(()) => info!("done backfilling beacon issuance"),
+                    Err(e) => error!("error during beacon issuance backfill: {:?}", e),
+                }
             }
         },
         Commands::BackfillBalances {
@@ -281,8 +296,10 @@ async fn run_cli(pool: PgPool, commands: Commands) {
         Commands::BackfillMissingBeaconBlocks { hardfork } => {
             let start_slot = hardfork.map(|hf| hf.into()).unwrap_or(Slot(0));
             info!(%start_slot, "initiating missing beacon_block backfill");
-            backfill_missing_beacon_blocks(&pool, start_slot).await;
-            info!("done backfilling missing beacon_blocks");
+            match backfill_missing_beacon_blocks(&pool, start_slot).await {
+                Ok(()) => info!("done backfilling missing beacon_blocks"),
+                Err(e) => error!("error during missing beacon_block backfill: {:?}", e),
+            }
         }
         Commands::GetPendingDepositsSum { slot } => {
             info!(%slot, "fetching pending deposits sum for slot");
@@ -404,6 +421,14 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                         slot, e
                     );
                 }
+            }
+        }
+        Commands::RecomputeDepositSums { hardfork } => {
+            let start_slot: Slot = hardfork.into();
+            info!(%start_slot, "initiating deposit sum recomputation");
+            match recompute_deposit_sums(&pool, start_slot).await {
+                Ok(()) => info!("done recomputing deposit sums"),
+                Err(e) => error!("error during deposit sum recomputation: {:?}", e),
             }
         }
     }

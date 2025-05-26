@@ -4,6 +4,7 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::{
     beacon_chain::{
+        blocks,
         issuance::{calc_issuance, store_issuance},
         node::{BeaconNode, BeaconNodeHttp},
         Slot, PECTRA_SLOT,
@@ -155,7 +156,7 @@ async fn get_slots_to_process_for_missing_issuance(db_pool: &PgPool) -> sqlx::Re
         .collect())
 }
 
-pub async fn backfill_missing_issuance(db_pool: &PgPool) {
+pub async fn backfill_missing_issuance(db_pool: &PgPool) -> anyhow::Result<()> {
     info!("starting backfill for missing hourly beacon issuance (post-Pectra only, using upsert)");
     let beacon_node = BeaconNodeHttp::new_from_env();
 
@@ -164,13 +165,13 @@ pub async fn backfill_missing_issuance(db_pool: &PgPool) {
         Ok(slots) => slots,
         Err(e) => {
             warn!(error = %e, "failed to fetch slots for missing issuance backfill, ending early");
-            return; // Early return
+            return Ok(());
         }
     };
 
     if slots_to_process.is_empty() {
         info!("no missing hourly issuance (post-Pectra) found. nothing to do.");
-        return;
+        return Ok(());
     }
 
     let total_missing_representative_slots = slots_to_process.len() as u64;
@@ -231,6 +232,8 @@ pub async fn backfill_missing_issuance(db_pool: &PgPool) {
         successful_updates_count, // Use successful_updates_count in the log
         progress.get_progress_string()
     );
+
+    Ok(())
 }
 
 async fn get_slots_to_process_for_range(
@@ -261,27 +264,11 @@ async fn get_slots_to_process_for_range(
         .collect())
 }
 
-async fn get_highest_beacon_block_slot(db_pool: &PgPool) -> sqlx::Result<Option<Slot>> {
-    let max_slot_opt: Option<i32> = sqlx::query_scalar!(
-        r#"
-        SELECT MAX(slot) FROM beacon_blocks
-        "#
-    )
-    .fetch_optional(db_pool)
-    .await?
-    .flatten(); // Option<Option<i32>> to Option<i32>
-
-    Ok(max_slot_opt.map(Slot))
-}
-
-pub async fn backfill_slot_range_issuance(db_pool: &PgPool, start_slot_config: Slot) {
-    let Some(highest_slot_in_db) = get_highest_beacon_block_slot(db_pool).await.unwrap_or_else(|e| {
-        warn!(error = %e, "failed to get highest slot from beacon_blocks, cannot proceed with range backfill");
-        None
-    }) else {
-        info!("no blocks found in beacon_blocks, cannot determine range for backfill. nothing to do.");
-        return;
-    };
+pub async fn backfill_slot_range_issuance(
+    db_pool: &PgPool,
+    start_slot_config: Slot,
+) -> anyhow::Result<()> {
+    let highest_slot_in_db = blocks::get_latest_beacon_block_slot(db_pool).await?;
 
     let run_description = if start_slot_config < *PECTRA_SLOT {
         format!(
@@ -305,7 +292,7 @@ pub async fn backfill_slot_range_issuance(db_pool: &PgPool, start_slot_config: S
             "start slot ({}) is after determined end slot ({}), nothing to do.",
             start_slot_config, highest_slot_in_db
         );
-        return;
+        return Ok(());
     }
 
     let beacon_node = BeaconNodeHttp::new_from_env();
@@ -321,7 +308,7 @@ pub async fn backfill_slot_range_issuance(db_pool: &PgPool, start_slot_config: S
         Ok(slots) => slots,
         Err(e) => {
             warn!(error = %e, "failed to fetch slots for range issuance backfill, ending early");
-            return; // Early return if we can't get the slots
+            return Ok(());
         }
     };
 
@@ -331,7 +318,7 @@ pub async fn backfill_slot_range_issuance(db_pool: &PgPool, start_slot_config: S
             "no representative slots (is_first_of_hour) found in the specified slot range [{}, {}] to backfill issuance for. nothing to do.",
             start_slot_config, highest_slot_in_db
         );
-        return;
+        return Ok(());
     }
 
     let total_representative_slots_to_process = slots_to_process.len() as u64;
@@ -394,4 +381,6 @@ pub async fn backfill_slot_range_issuance(db_pool: &PgPool, start_slot_config: S
         start_slot_config, highest_slot_in_db, successful_updates_count,
         progress.get_progress_string()
     );
+
+    Ok(())
 }

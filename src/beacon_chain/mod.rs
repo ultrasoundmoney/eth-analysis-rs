@@ -20,7 +20,6 @@ pub use balances::sum_validator_balances;
 pub use balances::BeaconBalancesSum;
 
 pub use blocks::backfill::backfill_beacon_block_slots;
-pub use blocks::get_block_before_slot;
 pub use blocks::get_block_by_slot;
 pub use blocks::heal_block_hashes;
 pub use blocks::store_block;
