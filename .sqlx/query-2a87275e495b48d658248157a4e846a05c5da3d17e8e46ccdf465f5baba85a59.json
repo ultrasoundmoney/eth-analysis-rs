@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT state_root FROM beacon_states WHERE slot = $1",
+  "query": "SELECT state_root FROM beacon_blocks WHERE slot IS NULL AND slot >= $1",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "d95a6c84c7dad1f9d526351964dc3764d09de77099e0aee12480a338f58d1ed3"
+  "hash": "2a87275e495b48d658248157a4e846a05c5da3d17e8e46ccdf465f5baba85a59"
 }

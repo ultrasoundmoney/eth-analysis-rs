@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT deposit_sum_aggregated FROM beacon_blocks WHERE block_root = $1",
+  "query": "\n        SELECT deposit_sum_aggregated\n        FROM beacon_blocks\n        WHERE slot < $1\n        ORDER BY slot DESC\n        LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -11,12 +11,12 @@
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Int4"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "78e90c3c2fd3ecdd3389bdc46d555d63ab508895fc33362155f9335383751f8c"
+  "hash": "03b2b8ea5b46eaf8fe99711faced9a6b3d8efad4b580430a25413e0861beee27"
 }
