@@ -5,7 +5,8 @@ use tracing::{info, warn};
 
 use eth_analysis::{
     beacon_chain::{BeaconNode, BeaconNodeHttp, Slot},
-    db, log,
+    db, export_blocks_from_august, export_blocks_from_london, export_daily_supply_since_merge,
+    export_execution_supply_deltas, export_thousandth_epoch_supply, log,
     units::GweiNewtype,
 };
 
@@ -54,6 +55,16 @@ enum Commands {
         #[clap(long)]
         output: String,
     },
+    /// Export blocks from August to CSV.
+    ExportBlocksFromAugust {},
+    /// Export blocks from London to CSV.
+    ExportBlocksFromLondon {},
+    /// Export execution supply deltas to CSV.
+    ExportExecutionSupplyDeltas {},
+    /// Export thousandth epoch supply to CSV.
+    ExportThousandthEpochSupply {},
+    /// Export daily supply since merge to CSV.
+    ExportDailySupplySinceMerge {},
 }
 
 #[tokio::main]
@@ -83,6 +94,21 @@ async fn main() -> anyhow::Result<()> {
             output,
         } => {
             export_net_deposits(start_slot, end_slot, output).await?;
+        }
+        Commands::ExportBlocksFromAugust {} => {
+            export_blocks_from_august().await?;
+        }
+        Commands::ExportBlocksFromLondon {} => {
+            export_blocks_from_london().await?;
+        }
+        Commands::ExportExecutionSupplyDeltas {} => {
+            export_execution_supply_deltas().await;
+        }
+        Commands::ExportThousandthEpochSupply {} => {
+            export_thousandth_epoch_supply().await;
+        }
+        Commands::ExportDailySupplySinceMerge {} => {
+            export_daily_supply_since_merge().await;
         }
     }
 
