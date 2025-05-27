@@ -259,9 +259,7 @@ mod tests {
     use super::*;
     use crate::{
         beacon_chain::{
-            node::{
-                BeaconBlockBody, BeaconBlockVersionedEnvelope, BeaconHeader, BeaconHeaderEnvelope,
-            },
+            node::types::BeaconBlockVersionedEnvelope,
             store_state,
             tests::{store_custom_test_block, store_test_block},
             BeaconBlockBuilder, BeaconHeaderSignedEnvelopeBuilder,
@@ -328,15 +326,17 @@ mod tests {
         assert!(is_hash_known);
     }
 
+    #[test_context(TestDb)]
     #[tokio::test]
-    async fn store_block_test() {
-        let mut connection = db::tests::get_test_db_connection().await;
-        let mut transaction = connection.begin().await.unwrap();
+    async fn store_block_test(db: &TestDb) {
+        let mut transaction = db.pool.begin().await.unwrap();
 
-        let state_root = "0xblock_test_state_root".to_string();
         let slot = Slot(0);
+        let block = BeaconBlockBuilder::default().build();
+        let header: BeaconHeaderSignedEnvelope =
+            BeaconHeaderSignedEnvelopeBuilder::from(&block).build();
 
-        store_state(&mut *transaction, &state_root, slot).await;
+        store_state(&mut *transaction, &block.state_root, slot).await;
 
         let sums = StoreBlockParams {
             deposit_sum: GweiNewtype(0),
@@ -346,33 +346,9 @@ mod tests {
             pending_deposits_sum: None,
         };
 
-        store_block(
-            &mut *transaction,
-            &BeaconBlock {
-                body: BeaconBlockBody {
-                    deposits: vec![],
-                    execution_payload: None,
-                    execution_requests: None,
-                },
-                parent_root: GENESIS_PARENT_ROOT.to_string(),
-                slot,
-                state_root: state_root.clone(),
-            },
-            sums,
-            &BeaconHeaderSignedEnvelope {
-                root: "0xblock_root".to_string(),
-                header: BeaconHeaderEnvelope {
-                    message: BeaconHeader {
-                        slot,
-                        parent_root: GENESIS_PARENT_ROOT.to_string(),
-                        state_root,
-                    },
-                },
-            },
-        )
-        .await;
+        store_block(&mut *transaction, &block, sums, &header).await;
 
-        let is_hash_known = get_is_hash_known(&mut *transaction, "0xblock_root")
+        let is_hash_known = get_is_hash_known(&mut *transaction, &header.root)
             .await
             .unwrap();
 

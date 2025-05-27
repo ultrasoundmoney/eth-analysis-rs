@@ -151,6 +151,11 @@ impl BeaconHeaderSignedEnvelopeBuilder {
         self
     }
 
+    pub fn parent_root(mut self, parent_root: &str) -> Self {
+        self.parent_root = parent_root.to_string();
+        self
+    }
+
     pub fn build(self) -> BeaconHeaderSignedEnvelope {
         BeaconHeaderSignedEnvelope {
             root: self.block_root,
@@ -162,5 +167,14 @@ impl BeaconHeaderSignedEnvelopeBuilder {
                 },
             },
         }
+    }
+}
+
+impl From<&BeaconBlock> for BeaconHeaderSignedEnvelopeBuilder {
+    fn from(block: &BeaconBlock) -> Self {
+        Self::new(block.slot.to_string().as_str())
+            .slot(block.slot)
+            .parent_root(block.parent_root.as_str())
+            .state_root(&block.state_root)
     }
 }

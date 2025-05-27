@@ -4,7 +4,7 @@ use sqlx::PgExecutor;
 
 use crate::units::{GweiImprecise, GweiNewtype};
 
-use super::{BeaconNode, Slot, StateRoot};
+use super::{BeaconNode, Slot};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EffectiveBalanceSum {
@@ -27,7 +27,7 @@ impl EffectiveBalanceSum {
 
 pub async fn get_effective_balance_sum(
     beacon_node: &impl BeaconNode,
-    state_root: &StateRoot,
+    state_root: &str,
 ) -> GweiNewtype {
     beacon_node
         .get_validators_by_state(state_root)
@@ -65,17 +65,13 @@ pub async fn store_effective_balance_sum(
 
 #[cfg(test)]
 mod tests {
-    use anyhow::{anyhow, Result};
-    use async_trait::async_trait;
     use test_context::test_context;
 
     use crate::{
         beacon_chain::{
             self,
-            node::{
-                BeaconBlock, FinalityCheckpoint, Validator, ValidatorBalance, ValidatorEnvelope,
-            },
-            BeaconHeaderSignedEnvelope, BlockId, StateRoot,
+            node::{Validator, ValidatorEnvelope},
+            MockBeaconNode,
         },
         db::tests::TestDb,
         units::GweiNewtype,
@@ -86,111 +82,26 @@ mod tests {
     const SLOT_0_STATE_ROOT: &str =
         "0x7e76880eb67bbdc86250aa578958e9d0675e64e714337855204fb5abaaf82c2b";
 
-    struct MockBeaconNode;
-
-    #[async_trait]
-    impl BeaconNode for MockBeaconNode {
-        async fn get_block_by_block_root(&self, _block_root: &str) -> Result<Option<BeaconBlock>> {
-            Ok(None)
-        }
-
-        async fn get_block_by_slot(&self, _slot: Slot) -> Result<Option<BeaconBlock>> {
-            Ok(None)
-        }
-
-        async fn get_header(
-            &self,
-            _block_id: &BlockId,
-        ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
-            Ok(None)
-        }
-
-        async fn get_header_by_block_root(
-            &self,
-            _block_root: &str,
-        ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
-            Ok(None)
-        }
-
-        async fn get_header_by_slot(
-            &self,
-            _slot: Slot,
-        ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
-            Ok(None)
-        }
-
-        async fn get_header_by_state_root(
-            &self,
-            _state_root: &str,
-            _slot: Slot,
-        ) -> Result<Option<BeaconHeaderSignedEnvelope>> {
-            Ok(None)
-        }
-
-        async fn get_last_block(&self) -> Result<BeaconBlock> {
-            Err(anyhow!("Not implemented in the MockBeaconNode"))
-        }
-
-        async fn get_last_finality_checkpoint(&self) -> Result<FinalityCheckpoint> {
-            Err(anyhow!("Not implemented in the MockBeaconNode"))
-        }
-
-        async fn get_last_finalized_block(&self) -> Result<BeaconBlock> {
-            Err(anyhow!("Not implemented in the MockBeaconNode"))
-        }
-
-        async fn get_last_header(&self) -> Result<BeaconHeaderSignedEnvelope> {
-            Err(anyhow!("Not implemented in the MockBeaconNode"))
-        }
-
-        async fn get_state_root_by_slot(&self, _slot: Slot) -> Result<Option<StateRoot>> {
-            Ok(None)
-        }
-
-        async fn get_validator_balances(
-            &self,
-            _state_root: &str,
-        ) -> Result<Option<Vec<ValidatorBalance>>> {
-            Ok(None)
-        }
-
-        async fn get_validators_by_state(
-            &self,
-            _state_root: &str,
-        ) -> Result<Vec<ValidatorEnvelope>> {
-            // Create some mock validator data to return
-            let mock_validators = vec![
-                ValidatorEnvelope {
-                    status: "active_ongoing".to_string(),
-                    validator: Validator {
-                        effective_balance: GweiNewtype(32_000_000_000_000_000),
-                    },
-                },
-                ValidatorEnvelope {
-                    status: "active_ongoing".to_string(),
-                    validator: Validator {
-                        effective_balance: GweiNewtype(32_000_000_000_000_000),
-                    },
-                },
-            ];
-            Ok(mock_validators)
-        }
-
-        async fn get_validator_balances_by_slot(
-            &self,
-            _slot: Slot,
-        ) -> Result<Option<Vec<ValidatorBalance>>> {
-            Ok(None)
-        }
-
-        async fn get_pending_deposits_sum(&self, _state_root: &str) -> Result<Option<GweiNewtype>> {
-            Ok(None)
-        }
-    }
-
     #[tokio::test]
     async fn test_get_effective_balance_sum() {
-        let mock_beacon_node = MockBeaconNode {};
+        let mut mock_beacon_node = MockBeaconNode::new();
+        let validator_envelopes = vec![
+            ValidatorEnvelope {
+                status: "active_ongoing".to_string(),
+                validator: Validator {
+                    effective_balance: GweiNewtype(32_000_000_000_000_000),
+                },
+            },
+            ValidatorEnvelope {
+                status: "active_ongoing".to_string(),
+                validator: Validator {
+                    effective_balance: GweiNewtype(32_000_000_000_000_000),
+                },
+            },
+        ];
+        mock_beacon_node
+            .expect_get_validators_by_state()
+            .return_once(move |_| Ok(validator_envelopes));
         let state_root = SLOT_0_STATE_ROOT.to_string();
         let expected_sum = GweiNewtype(64_000_000_000_000_000);
 
