@@ -96,7 +96,6 @@ impl FromStr for SlotRange {
     }
 }
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Parser, Debug)]
 enum Commands {
     /// Backfills beacon chain issuance data.
