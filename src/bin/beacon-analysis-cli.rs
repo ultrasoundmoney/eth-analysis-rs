@@ -8,7 +8,6 @@ use eth_analysis::{
         backfill::{backfill_balances, Granularity},
         backfill_pending_deposits_sum, blocks,
         blocks::backfill::backfill_missing_beacon_blocks,
-        deposits::heal::heal_deposit_sums,
         integrity::check_beacon_block_chain_integrity,
         issuance::backfill::{backfill_missing_issuance, backfill_slot_range_issuance},
         BeaconNode, BeaconNodeHttp, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT,
@@ -176,12 +175,6 @@ enum Commands {
         /// The slot to fetch the pending deposit sum and aggregated sum for.
         #[clap(long)]
         slot: i32,
-    },
-    /// Heals deposit sums in the beacon_blocks table.
-    HealDepositSums {
-        /// The hardfork to start healing deposit sums from.
-        #[clap(long)]
-        hardfork: HardforkArgs,
     },
 }
 
@@ -416,14 +409,6 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                         slot, e
                     );
                 }
-            }
-        }
-        Commands::HealDepositSums { hardfork } => {
-            let start_slot: Slot = hardfork.into();
-            info!(%start_slot, "initiating deposit sum healing");
-            match heal_deposit_sums(&pool, start_slot).await {
-                Ok(()) => info!("done healing deposit sums"),
-                Err(e) => error!("error during deposit sum healing: {:?}", e),
             }
         }
     }
