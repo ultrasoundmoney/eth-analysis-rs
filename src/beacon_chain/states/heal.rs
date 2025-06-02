@@ -31,6 +31,11 @@ pub async fn heal_beacon_states() {
         .expect("a beacon state should be stored before trying to heal any")
         .slot
         .0;
+    let last_stored_header = beacon_node
+        .get_header_by_slot(last_slot.into())
+        .await
+        .unwrap()
+        .expect("expect state_root to exist for head slot");
     let last_checked = job_progress.get().await;
     let starting_slot = last_checked.unwrap_or(FIRST_STORED_ETH_SUPPLY_SLOT).0;
 
@@ -83,7 +88,7 @@ pub async fn heal_beacon_states() {
             if *stored_state_root != header.state_root() {
                 warn!("state root mismatch, rolling back stored and resyncing");
                 sync::rollback_slots(&db_pool, slot.into()).await.unwrap();
-                sync::sync_slot_by_state_root(&db_pool, &beacon_node, header)
+                sync::sync_slot_by_state_root(&db_pool, &beacon_node, header, &last_stored_header)
                     .await
                     .unwrap();
                 info!(%slot, "healed state at slot");

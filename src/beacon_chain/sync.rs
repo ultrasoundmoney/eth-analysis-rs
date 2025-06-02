@@ -84,9 +84,9 @@ async fn fetch_pending_deposits_with_retry(
                     warn!(
                         %slot,
                         attempt = attempts,
-                        "pending deposits sum is none, retrying in 12s"
+                        "pending deposits sum is none, retrying in 6s"
                     );
-                    tokio::time::sleep(std::time::Duration::from_secs(12)).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
                 } else {
                     warn!(
                         %slot,
@@ -229,24 +229,32 @@ pub async fn sync_slot_by_state_root(
         )
         .await;
 
-        // Determine pending deposits for issuance, defaulting to 0 if None.
-        let pending_deposits_for_issuance = opt_pending_deposits_sum.unwrap_or_else(|| {
-            debug!(slot = %header.slot(), "pending deposits sum is None (due to pre-pectra, sync lag, or fetch error), using GweiNewtype(0) for issuance calculation");
-            GweiNewtype(0)
-        });
-        if opt_pending_deposits_sum.is_some() {
-            debug!(slot = %header.slot(), pending_deposits_sum = ?opt_pending_deposits_sum, "using actual pending deposits sum for issuance calculation");
+        // assume post-pectra slot
+        if let Some(pending_deposits_sum) = opt_pending_deposits_sum {
+            debug!(
+                slot = %slot,
+                pending_deposits_sum = %pending_deposits_sum,
+                "post-pectra slot. using pending_deposits_sum for beacon issuance calculation."
+            );
+
+            debug!(slot = %slot, "calculating and storing beacon issuance (post-pectra).");
+            let issuance = issuance::calc_issuance(
+                &validator_balances_sum,
+                &deposit_sum_aggregated,
+                &pending_deposits_sum,
+                &withdrawal_sum_aggregated,
+            );
+            issuance::store_issuance(&mut *transaction, state_root, slot, &issuance).await;
         }
+    }
 
-        debug!(slot = %header.slot(), "storing issuance using effective pending deposits sum");
-        let issuance = issuance::calc_issuance(
-            &validator_balances_sum,
-            &deposit_sum_aggregated,
-            &pending_deposits_for_issuance,
-            &withdrawal_sum_aggregated,
-        );
-        issuance::store_issuance(&mut *transaction, state_root, slot, &issuance).await;
+    // only sync eth_supply if balances and pending deposits were successfully stored in this iteration.
+    // if these were fetched, assume they were successfully stored.
+    let pending_deposits_stored = opt_pending_deposits_sum.is_some();
+    let beacon_balances_stored = opt_validator_balances.is_some();
 
+    if pending_deposits_stored && beacon_balances_stored {
+        debug!(slot = %slot, "beacon issuance was stored for this slot, proceeding to sync eth supply.");
         let result = eth_supply::sync_eth_supply(&mut transaction, slot).await;
         if let Err(e) = result {
             warn!(
@@ -254,26 +262,18 @@ pub async fn sync_slot_by_state_root(
                 slot, e
             );
         }
-    } else {
-        debug!(slot = %header.slot(), "validator balances not available (likely due to sync lag or fetch error), skipping dependent storage operations");
     }
 
     transaction.commit().await?;
 
     if is_at_chain_head {
-        debug!("sync caught up with head of chain, updating deferrable analysis");
-        update_deferrable_analysis(db_pool)
+        debug!("sync caught up with head of chain, updating supply dashboard analysis");
+        supply_dashboard_analysis::update_cache(db_pool)
             .await
-            .context("failed to update deferrable analysis after catching up")?;
+            .context("failed to update supply dashboard analysis after catching up")?;
     } else {
         debug!("sync not yet caught up with head of chain, skipping deferrable analysis");
     }
-
-    Ok(())
-}
-
-async fn update_deferrable_analysis(db_pool: &PgPool) -> Result<()> {
-    supply_dashboard_analysis::update_cache(db_pool).await?;
 
     Ok(())
 }
@@ -487,6 +487,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                             &db_pool,
                             &beacon_node,
                             on_chain_header_for_current_slot,
+                            &on_chain_head_header_envelope,
                         )
                         .await
                         {
