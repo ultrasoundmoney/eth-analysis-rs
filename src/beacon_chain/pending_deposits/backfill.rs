@@ -44,10 +44,7 @@ async fn fetch_pending_deposits_for_state_root(
     beacon_node: &BeaconNodeHttp,
     state_root: String,
 ) -> Option<PendingDepositUpdateData> {
-    match beacon_node
-        .pending_deposits_sum(&state_root)
-        .await
-    {
+    match beacon_node.pending_deposits_sum(&state_root).await {
         Ok(Some(sum)) => {
             debug!(%state_root, pending_deposits_sum = %sum, "pending deposits sum found via beacon node");
             Some(PendingDepositUpdateData {
