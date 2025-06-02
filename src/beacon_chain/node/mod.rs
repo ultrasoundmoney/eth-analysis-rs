@@ -92,7 +92,7 @@ pub trait BeaconNode {
         &self,
         slot: Slot,
     ) -> Result<Option<Vec<ValidatorBalance>>>;
-    async fn get_pending_deposits_sum(&self, state_root: &str) -> Result<Option<GweiNewtype>>;
+    async fn pending_deposits_sum(&self, state_root: &str) -> Result<Option<GweiNewtype>>;
 }
 
 impl BeaconNodeHttp {
@@ -352,7 +352,7 @@ impl BeaconNode for BeaconNodeHttp {
     }
 
     #[instrument(skip(self))]
-    async fn get_pending_deposits_sum(&self, state_root: &str) -> Result<Option<GweiNewtype>> {
+    async fn pending_deposits_sum(&self, state_root: &str) -> Result<Option<GweiNewtype>> {
         let Some(beacon_url) = ENV_CONFIG.beacon_url.as_ref() else {
             return Err(anyhow::anyhow!(
                 "BEACON_URL is not configured, cannot fetch pending deposits"

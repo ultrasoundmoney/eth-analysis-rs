@@ -72,7 +72,7 @@ async fn fetch_pending_deposits_with_retry(
     let mut attempts = 0;
     loop {
         attempts += 1;
-        match beacon_node.get_pending_deposits_sum(state_root_str).await {
+        match beacon_node.pending_deposits_sum(state_root_str).await {
             Ok(Some(sum)) => {
                 if attempts > 1 {
                     debug!(%slot, attempt = attempts, "pending deposits sum became available after retry");
@@ -135,27 +135,17 @@ async fn gather_balances_deposits(
     Ok((validator_balances, pending_deposits_sum_result))
 }
 
-async fn get_sync_lag(beacon_node: &BeaconNodeHttp, syncing_slot: Slot) -> Result<Duration> {
-    let last_header = beacon_node.get_last_header().await.with_context(|| {
-        format!(
-            "failed to get last header from beacon node (for sync_lag calculation for slot {})",
-            syncing_slot
-        )
-    })?;
-    let last_on_chain_slot = last_header.header.message.slot;
-    let last_on_chain_slot_date_time = last_on_chain_slot.date_time();
-    let slot_date_time = syncing_slot.date_time();
-    let lag = last_on_chain_slot_date_time - slot_date_time;
-    Ok(lag)
-}
-
 pub async fn sync_slot_by_state_root(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
     header: BeaconHeaderSignedEnvelope,
+    head_header: &BeaconHeaderSignedEnvelope,
 ) -> Result<()> {
-    let sync_lag = get_sync_lag(beacon_node, header.slot()).await?;
-    debug!(%sync_lag, "beacon sync lag for slot {}", header.slot());
+    // heavy data gathering calls (balances, pending deposits) and analyses may take more than 12s causing us to fall behind.
+    // we only want to do this if we're caught up to the head of the chain.
+    let is_at_chain_head = head_header.state_root() == header.state_root();
+    let sync_lag = head_header.slot().date_time() - header.slot().date_time();
+    debug!(lag = %sync_lag, %is_at_chain_head, slot = %header.slot(), "beacon sync lag while syncing slot");
 
     let block_root_for_get_block = header.root.clone();
     let slot_for_get_block = header.slot();
@@ -179,16 +169,13 @@ pub async fn sync_slot_by_state_root(
     let mut opt_validator_balances: Option<Vec<ValidatorBalance>> = None;
     let mut opt_pending_deposits_sum: Option<GweiNewtype> = None;
 
-    // whenever we fall behind, getting validator balances for older slots from lighthouse takes a
-    // long time. this means if we fall behind too far we never catch up, as syncing one slot now
-    // takes longer than it takes for a new slot to appear (12 seconds).
-    if sync_lag <= *BLOCK_LAG_LIMIT {
-        debug!(slot = %header.slot(), "sync lag within limit, gathering balances and deposits");
+    if is_at_chain_head {
+        debug!(slot = %header.slot(), "at chain head, gathering balances and deposits");
         let (balances, deposits) = gather_balances_deposits(beacon_node, &header).await?;
         opt_validator_balances = Some(balances);
         opt_pending_deposits_sum = deposits;
     } else {
-        warn!(slot = %header.slot(), %sync_lag, "sync lag over limit ({}), skipping balances and pending deposits fetch", *BLOCK_LAG_LIMIT);
+        warn!(slot = %header.slot(), %sync_lag, "not at chain head, skipping balances and pending deposits fetch to catch up faster");
     }
 
     let mut transaction = db_pool.begin().await?;
@@ -273,17 +260,11 @@ pub async fn sync_slot_by_state_root(
 
     transaction.commit().await?;
 
-    let last_on_chain_state_root = beacon_node
-        .get_last_header()
-        .await
-        .with_context(|| "failed to get last on-chain header for sync catch-up check".to_string())?
-        .header
-        .message
-        .state_root;
-
-    if last_on_chain_state_root == *state_root {
+    if is_at_chain_head {
         debug!("sync caught up with head of chain, updating deferrable analysis");
-        update_deferrable_analysis(db_pool).await?;
+        update_deferrable_analysis(db_pool)
+            .await
+            .context("failed to update deferrable analysis after catching up")?;
     } else {
         debug!("sync not yet caught up with head of chain, skipping deferrable analysis");
     }

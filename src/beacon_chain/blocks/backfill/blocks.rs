@@ -94,7 +94,7 @@ pub async fn backfill_missing_beacon_blocks(
                         let mut pending_deposits_sum: Option<GweiNewtype> = None;
                         if slot >= *PECTRA_SLOT {
                             let sum = beacon_node
-                                .get_pending_deposits_sum(&header_env.state_root())
+                                .pending_deposits_sum(&header_env.state_root())
                                 .await?;
                             pending_deposits_sum = sum;
                         }

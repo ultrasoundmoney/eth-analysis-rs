@@ -104,7 +104,7 @@ async fn fetch_issuance_data_for_slot(
         } else {
             // Fallback to beacon node if not in DB
             debug!(%slot, %state_root, "pending_deposits_sum not found in db (beacon_blocks table for post-pectra slot), fetching from beacon node");
-            match beacon_node.get_pending_deposits_sum(&state_root).await {
+            match beacon_node.pending_deposits_sum(&state_root).await {
                 Ok(Some(sum_node)) => {
                     debug!(%slot, %state_root, pending_deposits_sum = %sum_node, "pending deposits sum found via beacon node (after db miss)");
                     sum_node

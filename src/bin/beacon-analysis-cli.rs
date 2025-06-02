@@ -297,7 +297,7 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                 Ok(Some(block_header)) => {
                     let state_root = block_header.state_root();
                     info!(%slot, %state_root, "found state root for slot");
-                    match beacon_node.get_pending_deposits_sum(&state_root).await {
+                    match beacon_node.pending_deposits_sum(&state_root).await {
                         Ok(Some(sum)) => {
                             info!(%slot, pending_deposits_sum_gwei = %sum, "successfully fetched pending deposits sum");
                         }
@@ -330,7 +330,7 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                 Ok(Some(block_header)) => {
                     let state_root = block_header.state_root();
                     info!(%slot, %state_root, "found state root for slot");
-                    match beacon_node.get_pending_deposits_sum(&state_root).await {
+                    match beacon_node.pending_deposits_sum(&state_root).await {
                         Ok(Some(sum)) => {
                             info!(%slot, pending_deposits_sum_gwei = %sum, "successfully fetched pending deposits sum for slot");
                             Some(sum)
