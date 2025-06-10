@@ -5,7 +5,7 @@ use sqlx::Postgres;
 use store::EthPriceStore;
 use tracing::{debug, info};
 
-use crate::{db, execution_chain, log};
+use crate::{db, execution_chain};
 
 use super::{bybit, store, EthPriceTimestamp};
 use futures::stream::{self, StreamExt};
@@ -14,8 +14,6 @@ use tracing::warn;
 const CONCURRENT_REQUESTS: usize = 8;
 
 pub async fn heal_eth_prices() {
-    log::init();
-
     info!("healing missing eth prices");
     let max_distance_in_minutes: i64 = std::env::args()
         .collect::<Vec<String>>()

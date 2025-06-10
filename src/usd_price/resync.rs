@@ -4,7 +4,7 @@ use sqlx::{postgres::PgRow, PgExecutor, Row};
 use store::EthPriceStore;
 use tracing::{debug, info};
 
-use crate::{db, execution_chain, log};
+use crate::{db, execution_chain};
 
 use super::{bybit, store};
 
@@ -49,8 +49,6 @@ async fn set_last_synced_minute(executor: impl PgExecutor<'_>, minute: u32) {
 }
 
 pub async fn resync_all() {
-    log::init();
-
     let client = reqwest::Client::new();
 
     info!("resyncing all eth prices");
