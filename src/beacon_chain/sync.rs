@@ -450,6 +450,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
         }
 
         let mut slots_processed_this_cycle = 0;
+        let mut reorg_triggered_this_cycle = false;
         let end_slot_for_this_cycle = std::cmp::min(
             target_sync_slot,
             next_slot_to_process + (SYNC_V2_MAX_SLOTS_PER_CYCLE as i32) - 1,
@@ -471,6 +472,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                             warn!(%current_processing_slot, %highest_db_slot, "consistency issue: current slot not ahead of db tip. triggering rollback.");
                             next_slot_to_process =
                                 rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;
+                            reorg_triggered_this_cycle = true;
                             break;
                         }
                         highest_db_root.clone()
@@ -513,6 +515,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                         warn!(slot = %current_processing_slot, expected_parent = %db_parent_block_root_expected, actual_parent = %on_chain_parent_root, "reorg detected. parent mismatch.");
                         next_slot_to_process =
                             rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;
+                        reorg_triggered_this_cycle = true;
                         break;
                     }
                 }
@@ -532,7 +535,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
         if next_slot_to_process <= target_sync_slot
             && slots_processed_this_cycle < SYNC_V2_MAX_SLOTS_PER_CYCLE
         {
-            if slots_processed_this_cycle == 0 {
+            if slots_processed_this_cycle == 0 && !reorg_triggered_this_cycle {
                 debug!("inner loop made no progress, delaying before next cycle.");
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
