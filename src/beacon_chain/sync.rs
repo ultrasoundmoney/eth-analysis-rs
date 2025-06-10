@@ -16,7 +16,7 @@
 //!     * polls the beacon node every `SYNC_V2_POLLING_INTERVAL`,
 //!     * processes up to `SYNC_V2_MAX_SLOTS_PER_CYCLE` per iteration, and
 //!     * sleeps/retries on errors for `SYNC_V2_ERROR_RETRY_DELAY`.
-//! * For each slot (`sync_slot_by_state_root`):
+//! * For each slot (`sync_slot_with_block`):
 //!     * fetch the header, parent root, and block; abort on re-orgs,
 //!     * optionally gather heavy data (validator balances, pending deposits)
 //!       only when we are within `BLOCK_LAG_LIMIT` of the chain head to avoid
@@ -54,6 +54,18 @@ use crate::{
 
 use super::node::{BeaconNode, BeaconNodeHttp, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot};
+
+struct TruncatedHash<'a>(&'a str);
+
+impl std::fmt::Debug for TruncatedHash<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.starts_with("0x") && self.0.len() > 10 {
+            write!(f, "{}...{}", &self.0[..6], &self.0[self.0.len() - 4..])
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
 
 lazy_static! {
     static ref BLOCK_LAG_LIMIT: Duration = Duration::minutes(5);
@@ -135,8 +147,8 @@ async fn gather_balances_deposits(
     Ok((validator_balances, pending_deposits_sum_result))
 }
 
-#[instrument(skip(db_pool, beacon_node, header, head_header), fields(slot, block_root = %header.root))]
-pub async fn sync_slot_by_state_root(
+#[instrument(skip(db_pool, beacon_node, header, head_header), fields(slot, block_root = ?TruncatedHash(&header.root)))]
+pub async fn sync_slot_with_block(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
     header: BeaconHeaderSignedEnvelope,
@@ -493,7 +505,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
 
                     if on_chain_parent_root == db_parent_block_root_expected {
                         debug!(slot = %current_processing_slot, "parent match. syncing slot.");
-                        match sync_slot_by_state_root(
+                        match sync_slot_with_block(
                             &db_pool,
                             &beacon_node,
                             on_chain_header_for_current_slot,
@@ -506,7 +518,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                                 next_slot_to_process = current_processing_slot + 1;
                             }
                             Err(e) => {
-                                warn!(slot = %current_processing_slot, error = ?e, "error during sync_slot_by_state_root. breaking cycle.");
+                                warn!(slot = %current_processing_slot, error = ?e, "error during sync_slot_with_block. breaking cycle.");
                                 tokio::time::sleep(SYNC_V2_ERROR_RETRY_DELAY).await;
                                 break;
                             }
