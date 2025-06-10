@@ -147,7 +147,10 @@ async fn gather_balances_deposits(
     Ok((validator_balances, pending_deposits_sum_result))
 }
 
-#[instrument(skip(db_pool, beacon_node, header, head_header), fields(slot, block_root = ?TruncatedHash(&header.root)))]
+#[instrument(
+    skip(db_pool, beacon_node, header, head_header),
+    fields(slot = %header.slot(), block_root = ?TruncatedHash(&header.root))
+)]
 pub async fn sync_slot_with_block(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
@@ -159,7 +162,7 @@ pub async fn sync_slot_with_block(
     // we do first slot of an hour because some calculation depends on e.g. knowing at least 1 supply data point in the past day.
     let is_at_chain_head = head_header.state_root() == header.state_root();
     let sync_lag = head_header.slot().date_time() - header.slot().date_time();
-    debug!(lag = %sync_lag, %is_at_chain_head, slot = %header.slot(), "beacon sync lag while syncing slot");
+    debug!(lag = %sync_lag, %is_at_chain_head, "beacon sync lag while syncing slot");
 
     let block_root_for_get_block = header.root.clone();
     let slot_for_get_block = header.slot();
@@ -208,11 +211,8 @@ pub async fn sync_slot_with_block(
 
     let slot = header.slot();
     let state_root = &header.state_root();
-    let block_root = header.root.clone();
     debug!(
-        %slot,
-        state_root,
-        block_root,
+        %state_root,
         "storing slot with block"
     );
     let is_parent_known = blocks::get_is_hash_known(&mut *transaction, &header.parent_root())
@@ -239,7 +239,7 @@ pub async fn sync_slot_with_block(
     blocks::store_block(&mut *transaction, &block, store_block_params, &header).await;
 
     if let Some(ref validator_balances_vec) = opt_validator_balances {
-        debug!(slot = %header.slot(), "validator balances available, proceeding with related storage");
+        debug!("validator balances available, proceeding with related storage");
         let validator_balances_sum = balances::sum_validator_balances(validator_balances_vec);
         balances::store_validators_balance(
             &mut *transaction,
@@ -252,12 +252,11 @@ pub async fn sync_slot_with_block(
         // assume post-pectra slot
         if let Some(pending_deposits_sum) = opt_pending_deposits_sum {
             debug!(
-                slot = %slot,
                 pending_deposits_sum = %pending_deposits_sum,
                 "post-pectra slot. using pending_deposits_sum for beacon issuance calculation."
             );
 
-            debug!(slot = %slot, "calculating and storing beacon issuance (post-pectra).");
+            debug!("calculating and storing beacon issuance (post-pectra).");
             let issuance = issuance::calc_issuance(
                 &validator_balances_sum,
                 &deposit_sum_aggregated,
@@ -274,13 +273,10 @@ pub async fn sync_slot_with_block(
     let beacon_balances_stored = opt_validator_balances.is_some();
 
     if pending_deposits_stored && beacon_balances_stored {
-        debug!(slot = %slot, "beacon issuance was stored for this slot, proceeding to sync eth supply.");
+        debug!("beacon issuance was stored for this slot, proceeding to sync eth supply.");
         let result = eth_supply::sync_eth_supply(&mut transaction, slot).await;
         if let Err(e) = result {
-            warn!(
-                "error syncing eth supply for slot {}, skipping: {}",
-                slot, e
-            );
+            warn!(error = ?e, "error syncing eth supply, skipping");
         }
     }
 
