@@ -135,6 +135,7 @@ async fn gather_balances_deposits(
     Ok((validator_balances, pending_deposits_sum_result))
 }
 
+#[instrument(skip(db_pool, beacon_node, header, head_header), fields(slot, block_root = %header.root))]
 pub async fn sync_slot_by_state_root(
     db_pool: &PgPool,
     beacon_node: &BeaconNodeHttp,
@@ -142,7 +143,8 @@ pub async fn sync_slot_by_state_root(
     head_header: &BeaconHeaderSignedEnvelope,
 ) -> Result<()> {
     // heavy data gathering calls (balances, pending deposits) and analyses may take more than 12s causing us to fall behind.
-    // we only want to do this if we're caught up to the head of the chain.
+    // we only want to do this if we're caught up to the head of the chain or if we're at the first slot of an hour.
+    // we do first slot of an hour because some calculation depends on e.g. knowing at least 1 supply data point in the past day.
     let is_at_chain_head = head_header.state_root() == header.state_root();
     let sync_lag = head_header.slot().date_time() - header.slot().date_time();
     debug!(lag = %sync_lag, %is_at_chain_head, slot = %header.slot(), "beacon sync lag while syncing slot");
@@ -169,13 +171,19 @@ pub async fn sync_slot_by_state_root(
     let mut opt_validator_balances: Option<Vec<ValidatorBalance>> = None;
     let mut opt_pending_deposits_sum: Option<GweiNewtype> = None;
 
-    if is_at_chain_head {
-        debug!(slot = %header.slot(), "at chain head, gathering balances and deposits");
+    let should_gather_heavy_data = is_at_chain_head || header.slot().is_first_of_hour();
+
+    if should_gather_heavy_data {
+        if is_at_chain_head {
+            debug!("at chain head, gathering balances and deposits");
+        } else {
+            info!("not at chain head but first slot of hour, gathering balances and deposits");
+        }
         let (balances, deposits) = gather_balances_deposits(beacon_node, &header).await?;
         opt_validator_balances = Some(balances);
         opt_pending_deposits_sum = deposits;
     } else {
-        warn!(slot = %header.slot(), %sync_lag, "not at chain head, skipping balances and pending deposits fetch to catch up faster");
+        warn!(%sync_lag, "not at chain head, skipping balances and pending deposits fetch to catch up faster");
     }
 
     let mut transaction = db_pool.begin().await?;
