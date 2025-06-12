@@ -32,8 +32,10 @@ mod usd_price;
 pub use beacon_chain::effective_balance_sums;
 pub use beacon_chain::heal_beacon_states;
 pub use beacon_chain::heal_block_hashes;
-pub use beacon_chain::sync_beacon_states_slot_by_slot;
+pub use beacon_chain::sync_beacon_states;
 pub use beacon_chain::update_issuance_estimate;
+pub use beacon_chain::BeaconNode;
+pub use beacon_chain::BeaconNodeHttp;
 
 pub use data_integrity::check_beacon_state_gaps;
 pub use data_integrity::check_blocks_gaps;
@@ -51,6 +53,7 @@ pub use execution_chain::sync_execution_blocks;
 pub use execution_chain::sync_execution_supply_deltas;
 pub use execution_chain::write_execution_heads_log;
 pub use execution_chain::write_execution_supply_deltas_log;
+pub use execution_chain::ExecutionNode;
 
 pub use issuance_breakdown::update_issuance_breakdown;
 

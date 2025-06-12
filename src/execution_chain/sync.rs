@@ -8,14 +8,19 @@
 
 use futures::{Stream, StreamExt};
 use sqlx::PgPool;
-use std::{collections::VecDeque, iter::Iterator};
+use std::{
+    collections::VecDeque,
+    iter::Iterator,
+    sync::{Arc, Mutex},
+    time::SystemTime,
+};
 use tracing::{debug, info, warn};
 
 use crate::{
     beacon_chain::{IssuanceStore, IssuanceStorePostgres},
-    burn_rates, burn_sums, db, eth_supply,
+    burn_rates, burn_sums, eth_supply,
     execution_chain::{self, base_fees, BlockStorePostgres, ExecutionNode},
-    gauges, log,
+    gauges,
     performance::TimedExt,
     units::EthNewtype,
     usd_price::{self, EthPriceStore, EthPriceStorePostgres},
@@ -141,23 +146,20 @@ async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = BlockNumber> 
 
 type HeadsQueue = VecDeque<BlockNumber>;
 
-pub async fn sync_blocks() {
-    log::init();
-
+pub async fn sync_blocks(
+    db_pool: &PgPool,
+    execution_node: &ExecutionNode,
+    last_synced: &Arc<Mutex<SystemTime>>,
+) {
     info!("syncing execution blocks");
 
-    let db_pool = db::get_db_pool("sync-execution-blocks", 6).await;
-
-    sqlx::migrate!().run(&db_pool).await.unwrap();
-
-    let execution_node = ExecutionNode::connect().await;
     let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
     let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
     let block_store = BlockStorePostgres::new(db_pool.clone());
-    let mut heads_stream = stream_heads_from_last(&db_pool).await;
+    let mut heads_stream = stream_heads_from_last(db_pool).await;
     let mut heads_queue: HeadsQueue = VecDeque::new();
 
-    let blocks_remaining_on_start = estimate_blocks_remaining(&block_store, &execution_node)
+    let blocks_remaining_on_start = estimate_blocks_remaining(&block_store, execution_node)
         .await
         .try_into()
         .unwrap();
@@ -195,12 +197,13 @@ pub async fn sync_blocks() {
                 sync_by_hash(
                     &issuance_store,
                     &eth_price_store,
-                    &execution_node,
-                    &db_pool,
+                    execution_node,
+                    db_pool,
                     &next_block.hash,
                 )
                 .timed("sync_by_hash")
                 .await;
+                *last_synced.lock().unwrap() = SystemTime::now();
             } else {
                 warn!(
                     number = next_block.number,
@@ -212,7 +215,7 @@ pub async fn sync_blocks() {
                 // Roll back until we're following the canonical chain again, queue all rolled
                 // back blocks.
                 let last_matching_block_number = find_last_matching_block_number(
-                    &execution_node,
+                    execution_node,
                     &block_store,
                     last_stored_block.number - 1,
                 )
@@ -223,7 +226,7 @@ pub async fn sync_blocks() {
                 let first_invalid_block_number = last_matching_block_number + 1;
 
                 // Roll back
-                rollback_numbers(&db_pool, &first_invalid_block_number).await;
+                rollback_numbers(db_pool, &first_invalid_block_number).await;
 
                 // Requeue
                 for block_number in (first_invalid_block_number..=next_block.number).rev() {

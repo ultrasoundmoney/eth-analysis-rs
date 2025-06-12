@@ -36,6 +36,10 @@
 //! * Heavy RPC endpoints are avoided when lagging, ensuring the syncer always
 //!   makes forward progress.
 
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::SystemTime;
+
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Duration;
 use lazy_static::lazy_static;
@@ -45,12 +49,9 @@ use tracing::instrument;
 use tracing::{debug, info, warn};
 
 use crate::beacon_chain::withdrawals;
+use crate::beacon_chain::{balances, deposits, issuance};
 use crate::units::GweiNewtype;
 use crate::{beacon_chain::PECTRA_SLOT, eth_supply, supply_dashboard_analysis};
-use crate::{
-    beacon_chain::{balances, deposits, issuance},
-    db, log,
-};
 
 use super::node::{BeaconNode, BeaconNodeHttp, ValidatorBalance};
 use super::{blocks, states, BeaconHeaderSignedEnvelope, Slot};
@@ -417,16 +418,14 @@ async fn rollback_to_last_common_ancestor(
     }
 }
 
-pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
-    log::init();
+pub async fn sync_beacon_states(
+    db_pool: &PgPool,
+    beacon_node: &BeaconNodeHttp,
+    last_synced: &Arc<Mutex<SystemTime>>,
+) -> Result<()> {
     info!("starting slot-by-slot beacon state sync (v2)");
 
-    let db_pool = db::get_db_pool("sync-beacon-states-v2", 5).await;
-    sqlx::migrate!().run(&db_pool).await.unwrap();
-    let beacon_node = BeaconNodeHttp::new_from_env();
-
-    info!("performing startup validation and potential rollback to determine sync start slot.");
-    let mut next_slot_to_process = rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;
+    let mut next_slot_to_process = rollback_to_last_common_ancestor(db_pool, beacon_node).await?;
     info!(
         "startup validation complete. initial next_slot_to_process: {}",
         next_slot_to_process
@@ -469,7 +468,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
             debug!("attempting to process slot: {}", current_processing_slot);
 
             let db_highest_block_details: Option<(Slot, BlockRoot)> =
-                get_highest_stored_block_in_db(&db_pool).await?;
+                get_highest_stored_block_in_db(db_pool).await?;
 
             let db_parent_block_root_expected: BlockRoot = if current_processing_slot == Slot(0) {
                 GENESIS_PARENT_ROOT.to_string()
@@ -479,7 +478,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                         if *highest_db_slot >= current_processing_slot {
                             warn!(%current_processing_slot, %highest_db_slot, "consistency issue: current slot not ahead of db tip. triggering rollback.");
                             next_slot_to_process =
-                                rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;
+                                rollback_to_last_common_ancestor(db_pool, beacon_node).await?;
                             reorg_triggered_this_cycle = true;
                             break;
                         }
@@ -502,8 +501,8 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                     if on_chain_parent_root == db_parent_block_root_expected {
                         debug!(slot = %current_processing_slot, "parent match. syncing slot.");
                         match sync_slot_with_block(
-                            &db_pool,
-                            &beacon_node,
+                            db_pool,
+                            beacon_node,
                             on_chain_header_for_current_slot,
                             &on_chain_head_header_envelope,
                         )
@@ -511,6 +510,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                         {
                             Ok(_) => {
                                 info!("successfully synced slot: {}", current_processing_slot);
+                                *last_synced.lock().unwrap() = SystemTime::now();
                                 next_slot_to_process = current_processing_slot + 1;
                             }
                             Err(e) => {
@@ -522,7 +522,7 @@ pub async fn sync_beacon_states_slot_by_slot() -> Result<()> {
                     } else {
                         warn!(slot = %current_processing_slot, expected_parent = %db_parent_block_root_expected, actual_parent = %on_chain_parent_root, "reorg detected. parent mismatch.");
                         next_slot_to_process =
-                            rollback_to_last_common_ancestor(&db_pool, &beacon_node).await?;
+                            rollback_to_last_common_ancestor(db_pool, beacon_node).await?;
                         reorg_triggered_this_cycle = true;
                         break;
                     }

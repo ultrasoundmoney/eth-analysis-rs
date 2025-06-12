@@ -144,6 +144,7 @@ async fn handle_messages(
     }
 }
 
+#[derive(Clone)]
 pub struct ExecutionNode {
     id_pool: Arc<Mutex<IdPool>>,
     message_rx_map: Arc<Mutex<MessageHandlers>>,

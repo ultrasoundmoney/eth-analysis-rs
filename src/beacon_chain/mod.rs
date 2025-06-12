@@ -54,7 +54,7 @@ pub use states::store_state;
 pub use store::{BeaconStore, BeaconStorePostgres};
 
 pub use sync::rollback_slots;
-pub use sync::sync_beacon_states_slot_by_slot;
+pub use sync::sync_beacon_states;
 
 pub use units::slot_from_string;
 pub use units::Slot;
