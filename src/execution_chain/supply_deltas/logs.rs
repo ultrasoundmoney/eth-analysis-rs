@@ -25,7 +25,7 @@ pub async fn write_deltas_log() {
     info!("writing supply delta log {timestamp}");
 
     let execution_node = ExecutionNode::connect().await;
-    let latest_block = execution_node.get_latest_block().await;
+    let latest_block = execution_node.get_latest_block().await.unwrap();
 
     let mut supply_deltas_stream = supply_deltas::stream_supply_deltas_from(latest_block.number);
 

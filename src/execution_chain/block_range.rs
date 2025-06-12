@@ -161,8 +161,8 @@ mod tests {
             Some(number.to_string())
         }
 
-        async fn last(&self) -> ExecutionNodeBlock {
-            ExecutionNodeBlock {
+        async fn last(&self) -> anyhow::Result<Option<ExecutionNodeBlock>> {
+            Ok(Some(ExecutionNodeBlock {
                 base_fee_per_gas: 0,
                 difficulty: 0,
                 gas_used: 0,
@@ -174,7 +174,7 @@ mod tests {
                 transactions: vec![],
                 blob_gas_used: None,
                 excess_blob_gas: None,
-            }
+            }))
         }
     }
 

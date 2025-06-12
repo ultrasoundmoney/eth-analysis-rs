@@ -6,27 +6,77 @@
 //! code, adding more tests, and improving designs. This side should slowly take over more
 //! responsibilities.
 
-use futures::{Stream, StreamExt};
-use sqlx::PgPool;
+use sqlx::{PgExecutor, PgPool};
 use std::{
-    collections::VecDeque,
-    iter::Iterator,
     sync::{Arc, Mutex},
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 use tracing::{debug, info, warn};
 
 use crate::{
     beacon_chain::{IssuanceStore, IssuanceStorePostgres},
     burn_rates, burn_sums, eth_supply,
-    execution_chain::{self, base_fees, BlockStorePostgres, ExecutionNode},
+    execution_chain::{
+        self, base_fees, BlockStorePostgres, ExecutionNode, ExecutionNodeBlock,
+        LONDON_HARD_FORK_BLOCK_NUMBER,
+    },
     gauges,
     performance::TimedExt,
     units::EthNewtype,
     usd_price::{self, EthPriceStore, EthPriceStorePostgres},
 };
 
-use super::{BlockNumber, BlockStore, LONDON_HARD_FORK_BLOCK_HASH};
+use anyhow::{Context, Result};
+
+use super::{BlockNumber, BlockStore};
+
+pub const LONDON_HARD_FORK_BLOCK_PARENT_HASH: &str =
+    "0x3de6bb3849a138e6ab0b83a3a00dc7433f1e83f7fd488e4bba78f2fe2631a633";
+
+pub const EXECUTION_BLOCK_NUMBER_AUG_1ST: BlockNumber = 15253306;
+
+async fn rollback_to_common_ancestor(
+    db_pool: &PgPool,
+    execution_node: &ExecutionNode,
+    block_store: &impl BlockStore,
+) -> Result<BlockNumber> {
+    let mut candidate_number = match block_store.last().await? {
+        Some(block) => block.number,
+        None => {
+            info!("no blocks in db, starting from london hard fork block");
+            return Ok(LONDON_HARD_FORK_BLOCK_NUMBER);
+        }
+    };
+
+    info!(
+        "checking for common ancestor with node, starting from block {}",
+        candidate_number
+    );
+
+    loop {
+        let on_chain_block = execution_node.get_block_by_number(&candidate_number).await;
+        let stored_hash = block_store.hash_from_number(&candidate_number).await;
+
+        let on_chain_hash = on_chain_block.as_ref().map(|b| &b.hash);
+
+        if on_chain_hash == stored_hash.as_ref() && stored_hash.is_some() {
+            info!("found common ancestor at {}", candidate_number);
+            let next_block_to_sync = candidate_number + 1;
+            rollback_numbers(db_pool, &next_block_to_sync).await;
+            return Ok(next_block_to_sync);
+        }
+
+        if stored_hash.is_some() {
+            warn!(
+                "mismatch or missing on-chain block for block {}, rolling back",
+                candidate_number
+            );
+            rollback_numbers(db_pool, &candidate_number).await;
+        }
+
+        candidate_number -= 1;
+    }
+}
 
 async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber) {
     debug!("rolling back data based on numbers gte {greater_than_or_equal}");
@@ -39,203 +89,173 @@ async fn rollback_numbers(db_pool: &PgPool, greater_than_or_equal: &BlockNumber)
     transaction.commit().await.unwrap();
 }
 
-async fn sync_by_hash(
-    issuance_store: &impl IssuanceStore,
-    eth_price_store: &impl EthPriceStore,
-    execution_node: &ExecutionNode,
+async fn sync_block(
     db_pool: &PgPool,
-    hash: &str,
-) {
-    let block = execution_node
-        .get_block_by_hash(hash)
-        .await
-        // Between the time we received the head event and requested a header for the given
-        // block_root the block may have disappeared. Right now we panic, we could do better.
-        .expect("block not to disappear between deciding to add it and adding it");
+    eth_price_store: &impl EthPriceStore,
+    block: &ExecutionNodeBlock,
+) -> Result<()> {
+    debug!(block_hash = %block.hash, "syncing block");
 
     let eth_price = eth_price_store
-        .get_eth_price_by_block(&block)
+        .get_eth_price_by_block(block)
         .timed("get_eth_price_by_block")
         .await
-        .expect("eth price close to block to be available");
+        .context("eth price close to block to be available")?;
 
-    execution_chain::store_block(db_pool, &block, eth_price)
+    execution_chain::store_block(db_pool, block, eth_price)
         .timed("store_block")
         .await;
 
-    // Some computations can be skipped, others should be ran, and rolled back for every change in
-    // the chain of blocks we've assembled. These are the ones that are skippable, and so skipped
-    // until we're in-sync with the chain again.
-    let is_synced = execution_node.get_latest_block().await.hash == hash;
-    if is_synced {
-        debug!("we're synced, running on_new_head for skippables");
-        base_fees::on_new_block(db_pool, issuance_store, &block)
-            .timed("base_fees::on_new_block")
-            .await;
-        let burn_sums_envelope = burn_sums::on_new_block(db_pool, &block)
-            .timed("burn_sums::on_new_block")
-            .await;
-        let eth_supply: EthNewtype = eth_supply::last_eth_supply(db_pool)
-            .timed("last_eth_supply")
-            .await
-            .into();
-        burn_rates::on_new_block(db_pool, &burn_sums_envelope)
-            .timed("burn_rates::on_new_block")
-            .await;
-        gauges::on_new_block(
-            db_pool,
-            eth_price_store,
-            issuance_store,
-            &block,
-            &burn_sums_envelope,
-            &eth_supply,
-        )
-        .timed("gauges::on_new_block")
-        .await
-        .unwrap_or_else(|err| warn!("gauges::on_new_block failed: {}", err));
-        usd_price::on_new_block(db_pool, eth_price_store, &block)
-            .timed("usd_price::on_new_block")
-            .await;
-    } else {
-        debug!("not synced, skipping skippables");
-    }
+    Ok(())
 }
 
-async fn find_last_matching_block_number(
-    execution_node: &ExecutionNode,
-    block_store: &BlockStorePostgres,
-    starting_candidate: BlockNumber,
-) -> BlockNumber {
-    let mut current_candidate_number = starting_candidate;
-    loop {
-        let on_chain_block = execution_node
-            .get_block_by_number(&current_candidate_number)
-            .await
-            .unwrap();
-        let current_stored_hash = block_store
-            .hash_from_number(&current_candidate_number)
-            .await
-            .unwrap();
-
-        if current_stored_hash == on_chain_block.hash {
-            break;
-        }
-
-        current_candidate_number -= 1;
-    }
-    current_candidate_number
+async fn run_skippable_calculations(
+    db_pool: &PgPool,
+    issuance_store: &impl IssuanceStore,
+    eth_price_store: &impl EthPriceStore,
+    block: &ExecutionNodeBlock,
+) -> Result<()> {
+    base_fees::on_new_block(db_pool, issuance_store, block).await;
+    let burn_sums_envelope = burn_sums::on_new_block(db_pool, block).await;
+    let eth_supply: EthNewtype = eth_supply::last_eth_supply(db_pool).await.into();
+    burn_rates::on_new_block(db_pool, &burn_sums_envelope).await;
+    gauges::on_new_block(
+        db_pool,
+        eth_price_store,
+        issuance_store,
+        block,
+        &burn_sums_envelope,
+        &eth_supply,
+    )
+    .await
+    .unwrap_or_else(|err| warn!("gauges::on_new_block failed: {}", err));
+    usd_price::on_new_block(db_pool, eth_price_store, block).await;
+    Ok(())
 }
 
-async fn estimate_blocks_remaining(
-    block_store: &impl BlockStore,
-    execution_node: &ExecutionNode,
-) -> i32 {
-    let last_on_chain = execution_node.get_latest_block().await;
-    let last_stored = block_store.last().await;
-    last_on_chain.number - last_stored.number
+async fn get_highest_stored_beacon_block_hash(
+    executor: impl PgExecutor<'_>,
+) -> Result<Option<String>> {
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            bb.block_hash
+        FROM beacon_blocks bb
+        ORDER BY bb.slot DESC
+        LIMIT 1
+        "#
+    )
+    .fetch_optional(executor)
+    .await?;
+
+    Ok(row.and_then(|r| r.block_hash))
 }
-
-pub const EXECUTION_BLOCK_NUMBER_AUG_1ST: BlockNumber = 15253306;
-
-async fn stream_heads_from_last(db: &PgPool) -> impl Stream<Item = BlockNumber> {
-    let next_block_to_sync = execution_chain::get_last_block_number(db)
-        .await
-        .map_or(EXECUTION_BLOCK_NUMBER_AUG_1ST, |number| number + 1);
-    execution_chain::stream_heads_from(next_block_to_sync).await
-}
-
-type HeadsQueue = VecDeque<BlockNumber>;
 
 pub async fn sync_blocks(
     db_pool: &PgPool,
     execution_node: &ExecutionNode,
     last_synced: &Arc<Mutex<SystemTime>>,
-) {
+) -> Result<()> {
     info!("syncing execution blocks");
 
     let issuance_store = IssuanceStorePostgres::new(db_pool.clone());
     let eth_price_store = EthPriceStorePostgres::new(db_pool.clone());
     let block_store = BlockStorePostgres::new(db_pool.clone());
-    let mut heads_stream = stream_heads_from_last(db_pool).await;
-    let mut heads_queue: HeadsQueue = VecDeque::new();
 
-    let blocks_remaining_on_start = estimate_blocks_remaining(&block_store, execution_node)
-        .await
-        .try_into()
-        .unwrap();
-    debug!("blocks remaining on start: {}", blocks_remaining_on_start);
-    let mut progress = pit_wall::Progress::new("sync-execution-blocks", blocks_remaining_on_start);
+    let mut next_block_to_sync =
+        rollback_to_common_ancestor(db_pool, execution_node, &block_store).await?;
 
-    while let Some(head_block_number) = heads_stream.next().await {
-        heads_queue.push_back(head_block_number);
+    info!(%next_block_to_sync, "starting execution block sync");
 
-        // The heads queue allows us to walk backwards for rollbacks, then forwards to sync what we
-        // dropped in the loop below, and then break to continue where we left off in the outer
-        // loop, the heads stream.
-        while let Some(next_block_number) = heads_queue.pop_front() {
-            let next_block = execution_node
-                .get_block_by_number(&next_block_number)
-                .await
-                .expect("expect chain to never get shorter");
+    loop {
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
-            debug!(number = next_block.number, "syncing next block from queue");
+        let highest_beacon_block_opt = get_highest_stored_beacon_block_hash(db_pool).await?;
+        if highest_beacon_block_opt.is_none() {
+            warn!("no beacon blocks in db, skipping sync");
+            continue;
+        }
+        let block_hash = highest_beacon_block_opt.unwrap();
 
-            // Either we can add a block, or we need to roll back first. We can add a block when the
-            // last stored block matches the one on-chain, and nothing is stored for the current block
-            // number. If either condition fails, we need to roll back first, and then sync to the
-            // current head.
-            let last_stored_block = block_store.last().await;
-            let last_matches = if next_block.hash == LONDON_HARD_FORK_BLOCK_HASH {
-                true
-            } else {
-                last_stored_block.hash == next_block.parent_hash
-            };
-            let current_number_is_free = !block_store.number_exists(&next_block_number).await;
+        debug!(%block_hash, "got highest beacon block hash, using as sync target");
 
-            if last_matches && current_number_is_free {
-                // Add to the chain.
-                sync_by_hash(
-                    &issuance_store,
-                    &eth_price_store,
-                    execution_node,
-                    db_pool,
-                    &next_block.hash,
-                )
-                .timed("sync_by_hash")
-                .await;
-                *last_synced.lock().unwrap() = SystemTime::now();
-            } else {
-                warn!(
-                    number = next_block.number,
-                    forks_head = !current_number_is_free,
-                    parent_mismatch = !last_matches,
-                    "next block is not the next block in our copy of the chain, rolling back"
-                );
+        let target_block = execution_node
+            .get_block_by_hash(&block_hash)
+            .await
+            .with_context(|| "highest beacon block hash not found on execution node")?;
+        let target_block_number = target_block.number;
 
-                // Roll back until we're following the canonical chain again, queue all rolled
-                // back blocks.
-                let last_matching_block_number = find_last_matching_block_number(
-                    execution_node,
-                    &block_store,
-                    last_stored_block.number - 1,
-                )
-                .await;
-
-                debug!(last_matching_block_number, "rolling back to block number");
-
-                let first_invalid_block_number = last_matching_block_number + 1;
-
-                // Roll back
-                rollback_numbers(db_pool, &first_invalid_block_number).await;
-
-                // Requeue
-                for block_number in (first_invalid_block_number..=next_block.number).rev() {
-                    debug!(block_number, "requeueing");
-                    heads_queue.push_front(block_number);
-                }
-            }
+        if next_block_to_sync > target_block_number {
+            debug!("already synced to target block, waiting");
+            continue;
         }
 
-        progress.inc_work_done();
+        debug!(%next_block_to_sync, %target_block_number, "syncing blocks");
+
+        while next_block_to_sync <= target_block_number {
+            let next_on_chain_block = execution_node
+                .get_block_by_number(&next_block_to_sync)
+                .await
+                .with_context(|| {
+                    format!("block {} not found on execution node", next_block_to_sync)
+                })?;
+
+            let parent_matches = match block_store.last().await? {
+                Some(our_last_block) => {
+                    let on_chain_parent_hash = &next_on_chain_block.parent_hash;
+                    let our_last_hash = &our_last_block.hash;
+                    if on_chain_parent_hash != our_last_hash {
+                        warn!(
+                            block_number = next_block_to_sync,
+                            on_chain_parent_hash, our_last_hash, "parent hash mismatch"
+                        );
+                    }
+                    on_chain_parent_hash == our_last_hash
+                }
+                None => next_on_chain_block.parent_hash == LONDON_HARD_FORK_BLOCK_PARENT_HASH,
+            };
+
+            if parent_matches {
+                debug!(
+                    block_number = next_block_to_sync,
+                    "parent hash matches, syncing block"
+                );
+                sync_block(db_pool, &eth_price_store, &next_on_chain_block).await?;
+
+                let is_at_chain_head = next_block_to_sync == target_block_number;
+                let is_hourly_tick = next_block_to_sync % 300 == 0;
+
+                if is_at_chain_head || is_hourly_tick {
+                    if is_at_chain_head {
+                        debug!("at chain head, running skippable calculations");
+                    } else {
+                        info!(
+                            block_number = next_block_to_sync,
+                            "at hourly tick, running skippable calculations"
+                        );
+                    }
+                    run_skippable_calculations(
+                        db_pool,
+                        &issuance_store,
+                        &eth_price_store,
+                        &next_on_chain_block,
+                    )
+                    .await?;
+                }
+
+                *last_synced.lock().unwrap() = SystemTime::now();
+                next_block_to_sync += 1;
+            } else {
+                warn!(
+                    "reorg detected at block {}, rolling back",
+                    next_block_to_sync
+                );
+                next_block_to_sync =
+                    rollback_to_common_ancestor(db_pool, execution_node, &block_store).await?;
+                info!(%next_block_to_sync, "rolled back to block");
+                // Break inner while to re-evaluate target block.
+                break;
+            }
+        }
     }
 }

@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_tungstenite::{
     tokio::{connect_async, TokioAdapter},
     tungstenite::Message,
@@ -208,13 +208,13 @@ impl ExecutionNode {
         }
     }
 
-    pub async fn get_latest_block(&self) -> ExecutionNodeBlock {
+    pub async fn get_latest_block(&self) -> Result<ExecutionNodeBlock> {
         let value = self
             .call("eth_getBlockByNumber", &json!(("latest", false)))
             .await
-            .unwrap();
+            .map_err(|err| anyhow::anyhow!("failed to get latest block: {:?}", err))?;
 
-        serde_json::from_value::<ExecutionNodeBlock>(value).unwrap()
+        serde_json::from_value::<ExecutionNodeBlock>(value).context("failed to parse latest block")
     }
 
     pub async fn get_block_by_hash(&self, hash: &str) -> Option<ExecutionNodeBlock> {

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::join;
@@ -14,7 +15,7 @@ pub trait BlockStore {
     // async fn delete_from_range(&self, block_range: &BlockRange);
     // async fn add(&self, block: &ExecutionNodeBlock, eth_price: f64);
     async fn first_number_after_or_at(&self, timestamp: &DateTime<Utc>) -> Option<BlockNumber>;
-    async fn last(&self) -> ExecutionNodeBlock;
+    async fn last(&self) -> Result<Option<ExecutionNodeBlock>>;
     async fn hash_from_number(&self, block_number: &BlockNumber) -> Option<String>;
 }
 
@@ -123,8 +124,8 @@ impl BlockStore for BlockStorePostgres {
         .map(|row| row.number)
     }
 
-    async fn last(&self) -> ExecutionNodeBlock {
-        sqlx::query!(
+    async fn last(&self) -> Result<Option<ExecutionNodeBlock>> {
+        let row = sqlx::query!(
             r#"
             SELECT
                 base_fee_per_gas,
@@ -145,9 +146,10 @@ impl BlockStore for BlockStorePostgres {
             LIMIT 1
             "#
         )
-        .fetch_one(&self.db_pool)
-        .await
-        .map(|row| ExecutionNodeBlock {
+        .fetch_optional(&self.db_pool)
+        .await?;
+
+        let block = row.map(|row| ExecutionNodeBlock {
             base_fee_per_gas: row.base_fee_per_gas as u64,
             difficulty: row.difficulty as u64,
             gas_used: row.gas_used,
@@ -159,8 +161,9 @@ impl BlockStore for BlockStorePostgres {
             timestamp: row.timestamp,
             total_difficulty: row.total_difficulty.parse().unwrap(),
             transactions: vec![],
-        })
-        .unwrap()
+        });
+
+        Ok(block)
     }
 
     async fn hash_from_number(&self, block_number: &BlockNumber) -> Option<String> {
@@ -252,7 +255,7 @@ mod tests {
 
         block_store.add(&test_block, 0.0).await;
 
-        let last_block = block_store.last().await;
+        let last_block = block_store.last().await.unwrap().unwrap();
 
         assert_eq!(last_block, test_block);
     }

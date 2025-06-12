@@ -180,7 +180,7 @@ pub async fn stream_heads_from(gte_slot: BlockNumber) -> impl Stream<Item = Bloc
     debug!(from = gte_slot, "streaming heads");
 
     let execution_node = ExecutionNode::connect().await;
-    let last_block_on_start = execution_node.get_latest_block().await;
+    let last_block_on_start = execution_node.get_latest_block().await.unwrap();
     debug!(
         block_number = last_block_on_start.number,
         "last block on chain",
