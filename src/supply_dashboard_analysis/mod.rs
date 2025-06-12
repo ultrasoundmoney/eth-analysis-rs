@@ -8,7 +8,7 @@ use tracing::warn;
 
 use crate::{
     caching::{self, CacheKey},
-    eth_supply::{self, SupplyChanges, SupplyPartsStore},
+    eth_supply::{self, SupplyPartsStore},
     performance::TimedExt,
 };
 
@@ -52,7 +52,6 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
         eth_supply::get_supply_over_time(db_pool, limit_slot, supply_parts.block_number())
             .timed("get-supply-over-time")
             .await?;
-    let supply_changes: SupplyChanges = (&supply_over_time).into();
 
     // let supply_dashboard_analysis = SupplyDashboardAnalysis {
     //     supply_parts: supply_parts.clone(),
@@ -77,7 +76,6 @@ pub async fn update_cache(db_pool: &PgPool) -> Result<()> {
     join!(
         caching::update_and_publish(db_pool, &CacheKey::SupplyParts, supply_parts),
         caching::update_and_publish(db_pool, &CacheKey::SupplyOverTime, supply_over_time),
-        caching::update_and_publish(db_pool, &CacheKey::SupplyChanges, &supply_changes)
     );
 
     Ok(())

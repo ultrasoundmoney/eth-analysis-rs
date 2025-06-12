@@ -161,12 +161,6 @@ pub async fn start_server() {
             }),
         )
         .route(
-            "/api/v2/fees/supply-changes",
-            get(|state: StateExtension| async move {
-                cached_get(state, &CacheKey::SupplyChanges).await
-            }),
-        )
-        .route(
             "/api/v2/fees/supply-dashboard-analysis",
             get(|state: StateExtension| async move {
                 cached_get(state, &CacheKey::SupplyDashboardAnalysis).await
