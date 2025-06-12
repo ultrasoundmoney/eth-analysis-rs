@@ -77,7 +77,7 @@ else
         set +e # Allow hub to fail without exiting the main script immediately
         ci_status_val=""
         retries=0
-        max_retries=10 # Approx 160 seconds + initial 6s wait
+        max_retries=30 # Approx 8 minutes (16s * 30) + 6s initial wait
 
         while [[ $retries -lt $max_retries ]]; do
             ci_status_val=$(hub ci-status "$CURRENT_COMMIT_FULL" 2>&1) # Capture stderr too
