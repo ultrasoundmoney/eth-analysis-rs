@@ -82,21 +82,21 @@ else
         while [[ $retries -lt $max_retries ]]; do
             ci_status_val=$(hub ci-status "$CURRENT_COMMIT_FULL" 2>&1) # Capture stderr too
             if [[ $ci_status_val == "pending" ]]; then
-                echo "-> ci status: pending, trying again in 16 seconds (attempt $((retries + 1))/$max_retries)"
+                echo "-> ci status: pending, trying again in 16 seconds (attempt $((retries + 1))/$max_retries)" >&2
                 sleep 16
                 retries=$((retries + 1))
             elif [[ $ci_status_val == "success" || $ci_status_val == "failure" || $ci_status_val == "error" || $ci_status_val == "no status" ]]; then
                 break
             else
                 # Handle unexpected output from hub ci-status, could be an error message
-                echo "-> unexpected ci status output: $ci_status_val. assuming 'no status' and will ask to continue."
+                echo "-> unexpected ci status output: $ci_status_val. assuming 'no status' and will ask to continue." >&2
                 ci_status_val="no status" # Treat as no status
                 break
             fi
         done
 
         if [[ $retries -eq $max_retries && $ci_status_val == "pending" ]]; then
-            echo "-> ci status still pending after multiple retries."
+            echo "-> ci status still pending after multiple retries." >&2
             ci_status_val="no status" # Treat as no status if timeout
         fi
         
