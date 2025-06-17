@@ -11,23 +11,18 @@ use super::EthPrice;
 
 /// Parses a fixed array of len 5 into a `BybitCandle`
 #[derive(Debug, Deserialize)]
-struct BybitCandle {
-    timestamp: String,
-    open: String,
-    #[allow(unused)]
-    high: String,
-    #[allow(unused)]
-    low: String,
-    #[allow(unused)]
-    close: String,
-}
+struct BybitCandle(
+    String,                  // timestamp
+    String,                  // open
+    #[allow(unused)] String, // high
+    #[allow(unused)] String, // low
+    #[allow(unused)] String, // close
+);
 
 #[derive(Debug, Deserialize)]
 struct BybitPriceResult {
     #[allow(unused)]
     symbol: String,
-    #[allow(unused)]
-    category: String,
     list: Vec<BybitCandle>,
 }
 
@@ -42,6 +37,37 @@ struct BybitPriceResponse {
 }
 
 const BYBIT_API: &str = "https://api.bybit.com";
+
+fn parse_eth_price_response(text_body: &str) -> Result<Vec<EthPrice>> {
+    let body = serde_json::from_str::<BybitPriceResponse>(text_body).with_context(|| {
+        format!(
+            "failed to decode bybit response body, body: '{}'",
+            text_body
+        )
+    })?;
+
+    let candles: Vec<EthPrice> = body
+        .result
+        .list
+        .iter()
+        .map(|c| {
+            let timestamp_millis =
+                c.0.parse::<i64>()
+                    .expect("expect bybit candles to contain integer timestamps");
+            let timestamp = Utc
+                .timestamp_millis_opt(timestamp_millis)
+                .earliest()
+                .expect("expect bybit candles to contain millisecond timestamps");
+            let usd =
+                c.1.parse::<f64>()
+                    .expect("expect bybit candles to contain float usd prices");
+            EthPrice { timestamp, usd }
+        })
+        .rev() // Reverse so we get timestamps in ascending order
+        .collect();
+
+    Ok(candles)
+}
 
 // 1min candles of index price made up of of Kraken, Coinbase, Bitstamp & Bitfinex spot price
 async fn get_eth_candles(
@@ -76,37 +102,11 @@ async fn get_eth_candles(
 pub async fn send_eth_price_request(client: &reqwest::Client, url: &str) -> Result<Vec<EthPrice>> {
     debug!("sending request to {}", url);
 
-    let body = client
-        .get(url)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<BybitPriceResponse>()
-        .await?;
+    let response = client.get(url).send().await?.error_for_status()?;
 
-    let candles: Vec<EthPrice> = body
-        .result
-        .list
-        .iter()
-        .map(|c| {
-            let timestamp_millis = c
-                .timestamp
-                .parse::<i64>()
-                .expect("expect bybit candles to contain integer timestamps");
-            let timestamp = Utc
-                .timestamp_millis_opt(timestamp_millis)
-                .earliest()
-                .expect("expect bybit candles to contain millisecond timestamps");
-            let usd = c
-                .open
-                .parse::<f64>()
-                .expect("expect bybit candles to contain float usd prices");
-            EthPrice { timestamp, usd }
-        })
-        .rev() // Reverse so we get timestamps in ascending order
-        .collect();
+    let text_body = response.text().await?;
 
-    Ok(candles)
+    parse_eth_price_response(&text_body)
 }
 
 // Return current 1min candle open price
@@ -180,6 +180,35 @@ mod tests {
     use chrono::DurationRound;
 
     use super::*;
+
+    #[test]
+    fn parse_bybit_response_test() {
+        let response_body = r#"{
+            "retCode": 0,
+            "retMsg": "OK",
+            "result": {
+                "symbol": "ETHUSD",
+                "list": [
+                    [
+                        "1669852800000",
+                        "1290.5",
+                        "1290.6",
+                        "1290.4",
+                        "1290.5"
+                    ]
+                ]
+            },
+            "retExtInfo": {},
+            "time": 1669852800001
+        }"#;
+
+        let candles = parse_eth_price_response(response_body).unwrap();
+        let expected = EthPrice {
+            timestamp: Utc.timestamp_millis_opt(1669852800000).earliest().unwrap(),
+            usd: 1290.5,
+        };
+        assert_eq!(candles[0], expected);
+    }
 
     #[ignore = "failing in CI, probably temporary, try re-enabling"]
     #[tokio::test]
