@@ -31,7 +31,6 @@ pub async fn get_db_connection(name: &str) -> sqlx::PgConnection {
 
 #[cfg(test)]
 pub mod tests {
-    use async_trait::async_trait;
     use nanoid::nanoid;
     use sqlx::postgres::PgPoolOptions;
     use test_context::AsyncTestContext;
@@ -55,7 +54,6 @@ pub mod tests {
         name: String,
     }
 
-    #[async_trait]
     impl AsyncTestContext for TestDb {
         async fn setup() -> TestDb {
             TestDb::new().await
