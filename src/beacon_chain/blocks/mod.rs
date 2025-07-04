@@ -91,7 +91,7 @@ pub async fn get_is_hash_known(
     .fetch_one(executor)
     .await
     .map(|row| row.get::<bool, _>("exists"))
-    .with_context(|| format!("failed to check if block root is known: {}", block_root))
+    .with_context(|| format!("failed to check if block root is known: {block_root}"))
 }
 
 /// Gets the highest slot from the beacon_blocks table.
@@ -246,7 +246,7 @@ pub async fn get_block_by_slot(
     )
     .fetch_optional(executor)
     .await
-    .context(format!("failed to get block for slot {}", slot))?;
+    .context(format!("failed to get block for slot {slot}"))?;
 
     Ok(row.map(|row| row.into()))
 }

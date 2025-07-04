@@ -67,7 +67,7 @@ pub async fn get_state_root_by_slot(
     )
     .fetch_optional(executor)
     .await
-    .context(format!("failed to get state root for slot {}", slot))?;
+    .context(format!("failed to get state root for slot {slot}"))?;
 
     Ok(row.map(|row| row.state_root))
 }

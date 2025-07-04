@@ -277,8 +277,7 @@ async fn sync_delta(
                 .await
                 .unwrap_or_else(|e: anyhow::Error| {
                     panic!(
-                        "failed to fetch supply delta for block {}: {:#?}. halting sync.",
-                        supply_delta_number, e
+                        "failed to fetch supply delta for block {supply_delta_number}: {e:#?}. halting sync."
                     )
                 })
         }

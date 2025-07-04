@@ -144,7 +144,7 @@ async fn main() -> Result<()> {
                     );
                     writer.write_record(&[
                         current_slot_val.to_string(),
-                        format!("http_error_{}", status).to_string(),
+                        format!("http_error_{status}").to_string(),
                     ])?;
                 }
             }

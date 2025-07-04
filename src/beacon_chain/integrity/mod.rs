@@ -59,8 +59,7 @@ pub async fn check_beacon_block_chain_integrity<BN: BeaconNode + Send + Sync + ?
         .fetch_one(executor)
         .await
         .context(format!(
-            "failed to check for presence of start_slot {} in db",
-            start_slot
+            "failed to check for presence of start_slot {start_slot} in db"
         ))?;
 
         if db_has_block != Some(true) {
@@ -94,8 +93,7 @@ pub async fn check_beacon_block_chain_integrity<BN: BeaconNode + Send + Sync + ?
         .fetch_all(executor)
         .await
         .context(format!(
-            "failed to fetch block chunk with start_slot_filter {} and offset {}",
-            start_slot, offset
+            "failed to fetch block chunk with start_slot_filter {start_slot} and offset {offset}"
         ))?;
 
         if chunk.is_empty() {

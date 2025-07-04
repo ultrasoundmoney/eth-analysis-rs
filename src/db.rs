@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::env::ENV_CONFIG;
 
 pub async fn get_db_pool(name: &str, max_connections: u32) -> PgPool {
-    let name_query = format!("SET application_name = '{}';", name);
+    let name_query = format!("SET application_name = '{name}';");
     PgPoolOptions::new()
         .after_connect(move |conn, _meta| {
             let name_query = name_query.clone();
@@ -24,7 +24,7 @@ pub async fn get_db_connection(name: &str) -> sqlx::PgConnection {
     let mut conn = PgConnection::connect(ENV_CONFIG.db_url.as_str())
         .await
         .expect("expect DB to be available to connect");
-    let query = format!("SET application_name = '{}'", name);
+    let query = format!("SET application_name = '{name}'");
     sqlx::query(&query).execute(&mut conn).await.unwrap();
     conn
 }

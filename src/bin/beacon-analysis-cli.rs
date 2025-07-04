@@ -82,10 +82,10 @@ impl FromStr for SlotRange {
         }
         let start = parts[0]
             .parse::<i32>()
-            .map_err(|e| format!("invalid start slot: {}", e))?;
+            .map_err(|e| format!("invalid start slot: {e}"))?;
         let end = parts[1]
             .parse::<i32>()
-            .map_err(|e| format!("invalid end slot: {}", e))?;
+            .map_err(|e| format!("invalid end slot: {e}"))?;
         if start >= end {
             return Err("start slot must be less than end slot".to_string());
         }
@@ -277,7 +277,7 @@ async fn run_cli(pool: PgPool, commands: Commands) {
 
             match check_beacon_block_chain_integrity(&pool, &beacon_node, start_slot_opt).await {
                 Ok(()) => info!("beacon block chain integrity check successful"),
-                Err(e) => eprintln!("error during beacon block chain integrity check: {}", e),
+                Err(e) => eprintln!("error during beacon block chain integrity check: {e}"),
             }
         }
         Commands::BackfillMissingBeaconBlocks { hardfork } => {
@@ -302,18 +302,18 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                             info!(%slot, pending_deposits_sum_gwei = %sum, "successfully fetched pending deposits sum");
                         }
                         Ok(None) => {
-                            eprintln!("error: beacon node reported no pending deposits sum for state_root {} (slot {})", state_root, slot);
+                            eprintln!("error: beacon node reported no pending deposits sum for state_root {state_root} (slot {slot})");
                         }
                         Err(e) => {
-                            eprintln!("error: failed to get pending deposits sum for state_root {} (slot {}): {}", state_root, slot, e);
+                            eprintln!("error: failed to get pending deposits sum for state_root {state_root} (slot {slot}): {e}");
                         }
                     }
                 }
                 Ok(None) => {
-                    eprintln!("error: block header not found for slot {}", slot);
+                    eprintln!("error: block header not found for slot {slot}");
                 }
                 Err(e) => {
-                    eprintln!("error: failed to get block header for slot {}: {}", slot, e);
+                    eprintln!("error: failed to get block header for slot {slot}: {e}");
                 }
             }
         }
@@ -336,21 +336,21 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                             Some(sum)
                         }
                         Ok(None) => {
-                            eprintln!("error: beacon node reported no pending deposits sum for state_root {} (slot {})", state_root, slot);
+                            eprintln!("error: beacon node reported no pending deposits sum for state_root {state_root} (slot {slot})");
                             None
                         }
                         Err(e) => {
-                            eprintln!("error: failed to get pending deposits sum for state_root {} (slot {}): {}", state_root, slot, e);
+                            eprintln!("error: failed to get pending deposits sum for state_root {state_root} (slot {slot}): {e}");
                             None
                         }
                     }
                 }
                 Ok(None) => {
-                    eprintln!("error: block header not found for slot {}", slot);
+                    eprintln!("error: block header not found for slot {slot}");
                     None
                 }
                 Err(e) => {
-                    eprintln!("error: failed to get block header for slot {}: {}", slot, e);
+                    eprintln!("error: failed to get block header for slot {slot}: {e}");
                     None
                 }
             };
@@ -404,8 +404,7 @@ async fn run_cli(pool: PgPool, commands: Commands) {
                 }
                 Err(e) => {
                     eprintln!(
-                        "error: failed to fetch aggregated pending deposits sum for slot {}: {}",
-                        slot, e
+                        "error: failed to fetch aggregated pending deposits sum for slot {slot}: {e}"
                     );
                 }
             }

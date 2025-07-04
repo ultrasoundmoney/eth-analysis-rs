@@ -535,8 +535,8 @@ mod tests {
         for i in 1..(MAX_CACHED_DELTAS + 5) {
             let supply_delta_entry = SupplyDelta {
                 block_number: i as BlockNumber,
-                block_hash: format!("0x{}", i),
-                parent_hash: format!("0xp{}", i),
+                block_hash: format!("0x{i}"),
+                parent_hash: format!("0xp{i}"),
                 supply_delta: i as i128,
                 self_destruct: 0,
                 fee_burn: 0,

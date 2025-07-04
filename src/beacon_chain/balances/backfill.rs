@@ -186,7 +186,7 @@ pub async fn backfill_balances(
                         }
                         Err(e) => {
                             warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: failed to get validator balances by slot: {}", e.to_string());
-                            BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting balances for slot {}: {}", slot_obj, e))
+                            BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting balances for slot {slot_obj}: {e}"))
                         }
                     }
                 }
@@ -196,7 +196,7 @@ pub async fn backfill_balances(
                 }
                 Err(e) => {
                     warn!(slot = %slot_obj, "backfill: failed to get header: {}. skipping slot.", e.to_string());
-                    BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting header for slot {}: {}", slot_obj, e))
+                    BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting header for slot {slot_obj}: {e}"))
                 }
             }
         }

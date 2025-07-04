@@ -38,11 +38,11 @@ impl From<Slot> for BlockId {
 impl Display for BlockId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::BlockRoot(block_root) => write!(f, "BlockId(BlockRoot({}))", block_root),
+            Self::BlockRoot(block_root) => write!(f, "BlockId(BlockRoot({block_root}))"),
             Self::Finalized => write!(f, "BlockId(Finalized)"),
             Self::Genesis => write!(f, "BlockId(Genesis)"),
             Self::Head => write!(f, "BlockId(Head)"),
-            Self::Slot(slot) => write!(f, "BlockId(Slot{})", slot),
+            Self::Slot(slot) => write!(f, "BlockId(Slot{slot})"),
         }
     }
 }

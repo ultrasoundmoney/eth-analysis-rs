@@ -197,7 +197,7 @@ pub async fn sync_blocks(
                 .get_block_by_number(&next_block_to_sync)
                 .await
                 .with_context(|| {
-                    format!("block {} not found on execution node", next_block_to_sync)
+                    format!("block {next_block_to_sync} not found on execution node")
                 })?;
 
             let parent_matches = match block_store.last().await? {

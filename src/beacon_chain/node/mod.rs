@@ -32,7 +32,7 @@ fn make_blocks_url(block_id: &BlockId) -> String {
         .as_ref()
         .expect("BEACON_URL is required in env to fetch blocks");
 
-    format!("{beacon_url}/eth/v2/beacon/blocks/{}", block_id_text)
+    format!("{beacon_url}/eth/v2/beacon/blocks/{block_id_text}")
 }
 
 fn make_header_by_block_id_url(block_id: &BlockId) -> String {
@@ -47,7 +47,7 @@ fn make_header_by_block_id_url(block_id: &BlockId) -> String {
         .beacon_url
         .as_ref()
         .expect("BEACON_URL is required in env to fetch headers");
-    format!("{beacon_url}/eth/v1/beacon/headers/{}", block_id_text)
+    format!("{beacon_url}/eth/v1/beacon/headers/{block_id_text}")
 }
 
 #[derive(Clone, Debug)]
@@ -360,8 +360,7 @@ impl BeaconNode for BeaconNodeHttp {
         };
 
         let url = format!(
-            "{}/eth/v1/beacon/states/{}/pending_deposits",
-            beacon_url, state_root
+            "{beacon_url}/eth/v1/beacon/states/{state_root}/pending_deposits"
         );
 
         let res = self.client.get(&url).send().await?;
@@ -434,18 +433,18 @@ pub mod tests {
         // Test decoding for the block
         let block_data_path = "src/beacon_chain/data_samples/block_11678488.json";
         let block_json_str = fs::read_to_string(block_data_path)
-            .unwrap_or_else(|_| panic!("failed to read block data from {}", block_data_path));
+            .unwrap_or_else(|_| panic!("failed to read block data from {block_data_path}"));
 
         serde_json::from_str::<BeaconBlockVersionedEnvelope>(&block_json_str)
-            .unwrap_or_else(|_| panic!("failed to decode block JSON from {}", block_data_path));
+            .unwrap_or_else(|_| panic!("failed to decode block JSON from {block_data_path}"));
 
         // Test decoding for the header
         let header_data_path = "src/beacon_chain/data_samples/header_11678488.json";
         let header_json_str = fs::read_to_string(header_data_path)
-            .unwrap_or_else(|_| panic!("failed to read header data from {}", header_data_path));
+            .unwrap_or_else(|_| panic!("failed to read header data from {header_data_path}"));
 
         serde_json::from_str::<HeaderEnvelope>(&header_json_str)
-            .unwrap_or_else(|_| panic!("failed to decode header JSON from {}", header_data_path));
+            .unwrap_or_else(|_| panic!("failed to decode header JSON from {header_data_path}"));
     }
 
     const SLOT_1229: Slot = Slot(1229);

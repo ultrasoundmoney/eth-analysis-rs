@@ -114,8 +114,7 @@ pub async fn heal_deposit_sums(db_pool: &PgPool, start_slot: Slot) -> Result<()>
                     .await?
                     .with_context(|| {
                         format!(
-                            "failed to get header for slot {} to find block_root for update",
-                            current_slot
+                            "failed to get header for slot {current_slot} to find block_root for update"
                         )
                     })?;
                 let block_root_of_current_block = header.root;

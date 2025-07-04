@@ -50,7 +50,7 @@ pub async fn store_issuance(
     )
     .execute(executor)
     .await
-    .unwrap_or_else(|e| panic!("failed to store issuance with on conflict: {}", e));
+    .unwrap_or_else(|e| panic!("failed to store issuance with on conflict: {e}"));
 }
 
 pub fn calc_issuance(

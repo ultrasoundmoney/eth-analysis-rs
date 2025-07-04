@@ -172,8 +172,7 @@ pub async fn sync_slot_with_block(
         .await
         .with_context(|| {
             format!(
-                "failed to get block by block_root {} (for slot {}) from beacon node",
-                block_root_for_get_block, slot_for_get_block
+                "failed to get block by block_root {block_root_for_get_block} (for slot {slot_for_get_block}) from beacon node"
             )
         })?
         .ok_or_else(|| {

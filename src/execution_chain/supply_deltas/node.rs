@@ -39,15 +39,14 @@ async fn fetch_supply_delta_http(block_number: BlockNumber) -> Result<SupplyDelt
         .timeout(HTTP_TIMEOUT)
         .send()
         .await
-        .context(format!("http get request failed for url: {}", url))?;
+        .context(format!("http get request failed for url: {url}"))?;
 
     let response = response
         .error_for_status()
-        .context(format!("server returned error for url: {}", url))?;
+        .context(format!("server returned error for url: {url}"))?;
 
     let deltas_vec = response.json::<Vec<SupplyDelta>>().await.context(format!(
-        "failed to parse json response (Vec<SupplyDelta>) from url: {}",
-        url
+        "failed to parse json response (Vec<SupplyDelta>) from url: {url}"
     ))?;
 
     match deltas_vec.len().cmp(&1) {

@@ -146,8 +146,7 @@ pub async fn get_balances_by_state_root(
     .fetch_optional(executor)
     .await
     .context(format!(
-        "failed to get balances by state root {}",
-        state_root
+        "failed to get balances by state root {state_root}"
     ))?;
 
     Ok(row.map(|row| {
