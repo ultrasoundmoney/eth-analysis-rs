@@ -359,9 +359,7 @@ impl BeaconNode for BeaconNodeHttp {
             ));
         };
 
-        let url = format!(
-            "{beacon_url}/eth/v1/beacon/states/{state_root}/pending_deposits"
-        );
+        let url = format!("{beacon_url}/eth/v1/beacon/states/{state_root}/pending_deposits");
 
         let res = self.client.get(&url).send().await?;
 

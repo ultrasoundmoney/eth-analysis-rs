@@ -82,9 +82,7 @@ pub async fn heal_eth_prices() {
                 .await;
                 match usd {
                     None => {
-                        panic!(
-                            "no Bybit price available for timestamp: {timestamp_date_time}",
-                        );
+                        panic!("no Bybit price available for timestamp: {timestamp_date_time}",);
                     }
                     Some(usd) => {
                         info!(
