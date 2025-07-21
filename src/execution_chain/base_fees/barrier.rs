@@ -40,7 +40,7 @@ pub fn estimate_barrier_from_weekly_issuance(issuance: GweiNewtype, average_gas_
     issuance.0 as f64 / APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK as f64 / average_gas_used
 }
 
-pub async fn get_barrier(db_pool: &PgPool, issuance_store: &impl IssuanceStore) -> Barrier {
+pub async fn get_barrier(db_pool: &PgPool, issuance_store: &impl IssuanceStore) -> Option<Barrier> {
     debug!("estimating base fee per gas barrier");
 
     let issuance = issuance_store
@@ -50,17 +50,20 @@ pub async fn get_barrier(db_pool: &PgPool, issuance_store: &impl IssuanceStore) 
 
     let average_gas_used = block_store_next::get_average_gas_used_last_week(db_pool)
         .await
-        .unwrap()
         .unwrap();
+    if average_gas_used.is_none() {
+        None
+    } else {
+        let base_fee_barrier =
+            estimate_barrier_from_weekly_issuance(issuance, average_gas_used.unwrap());
+        debug!("base fee per gas (ultra sound) barrier: {base_fee_barrier}");
+        let blob_fee_barrier = estimate_blob_barrier_from_weekly_issuance(issuance);
+        debug!("blob fee per gas (ultra sound) barrier: {blob_fee_barrier}");
 
-    let base_fee_barrier = estimate_barrier_from_weekly_issuance(issuance, average_gas_used);
-    debug!("base fee per gas (ultra sound) barrier: {base_fee_barrier}");
-    let blob_fee_barrier = estimate_blob_barrier_from_weekly_issuance(issuance);
-    debug!("blob fee per gas (ultra sound) barrier: {blob_fee_barrier}");
-
-    Barrier {
-        base_fee_barrier,
-        blob_fee_barrier,
+        Some(Barrier {
+            base_fee_barrier,
+            blob_fee_barrier,
+        })
     }
 }
 
