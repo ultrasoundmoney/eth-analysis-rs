@@ -6,7 +6,7 @@ use tracing::debug;
 use crate::{
     beacon_chain::IssuanceStore,
     caching::{self, CacheKey},
-    execution_chain::{BlockNumber, ExecutionNodeBlock},
+    execution_chain::{block_store_next, BlockNumber, ExecutionNodeBlock},
     performance::TimedExt,
     units::GweiNewtype,
 };
@@ -27,7 +27,6 @@ pub struct BarrierStats {
     timestamp: DateTime<Utc>,
 }
 
-const APPROXIMATE_GAS_USED_PER_BLOCK: u32 = 18_000_000u32;
 const APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK: i32 = 50400;
 const TARGET_BLOB_GAS_PER_BLOCK: i32 = 393216;
 
@@ -37,13 +36,11 @@ pub fn estimate_blob_barrier_from_weekly_issuance(issuance: GweiNewtype) -> f64 
         / TARGET_BLOB_GAS_PER_BLOCK as f64
 }
 
-pub fn estimate_barrier_from_weekly_issuance(issuance: GweiNewtype) -> f64 {
-    issuance.0 as f64
-        / APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK as f64
-        / APPROXIMATE_GAS_USED_PER_BLOCK as f64
+pub fn estimate_barrier_from_weekly_issuance(issuance: GweiNewtype, average_gas_used: f64) -> f64 {
+    issuance.0 as f64 / APPROXIMATE_NUMBER_OF_BLOCKS_PER_WEEK as f64 / average_gas_used
 }
 
-pub async fn get_barrier(issuance_store: &impl IssuanceStore) -> Barrier {
+pub async fn get_barrier(db_pool: &PgPool, issuance_store: &impl IssuanceStore) -> Barrier {
     debug!("estimating base fee per gas barrier");
 
     let issuance = issuance_store
@@ -51,7 +48,12 @@ pub async fn get_barrier(issuance_store: &impl IssuanceStore) -> Barrier {
         .timed("get_last_week_issuance")
         .await;
 
-    let base_fee_barrier = estimate_barrier_from_weekly_issuance(issuance);
+    let average_gas_used = block_store_next::get_average_gas_used_last_week(db_pool)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let base_fee_barrier = estimate_barrier_from_weekly_issuance(issuance, average_gas_used);
     debug!("base fee per gas (ultra sound) barrier: {base_fee_barrier}");
     let blob_fee_barrier = estimate_blob_barrier_from_weekly_issuance(issuance);
     debug!("blob fee per gas (ultra sound) barrier: {blob_fee_barrier}");
@@ -81,7 +83,8 @@ mod tests {
     #[test]
     fn barrier_from_issuance_test() {
         let issuance = GweiNewtype(11241590000000);
-        let barrier = estimate_barrier_from_weekly_issuance(issuance);
+        let average_gas_used = 18_000_000.0;
+        let barrier = estimate_barrier_from_weekly_issuance(issuance, average_gas_used);
         assert_eq!(barrier, 12.391523368606702);
     }
 }

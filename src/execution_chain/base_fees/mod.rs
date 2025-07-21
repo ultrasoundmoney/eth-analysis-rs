@@ -44,7 +44,7 @@ pub async fn on_new_block(
     block: &ExecutionNodeBlock,
 ) {
     let (barrier, ()) = join!(
-        barrier::get_barrier(issuance_store),
+        barrier::get_barrier(db_pool, issuance_store),
         last::update_last_base_fee(db_pool, block).timed("update_last_base_fee"),
     );
 

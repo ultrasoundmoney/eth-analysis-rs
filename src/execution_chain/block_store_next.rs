@@ -4,9 +4,23 @@ use chrono::{DateTime, Utc};
 use futures::join;
 use sqlx::PgPool;
 
-use crate::execution_chain::{BlockNumber, BlockRange, ExecutionNodeBlock};
+use crate::execution_chain::{block_store, BlockNumber, BlockRange, ExecutionNodeBlock};
 
-use super::block_store;
+pub async fn get_average_gas_used_last_week(executor: &PgPool) -> sqlx::Result<Option<f64>> {
+    sqlx::query!(
+        r#"
+        SELECT
+            AVG(gas_used)::float8 as avg
+        FROM
+            blocks_next
+        WHERE
+            timestamp >= NOW() - '7 days'::INTERVAL
+        "#
+    )
+    .fetch_one(executor)
+    .await
+    .map(|row| row.avg)
+}
 
 #[async_trait]
 pub trait BlockStore {
@@ -306,5 +320,67 @@ mod tests {
 
         assert_eq!(start_time, test_block_1.timestamp);
         assert_eq!(end_time, test_block_2.timestamp);
+    }
+
+    #[test_context(TestDb)]
+    #[tokio::test]
+    async fn get_average_gas_used_last_week_test(test_db: &TestDb) {
+        let block_store = BlockStorePostgres::new(test_db.pool.clone());
+        let now = Utc::now();
+
+        // This block is old, and should not be included.
+        let test_block_old = ExecutionNodeBlockBuilder::new("old")
+            .with_timestamp(&(now - chrono::Duration::days(8)))
+            .with_gas_used(10_000_000)
+            .build();
+
+        // These blocks are recent, and should be included.
+        let test_block_1 = ExecutionNodeBlockBuilder::new("1")
+            .with_parent(&test_block_old)
+            .with_timestamp(&(now - chrono::Duration::days(1)))
+            .with_gas_used(15_000_000)
+            .build();
+        let test_block_2 = ExecutionNodeBlockBuilder::new("2")
+            .with_parent(&test_block_1)
+            .with_timestamp(&(now - chrono::Duration::days(2)))
+            .with_gas_used(16_000_000)
+            .build();
+
+        block_store.add(&test_block_old, 0.0).await;
+        block_store.add(&test_block_1, 0.0).await;
+        block_store.add(&test_block_2, 0.0).await;
+
+        let average_gas_used = get_average_gas_used_last_week(&test_db.pool)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(average_gas_used, 15_500_000.0);
+    }
+
+    #[test_context(TestDb)]
+    #[tokio::test]
+    async fn get_average_gas_used_last_week_no_recent_blocks_test(test_db: &TestDb) {
+        let block_store = BlockStorePostgres::new(test_db.pool.clone());
+        let now = Utc::now();
+
+        // This block is old, and should not be included.
+        let test_block_old = ExecutionNodeBlockBuilder::new("old")
+            .with_timestamp(&(now - chrono::Duration::days(8)))
+            .with_gas_used(10_000_000)
+            .build();
+        block_store.add(&test_block_old, 0.0).await;
+
+        let average_gas_used = get_average_gas_used_last_week(&test_db.pool).await.unwrap();
+
+        assert!(average_gas_used.is_none());
+    }
+
+    #[test_context(TestDb)]
+    #[tokio::test]
+    async fn get_average_gas_used_last_week_no_blocks_test(test_db: &TestDb) {
+        let average_gas_used = get_average_gas_used_last_week(&test_db.pool).await.unwrap();
+
+        assert!(average_gas_used.is_none());
     }
 }

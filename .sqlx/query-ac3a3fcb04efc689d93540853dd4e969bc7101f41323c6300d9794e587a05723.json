@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            AVG(gas_used)::float8 as avg\n        FROM\n            blocks_next\n        WHERE\n            timestamp >= NOW() - '7 days'::INTERVAL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "avg",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ac3a3fcb04efc689d93540853dd4e969bc7101f41323c6300d9794e587a05723"
+}
