@@ -145,9 +145,7 @@ pub async fn get_balances_by_state_root(
     )
     .fetch_optional(executor)
     .await
-    .context(format!(
-        "failed to get balances by state root {state_root}"
-    ))?;
+    .context(format!("failed to get balances by state root {state_root}"))?;
 
     Ok(row.map(|row| {
         let gwei_i64: i64 = row.gwei;

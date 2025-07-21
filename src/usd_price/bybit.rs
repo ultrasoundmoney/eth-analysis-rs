@@ -39,11 +39,8 @@ struct BybitPriceResponse {
 const BYBIT_API: &str = "https://api.bybit.com";
 
 fn parse_eth_price_response(text_body: &str) -> Result<Vec<EthPrice>> {
-    let body = serde_json::from_str::<BybitPriceResponse>(text_body).with_context(|| {
-        format!(
-            "failed to decode bybit response body, body: '{text_body}'"
-        )
-    })?;
+    let body = serde_json::from_str::<BybitPriceResponse>(text_body)
+        .with_context(|| format!("failed to decode bybit response body, body: '{text_body}'"))?;
 
     let candles: Vec<EthPrice> = body
         .result
