@@ -51,11 +51,8 @@ pub async fn get_barrier(db_pool: &PgPool, issuance_store: &impl IssuanceStore) 
     let average_gas_used = block_store_next::get_average_gas_used_last_week(db_pool)
         .await
         .unwrap();
-    if average_gas_used.is_none() {
-        None
-    } else {
-        let base_fee_barrier =
-            estimate_barrier_from_weekly_issuance(issuance, average_gas_used.unwrap());
+    if let Some(avg_gas_used) = average_gas_used {
+        let base_fee_barrier = estimate_barrier_from_weekly_issuance(issuance, avg_gas_used);
         debug!("base fee per gas (ultra sound) barrier: {base_fee_barrier}");
         let blob_fee_barrier = estimate_blob_barrier_from_weekly_issuance(issuance);
         debug!("blob fee per gas (ultra sound) barrier: {blob_fee_barrier}");
@@ -64,6 +61,8 @@ pub async fn get_barrier(db_pool: &PgPool, issuance_store: &impl IssuanceStore) 
             base_fee_barrier,
             blob_fee_barrier,
         })
+    } else {
+        None
     }
 }
 

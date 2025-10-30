@@ -32,6 +32,7 @@ pub async fn get_withdrawal_sum_aggregated(
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct BeaconWithdrawalsSum {
     pub slot: Slot,
     pub withdrawals_sum: GweiNewtype,

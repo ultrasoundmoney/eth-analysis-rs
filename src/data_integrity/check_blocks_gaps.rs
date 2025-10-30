@@ -64,7 +64,7 @@ pub async fn check_blocks_gaps() -> Result<()> {
             error!(stored_hash, on_chain.hash, "block mismatch",);
         }
 
-        if progress.work_done % 100 == 0 && progress.work_done != 0 {
+        if progress.work_done.is_multiple_of(100) && progress.work_done != 0 {
             debug!("{}", progress.get_progress_string());
         }
 

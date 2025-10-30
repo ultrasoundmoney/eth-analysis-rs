@@ -88,7 +88,7 @@ pub async fn heal_eth_supply(db_pool: &PgPool, start_slot: Slot) -> Result<()> {
         }
 
         progress.inc_work_done();
-        if progress.work_done % 100 == 0 || progress.work_done == total_slots_to_process {
+        if progress.work_done.is_multiple_of(100) || progress.work_done == total_slots_to_process {
             info!("{}", progress.get_progress_string());
         }
     }

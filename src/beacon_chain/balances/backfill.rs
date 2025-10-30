@@ -241,7 +241,7 @@ pub async fn backfill_balances(
 
         progress.inc_work_done();
         // Log progress periodically or when done.
-        if progress.work_done % 100 == 0 || progress.work_done >= work_todo {
+        if progress.work_done.is_multiple_of(100) || progress.work_done >= work_todo {
             info!("backfill progress: {}", progress.get_progress_string());
         }
     }

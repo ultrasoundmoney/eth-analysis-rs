@@ -124,7 +124,7 @@ pub async fn backfill_missing_beacon_blocks(
         }
 
         progress.inc_work_done();
-        if progress.work_done % 100 == 0 || progress.work_done >= total_missing {
+        if progress.work_done.is_multiple_of(100) || progress.work_done >= total_missing {
             info!("progress: {}", progress.get_progress_string());
         }
     }
