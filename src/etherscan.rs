@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::{env::ENV_CONFIG, units::WeiNewtype, usd_price::EthPrice};
 
-const ETHERSCAN_API: &str = "https://api.etherscan.io/api";
+const ETHERSCAN_API: &str = "https://api.etherscan.io/v2/api";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -30,6 +30,7 @@ pub async fn get_eth_supply_2() -> reqwest::Result<EthSupply2> {
         .expect("expect ETHERSCAN_API_KEY in env in order to fetch eth supply 2");
     let url = FormatUrl::new(ETHERSCAN_API)
         .with_query_params(vec![
+            ("chainid", "1"),
             ("module", "stats"),
             ("action", "ethsupply2"),
             ("apikey", etherscan_api_key),
@@ -62,7 +63,7 @@ pub async fn get_eth_price() -> reqwest::Result<EthPrice> {
         .as_ref()
         .expect("expect ETHERSCAN_API_KEY in env in order to fetch eth price");
     reqwest::get(format!(
-        "https://api.etherscan.io/api?module=stats&action=ethprice&apikey={etherscan_api_key}"
+        "https://api.etherscan.io/v2/api?chainid=1&module=stats&action=ethprice&apikey={etherscan_api_key}"
     ))
     .await?
     .error_for_status()?
