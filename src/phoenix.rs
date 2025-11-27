@@ -174,7 +174,7 @@ async fn run_alarm_loop(last_checked: Arc<Mutex<DateTime<Utc>>>) {
 
     let mut alarm = Alarm::new();
 
-    let mut phoenixes = vec![
+    let mut phoenixes = [
         Phoenix {
             last_seen: Utc::now(),
             monitor: Box::new(EthPriceStatsMonitor::new()),
