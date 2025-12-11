@@ -106,7 +106,7 @@ pub async fn heal_blob_fees(pool: &PgPool, start_block: BlockNumber) -> Result<(
                 "blob_base_fee already correct, skipping update"
             );
         } else {
-            debug!(
+            info!(
                 block_number = %block.number,
                 excess_blob_gas = %block.excess_blob_gas,
                 current_blob_base_fee = ?block.blob_base_fee,
