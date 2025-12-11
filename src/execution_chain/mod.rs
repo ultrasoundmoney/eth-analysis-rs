@@ -4,6 +4,7 @@ mod block_range;
 pub mod block_store;
 mod block_store_next;
 mod export_blocks;
+mod heal_blob_fees;
 mod logs;
 mod node;
 pub mod routes;
@@ -50,6 +51,8 @@ pub use supply_deltas::write_deltas_log as write_execution_supply_deltas_log;
 pub use supply_deltas::SupplyDelta;
 
 pub use sync::sync_blocks as sync_execution_blocks;
+
+pub use heal_blob_fees::heal_blob_fees;
 
 use chrono::DateTime;
 use chrono::Utc;

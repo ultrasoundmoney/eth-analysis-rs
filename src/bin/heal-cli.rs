@@ -3,7 +3,7 @@ use tracing::{error, info};
 
 use eth_analysis::{
     beacon_chain::{deposits::heal::heal_deposit_sums, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT},
-    db, eth_supply, log,
+    db, eth_supply, heal_blob_fees, log,
 };
 
 #[derive(Parser, Debug)]
@@ -34,6 +34,22 @@ impl From<HardforkArgs> for Slot {
     }
 }
 
+/// hardforks that map to execution block numbers.
+#[derive(Parser, Debug, Clone, clap::ValueEnum)]
+enum BlockHardforkArgs {
+    Deneb,
+    Pectra,
+}
+
+impl From<BlockHardforkArgs> for i32 {
+    fn from(arg: BlockHardforkArgs) -> Self {
+        match arg {
+            BlockHardforkArgs::Deneb => 19_426_587,
+            BlockHardforkArgs::Pectra => 22_431_084,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 enum Commands {
     /// Heals beacon states.
@@ -53,6 +69,18 @@ enum Commands {
         /// The hardfork to start healing eth supply from.
         #[clap(long)]
         hardfork: HardforkArgs,
+    },
+    /// Heals blob_base_fee values in blocks_next table.
+    ///
+    /// The blob_base_fee calculation changed at pectra due to a new blob_update_fraction.
+    /// This recalculates blob_base_fee for all blocks with excess_blob_gas from the given fork.
+    ///
+    /// Note: burn_sums table is affected but auto-heals as old entries are deleted (~100 blocks).
+    /// Cached burn_sums are only used for rollbacks before heal completion, which is rare.
+    BlobFees {
+        /// The hardfork to start healing blob fees from.
+        #[clap(long)]
+        hardfork: BlockHardforkArgs,
     },
 }
 
@@ -87,6 +115,14 @@ async fn run_cli(pool: sqlx::PgPool, command: Commands) {
             match eth_supply::heal_eth_supply(&pool, start_slot).await {
                 Ok(()) => info!("done healing eth supply"),
                 Err(e) => error!("error during eth supply healing: {:?}", e),
+            }
+        }
+        Commands::BlobFees { hardfork } => {
+            let start_block: i32 = hardfork.into();
+            info!(%start_block, "initiating blob fees healing");
+            match heal_blob_fees(&pool, start_block).await {
+                Ok(()) => info!("done healing blob fees"),
+                Err(e) => error!("error during blob fees healing: {:?}", e),
             }
         }
     }

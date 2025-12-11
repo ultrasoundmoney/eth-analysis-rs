@@ -48,6 +48,7 @@ pub use eth_supply::SupplyAtTime;
 pub use execution_chain::export_blocks_from_august;
 pub use execution_chain::export_blocks_from_london;
 pub use execution_chain::export_execution_supply_deltas;
+pub use execution_chain::heal_blob_fees;
 pub use execution_chain::summary_from_deltas_csv;
 pub use execution_chain::sync_execution_blocks;
 pub use execution_chain::sync_execution_supply_deltas;

@@ -118,7 +118,7 @@ fn blob_update_fraction_from_block(block_number: i32) -> u128 {
     }
 }
 
-fn calc_blob_base_fee(excess_blob_gas: Option<i32>, block_number: i32) -> Option<i64> {
+pub fn calc_blob_base_fee(excess_blob_gas: Option<i32>, block_number: i32) -> Option<i64> {
     let excess_blob_gas: u128 = excess_blob_gas?
         .try_into()
         .expect("expect excess_blob_gas to be positive");
