@@ -17,7 +17,7 @@
 use anyhow::Result;
 use pit_wall::Progress;
 use sqlx::PgPool;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 use super::block_store::calc_blob_base_fee;
 use super::BlockNumber;
@@ -99,14 +99,14 @@ pub async fn heal_blob_fees(pool: &PgPool, start_block: BlockNumber) -> Result<(
             .expect("excess_blob_gas is Some, so blob_base_fee should be Some");
 
         if block.blob_base_fee == Some(new_blob_base_fee) {
-            debug!(
+            trace!(
                 block_number = %block.number,
                 excess_blob_gas = %block.excess_blob_gas,
                 current_blob_base_fee = ?block.blob_base_fee,
                 "blob_base_fee already correct, skipping update"
             );
         } else {
-            info!(
+            debug!(
                 block_number = %block.number,
                 excess_blob_gas = %block.excess_blob_gas,
                 current_blob_base_fee = ?block.blob_base_fee,
