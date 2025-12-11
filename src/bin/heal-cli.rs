@@ -20,6 +20,7 @@ enum HardforkArgs {
     Capella,
     Deneb,
     Pectra,
+    Fusaka,
 }
 
 impl From<HardforkArgs> for Slot {
@@ -30,6 +31,7 @@ impl From<HardforkArgs> for Slot {
             HardforkArgs::Capella => Slot(6_209_536),
             HardforkArgs::Deneb => Slot(8_626_176),
             HardforkArgs::Pectra => *PECTRA_SLOT,
+            HardforkArgs::Fusaka => Slot(13_164_544),
         }
     }
 }
@@ -39,6 +41,7 @@ impl From<HardforkArgs> for Slot {
 enum BlockHardforkArgs {
     Deneb,
     Pectra,
+    Fusaka,
 }
 
 impl From<BlockHardforkArgs> for i32 {
@@ -46,6 +49,7 @@ impl From<BlockHardforkArgs> for i32 {
         match arg {
             BlockHardforkArgs::Deneb => 19_426_587,
             BlockHardforkArgs::Pectra => 22_431_084,
+            BlockHardforkArgs::Fusaka => 23_935_694,
         }
     }
 }
