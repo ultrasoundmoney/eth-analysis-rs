@@ -4,14 +4,12 @@ use tracing::{debug, info};
 
 use crate::{
     beacon_chain::{blocks, node::BeaconNodeHttp, BeaconNode, FIRST_POST_MERGE_SLOT},
-    db, job_progress, key_value_store, log,
+    db, job_progress, key_value_store,
 };
 
 const HEAL_BLOCK_HASHES_KEY: &str = "heal-block-hashes";
 
 pub async fn heal_block_hashes() {
-    log::init();
-
     info!("healing execution block hashes");
 
     let db_pool = db::get_db_pool("heal-beacon-states", 1).await;

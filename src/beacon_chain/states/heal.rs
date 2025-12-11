@@ -8,7 +8,7 @@ use crate::{
 use pit_wall::Progress;
 use tracing::{debug, info, warn};
 
-use crate::{beacon_chain::BeaconNode, db, log};
+use crate::{beacon_chain::BeaconNode, db};
 
 // The first slot we have stored.
 const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = Slot(0);
@@ -16,8 +16,6 @@ const FIRST_STORED_ETH_SUPPLY_SLOT: Slot = Slot(0);
 const HEAL_BEACON_STATES_KEY: &str = "heal-beacon-states";
 
 pub async fn heal_beacon_states() {
-    log::init();
-
     info!("healing reorged states");
 
     let db_pool = db::get_db_pool("heal-beacon-states", 1).await;
