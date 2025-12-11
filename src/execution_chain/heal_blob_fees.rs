@@ -25,6 +25,7 @@ use super::BlockNumber;
 struct BlockRow {
     number: i32,
     excess_blob_gas: i32,
+    blob_base_fee: Option<i64>,
 }
 
 async fn get_blocks_with_blob_gas_from(
@@ -36,7 +37,8 @@ async fn get_blocks_with_blob_gas_from(
         r#"
         SELECT
             number,
-            excess_blob_gas AS "excess_blob_gas!"
+            excess_blob_gas AS "excess_blob_gas!",
+            blob_base_fee
         FROM
             blocks_next
         WHERE
@@ -96,14 +98,24 @@ pub async fn heal_blob_fees(pool: &PgPool, start_block: BlockNumber) -> Result<(
         let new_blob_base_fee = calc_blob_base_fee(Some(block.excess_blob_gas), block.number)
             .expect("excess_blob_gas is Some, so blob_base_fee should be Some");
 
-        debug!(
-            block_number = %block.number,
-            excess_blob_gas = %block.excess_blob_gas,
-            new_blob_base_fee = %new_blob_base_fee,
-            "updating blob_base_fee"
-        );
+        if block.blob_base_fee == Some(new_blob_base_fee) {
+            debug!(
+                block_number = %block.number,
+                excess_blob_gas = %block.excess_blob_gas,
+                current_blob_base_fee = ?block.blob_base_fee,
+                "blob_base_fee already correct, skipping update"
+            );
+        } else {
+            debug!(
+                block_number = %block.number,
+                excess_blob_gas = %block.excess_blob_gas,
+                current_blob_base_fee = ?block.blob_base_fee,
+                new_blob_base_fee = %new_blob_base_fee,
+                "updating blob_base_fee"
+            );
 
-        update_blob_base_fee(pool, block.number, new_blob_base_fee).await?;
+            update_blob_base_fee(pool, block.number, new_blob_base_fee).await?;
+        }
 
         progress.inc_work_done();
 
