@@ -108,13 +108,23 @@ pub async fn store_block(
 }
 
 fn blob_update_fraction_from_block(block_number: i32) -> u128 {
-    const OLD_FRACTION: u128 = 3_338_477;
-    const NEW_FRACTION: u128 = 5_007_716;
+    const CANCUN_FRACTION: u128 = 3_338_477;
+    const PRAGUE_FRACTION: u128 = 5_007_716;
+    const BPO1_FRACTION: u128 = 8_346_193;
+    const BPO2_FRACTION: u128 = 11_684_671;
+
     const PECTRA_FORK_BLOCK: i32 = 22_431_084;
-    if block_number >= PECTRA_FORK_BLOCK {
-        NEW_FRACTION
+    const BPO1_FORK_BLOCK: i32 = 23_322_756;
+    const BPO2_FORK_BLOCK: i32 = 24_150_800; // Estimated
+
+    if block_number >= BPO2_FORK_BLOCK {
+        BPO2_FRACTION
+    } else if block_number >= BPO1_FORK_BLOCK {
+        BPO1_FRACTION
+    } else if block_number >= PECTRA_FORK_BLOCK {
+        PRAGUE_FRACTION
     } else {
-        OLD_FRACTION
+        CANCUN_FRACTION
     }
 }
 
