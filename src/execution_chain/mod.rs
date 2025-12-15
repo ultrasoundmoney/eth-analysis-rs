@@ -1,5 +1,6 @@
 mod balances;
 mod base_fees;
+mod blob_schedule;
 mod block_range;
 pub mod block_store;
 mod block_store_next;

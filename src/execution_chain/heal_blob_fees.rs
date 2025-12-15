@@ -15,15 +15,17 @@
 //!   blocks_next, will return correct values after this heal completes.
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use pit_wall::Progress;
 use sqlx::PgPool;
 use tracing::{debug, info, trace};
 
-use super::block_store::calc_blob_base_fee;
+use super::blob_schedule::calc_blob_base_fee;
 use super::BlockNumber;
 
 struct BlockRow {
     number: i32,
+    timestamp: DateTime<Utc>,
     excess_blob_gas: i32,
     blob_base_fee: Option<i64>,
 }
@@ -37,6 +39,7 @@ async fn get_blocks_with_blob_gas_from(
         r#"
         SELECT
             number,
+            timestamp,
             excess_blob_gas AS "excess_blob_gas!",
             blob_base_fee
         FROM
@@ -95,7 +98,7 @@ pub async fn heal_blob_fees(pool: &PgPool, start_block: BlockNumber) -> Result<(
     info!(total_blocks = %total, "found blocks with blob gas to heal");
 
     for block in blocks {
-        let new_blob_base_fee = calc_blob_base_fee(Some(block.excess_blob_gas), block.number)
+        let new_blob_base_fee = calc_blob_base_fee(Some(block.excess_blob_gas), block.timestamp)
             .expect("excess_blob_gas is Some, so blob_base_fee should be Some");
 
         if block.blob_base_fee == Some(new_blob_base_fee) {

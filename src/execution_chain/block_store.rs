@@ -1,6 +1,7 @@
 use chrono::{DateTime, SubsecRound, Utc};
 use sqlx::PgExecutor;
 
+use super::blob_schedule::calc_blob_base_fee;
 use super::node::{BlockNumber, ExecutionNodeBlock};
 
 struct ExecutionBlockRow {
@@ -101,48 +102,10 @@ pub async fn store_block(
     .bind(block.total_difficulty.to_string())
     .bind(block.blob_gas_used)
     .bind(block.excess_blob_gas)
-    .bind(calc_blob_base_fee(block.excess_blob_gas, block.number))
+    .bind(calc_blob_base_fee(block.excess_blob_gas, block.timestamp))
     .execute(executor)
     .await
     .unwrap();
-}
-
-fn blob_update_fraction_from_block(block_number: i32) -> u128 {
-    const OLD_FRACTION: u128 = 3_338_477;
-    const NEW_FRACTION: u128 = 5_007_716;
-    const PECTRA_FORK_BLOCK: i32 = 22_431_084;
-    if block_number >= PECTRA_FORK_BLOCK {
-        NEW_FRACTION
-    } else {
-        OLD_FRACTION
-    }
-}
-
-pub fn calc_blob_base_fee(excess_blob_gas: Option<i32>, block_number: i32) -> Option<i64> {
-    let excess_blob_gas: u128 = excess_blob_gas?
-        .try_into()
-        .expect("expect excess_blob_gas to be positive");
-    const MIN_BLOB_BASE_FEE: u128 = 1;
-    let blob_base_fee = fake_exponential(
-        MIN_BLOB_BASE_FEE,
-        excess_blob_gas,
-        blob_update_fraction_from_block(block_number),
-    )
-    .try_into()
-    .expect("overflow of blob_base_fee");
-    Some(blob_base_fee)
-}
-
-fn fake_exponential(factor: u128, numerator: u128, denominator: u128) -> u128 {
-    let mut i: u128 = 1;
-    let mut output: u128 = 0;
-    let mut numerator_accum: u128 = factor * denominator;
-    while numerator_accum > 0 {
-        output += numerator_accum;
-        numerator_accum = (numerator_accum * numerator) / (denominator * i);
-        i += 1;
-    }
-    output / denominator
 }
 
 #[cfg(test)]
