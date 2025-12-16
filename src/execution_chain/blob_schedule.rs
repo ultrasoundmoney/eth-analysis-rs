@@ -9,9 +9,13 @@ lazy_static! {
     static ref BLOB_SCHEDULE: Vec<(i64, u128)> = parse_blob_schedule(BLOB_SCHEDULE_JSON);
 }
 
+/// If excess_blob_gas is a negetive value, we want this function to panic
 pub fn calc_blob_base_fee(excess_blob_gas: Option<i32>, timestamp: DateTime<Utc>) -> Option<u128> {
     excess_blob_gas
-        .and_then(|v| v.try_into().ok())
+        .map(|v| {
+            v.try_into()
+                .expect("excess_blob_gas should not be negative")
+        })
         .zip(blob_update_fraction_from_timestamp(timestamp.timestamp()))
         .map(|(gas, fraction)| fake_exponential(MIN_BLOB_BASE_FEE, gas, fraction))
 }
@@ -35,31 +39,50 @@ fn fake_exponential(factor: u128, numerator: u128, denominator: u128) -> u128 {
     output / denominator
 }
 
-// Parses the blob schedule into a vec so the code doesn't need to change for any future blob
-// schedule additions
-fn parse_blob_schedule(json: &str) -> Vec<(i64, u128)> {
-    let json: Value = serde_json::from_str(json).expect("failed to parse blob schedule JSON");
+/// Parses the blob schedule JSON into a vec of (timestamp, fraction) tuples.
+///
+/// The blob schedule JSON format:
+/// ```json
+/// {
+///   "blobSchedule": {
+///     "cancun": { "baseFeeUpdateFraction": 3338477 },
+///     "prague": { "baseFeeUpdateFraction": 5007716 },
+///     ...
+///   },
+///   "cancunTime": 1710338135,
+///   "pragueTime": 1746612311,
+///   ...
+/// }
+/// ```
+///
+/// Each fork in `blobSchedule` must have a corresponding `{forkName}Time` field.
+/// Parsing dynamically means new forks can be added to the JSON without code changes.
+/// Any additions that don't follow this format will cause a panic at startup.
+fn parse_blob_schedule(json_str: &str) -> Vec<(i64, u128)> {
+    let json: Value = serde_json::from_str(json_str).expect("failed to parse blob schedule JSON");
 
     let blob_schedule = json["blobSchedule"]
         .as_object()
         .expect("blobSchedule should be an object");
-    // Any additions that don't follow the current blob schedule format can only cause a panic at
-    // startup.
-    let mut entries: Vec<(i64, u128)> = blob_schedule
-        .keys()
-        .map(|fork_name| {
-            let time_key = format!("{}Time", fork_name);
-            let time = json[&time_key]
-                .as_i64()
-                .unwrap_or_else(|| panic!("missing or invalid {}", time_key));
-            let fraction = blob_schedule[fork_name]["baseFeeUpdateFraction"]
-                .as_u64()
-                .unwrap_or_else(|| panic!("missing baseFeeUpdateFraction for {}", fork_name))
-                as u128;
-            (time, fraction)
-        })
-        .collect();
-    // Sort schedule by timestamp so we don't rely on the order of the blob schedule.
+
+    let mut entries = Vec::new();
+
+    for fork_name in blob_schedule.keys() {
+        // Convention: each fork "foo" in blobSchedule must have a "fooTime" field
+        let time_key = format!("{}Time", fork_name);
+        let time = json[&time_key]
+            .as_i64()
+            .unwrap_or_else(|| panic!("missing or invalid {}", time_key));
+
+        let fraction = blob_schedule[fork_name]["baseFeeUpdateFraction"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("missing baseFeeUpdateFraction for {}", fork_name))
+            as u128;
+
+        entries.push((time, fraction));
+    }
+
+    // Sort descending by timestamp so we don't rely on the order in the JSON
     entries.sort_by(|a, b| b.cmp(a));
     entries
 }
