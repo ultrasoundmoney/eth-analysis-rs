@@ -98,8 +98,10 @@ pub async fn heal_blob_fees(pool: &PgPool, start_block: BlockNumber) -> Result<(
     info!(total_blocks = %total, "found blocks with blob gas to heal");
 
     for block in blocks {
-        let new_blob_base_fee = calc_blob_base_fee(Some(block.excess_blob_gas), block.timestamp)
-            .expect("excess_blob_gas is Some, so blob_base_fee should be Some");
+        let new_blob_base_fee: i64 =
+            calc_blob_base_fee(Some(block.excess_blob_gas), block.timestamp)
+                .expect("excess_blob_gas is Some, so blob_base_fee should be Some")
+                .try_into()?;
 
         if block.blob_base_fee == Some(new_blob_base_fee) {
             trace!(

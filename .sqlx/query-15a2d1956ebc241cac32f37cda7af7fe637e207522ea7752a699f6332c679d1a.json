@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            number,\n            timestamp,\n            excess_blob_gas AS \"excess_blob_gas!\",\n            blob_base_fee\n        FROM\n            blocks_next\n        WHERE\n            number >= $1\n            AND excess_blob_gas IS NOT NULL\n        ORDER BY\n            number ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "excess_blob_gas!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "blob_base_fee",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "15a2d1956ebc241cac32f37cda7af7fe637e207522ea7752a699f6332c679d1a"
+}
