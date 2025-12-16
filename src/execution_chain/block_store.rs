@@ -102,7 +102,7 @@ pub async fn store_block(
     .bind(block.total_difficulty.to_string())
     .bind(block.blob_gas_used)
     .bind(block.excess_blob_gas)
-    .bind(calc_blob_base_fee(block.excess_blob_gas, block.timestamp))
+    .bind(calc_blob_base_fee(block.excess_blob_gas, block.timestamp).map(|v| v as i64))
     .execute(executor)
     .await
     .unwrap();
