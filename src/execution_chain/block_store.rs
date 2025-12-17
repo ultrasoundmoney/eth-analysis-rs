@@ -102,10 +102,19 @@ pub async fn store_block(
     .bind(block.total_difficulty.to_string())
     .bind(block.blob_gas_used)
     .bind(block.excess_blob_gas)
-    .bind(calc_blob_base_fee(block.excess_blob_gas, block.timestamp).map(|v| v as i64))
+    .bind(blob_base_fee_for_db(block.excess_blob_gas, block.timestamp))
     .execute(executor)
     .await
     .unwrap();
+}
+
+/// If excess_blob_gas is a negative value, or blob base fee doesn't fit in an i64 we want this
+/// function to panic
+pub fn blob_base_fee_for_db(excess_blob_gas: Option<i32>, timestamp: DateTime<Utc>) -> Option<i64> {
+    excess_blob_gas
+        .map(|v| u128::try_from(v).expect("excess blob gas can't be negative"))
+        .and_then(|gas| calc_blob_base_fee(gas, timestamp.timestamp()))
+        .map(|fee| i64::try_from(fee).expect("blob base fee must fit in an i64"))
 }
 
 #[cfg(test)]

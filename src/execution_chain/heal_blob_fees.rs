@@ -20,7 +20,7 @@ use pit_wall::Progress;
 use sqlx::PgPool;
 use tracing::{debug, info, trace};
 
-use super::blob_schedule::calc_blob_base_fee;
+use super::block_store::blob_base_fee_for_db;
 use super::BlockNumber;
 
 struct BlockRow {
@@ -99,9 +99,8 @@ pub async fn heal_blob_fees(pool: &PgPool, start_block: BlockNumber) -> Result<(
 
     for block in blocks {
         let new_blob_base_fee: i64 =
-            calc_blob_base_fee(Some(block.excess_blob_gas), block.timestamp)
-                .expect("excess_blob_gas is Some, so blob_base_fee should be Some")
-                .try_into()?;
+            blob_base_fee_for_db(Some(block.excess_blob_gas), block.timestamp)
+                .expect("excess_blob_gas is Some, so blob_base_fee should be Some");
 
         if block.blob_base_fee == Some(new_blob_base_fee) {
             trace!(
