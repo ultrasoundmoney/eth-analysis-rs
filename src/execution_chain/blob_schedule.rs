@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use serde_json::Value;
 
@@ -9,15 +8,9 @@ lazy_static! {
     static ref BLOB_SCHEDULE: Vec<(i64, u128)> = parse_blob_schedule(BLOB_SCHEDULE_JSON);
 }
 
-/// If excess_blob_gas is a negetive value, we want this function to panic
-pub fn calc_blob_base_fee(excess_blob_gas: Option<i32>, timestamp: DateTime<Utc>) -> Option<u128> {
-    excess_blob_gas
-        .map(|v| {
-            v.try_into()
-                .expect("excess_blob_gas should not be negative")
-        })
-        .zip(blob_update_fraction_from_timestamp(timestamp.timestamp()))
-        .map(|(gas, fraction)| fake_exponential(MIN_BLOB_BASE_FEE, gas, fraction))
+pub fn calc_blob_base_fee(excess_blob_gas: u128, timestamp: i64) -> Option<u128> {
+    blob_update_fraction_from_timestamp(timestamp)
+        .map(|fraction| fake_exponential(MIN_BLOB_BASE_FEE, excess_blob_gas, fraction))
 }
 
 fn blob_update_fraction_from_timestamp(timestamp: i64) -> Option<u128> {
