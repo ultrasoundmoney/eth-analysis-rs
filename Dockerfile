@@ -21,6 +21,7 @@ RUN sed -i 's#dummy.rs#src/bin/serve.rs#' Cargo.toml
 COPY src ./src
 COPY .sqlx ./.sqlx
 COPY migrations ./migrations
+COPY data ./data
 RUN cargo build --release --bin phoenix-service
 RUN cargo build --release --bin record-eth-price
 RUN cargo build --release --bin sync-beacon-states
