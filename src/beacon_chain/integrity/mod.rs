@@ -99,7 +99,7 @@ pub async fn check_beacon_block_chain_integrity<BN: BeaconNode + Send + Sync + ?
         if chunk.is_empty() {
             if total_blocks_processed == 0 && offset == 0 {
                 if start_from_slot_opt.is_some() {
-                    bail!("no blocks found at or after the user-specified start_slot: {:?}. DB might be empty in this range or start slot too high.", start_from_slot_opt.unwrap());
+                    bail!("no blocks found at or after the user-specified start_slot: {:?}. DB might be empty in this range or start slot too high.", start_from_slot_opt);
                 } else {
                     info!("no blocks found (database is empty from slot 0). integrity check passed (empty case).");
                 }
