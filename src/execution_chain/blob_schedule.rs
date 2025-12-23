@@ -1,11 +1,47 @@
+//! Blob fee calculation based on EIP-4844.
+//!
+//! To update the blob schedule for future forks, replace the blob schedule JSON with the new
+//! version. Blob schedule can be found in the chainspec:
+//! <https://github.com/eth-clients/mainnet/blob/main/metadata/chainspec.json>
+
 use lazy_static::lazy_static;
-use serde_json::Value;
+use serde::Deserialize;
+
+use super::node::decoders::{from_u128_hex_str, from_u32_hex_str};
 
 const BLOB_SCHEDULE_JSON: &str = include_str!("../../data/blobs/blobschedule.json");
 const MIN_BLOB_BASE_FEE: u128 = 1;
 
+#[derive(Debug, Deserialize)]
+struct BlobScheduleJson {
+    #[serde(rename = "blobSchedule")]
+    blob_schedule: Vec<BlobScheduleEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BlobScheduleEntry {
+    #[serde(deserialize_with = "from_u32_hex_str")]
+    timestamp: u32,
+    #[serde(
+        rename = "baseFeeUpdateFraction",
+        deserialize_with = "from_u128_hex_str"
+    )]
+    base_fee_update_fraction: u128,
+}
+
 lazy_static! {
-    static ref BLOB_SCHEDULE: Vec<(i64, u128)> = parse_blob_schedule(BLOB_SCHEDULE_JSON);
+    static ref BLOB_SCHEDULE: Vec<(i64, u128)> = {
+        let json: BlobScheduleJson = serde_json::from_str(BLOB_SCHEDULE_JSON)
+            .expect("failed to parse blob schedule JSON");
+        let mut entries: Vec<(i64, u128)> = json
+            .blob_schedule
+            .into_iter()
+            .map(|e| (e.timestamp as i64, e.base_fee_update_fraction))
+            .collect();
+        // Sort descending by timestamp
+        entries.sort_by(|a, b| b.cmp(a));
+        entries
+    };
 }
 
 pub fn calc_blob_base_fee(excess_blob_gas: u128, timestamp: i64) -> Option<u128> {
@@ -32,100 +68,31 @@ fn fake_exponential(factor: u128, numerator: u128, denominator: u128) -> u128 {
     output / denominator
 }
 
-/// Parses the blob schedule JSON into a vec of (timestamp, fraction) tuples.
-///
-/// The blob schedule JSON format:
-/// ```json
-/// {
-///   "blobSchedule": {
-///     "cancun": { "baseFeeUpdateFraction": 3338477 },
-///     "prague": { "baseFeeUpdateFraction": 5007716 },
-///     ...
-///   },
-///   "cancunTime": 1710338135,
-///   "pragueTime": 1746612311,
-///   ...
-/// }
-/// ```
-///
-/// Each fork in `blobSchedule` must have a corresponding `{forkName}Time` field.
-/// Parsing dynamically means new forks can be added to the JSON without code changes.
-/// Any additions that don't follow this format will cause a panic at startup.
-fn parse_blob_schedule(json_str: &str) -> Vec<(i64, u128)> {
-    let json: Value = serde_json::from_str(json_str).expect("failed to parse blob schedule JSON");
-
-    let blob_schedule = json["blobSchedule"]
-        .as_object()
-        .expect("blobSchedule should be an object");
-
-    let mut entries = Vec::new();
-
-    for fork_name in blob_schedule.keys() {
-        // Convention: each fork "foo" in blobSchedule must have a "fooTime" field
-        let time_key = format!("{}Time", fork_name);
-        let time = json[&time_key]
-            .as_i64()
-            .unwrap_or_else(|| panic!("missing or invalid {}", time_key));
-
-        let fraction = blob_schedule[fork_name]["baseFeeUpdateFraction"]
-            .as_u64()
-            .unwrap_or_else(|| panic!("missing baseFeeUpdateFraction for {}", fork_name))
-            as u128;
-
-        entries.push((time, fraction));
-    }
-
-    // Sort descending by timestamp so we don't rely on the order in the JSON
-    entries.sort_by(|a, b| b.cmp(a));
-    entries
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "missing or invalid")]
-    fn test_panics_on_invalid_schedule() {
-        let json = include_str!("../../data/test/breakingblobscheduletest.json");
-        parse_blob_schedule(json);
-    }
-
-    #[test]
-    fn test_parses_and_sorts_test_schedule() {
-        let json = include_str!("../../data/test/blobscheduletest.json");
-        let entries = parse_blob_schedule(json);
-
-        // Should have 7 entries
-        assert_eq!(entries.len(), 7);
-
-        // Should be sorted descending by time
-        for window in entries.windows(2) {
+    fn test_blob_schedule_is_sorted_descending() {
+        for window in BLOB_SCHEDULE.windows(2) {
             assert!(
                 window[0].0 > window[1].0,
                 "entries should be sorted descending by time"
             );
         }
-
-        // badTest (1746612611) should be sorted between prague (1746612311) and osaka (1747387400)
-        let bad_test_idx = entries.iter().position(|(t, _)| *t == 1746612611).unwrap();
-        let prague_idx = entries.iter().position(|(t, _)| *t == 1746612311).unwrap();
-        let osaka_idx = entries.iter().position(|(t, _)| *t == 1747387400).unwrap();
-
-        assert!(
-            bad_test_idx < prague_idx,
-            "badTest should come before prague (descending order)"
-        );
-        assert!(
-            bad_test_idx > osaka_idx,
-            "badTest should come after osaka (descending order)"
-        );
     }
 
     #[test]
     fn test_returns_correct_fractions() {
-        // cancun (before prague)
-        assert_eq!(blob_update_fraction_from_timestamp(0), Some(3_338_477));
+        // before cancun (1710338135) - no blobs existed
+        assert_eq!(blob_update_fraction_from_timestamp(0), None);
+        assert_eq!(blob_update_fraction_from_timestamp(1710338134), None);
+
+        // cancun (at and after 1710338135, before prague)
+        assert_eq!(
+            blob_update_fraction_from_timestamp(1710338135),
+            Some(3_338_477)
+        );
         assert_eq!(
             blob_update_fraction_from_timestamp(1746612310),
             Some(3_338_477)
@@ -137,33 +104,23 @@ mod tests {
             Some(5_007_716)
         );
         assert_eq!(
-            blob_update_fraction_from_timestamp(1747000000),
-            Some(5_007_716)
-        );
-
-        // osaka (at and after 1747387400)
-        assert_eq!(
-            blob_update_fraction_from_timestamp(1747387400),
-            Some(5_007_716)
-        );
-        assert_eq!(
             blob_update_fraction_from_timestamp(1750000000),
             Some(5_007_716)
         );
 
-        // bpo1 (at and after 1757387400)
+        // bpo1 (at and after 1765290071)
         assert_eq!(
-            blob_update_fraction_from_timestamp(1757387400),
+            blob_update_fraction_from_timestamp(1765290071),
             Some(8_346_193)
         );
         assert_eq!(
-            blob_update_fraction_from_timestamp(1760000000),
+            blob_update_fraction_from_timestamp(1766000000),
             Some(8_346_193)
         );
 
-        // bpo2 (at and after 1767387784)
+        // bpo2 (at and after 1767747671)
         assert_eq!(
-            blob_update_fraction_from_timestamp(1767387784),
+            blob_update_fraction_from_timestamp(1767747671),
             Some(11_684_671)
         );
         assert_eq!(

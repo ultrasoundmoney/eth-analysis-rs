@@ -108,8 +108,7 @@ pub async fn store_block(
     .unwrap();
 }
 
-/// If excess_blob_gas is a negative value, or blob base fee doesn't fit in an i64 we want this
-/// function to panic
+/// Should panic if conversion fails
 pub fn blob_base_fee_for_db(excess_blob_gas: Option<i32>, timestamp: DateTime<Utc>) -> Option<i64> {
     excess_blob_gas
         .map(|v| u128::try_from(v).expect("excess blob gas can't be negative"))
