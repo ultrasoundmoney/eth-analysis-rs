@@ -39,12 +39,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image cronjob/update-validator-rewards update-validator-rewards=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: create job --from=cronjob/update-validator-rewards update-validator-rewards-${{ steps.vars.outputs.sha_short }}
@@ -58,12 +58,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image cronjob/update-supply-projection-inputs update-supply-projection-inputs=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: create job --from=cronjob/update-supply-projection-inputs update-supply-projection-inputs-${{ steps.vars.outputs.sha_short }}
@@ -77,12 +77,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image cronjob/update-issuance-breakdown update-issuance-breakdown=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: create job --from=cronjob/update-issuance-breakdown update-issuance-breakdown-${{ steps.vars.outputs.sha_short }}
@@ -96,12 +96,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: Deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image deployment/sync-execution-supply-deltas sync-execution-supply-deltas=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: rollout status deployment/sync-execution-supply-deltas
@@ -115,12 +115,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: Deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image deployment/sync-beacon-states sync-beacon-states=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: rollout status deployment/sync-beacon-states
@@ -134,12 +134,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image cronjob/update-effective-balance-sum update-effective-balance-sum=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: create job --from=cronjob/update-effective-balance-sum update-effective-balance-sum-${{ steps.vars.outputs.sha_short }}
@@ -153,12 +153,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: Deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image deployment/sync-execution-blocks sync-execution-blocks=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: rollout status deployment/sync-execution-blocks
@@ -172,12 +172,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image deployment/phoenix phoenix=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: rollout status deployment/phoenix
@@ -191,12 +191,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: Deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image deployment/serve-fees-rs serve-fees-rs=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: rollout status deployment/serve-fees-rs
@@ -210,12 +210,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: Deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image deployment/record-eth-price record-eth-price=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: Verify deployment
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: rollout status deployment/record-eth-price
@@ -229,12 +229,12 @@ jobs:
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
       - name: deploy
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: set image cronjob/update-issuance-estimate update-issuance-estimate=rg.fr-par.scw.cloud/ultrasoundmoney/eth-analysis-rs:${{ steps.vars.outputs.sha_short }}
       - name: run job
-        uses: steebchen/kubectl@v2.0.0
+        uses: steebchen/kubectl@v2.1.1
         with:
           config: ${{ secrets.KUBE_CONFIG_DATA_PROD }}
           command: create job --from=cronjob/update-issuance-estimate update-issuance-estimate-${{ steps.vars.outputs.sha_short }}
