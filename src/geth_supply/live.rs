@@ -1,7 +1,14 @@
 use anyhow::Result;
 use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use serde::Deserialize;
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncSeekExt, BufReader, SeekFrom},
@@ -10,10 +17,23 @@ use tokio::{
 use tracing::{debug, error, info, warn};
 
 use super::GethSupplyDelta;
+use crate::env;
 use crate::execution_chain::{BlockNumber, SupplyDelta};
 
 const MAX_CACHED_DELTAS: usize = 1_000_000;
 const TAIL_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const WATCHDOG_MAX_STALE_DEFAULT: Duration = Duration::from_secs(60 * 60);
+const WATCHDOG_CHECK_INTERVAL_DEFAULT: Duration = Duration::from_secs(60);
+
+#[cfg(unix)]
+fn file_inode(meta: &std::fs::Metadata) -> u64 {
+    meta.ino()
+}
+
+#[cfg(not(unix))]
+fn file_inode(_meta: &std::fs::Metadata) -> u64 {
+    0
+}
 
 fn convert_to_supply_delta(geth_delta: &GethSupplyDelta) -> Result<SupplyDelta> {
     // Convert hex strings to numbers, defaulting to 0 if optional fields are None
@@ -68,6 +88,7 @@ fn convert_to_supply_delta(geth_delta: &GethSupplyDelta) -> Result<SupplyDelta> 
 pub struct LiveSupplyReader {
     data_dir: PathBuf,
     deltas: Arc<RwLock<BTreeMap<BlockNumber, Vec<SupplyDelta>>>>,
+    last_progress: Arc<Mutex<Instant>>,
 }
 
 impl LiveSupplyReader {
@@ -75,7 +96,24 @@ impl LiveSupplyReader {
         Self {
             data_dir,
             deltas: Arc::new(RwLock::new(BTreeMap::new())),
+            last_progress: Arc::new(Mutex::new(Instant::now())),
         }
+    }
+
+    fn mark_progress(&self) {
+        let mut last_progress = self
+            .last_progress
+            .lock()
+            .expect("last_progress mutex poisoned");
+        *last_progress = Instant::now();
+    }
+
+    fn last_progress_age(&self) -> Duration {
+        let last_progress = self
+            .last_progress
+            .lock()
+            .expect("last_progress mutex poisoned");
+        last_progress.elapsed()
     }
 
     fn ensure_cache_limit(deltas: &mut BTreeMap<BlockNumber, Vec<SupplyDelta>>) {
@@ -219,6 +257,28 @@ impl LiveSupplyReader {
         });
     }
 
+    pub fn start_watchdog_task(self: Arc<Self>, max_stale: Duration, check_interval: Duration) {
+        tokio::spawn(async move {
+            info!(
+                "watchdog enabled. restarting process if no new supply deltas for {}s (check every {}s)",
+                max_stale.as_secs(),
+                check_interval.as_secs()
+            );
+            loop {
+                tokio::time::sleep(check_interval).await;
+                let age = self.last_progress_age();
+                if age >= max_stale {
+                    error!(
+                        "no new supply deltas for {}s (limit {}s); exiting so supervisor can restart",
+                        age.as_secs(),
+                        max_stale.as_secs()
+                    );
+                    std::process::exit(1);
+                }
+            }
+        });
+    }
+
     async fn initial_load_and_tail(&self) -> Result<()> {
         let initial_files = self.get_initial_supply_files().await?;
         info!("processing {} initial supply files until cache limit ({}) is reached or all files are read.", initial_files.len(), MAX_CACHED_DELTAS);
@@ -268,7 +328,9 @@ impl LiveSupplyReader {
             match serde_json::from_str::<GethSupplyDelta>(&line_result) {
                 Ok(geth_delta) => match convert_to_supply_delta(&geth_delta) {
                     Ok(supply_delta) => {
-                        Self::add_delta_to_cache_if_unique(&mut deltas_guard, supply_delta);
+                        if Self::add_delta_to_cache_if_unique(&mut deltas_guard, supply_delta) {
+                            self.mark_progress();
+                        }
                     }
                     Err(e) => {
                         error!(
@@ -298,6 +360,8 @@ impl LiveSupplyReader {
         info!("starting to tail live supply file: {:?}", file_path);
         let mut file = File::open(file_path).await?;
         let mut current_position = file.seek(SeekFrom::End(0)).await?;
+        let mut last_inode = file_inode(&file.metadata().await?);
+        let inode_supported = cfg!(unix);
         debug!(
             "initial position for tailing {:?}: {}",
             file_path, current_position
@@ -308,15 +372,28 @@ impl LiveSupplyReader {
 
             let metadata = tokio::fs::metadata(file_path).await?;
             let file_size = metadata.len();
+            let rotated_due_to_size = file_size < current_position;
+            let rotated_due_to_inode =
+                inode_supported && file_inode(&metadata) != last_inode;
+            let rotated = rotated_due_to_size || rotated_due_to_inode;
 
-            if file_size < current_position {
-                warn!(
-                    "file {:?} appears to have been truncated or rotated (size: {} < last_pos: {}). resetting position to 0.",
-                    file_path,
-                    file_size,
-                    current_position
-                );
+            if rotated {
+                if rotated_due_to_size {
+                    warn!(
+                        "file {:?} appears to have been truncated (size: {} < last_pos: {}). reopening and resetting position to 0.",
+                        file_path,
+                        file_size,
+                        current_position
+                    );
+                } else {
+                    warn!(
+                        "file {:?} appears to have been rotated (inode change). reopening and resetting position to 0.",
+                        file_path
+                    );
+                }
+                file = File::open(file_path).await?;
                 current_position = 0;
+                last_inode = file_inode(&file.metadata().await?);
             }
 
             if file_size > current_position {
@@ -340,6 +417,7 @@ impl LiveSupplyReader {
                                     supply_delta,
                                 ) {
                                     new_deltas_processed += 1;
+                                    self.mark_progress();
                                 }
                             }
                             Err(e) => {
@@ -409,6 +487,7 @@ impl LiveSupplyReader {
                                     supply_delta,
                                 ) {
                                     deltas_added += 1;
+                                    self.mark_progress();
                                 }
                             }
                             Err(e) => {
@@ -451,10 +530,27 @@ struct SupplyDeltaQuery {
     block_number: BlockNumber,
 }
 
+fn env_duration_secs(key: &str) -> Option<Duration> {
+    env::get_env_var(key).map(|value| {
+        Duration::from_secs(value.parse::<u64>().expect("invalid duration seconds"))
+    })
+}
+
 pub async fn start_live_api(data_dir: PathBuf, port: u16) -> Result<()> {
     let reader = Arc::new(LiveSupplyReader::new(data_dir));
 
     reader.clone().start_background_tasks();
+    let max_stale =
+        env_duration_secs("GETH_SUPPLY_LIVE_MAX_STALE_SECS").unwrap_or(WATCHDOG_MAX_STALE_DEFAULT);
+    let check_interval = env_duration_secs("GETH_SUPPLY_LIVE_WATCHDOG_INTERVAL_SECS")
+        .unwrap_or(WATCHDOG_CHECK_INTERVAL_DEFAULT);
+    if max_stale.as_secs() == 0 {
+        warn!("watchdog disabled (GETH_SUPPLY_LIVE_MAX_STALE_SECS=0)");
+    } else {
+        reader
+            .clone()
+            .start_watchdog_task(max_stale, check_interval);
+    }
 
     let app = Router::new()
         .route("/supply/delta", get(get_supply_delta_handler))
