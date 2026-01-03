@@ -1,14 +1,14 @@
 use anyhow::Result;
 use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use serde::Deserialize;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::{
     collections::BTreeMap,
     path::PathBuf,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncSeekExt, BufReader, SeekFrom},
@@ -373,8 +373,7 @@ impl LiveSupplyReader {
             let metadata = tokio::fs::metadata(file_path).await?;
             let file_size = metadata.len();
             let rotated_due_to_size = file_size < current_position;
-            let rotated_due_to_inode =
-                inode_supported && file_inode(&metadata) != last_inode;
+            let rotated_due_to_inode = inode_supported && file_inode(&metadata) != last_inode;
             let rotated = rotated_due_to_size || rotated_due_to_inode;
 
             if rotated {
@@ -531,9 +530,8 @@ struct SupplyDeltaQuery {
 }
 
 fn env_duration_secs(key: &str) -> Option<Duration> {
-    env::get_env_var(key).map(|value| {
-        Duration::from_secs(value.parse::<u64>().expect("invalid duration seconds"))
-    })
+    env::get_env_var(key)
+        .map(|value| Duration::from_secs(value.parse::<u64>().expect("invalid duration seconds")))
 }
 
 pub async fn start_live_api(data_dir: PathBuf, port: u16) -> Result<()> {
