@@ -1,5 +1,5 @@
 mod blocks;
-mod decoders;
+pub mod decoders;
 mod heads;
 mod transaction_receipts;
 
