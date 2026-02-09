@@ -8,6 +8,12 @@ use serde::Serialize;
 const DUNE_ETH_IN_CONTRACTS_QUERY_URL: &str = "https://api.dune.com/api/v1/query/3751774/results";
 const DUNE_FLIPPENING_DATA_QUERY_URL: &str = "https://api.dune.com/api/v1/query/3758140/results";
 
+// Incremental eth-in-contracts query with start_date and starting_cumulative_sum
+// parameters. Can be used to avoid scanning all historical traces.
+// https://dune.com/queries/6676221
+#[allow(dead_code)]
+const DUNE_ETH_IN_CONTRACTS_INCREMENTAL_QUERY_ID: &str = "6676221";
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DuneResponse<Row> {
     pub execution_id: String,
@@ -55,7 +61,10 @@ pub struct Metadata {
 }
 
 pub async fn get_eth_in_contracts() -> Result<Vec<EthInContractsRow>> {
-    get_dune_data(DUNE_ETH_IN_CONTRACTS_QUERY_URL).await
+    let url = FormatUrl::new(DUNE_ETH_IN_CONTRACTS_QUERY_URL)
+        .with_query_params(vec![("max_age_hours", "168")])
+        .format_url();
+    get_dune_data_from_url(&url).await
 }
 
 pub async fn get_flippening_data() -> Result<Vec<FlippeningDataRow>> {
@@ -66,11 +75,18 @@ async fn get_dune_data<Row>(url: &str) -> Result<Vec<Row>>
 where
     Row: for<'a> Deserialize<'a>,
 {
+    let url = FormatUrl::new(url).format_url();
+    get_dune_data_from_url(&url).await
+}
+
+async fn get_dune_data_from_url<Row>(url: &str) -> Result<Vec<Row>>
+where
+    Row: for<'a> Deserialize<'a>,
+{
     let dune_api_key = ENV_CONFIG
         .dune_api_key
         .as_ref()
         .expect("expect DUNE_API_KEY in env in order to fetch eth in smart contracts");
-    let url = FormatUrl::new(url).format_url();
 
     let client = reqwest::Client::new();
     Ok(client
