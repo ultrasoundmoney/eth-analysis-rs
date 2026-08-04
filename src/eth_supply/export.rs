@@ -125,7 +125,7 @@ pub async fn export_thousandth_epoch_supply() {
         f
     });
 
-    let supply = early_supply.into_iter().chain(recent_supply.into_iter());
+    let supply = early_supply.into_iter().chain(recent_supply);
 
     let mut csv_writer = csv::Writer::from_path("eth_supply.csv").unwrap();
     let mut last_epoch: Option<i32> = None;

@@ -246,7 +246,7 @@ pub async fn add_delta(connection: &mut PgConnection, supply_delta: &SupplyDelta
     if !is_parent_known {
         panic!(
             "trying to insert supply delta with missing parent hash: {}, parent_hash: {}",
-            &supply_delta.block_hash, &supply_delta.parent_hash
+            supply_delta.block_hash, supply_delta.parent_hash
         )
     }
 

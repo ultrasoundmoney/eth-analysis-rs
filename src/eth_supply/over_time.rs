@@ -272,7 +272,7 @@ async fn get_supply_since_burn(db_pool: &PgPool) -> Vec<SupplyAtTime> {
 
     let eth_supply: Vec<SupplyAtTime> = eth_supply_glassnode
         .into_iter()
-        .chain(eth_supply_ours.into_iter())
+        .chain(eth_supply_ours)
         .collect();
 
     eth_supply
@@ -384,7 +384,7 @@ pub async fn get_daily_supply(db_pool: &PgPool) -> Vec<SupplyAtTime> {
 
     let eth_supply: Vec<SupplyAtTime> = eth_supply_glassnode
         .into_iter()
-        .chain(eth_supply_ours.into_iter())
+        .chain(eth_supply_ours)
         .collect();
 
     eth_supply
