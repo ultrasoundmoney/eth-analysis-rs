@@ -68,7 +68,7 @@ pub async fn check_beacon_state_gaps() -> Result<()> {
         if !is_parent_known {
             panic!(
                 "block_root {}, parent_root {:?}, missing",
-                &block_root, &parent_root
+                block_root, parent_root
             );
         }
     }
