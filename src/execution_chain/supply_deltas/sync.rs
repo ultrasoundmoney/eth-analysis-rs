@@ -4,6 +4,7 @@ use sqlx::{Connection, PgExecutor, Row};
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
 use super::node::{get_supply_delta_by_block_number, stream_supply_deltas_from_last};
@@ -16,6 +17,84 @@ use super::SupplyDelta;
 
 const GENESIS_PARENT_HASH: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
+const WATCHDOG_MAX_STALE_DEFAULT: Duration = Duration::from_secs(5 * 60);
+const WATCHDOG_CHECK_INTERVAL_DEFAULT: Duration = Duration::from_secs(10);
+
+#[derive(Clone)]
+struct SyncProgress {
+    last_completed_work: Arc<Mutex<Instant>>,
+}
+
+impl SyncProgress {
+    fn new() -> Self {
+        Self::new_at(Instant::now())
+    }
+
+    fn new_at(now: Instant) -> Self {
+        Self {
+            last_completed_work: Arc::new(Mutex::new(now)),
+        }
+    }
+
+    fn mark_completed_work(&self) {
+        self.mark_completed_work_at(Instant::now());
+    }
+
+    fn mark_completed_work_at(&self, now: Instant) {
+        *self
+            .last_completed_work
+            .lock()
+            .expect("sync progress mutex poisoned") = now;
+    }
+
+    fn stalled_for(&self, max_stale: Duration) -> Option<Duration> {
+        self.stalled_for_at(Instant::now(), max_stale)
+    }
+
+    fn stalled_for_at(&self, now: Instant, max_stale: Duration) -> Option<Duration> {
+        let stale_for = now.saturating_duration_since(
+            *self
+                .last_completed_work
+                .lock()
+                .expect("sync progress mutex poisoned"),
+        );
+        (stale_for >= max_stale).then_some(stale_for)
+    }
+
+    fn start_watchdog(self, max_stale: Duration, check_interval: Duration) {
+        tokio::spawn(async move {
+            info!(
+                max_stale_secs = max_stale.as_secs(),
+                check_interval_secs = check_interval.as_secs(),
+                "execution supply sync watchdog enabled"
+            );
+
+            loop {
+                tokio::time::sleep(check_interval).await;
+                if let Some(stale_for) = self.stalled_for(max_stale) {
+                    tracing::error!(
+                        stale_for_secs = stale_for.as_secs(),
+                        max_stale_secs = max_stale.as_secs(),
+                        "execution supply sync consumer made no progress; exiting so the supervisor can restart it"
+                    );
+                    std::process::exit(1);
+                }
+            }
+        });
+    }
+}
+
+fn duration_from_env(key: &str, default: Duration) -> Duration {
+    crate::env::get_env_var(key)
+        .map(|value| {
+            Duration::from_secs(
+                value
+                    .parse::<u64>()
+                    .unwrap_or_else(|_| panic!("{key} must be an integer number of seconds")),
+            )
+        })
+        .unwrap_or(default)
+}
 
 async fn get_is_hash_known<'a>(executor: impl PgExecutor<'a>, block_hash: &str) -> bool {
     // Instead of the genesis parent_hash being absent, it is set to GENESIS_PARENT_HASH.
@@ -349,6 +428,31 @@ pub async fn sync_deltas() {
 
     info!("syncing supply deltas");
 
+    let max_stale = duration_from_env(
+        "SYNC_EXECUTION_SUPPLY_DELTAS_MAX_STALE_SECS",
+        WATCHDOG_MAX_STALE_DEFAULT,
+    );
+    let check_interval = duration_from_env(
+        "SYNC_EXECUTION_SUPPLY_DELTAS_WATCHDOG_INTERVAL_SECS",
+        WATCHDOG_CHECK_INTERVAL_DEFAULT,
+    );
+    assert!(
+        !max_stale.is_zero(),
+        "SYNC_EXECUTION_SUPPLY_DELTAS_MAX_STALE_SECS must be greater than zero"
+    );
+    assert!(
+        !check_interval.is_zero(),
+        "SYNC_EXECUTION_SUPPLY_DELTAS_WATCHDOG_INTERVAL_SECS must be greater than zero"
+    );
+
+    // Start this before connecting to the database so slow or wedged startup is covered too. The
+    // generous default allows normal startup, while each completed consumer operation resets the
+    // timer regardless of how far the service is from chain head.
+    let sync_progress = SyncProgress::new();
+    sync_progress
+        .clone()
+        .start_watchdog(max_stale, check_interval);
+
     let mut connection = db::get_db_connection("sync-execution-supply-deltas").await;
 
     sqlx::migrate!().run(&mut connection).await.unwrap();
@@ -375,6 +479,7 @@ pub async fn sync_deltas() {
                     // Because we may encounter rollbacks, this step may add more deltas to sync to
                     // the front of the queue.
                     sync_delta(&mut connection, deltas_queue.clone(), delta_to_sync).await;
+                    sync_progress.mark_completed_work();
                 }
             }
         }
@@ -387,6 +492,52 @@ mod tests {
     use test_context::test_context;
 
     use crate::db::tests::TestDb;
+
+    #[test]
+    fn watchdog_allows_slow_startup() {
+        let started_at = Instant::now();
+        let progress = SyncProgress::new_at(started_at);
+
+        assert_eq!(
+            progress.stalled_for_at(
+                started_at + Duration::from_secs(60),
+                WATCHDOG_MAX_STALE_DEFAULT
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn watchdog_stays_healthy_while_catching_up() {
+        let started_at = Instant::now();
+        let progress = SyncProgress::new_at(started_at);
+
+        // The process has been running longer than the stale limit, but completed catch-up work
+        // less than one stale window ago.
+        progress.mark_completed_work_at(started_at + Duration::from_secs(4 * 60));
+
+        assert_eq!(
+            progress.stalled_for_at(
+                started_at + Duration::from_secs(8 * 60),
+                WATCHDOG_MAX_STALE_DEFAULT
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn watchdog_detects_a_stalled_consumer() {
+        let started_at = Instant::now();
+        let progress = SyncProgress::new_at(started_at);
+
+        assert_eq!(
+            progress.stalled_for_at(
+                started_at + WATCHDOG_MAX_STALE_DEFAULT,
+                WATCHDOG_MAX_STALE_DEFAULT
+            ),
+            Some(WATCHDOG_MAX_STALE_DEFAULT)
+        );
+    }
 
     #[test_context(TestDb)]
     #[tokio::test]
