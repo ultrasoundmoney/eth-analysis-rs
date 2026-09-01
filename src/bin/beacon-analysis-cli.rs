@@ -5,7 +5,7 @@ use tracing::{error, info};
 
 use eth_analysis::{
     beacon_chain::{
-        backfill::{backfill_balances, Granularity},
+        backfill::{backfill_balances, BackfillBalancesConfig, Granularity},
         backfill_pending_deposits_sum, blocks,
         blocks::backfill::backfill_missing_beacon_blocks,
         integrity::check_beacon_block_chain_integrity,
@@ -13,7 +13,7 @@ use eth_analysis::{
         BeaconNode, BeaconNodeHttp, Slot, FIRST_POST_LONDON_SLOT, PECTRA_SLOT,
     },
     db,
-    eth_supply::backfill::backfill_eth_supply,
+    eth_supply::backfill::{backfill_eth_supply, estimate_eth_supply_backfill},
     execution_chain::supply_deltas::backfill_execution_supply,
     log,
     units::GweiNewtype,
@@ -86,8 +86,8 @@ impl FromStr for SlotRange {
         let end = parts[1]
             .parse::<i32>()
             .map_err(|e| format!("invalid end slot: {e}"))?;
-        if start >= end {
-            return Err("start slot must be less than end slot".to_string());
+        if start > end {
+            return Err("start slot must be less than or equal to end slot".to_string());
         }
         Ok(SlotRange {
             start: Slot(start),
@@ -123,6 +123,15 @@ enum Commands {
         /// Overrides 'hardfork' if provided.
         #[clap(long)]
         slot_range: Option<SlotRange>,
+        /// Maximum number of historic balance requests in flight.
+        #[clap(long, default_value_t = 1)]
+        concurrency: usize,
+        /// Maximum attempts for each historic balance request.
+        #[clap(long, default_value_t = 5)]
+        max_attempts: usize,
+        /// Perform database writes. Without this flag the command is a dry run.
+        #[clap(long)]
+        execute: bool,
     },
     /// Backfills beacon block slots.
     BackfillMissingBeaconBlockSlots,
@@ -150,6 +159,9 @@ enum Commands {
         /// Overrides 'hardfork' for the start slot if provided.
         #[clap(long)]
         slot_range: Option<SlotRange>,
+        /// Perform database writes. Without this flag the command is a dry run.
+        #[clap(long)]
+        execute: bool,
     },
     /// Checks the integrity of the beacon block chain.
     CheckBeaconBlockChainIntegrity {
@@ -206,18 +218,46 @@ async fn run_cli(pool: PgPool, commands: Commands) {
             granularity,
             hardfork,
             slot_range,
+            concurrency,
+            max_attempts,
+            execute,
         } => {
             let gran: Granularity = granularity.into();
+            let config = BackfillBalancesConfig {
+                concurrency,
+                execute,
+                max_attempts,
+            };
             match slot_range {
                 Some(range) => {
                     info!(granularity = ?gran, start_slot = %range.start, end_slot = %range.end, "initiating beacon balances backfill for slot range");
-                    backfill_balances(&pool, &gran, Some(range.start), Some(range.end)).await;
+                    match backfill_balances(
+                        &pool,
+                        &gran,
+                        Some(range.start),
+                        Some(range.end),
+                        config,
+                    )
+                    .await
+                    {
+                        Ok(report) => info!(?report, "beacon balances backfill finished"),
+                        Err(error) => {
+                            error!(?error, "beacon balances backfill failed");
+                            std::process::exit(1);
+                        }
+                    }
                     info!("done backfilling beacon balances for specified slot range");
                 }
                 None => {
                     let start_slot: Slot = hardfork.unwrap_or(HardforkArgs::Genesis).into();
                     info!(granularity = ?gran, %start_slot, "initiating beacon balances backfill from hardfork to db tip");
-                    backfill_balances(&pool, &gran, Some(start_slot), None).await;
+                    match backfill_balances(&pool, &gran, Some(start_slot), None, config).await {
+                        Ok(report) => info!(?report, "beacon balances backfill finished"),
+                        Err(error) => {
+                            error!(?error, "beacon balances backfill failed");
+                            std::process::exit(1);
+                        }
+                    }
                     info!("done backfilling beacon balances for specified hardfork");
                 }
             }
@@ -252,16 +292,38 @@ async fn run_cli(pool: PgPool, commands: Commands) {
         Commands::BackfillEthSupply {
             hardfork,
             slot_range,
+            execute,
         } => {
             match slot_range {
                 Some(range) => {
-                    info!(start_slot = %range.start, end_slot = %range.end, "initiating eth supply backfill for slot range");
-                    backfill_eth_supply(&pool, Some(range.start), Some(range.end)).await;
+                    let work_todo =
+                        estimate_eth_supply_backfill(&pool, Some(range.start), Some(range.end))
+                            .await;
+                    info!(start_slot = %range.start, end_slot = %range.end, work_todo, execute, "planned eth supply backfill for slot range");
+                    if execute {
+                        backfill_eth_supply(&pool, Some(range.start), Some(range.end)).await;
+                        let remaining =
+                            estimate_eth_supply_backfill(&pool, Some(range.start), Some(range.end))
+                                .await;
+                        if remaining > 0 {
+                            error!(remaining, "eth supply backfill left rows missing");
+                            std::process::exit(1);
+                        }
+                    }
                 }
                 None => {
                     let start_slot_opt: Option<Slot> = hardfork.map(|hf_arg| hf_arg.into());
-                    info!(?start_slot_opt, "initiating eth supply backfill from specified start (or Merge) to latest available prerequisites");
-                    backfill_eth_supply(&pool, start_slot_opt, None).await;
+                    let work_todo = estimate_eth_supply_backfill(&pool, start_slot_opt, None).await;
+                    info!(?start_slot_opt, work_todo, execute, "planned eth supply backfill from specified start (or Merge) to latest available prerequisites");
+                    if execute {
+                        backfill_eth_supply(&pool, start_slot_opt, None).await;
+                        let remaining =
+                            estimate_eth_supply_backfill(&pool, start_slot_opt, None).await;
+                        if remaining > 0 {
+                            error!(remaining, "eth supply backfill left rows missing");
+                            std::process::exit(1);
+                        }
+                    }
                 }
             }
             info!("done backfilling eth supply");
@@ -425,4 +487,22 @@ async fn main() -> anyhow::Result<()> {
     run_cli(db_pool, cli.command).await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slot_range_is_inclusive_for_a_single_slot() {
+        let range = SlotRange::from_str("8208482,8208482").unwrap();
+
+        assert_eq!(range.start, Slot(8_208_482));
+        assert_eq!(range.end, Slot(8_208_482));
+    }
+
+    #[test]
+    fn slot_range_rejects_descending_bounds() {
+        assert!(SlotRange::from_str("8208483,8208482").is_err());
+    }
 }

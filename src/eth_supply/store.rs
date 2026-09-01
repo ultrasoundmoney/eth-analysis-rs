@@ -1,7 +1,7 @@
 use anyhow::Result;
 use sqlx::postgres::PgQueryResult;
 use sqlx::{Acquire, PgConnection, PgExecutor};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::beacon_chain::Slot;
 use crate::units::{GweiNewtype, WeiNewtype};
@@ -117,15 +117,15 @@ pub async fn get_last_stored_supply_slot(executor: impl PgExecutor<'_>) -> Resul
     Ok(slot.map(Slot))
 }
 
-pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) -> Result<()> {
+pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) -> Result<bool> {
     let mut transaction = executor_acq.begin().await?;
 
     let supply_parts_result =
         SupplyPartsStore::get_with_transaction(&mut transaction, slot).await?;
 
-    match supply_parts_result {
+    let stored = match supply_parts_result {
         Some(supply_parts) => {
-            match store(
+            store(
                 &mut *transaction,
                 slot,
                 &supply_parts.block_number(),
@@ -133,20 +133,19 @@ pub async fn store_supply_for_slot(executor_acq: &mut PgConnection, slot: Slot) 
                 &supply_parts.beacon_balances_sum,
                 &supply_parts.beacon_deposits_sum,
             )
-            .await
-            {
-                Ok(_) => debug!(%slot, "successfully stored eth supply"),
-                Err(e) => warn!(%slot, "failed to store eth supply after computing parts: {}", e),
-            }
+            .await?;
+            debug!(%slot, "successfully stored eth supply");
+            true
         }
         None => {
             debug!(%slot, "supply parts not computed (e.g., no block/state for slot), skipping store");
+            false
         }
     };
 
     transaction.commit().await?;
 
-    Ok(())
+    Ok(stored)
 }
 
 pub async fn get_last_stored_balances_slot(executor: impl PgExecutor<'_>) -> Option<Slot> {
@@ -298,8 +297,8 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        // Compute expected net deposits sum: deposit_sum_aggregated - pending_deposits_sum.
-        let beacon_deposits_sum = GweiNewtype(5) - pending_deposits_sum; // 3 gwei
+        // Slot 0 is pre-Pectra, so pending deposits are not applicable and resolve to zero.
+        let beacon_deposits_sum = GweiNewtype(5);
 
         let expected_supply_parts = SupplyParts::new(
             slot,
