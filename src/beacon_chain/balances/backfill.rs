@@ -1,15 +1,24 @@
-use futures::{pin_mut, StreamExt};
+use std::{cmp::min, time::Duration};
+
+use anyhow::{anyhow, bail, Context, Result};
+use futures::{stream, StreamExt};
 use pit_wall::Progress;
 use sqlx::PgPool;
-use tracing::{debug, info, warn};
+use tokio::time::{sleep, timeout};
+use tracing::{info, warn};
 
-use crate::beacon_chain::{
-    balances,
-    node::{BeaconNodeHttp, ValidatorBalance},
-    BeaconNode, Slot,
+use crate::{
+    beacon_chain::{
+        balances,
+        node::{BeaconNodeHttp, ValidatorBalance},
+        BeaconNode, Slot,
+    },
+    units::GweiNewtype,
 };
 
-const GET_BALANCES_CONCURRENCY_LIMIT: usize = 8;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const INITIAL_RETRY_DELAY: Duration = Duration::from_secs(5);
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(2 * 60);
 
 #[derive(Debug)]
 pub enum Granularity {
@@ -19,92 +28,64 @@ pub enum Granularity {
     Slot,
 }
 
-#[derive(sqlx::FromRow, Debug)]
+#[derive(Debug, Clone, Copy)]
+pub struct BackfillBalancesConfig {
+    pub concurrency: usize,
+    pub execute: bool,
+    pub max_attempts: usize,
+}
+
+impl BackfillBalancesConfig {
+    fn validate(self) -> Result<Self> {
+        if !(1..=8).contains(&self.concurrency) {
+            bail!("concurrency must be between 1 and 8");
+        }
+        if !(1..=10).contains(&self.max_attempts) {
+            bail!("max_attempts must be between 1 and 10");
+        }
+        Ok(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackfillBalancesReport {
+    pub executed: bool,
+    pub planned: u64,
+    pub stored: u64,
+}
+
+#[derive(sqlx::FromRow, Debug, Clone)]
 struct SlotRow {
     slot: i32,
+    state_root: String,
 }
 
-async fn estimate_work_todo(
-    db_pool: &PgPool,
-    granularity: &Granularity,
-    start_slot_opt: Option<Slot>,
-    end_slot_opt: Option<Slot>,
-) -> u64 {
-    let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-        r#"
-        SELECT
-            beacon_states.slot
-        FROM
-            beacon_states
-        LEFT JOIN beacon_validators_balance ON
-            beacon_states.state_root = beacon_validators_balance.state_root
-        WHERE
-            beacon_validators_balance.state_root IS NULL
-        "#,
-    );
-
-    let from_slot = start_slot_opt.unwrap_or(Slot(0));
-    query_builder.push(" AND slot >= ");
-    query_builder.push_bind(from_slot.0);
-
-    if let Some(end_slot) = end_slot_opt {
-        query_builder.push(" AND slot <= ");
-        query_builder.push_bind(end_slot.0);
+impl SlotRow {
+    fn slot(&self) -> Slot {
+        Slot(self.slot)
     }
-
-    let rows: Vec<i32> = query_builder
-        .build_query_scalar()
-        .fetch_all(db_pool)
-        .await
-        .unwrap_or_else(|e| {
-            warn!("failed to fetch rows for work estimation: {:?}", e);
-            Vec::new()
-        });
-
-    let count = match granularity {
-        Granularity::Slot => rows.len(),
-        Granularity::Epoch => rows
-            .iter()
-            .filter(|&&s| Slot(s).is_first_of_epoch())
-            .count(),
-        Granularity::Hour => rows.iter().filter(|&&s| Slot(s).is_first_of_hour()).count(),
-        Granularity::Day => rows.iter().filter(|&&s| Slot(s).is_first_of_day()).count(),
-    };
-
-    count as u64
 }
 
-// Define an outcome enum for processing each item
-enum BackfillItemOutcome {
-    StoreBalances(String, i32, Vec<ValidatorBalance>), // state_root_from_header, slot, balances
-    HeaderExistsNoBalances(String, i32),               // state_root_from_header, slot
-    SkippedMissedSlot(i32),                            // slot
-    SkippedError(i32, String),                         // slot, error details
+fn matches_granularity(slot: Slot, granularity: &Granularity) -> bool {
+    match granularity {
+        Granularity::Slot => true,
+        Granularity::Epoch => slot.is_first_of_epoch(),
+        Granularity::Hour => slot.is_first_of_hour(),
+        Granularity::Day => slot.is_first_of_day(),
+    }
 }
 
-pub async fn backfill_balances(
+async fn fetch_missing_rows(
     db_pool: &PgPool,
     granularity: &Granularity,
     start_slot_opt: Option<Slot>,
     end_slot_opt: Option<Slot>,
-) {
-    let beacon_node = BeaconNodeHttp::new_from_env();
-    let from_slot = start_slot_opt.unwrap_or(Slot(0));
-
-    debug!("estimating work to be done for backfill");
-    let work_todo = estimate_work_todo(db_pool, granularity, start_slot_opt, end_slot_opt).await;
-    debug!(
-        ?start_slot_opt,
-        ?end_slot_opt,
-        "estimated work to be done for backfill: {} items matching granularity",
-        work_todo
-    );
-    let mut progress = Progress::new("backfill-beacon-balances", work_todo);
-
+) -> Result<Vec<SlotRow>> {
     let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
         r#"
         SELECT
-            beacon_blocks.slot
+            beacon_blocks.slot,
+            beacon_blocks.state_root
         FROM
             beacon_blocks
         LEFT JOIN beacon_validators_balance ON
@@ -114,139 +95,295 @@ pub async fn backfill_balances(
         "#,
     );
 
-    query_builder.push(" AND slot >= ");
+    let from_slot = start_slot_opt.unwrap_or(Slot(0));
+    query_builder.push(" AND beacon_blocks.slot >= ");
     query_builder.push_bind(from_slot.0);
 
     if let Some(end_slot) = end_slot_opt {
-        query_builder.push(" AND slot <= ");
+        query_builder.push(" AND beacon_blocks.slot <= ");
         query_builder.push_bind(end_slot.0);
     }
 
-    query_builder.push(" ORDER BY slot DESC");
+    query_builder.push(" ORDER BY beacon_blocks.slot ASC");
 
-    let rows = query_builder.build_query_as::<SlotRow>().fetch(db_pool);
+    let rows = query_builder
+        .build_query_as::<SlotRow>()
+        .fetch_all(db_pool)
+        .await
+        .context("failed to load missing canonical beacon balance rows")?;
 
-    // filter_map closure must return a Future<Output = Option<Item>>
-    let rows_filtered = rows.filter_map(|row_result| async move {
-        match row_result {
-            Ok(row) => {
-                let slot_for_filter = Slot(row.slot);
-                match granularity {
-                    Granularity::Slot => Some(row),
-                    Granularity::Epoch => {
-                        if slot_for_filter.is_first_of_epoch() {
-                            Some(row)
-                        } else {
-                            None
-                        }
-                    }
-                    Granularity::Hour => {
-                        if slot_for_filter.is_first_of_hour() {
-                            Some(row)
-                        } else {
-                            None
-                        }
-                    }
-                    Granularity::Day => {
-                        if slot_for_filter.is_first_of_day() {
-                            Some(row)
-                        } else {
-                            None
-                        }
-                    }
-                }
+    Ok(rows
+        .into_iter()
+        .filter(|row| matches_granularity(row.slot(), granularity))
+        .collect())
+}
+
+async fn fetch_validator_balances_with_retry<B: BeaconNode>(
+    beacon_node: &B,
+    row: &SlotRow,
+    max_attempts: usize,
+    request_timeout: Duration,
+    initial_retry_delay: Duration,
+) -> Result<Vec<ValidatorBalance>> {
+    let mut retry_delay = initial_retry_delay;
+    let mut last_error = None;
+
+    for attempt in 1..=max_attempts {
+        let result = timeout(
+            request_timeout,
+            beacon_node.get_validator_balances(&row.state_root),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(Some(validator_balances))) => return Ok(validator_balances),
+            Ok(Ok(None)) => {
+                last_error = Some(anyhow!(
+                    "beacon node returned no validator balances for canonical state root {}",
+                    row.state_root
+                ));
             }
-            Err(e) => {
-                warn!("error fetching row for backfill: {:?}", e);
-                None
+            Ok(Err(error)) => last_error = Some(error),
+            Err(_) => {
+                last_error = Some(anyhow!(
+                    "validator balances request exceeded {} seconds",
+                    request_timeout.as_secs()
+                ));
             }
         }
-    });
 
-    // rows_filtered is now Stream<Item = Record>
-    // .map closure takes Record and returns Future<Output = BackfillItemOutcome>
-    let tasks = rows_filtered.map(move |row| {
-        // row is { state_root: String (original from DB), slot: i64 }
-        let beacon_node_clone = beacon_node.clone();
+        let error = last_error
+            .as_ref()
+            .expect("failed request must set an error");
+        warn!(
+            slot = %row.slot(),
+            state_root = %row.state_root,
+            attempt,
+            max_attempts,
+            error = %error,
+            "failed to fetch historical validator balances"
+        );
+
+        if attempt < max_attempts {
+            sleep(retry_delay).await;
+            retry_delay = min(retry_delay.saturating_mul(2), MAX_RETRY_DELAY);
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| anyhow!("validator balances request was not attempted")))
+        .with_context(|| {
+            format!(
+                "failed to fetch validator balances for slot {} after {} attempts",
+                row.slot(),
+                max_attempts
+            )
+        })
+}
+
+async fn store_balance_sum(
+    db_pool: &PgPool,
+    row: &SlotRow,
+    balances_sum: GweiNewtype,
+) -> Result<bool> {
+    let gwei: i64 = balances_sum.into();
+    let result = sqlx::query(
+        r#"
+        INSERT INTO beacon_validators_balance (timestamp, state_root, gwei)
+        VALUES ($1, $2, $3)
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(row.slot().date_time())
+    .bind(&row.state_root)
+    .bind(gwei)
+    .execute(db_pool)
+    .await
+    .with_context(|| {
+        format!(
+            "failed to store validator balance sum for slot {}",
+            row.slot()
+        )
+    })?;
+
+    Ok(result.rows_affected() == 1)
+}
+
+enum BackfillItemOutcome {
+    StoreBalances(SlotRow, GweiNewtype),
+    Failed(SlotRow, anyhow::Error),
+}
+
+pub async fn estimate_balances_backfill(
+    db_pool: &PgPool,
+    granularity: &Granularity,
+    start_slot_opt: Option<Slot>,
+    end_slot_opt: Option<Slot>,
+) -> Result<u64> {
+    Ok(
+        fetch_missing_rows(db_pool, granularity, start_slot_opt, end_slot_opt)
+            .await?
+            .len() as u64,
+    )
+}
+
+pub async fn backfill_balances(
+    db_pool: &PgPool,
+    granularity: &Granularity,
+    start_slot_opt: Option<Slot>,
+    end_slot_opt: Option<Slot>,
+    config: BackfillBalancesConfig,
+) -> Result<BackfillBalancesReport> {
+    let config = config.validate()?;
+    let rows = fetch_missing_rows(db_pool, granularity, start_slot_opt, end_slot_opt).await?;
+    let work_todo = rows.len() as u64;
+
+    info!(
+        ?start_slot_opt,
+        ?end_slot_opt,
+        concurrency = config.concurrency,
+        max_attempts = config.max_attempts,
+        execute = config.execute,
+        work_todo,
+        "planned beacon balances backfill"
+    );
+
+    if !config.execute || rows.is_empty() {
+        return Ok(BackfillBalancesReport {
+            executed: false,
+            planned: work_todo,
+            stored: 0,
+        });
+    }
+
+    let beacon_node = BeaconNodeHttp::new_from_env();
+    let tasks = stream::iter(rows).map(move |row| {
+        let beacon_node = beacon_node.clone();
         async move {
-            let current_slot_val_i32 = row.slot;
-            let slot_obj = Slot(current_slot_val_i32);
-            match beacon_node_clone.get_header_by_slot(slot_obj).await {
-                Ok(Some(header_envelope)) => {
-                    debug!(slot = %slot_obj, "backfill: header found.");
-                    let state_root_from_header = header_envelope.state_root();
-                    match beacon_node_clone.get_validator_balances_by_slot(slot_obj).await {
-                        Ok(Some(validator_balances)) => {
-                            debug!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: validator balances successfully fetched.");
-                            BackfillItemOutcome::StoreBalances(state_root_from_header.clone(), current_slot_val_i32, validator_balances)
-                        }
-                        Ok(None) => {
-                            warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: beacon node reported no validator balances for slot (using slot-based fetch).");
-                            BackfillItemOutcome::HeaderExistsNoBalances(state_root_from_header.clone(), current_slot_val_i32)
-                        }
-                        Err(e) => {
-                            warn!(slot = %slot_obj, state_root = %state_root_from_header, "backfill: failed to get validator balances by slot: {}", e.to_string());
-                            BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting balances for slot {slot_obj}: {e}"))
-                        }
-                    }
+            match fetch_validator_balances_with_retry(
+                &beacon_node,
+                &row,
+                config.max_attempts,
+                REQUEST_TIMEOUT,
+                INITIAL_RETRY_DELAY,
+            )
+            .await
+            {
+                Ok(validator_balances) => {
+                    let balances_sum = balances::sum_validator_balances(&validator_balances);
+                    BackfillItemOutcome::StoreBalances(row, balances_sum)
                 }
-                Ok(None) => {
-                    debug!(slot = %slot_obj, "backfill: slot missed (no header found), skipping.");
-                    BackfillItemOutcome::SkippedMissedSlot(current_slot_val_i32)
-                }
-                Err(e) => {
-                    warn!(slot = %slot_obj, "backfill: failed to get header: {}. skipping slot.", e.to_string());
-                    BackfillItemOutcome::SkippedError(current_slot_val_i32, format!("getting header for slot {slot_obj}: {e}"))
-                }
+                Err(error) => BackfillItemOutcome::Failed(row, error),
             }
         }
     });
 
-    let buffered_tasks = tasks.buffered(GET_BALANCES_CONCURRENCY_LIMIT);
+    let mut outcomes = tasks.buffer_unordered(config.concurrency);
+    let mut progress = Progress::new("backfill-beacon-balances", work_todo);
+    let mut stored = 0u64;
 
-    pin_mut!(buffered_tasks);
-
-    while let Some(outcome) = buffered_tasks.next().await {
+    while let Some(outcome) = outcomes.next().await {
         match outcome {
-            BackfillItemOutcome::StoreBalances(
-                state_root_to_store,
-                slot_val,
-                validator_balances,
-            ) => {
-                let slot_obj = Slot(slot_val);
-                debug!(slot = %slot_obj, state_root = %state_root_to_store, "backfill: attempting to store balances");
-                let balances_sum = balances::sum_validator_balances(&validator_balances);
-                balances::store_validators_balance(
-                    db_pool,
-                    &state_root_to_store,
-                    slot_obj,
-                    &balances_sum,
-                )
-                .await;
-                info!(slot = %slot_obj, state_root = %state_root_to_store, "backfill: successfully stored validator balances");
+            BackfillItemOutcome::StoreBalances(row, balances_sum) => {
+                if store_balance_sum(db_pool, &row, balances_sum).await? {
+                    stored += 1;
+                    info!(slot = %row.slot(), state_root = %row.state_root, "stored validator balance sum");
+                } else {
+                    info!(slot = %row.slot(), state_root = %row.state_root, "validator balance sum was already stored");
+                }
             }
-            BackfillItemOutcome::HeaderExistsNoBalances(state_root_ref, slot_val) => {
-                let slot_obj = Slot(slot_val);
-                info!(slot = %slot_obj, state_root = %state_root_ref, "backfill: header existed but no balances found; skipped storage.");
-            }
-            BackfillItemOutcome::SkippedMissedSlot(slot_val) => {
-                let slot_obj = Slot(slot_val);
-                info!(slot = %slot_obj, "backfill: slot was missed on-chain; skipped.");
-            }
-            BackfillItemOutcome::SkippedError(slot_val, err_msg) => {
-                let slot_obj = Slot(slot_val);
-                warn!(slot = %slot_obj, error = %err_msg, "backfill: slot skipped due to error.");
+            BackfillItemOutcome::Failed(row, error) => {
+                warn!(slot = %row.slot(), state_root = %row.state_root, error = %error, "leaving validator balance row missing");
             }
         }
 
         progress.inc_work_done();
-        // Log progress periodically or when done.
-        if progress.work_done.is_multiple_of(100) || progress.work_done >= work_todo {
+        if progress.work_done.is_multiple_of(25) || progress.work_done >= work_todo {
             info!("backfill progress: {}", progress.get_progress_string());
         }
     }
+
+    let remaining = fetch_missing_rows(db_pool, granularity, start_slot_opt, end_slot_opt).await?;
+    if !remaining.is_empty() {
+        let sample = remaining
+            .iter()
+            .take(20)
+            .map(|row| row.slot.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        bail!(
+            "beacon balances backfill incomplete: {} canonical slots remain missing (first slots: {})",
+            remaining.len(),
+            sample
+        );
+    }
+
     info!(
-        "beacon balances backfill process finished. Final progress: {}",
-        progress.get_progress_string()
+        planned = work_todo,
+        stored, "beacon balances backfill completed"
     );
+    Ok(BackfillBalancesReport {
+        executed: true,
+        planned: work_todo,
+        stored,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::beacon_chain::node::MockBeaconNode;
+
+    #[tokio::test]
+    async fn retry_exhaustion_returns_error_without_balance_data() {
+        let mut beacon_node = MockBeaconNode::new();
+        beacon_node
+            .expect_get_validator_balances()
+            .times(2)
+            .returning(|_| Err(anyhow!("temporary failure")));
+        let row = SlotRow {
+            slot: 8_208_482,
+            state_root: "0xstate-root".to_string(),
+        };
+
+        let result = fetch_validator_balances_with_retry(
+            &beacon_node,
+            &row,
+            2,
+            Duration::from_secs(1),
+            Duration::ZERO,
+        )
+        .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn fetch_uses_canonical_state_root() {
+        let mut beacon_node = MockBeaconNode::new();
+        beacon_node
+            .expect_get_validator_balances()
+            .withf(|state_root| state_root == "0xcanonical")
+            .times(1)
+            .returning(|_| {
+                Ok(Some(vec![ValidatorBalance {
+                    balance: GweiNewtype(42),
+                }]))
+            });
+        let row = SlotRow {
+            slot: 8_208_482,
+            state_root: "0xcanonical".to_string(),
+        };
+
+        let balances = fetch_validator_balances_with_retry(
+            &beacon_node,
+            &row,
+            1,
+            Duration::from_secs(1),
+            Duration::ZERO,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(balances::sum_validator_balances(&balances), GweiNewtype(42));
+    }
 }

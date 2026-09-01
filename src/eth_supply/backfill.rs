@@ -49,6 +49,23 @@ async fn estimate_verifiable_missing_slots_count(
     })
 }
 
+pub async fn estimate_eth_supply_backfill(
+    db_pool: &PgPool,
+    start_slot_override: Option<Slot>,
+    end_slot_override: Option<Slot>,
+) -> u64 {
+    let effective_end_slot = match end_slot_override {
+        Some(end_slot) => end_slot,
+        None => match store::get_last_stored_balances_slot(db_pool).await {
+            Some(slot) => slot,
+            None => return 0,
+        },
+    };
+    let first_slot_to_check = start_slot_override.unwrap_or(FIRST_POST_MERGE_SLOT);
+
+    estimate_verifiable_missing_slots_count(db_pool, first_slot_to_check, effective_end_slot).await
+}
+
 /// Fetches a chunk of slots that have prerequisite data but are missing from eth_supply.
 async fn fetch_verifiable_missing_slots_chunk(
     db_pool: &PgPool,
@@ -179,7 +196,7 @@ pub async fn backfill_eth_supply(
                     }
                 };
                 match store::store_supply_for_slot(&mut conn, slot_to_process).await {
-                    Ok(_) => Ok(()),
+                    Ok(stored) => Ok(stored),
                     Err(e) => {
                         warn!(%slot_to_process, error = %e, "error trying to store eth supply for slot");
                         Err(e)
@@ -188,14 +205,14 @@ pub async fn backfill_eth_supply(
             }
         });
 
-        let results: Vec<Result<(), anyhow::Error>> = tasks
+        let results: Vec<Result<bool, anyhow::Error>> = tasks
             .buffer_unordered(PROCESSING_CONCURRENCY_LIMIT)
             .collect()
             .await;
 
         let mut current_chunk_success_count = 0;
         for result in results {
-            if result.is_ok() {
+            if matches!(result, Ok(true)) {
                 current_chunk_success_count += 1;
             }
         }

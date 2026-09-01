@@ -4,10 +4,21 @@ use sqlx::{PgConnection, PgPool};
 use tracing::{debug, error, warn};
 
 use crate::{
-    beacon_chain::{self, Slot},
+    beacon_chain::{self, Slot, PECTRA_SLOT},
     execution_chain::{self, BlockNumber},
     units::{GweiNewtype, WeiNewtype},
 };
+
+fn pending_deposits_sum_for_slot(
+    target_slot: Slot,
+    stored_sum: Option<GweiNewtype>,
+) -> Option<GweiNewtype> {
+    if target_slot < *PECTRA_SLOT {
+        Some(GweiNewtype(0))
+    } else {
+        stored_sum
+    }
+}
 
 // Remove deprecated fields after frontend switches over.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -131,13 +142,16 @@ async fn gather_supply_parts(
     .await?
     .and_then(|row| row.pending_deposits_sum_gwei.map(GweiNewtype));
 
-    let pending_deposits_sum = match pending_deposits_sum_db {
+    let pending_deposits_sum = match pending_deposits_sum_for_slot(
+        target_slot,
+        pending_deposits_sum_db,
+    ) {
         Some(sum) => {
-            debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "fetched pending deposits sum from beacon node");
+            debug!(%target_slot, state_root = %block.state_root, pending_deposits_sum = %sum, "resolved pending deposits sum");
             sum
         }
         None => {
-            warn!(%target_slot, state_root = %block.state_root, "pending deposits sum unavailable from db and beacon node; skipping supply calculation for this slot");
+            warn!(%target_slot, state_root = %block.state_root, "post-Pectra pending deposits sum unavailable from db; skipping supply calculation for this slot");
             return Ok(None);
         }
     };
@@ -179,5 +193,35 @@ impl<'a> SupplyPartsStore<'a> {
         slot: Slot,
     ) -> Result<Option<SupplyParts>> {
         gather_supply_parts(transaction, slot).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pre_pectra_pending_deposits_default_to_zero() {
+        let slot = *PECTRA_SLOT - 1;
+
+        assert_eq!(
+            pending_deposits_sum_for_slot(slot, None),
+            Some(GweiNewtype(0))
+        );
+    }
+
+    #[test]
+    fn post_pectra_pending_deposits_are_required() {
+        assert_eq!(pending_deposits_sum_for_slot(*PECTRA_SLOT, None), None);
+    }
+
+    #[test]
+    fn post_pectra_pending_deposits_use_stored_value() {
+        let stored_sum = GweiNewtype(42);
+
+        assert_eq!(
+            pending_deposits_sum_for_slot(*PECTRA_SLOT, Some(stored_sum)),
+            Some(stored_sum)
+        );
     }
 }
